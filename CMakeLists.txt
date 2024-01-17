@@ -49,7 +49,8 @@ project(cpplibLib)
                                "cpplib/src/Classes/Geometry.h"
                                "cpplib/src/Classes/SearchGraph.h"
                                "cpplib/src/Platform/Definitions.h"
-                               "cpplib/src/Functions/AllInOneAndCurrent.h")
+                               "cpplib/src/Functions/AllInOneAndCurrent.h" 
+                               "cpplib/src/Classes/FindGeometry.h")
 
 target_include_directories(cpplibLib
     PUBLIC 
@@ -78,7 +79,8 @@ if(CMAKE_BUILD_TYPE MATCHES Release)
                                "cpplib/src/Classes/Geometry.h"
                                "cpplib/src/Classes/SearchGraph.h"
                                "cpplib/src/Platform/Definitions.h"
-                               "cpplib/src/Functions/AllInOneAndCurrent.h")
+                               "cpplib/src/Functions/AllInOneAndCurrent.h" 
+                               "cpplib/src/Classes/FindGeometry.h")
 
 target_include_directories(cpplib
     PUBLIC 

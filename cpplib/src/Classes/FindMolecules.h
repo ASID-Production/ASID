@@ -140,9 +140,9 @@ struct FAM_Cell : public geometry::Cell<T> {
 		}
 		return res;
 	}
-	void CreateSupercell(PointConteinerType& points, T cutoff) {
+	void CreateSupercell(PointConteinerType& points, T cutoff, uint8_t minimum = 1) {
 
-		auto super = base::template findOptimalSupercell<uint8_t>(cutoff);
+		auto super = base::template findOptimalSupercell<uint8_t>(cutoff, minimum);
 		// super_ is ready. Next step is resizing of actual points
 		uint8_t mult_super_cell = super.get(2) * super.get(1) * super.get(0);
 		size_t sizePoints = points.size();

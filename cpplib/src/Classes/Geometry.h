@@ -34,9 +34,10 @@
 #include <utility> //for std::move
 
 namespace geometry {
+	template <class T> inline T GradtoRad(T a) { return a * static_cast<T>(0.0174532925199432957692); }
+	template <class T> inline T RadtoGrad(T a) { return a * static_cast<T>(57.295779513082320877); }
 
-	template<class T>
-	class Point {
+	template<class T> class Point {
 	public:
 		using value_type = T;
 		using array_type = std::array<T, 3>;
@@ -51,7 +52,7 @@ namespace geometry {
 		explicit constexpr Point(array_type&& other) noexcept : a_(std::move(other)) {};
 
 		constexpr T r() const noexcept {
-			return std::sqrt(a_[0] * a_[0] + a_[1] * a_[1] + a_[2] * a_[2]);
+			return sqrt(fma(a_[0], a_[0], fma(a_[1], a_[1], a_[2] * a_[2])));
 		}
 		constexpr Point& MoveToCell() noexcept {
 			a_[0] -= std::floor(a_[0]);
@@ -67,6 +68,39 @@ namespace geometry {
 		static constexpr Point Vector(const Point& left, const Point& right) noexcept {
 			return Point(left.a_[1] * right.a_[2] - left.a_[2] * right.a_[1], left.a_[2] * right.a_[0] - left.a_[0] * right.a_[2], left.a_[0] * right.a_[1] - left.a_[1] * right.a_[0]);
 		}
+		static constexpr T distance(const Point& a, const Point& b) noexcept {
+			T d0 = a.a_[0] - b.a_[0];
+			T d1 = a.a_[1] - b.a_[1];
+			T d2 = a.a_[2] - b.a_[2];
+			return sqrt(fma(d0, d0, fma(d1, d1, d2 * d2)));
+		}
+		static constexpr T angleRad(const Point& a, const Point& b, const Point& c) noexcept {
+			auto ab = distance(a, b);
+			auto ac = distance(a, c);
+			auto bc = distance(b, c);
+			return std::acos(fma(ab,ab,fma(bc,bc,-ac*ac))/(ab*bc*2));
+		}
+		static constexpr T angleGrad(const Point& a, const Point& b, const Point& c) noexcept {
+			return RadtoGrad(angleRad(a, b, c));
+		}
+
+		static constexpr T torsionRad(const Point& a, const Point& b, const Point& c, const Point& d) noexcept {
+			auto b1 = c - b;
+			auto b0 = a - b;
+			b1 = b1 / (b1.r());
+			auto b2 = d - c;
+			auto v = b0 - b1 * (b0.a_[0] * b1.a_[0] + b0.a_[1] * b1.a_[1] + b0.a_[2] * b1.a_[2]);
+			auto w = b2 - b1 * (b2.a_[0] * b1.a_[0] + b2.a_[1] * b1.a_[1] + b2.a_[2] * b1.a_[2]);
+			auto x = v.a_[0] * w.a_[0] + v.a_[1] * w.a_[1] + v.a_[2] * w.a_[2];
+			auto y = (b1.a_[1] * v.a_[2] - b1.a_[2] * v.a_[1]) * w.a_[0] + 
+				(b1.a_[2] * v.a_[0] - b1.a_[0] * v.a_[2]) * w.a_[1] 
+				+ (b1.a_[0] * v.a_[1] - b1.a_[1] * v.a_[0]) * w.a_[2];
+			return std::atan2(y, x);
+		}
+		static constexpr T torsionGrad(const Point& a, const Point& b, const Point& c, const Point& d) noexcept {
+			return RadtoGrad(torsionRad(a, b, c, d));
+		}
+
 
 		//Operators
 		constexpr Point operator-() const noexcept {
@@ -145,8 +179,7 @@ namespace geometry {
 		}
 	};
 
-	template<class T>
-	class Matrix {
+	template<class T> class Matrix {
 	public:
 		using size_t = unsigned char;
 		using value_type = T;
@@ -308,18 +341,14 @@ namespace geometry {
 		return res;
 	}
 
-	template<class T>
-	constexpr Matrix<T> EqualMatrix(static_cast<T>(1));
+	template<class T> constexpr Matrix<T> EqualMatrix(static_cast<T>(1));
 
-	template<class T>
-	struct Cell {
+	template<class T> struct Cell {
 	public:
 		using value_type = T;
 		using array_type = std::array<T, 3>;
 		using matrix_type = geometry::Matrix<T>;
 	private:
-		static constexpr value_type GradtoRad = static_cast<value_type>(0.0174532925199432957692);
-		static constexpr value_type RadtoGrad = static_cast<value_type>(57.295779513082320877);
 		array_type lattice_;
 		array_type angleRad_;
 		array_type angleGrad_;
@@ -343,7 +372,7 @@ namespace geometry {
 			angleRad_[1] = std::acos(fracToCart_.El(0, 2) / lattice_[2]);
 			angleRad_[0] = std::acos(temp / lattice_[2]);
 			for (int i = 0; i < 3; i++)
-				angleGrad_[i] = angleRad_[i] * RadtoGrad;
+				angleGrad_[i] = RadtoGrad(angleRad_[i]);
 		}
 		constexpr void createFromCartToFrac(const matrix_type& Mat) noexcept {
 			cartToFrac_ = Mat;
@@ -394,7 +423,7 @@ namespace geometry {
 				angleGrad_[1] = beta;
 				angleGrad_[2] = gamma;
 				for (int i = 0; i < 3; i++) {
-					angleRad_[i] = angleGrad_[i] * GradtoRad;
+					angleRad_[i] = GradtoRad(angleGrad_[i]);
 				}
 			}
 			else {
@@ -402,7 +431,7 @@ namespace geometry {
 				angleRad_[1] = beta;
 				angleRad_[2] = gamma;
 				for (int i = 0; i < 3; i++) {
-					angleGrad_[i] = angleRad_[i] * RadtoGrad;
+					angleGrad_[i] = RadtoGrad(angleRad_[i]);
 				}
 			}
 			createMatrix();
@@ -428,7 +457,7 @@ namespace geometry {
 		}
 
 		template <class I>
-		[[nodiscard]] constexpr geometry::Point<I> findOptimalSupercell(const value_type cutoff) const noexcept {
+		[[nodiscard]] constexpr geometry::Point<I> findOptimalSupercell(const value_type cutoff, I minimum) const noexcept {
 			constexpr char shortContactsInTriclinic = 10;
 
 			constexpr std::array<geometry::Point<I>, shortContactsInTriclinic> directions{
@@ -444,9 +473,9 @@ namespace geometry {
 				geometry::Point<I>(1,-1,-1) };
 
 			geometry::Point<I> currentSuperCell(
-				static_cast<I>(std::ceil(cutoff / lattice_[0])),
-				static_cast<I>(std::ceil(cutoff / lattice_[1])),
-				static_cast<I>(std::ceil(cutoff / lattice_[2])));
+				std::max(static_cast<I>(std::ceil(cutoff / lattice_[0])), minimum),
+				std::max(static_cast<I>(std::ceil(cutoff / lattice_[1])), minimum),
+				std::max(static_cast<I>(std::ceil(cutoff / lattice_[2])), minimum));
 
 			char i = 0;
 			while (i < shortContactsInTriclinic) {
@@ -483,8 +512,7 @@ namespace geometry {
 		}
 	};
 
-	template<class T>
-	struct Symm
+	template<class T> struct Symm
 	{
 		using matrix_t = geometry::Matrix<int8_t>;
 		using point_t = geometry::Point<T>;
