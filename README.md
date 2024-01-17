@@ -1,7 +1,7 @@
 <h1 align="center">Atomistic Simulation Instruments and Database</h1>
 
 <p align="center">
-	<a href=https://github.com/ASID-Production/ASID/releases/tag/latest><img src=https://img.shields.io/badge/Version-PLACEHOLDER-brightgreen.svg?style=plastic></a>
+	<a href=https://github.com/ASID-Production/ASID/releases/tag/latest><img src=https://img.shields.io/github/v/release/ASID-Production/ASID?sort=date&display_name=release&style=plastic&color=brightgreen></a>
 	<img src=https://img.shields.io/badge/C++-14-blue.svg?style=plastic>
   <img src=https://img.shields.io/badge/Python-3.10-blue.svg?style=plastic>
   <img src=https://img.shields.io/badge/Django-3.2.16-blue.svg?style=plastic>
