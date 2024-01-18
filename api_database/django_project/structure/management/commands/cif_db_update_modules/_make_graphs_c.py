@@ -27,7 +27,6 @@
 # *****************************************************************************************
 
 import networkx as nx
-import matplotlib.pyplot as plt
 from django.conf import settings
 import ctypes
 import json
@@ -131,6 +130,7 @@ def save(params, coords, types, refcode, symops):
 
 
 def print_graph(graphs):
+    import matplotlib.pyplot as plt
     for item in set(graphs):
         print(item)
         elements = nx.get_node_attributes(item, "element")

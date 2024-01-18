@@ -57,10 +57,11 @@ def set_substructure(template_graph, analyse_mol):
 
 def set_elements(analyse_mol):
     elem_found = set()
-    num_nodes = int(analyse_mol[1])
-    for idx, el in enumerate(analyse_mol[3:], start=1):
+    mol_data = analyse_mol.split()
+    num_nodes = int(mol_data[1])
+    for idx, el in enumerate(mol_data[3:], start=1):
         if idx < num_nodes * 2 and idx % 2 == 1:
-            element = NUM_ELEM_DICT[el]
+            element = NUM_ELEM_DICT[int(el)]
             elem_found.add(element)
     return elem_found
 

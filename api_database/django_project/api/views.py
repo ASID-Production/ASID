@@ -44,12 +44,13 @@ from structure.management.commands.cif_db_update_modules._element_numbers import
 from multiprocessing import cpu_count
 import ctypes
 from django.conf import settings
-from itertools import chain
+from itertools import chain, zip_longest
 from structure.management.commands.cif_db_update import main as add_cif_data
 import os
 
 NUM_OF_PROC = int(cpu_count() / 2)
 MAX_STRS_SIZE = 30000
+CHUNK_SIZE = 10000  # the number of structures for search in
 
 
 class StructureViewSet(ReadOnlyModelViewSet):
@@ -126,24 +127,27 @@ class StructureViewSet(ReadOnlyModelViewSet):
         graph.add_nodes_from(serializer.data.get('nodes'))
         graph.add_edges_from(serializer.data.get('edges'))
         template_data = get_template_graph(graph)
-        analyse_data, size = get_search_queryset()
-
+        analyse_data, size = get_search_queryset_with_filtration(template_data)
         array_template = ctypes.c_char_p(template_data.encode())
-        array_data = (ctypes.c_char_p * size)(*[s.encode() for s in analyse_data])
         dll = settings.GET_DLL()
         if serializer.data.get('search_type') == 'substructure':
-            output = dll.SearchMain(array_template, array_data, size, NUM_OF_PROC, False)
+            exact = False
         elif serializer.data.get('search_type') == 'exact':
-            output = dll.SearchMain(array_template, array_data, size, NUM_OF_PROC, True)
+            exact = True
         else:
             return Response(
                 {'errors': 'Unsupported value of "search_type" parameter. Use exact or substructure keywords'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-
+        # split search for CHUNK_SIZE structures parts and then merge the result
         out_refcode_ids = []
-        for i in range(1, output[0] + 1):
-            out_refcode_ids.append(output[i])
+        analyse_data_split = list(zip_longest(*[iter(analyse_data)] * CHUNK_SIZE, fillvalue=''))
+        for analyse_data in analyse_data_split:
+            array_data = (ctypes.c_char_p * CHUNK_SIZE)(*[s.encode() for s in analyse_data])
+            output = dll.SearchMain(array_template, array_data, CHUNK_SIZE, NUM_OF_PROC, exact)
+            for j in range(1, output[0] + 1):
+                out_refcode_ids.append(output[j])
+        # get queryset on search result
         refcodes = StructureCode.objects.none()
         if len(out_refcode_ids) > MAX_STRS_SIZE:
             for i in range(0, len(out_refcode_ids), MAX_STRS_SIZE):
@@ -157,12 +161,6 @@ class StructureViewSet(ReadOnlyModelViewSet):
         pages = self.paginate_queryset(refcodes)
         out_serializer = RefcodeShortSerializer(pages, many=True)
         return self.get_paginated_response(out_serializer.data)
-
-
-def get_search_queryset():
-    graphs = CoordinatesBlock.objects.filter(graph__isnull=False)
-    analyse_data = graphs.values_list('graph', flat=True)
-    return analyse_data, graphs.count()
 
 
 def get_search_queryset_with_filtration(template):
