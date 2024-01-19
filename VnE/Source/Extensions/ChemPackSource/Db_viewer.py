@@ -181,6 +181,27 @@ class SearchDialog(SearchDialogTypes[1], SearchDialogTypes[0]):
         return self.search_type
 
 
+DbSettingsTypes = loadUiType(r'.\Source\Extensions\ChemPackSource\ui\Settings_dialog.ui')
+
+
+class DbSettings(DbSettingsTypes[1], DbSettingsTypes[0]):
+    def __init__(self, parent=None):
+        super().__init__()
+        self.setupUi(self)
+        self.setWindowTitle('Db Settings')
+        self.pushButton.pressed.connect(lambda: self.setServerAddress(self.lineEdit.text()))
+        self.pushButton_2.pressed.connect(lambda: self.setUser(self.lineEdit_2.text(), self.lineEdit_3.text()))
+        self.pushButton_3.pressed.connect(lambda: self.setUser(self.lineEdit_2.text(), self.lineEdit_3.text()))
+
+    def setUser(self, user_name, password):
+        if user_name and password:
+            Db_bindings.SESSION.changeUser(user_name, password)
+
+    def setServerAddress(self, address):
+        if address:
+            Db_bindings.SESSION.changeUrlBase(address)
+
+
 DbWindowtypes = loadUiType(r'.\Source\Extensions\ChemPackSource\ui\base_search_window.ui')
 
 
@@ -199,7 +220,7 @@ class DbWindow(DbWindowtypes[1], DbWindowtypes[0]):
         self.listView.selectionModel().currentChanged.connect(self.newSelection)
 
         self.search_dialog = SearchDialog(parent=self)
-
+        self.db_settings = DbSettings(parent=self)
 
         self.table_model = InfoTableModel()
         self.tableView: QtWidgets.QTableView
@@ -216,6 +237,10 @@ class DbWindow(DbWindowtypes[1], DbWindowtypes[0]):
         self.pushButton_2.pressed.connect(self.loadStruct)
 
         self.pushButton_3.pressed.connect(self.saveCif)
+
+        self.pushButton_4.pressed.connect(self.uploadFile)
+
+        self.pushButton_5.pressed.connect(self.db_settings.show)
 
     def setSpan(self):
         for i in range(self.table_model.rowCount()):
@@ -242,6 +267,11 @@ class DbWindow(DbWindowtypes[1], DbWindowtypes[0]):
                 out = open(filename, 'wb')
                 out.write(cif)
                 out.close()
+
+    def uploadFile(self):
+        filename = QtWidgets.QFileDialog.getOpenFileName(filter='*.cif')[0]
+        if filename:
+            Db_bindings.uploadFile(filename)
 
     def loadStruct(self):
 
