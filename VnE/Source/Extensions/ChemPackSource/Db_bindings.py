@@ -32,12 +32,43 @@ import json
 
 search_types = ['refcode', 'name', 'elements', 'doi', 'authors', 'cell']
 
+SETUP = False
+SESSION = None
+SERVER_PROC = None
+
+
+class Session:
+    def __init__(self):
+        self.url_base = 'http://127.0.0.1:8000'
+        self.user_name = 'VnE'
+        self.user_password = '12345678AsD'
+        self.user_token = None
+        self.changeUser(self.user_name, self.user_password)
+
+    def changeUser(self, name, password):
+        b = requests.post(f'{self.url_base}/api/auth/users/', data={
+            "email": "user@example.com",
+            "username": f"{name}",
+            "first_name": "none",
+            "last_name": "none",
+            "password": f"{password}"
+        })
+        token = requests.post(f'{self.url_base}/api/auth/token/login/', data={
+            "username": f"{name}",
+            "password": f"{password}"
+        })
+        self.user_token = json.loads(token.text)['auth_token']
+
+    def changeUrlBase(self, address):
+        self.url_base = f'http://{address}'
+        self.changeUser(self.user_name, self.user_password)
+
 
 def search(text, search_type):
     if search_type == 'substructure':
         data_out = structureSearch(text)
         return data_out
-    data = requests.get(f'http://127.0.0.1:8000/api/v1/structures/?{search_type}={text}&limit=1000')
+    data = requests.get(f'{SESSION.url_base}/api/v1/structures/?{search_type}={text}&limit=1000')
     data = data.content.decode(data.apparent_encoding)
     data = json.loads(data)
     data_out = data['results']
@@ -50,16 +81,31 @@ def search(text, search_type):
     return data_out
 
 
+SESSION: Session
+
+
 def get_full_info(id):
-    data = requests.get(f'http://127.0.0.1:8000/api/v1/structures/{id}')
+    data = requests.get(f'{SESSION.url_base}/api/v1/structures/{id}')
     data = data.content.decode(data.apparent_encoding)
     data_out = json.loads(data)
     return data_out
 
 
 def getCif(id):
-    data = requests.get(f'http://127.0.0.1:8000/api/v1/structures/{id}/download/')
+    data = requests.get(f'{SESSION.url_base}/api/v1/structures/{id}/download/')
     return data.content
+
+
+def uploadFile(file):
+    import os
+
+    global TOKEN
+    if SESSION.user_token is not None:
+        url = f'{SESSION.url_base}/api/v1/structures/upload/'
+        files = [('file', (os.path.basename(file), open(file, 'rb'), 'application/octet-stream'))]
+        headers = {'Authorization': f'Token {SESSION.user_token}'}
+        resp = requests.request('POST', url, headers=headers, data={}, files=files)
+        a = 0
 
 
 def structureSearch(struct):
@@ -94,7 +140,7 @@ def structureSearch(struct):
     edges = getEdges(struct)
     body['nodes'] = nodes
     body['edges'] = edges
-    data = requests.get('http://127.0.0.1:8000/api/v1/structures/search/?limit=100000', data=body)
+    data = requests.get(f'{SESSION.url_base}/api/v1/structures/search/?limit=100000', data=body)
     data = data.content.decode(data.apparent_encoding)
     data = json.loads(data)
     data_out = data['results']
@@ -123,6 +169,21 @@ def create_table(data):
     print(text_dict["Cell"])
 
     return text_dict
+
+
+def setup():
+    import subprocess
+    proc_cmd = '../api_database/venv/Scripts/python.exe ../api_database/django_project/manage.py runserver'.split(' ')
+    proc = subprocess.Popen(proc_cmd)
+    global SERVER_PROC
+    global SESSION
+    SERVER_PROC = proc
+    SESSION = Session()
+    return
+
+
+if SETUP is False:
+    setup()
 
 
 if __name__ == '__main__':
