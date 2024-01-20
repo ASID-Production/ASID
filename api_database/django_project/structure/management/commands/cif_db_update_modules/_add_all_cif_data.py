@@ -291,12 +291,12 @@ def add_cell(cif_block, space_group, struct_obj):
     centring = cif_block['_symmetry_space_group_name_h-m'].split()[0]
     centring_id = 0
     for item in CENTRINGS:
-        if centring in item:
+        if centring.replace('-', '') in item:
             centring_id = item[0]
     if not centring_id:
         raise Exception('Invalid unit cell centring!')
     if '_cell_formula_units_z' in data_in_cif:
-        z_val = int(cif_block['_cell_formula_units_z'])
+        z_val = float(cif_block['_cell_formula_units_z'])
     else:
         raise Exception('No Z value was found!')
     cell, created = Cell.objects.get_or_create(
@@ -305,6 +305,10 @@ def add_cell(cif_block, space_group, struct_obj):
         spacegroup=space_group[0], refcode=struct_obj,
         centring=centring_id, zvalue=z_val
     )
+    if '_cell_formula_units_Z_prime' in data_in_cif:
+        z_prime = float(cif_block['_cell_formula_units_Z_prime'])
+        cell.zprime = z_prime
+        cell.save()
     if created:
         add_cell_parms_with_error([1, cif_block], struct_obj)
 

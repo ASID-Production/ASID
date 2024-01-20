@@ -512,7 +512,7 @@ class CrystalAndStructureInfo(models.Model):
         blank=True,
         null=True,
         verbose_name='Sensitivity',
-        max_length=500
+        max_length=1000
     )
     pressure = models.CharField(
         blank=True,
