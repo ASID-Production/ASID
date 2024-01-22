@@ -28,7 +28,6 @@
 
 from rest_framework import serializers
 from rest_framework.fields import SerializerMethodField
-from django.shortcuts import get_object_or_404
 from structure.models import (StructureCode, Author, Spacegroup, Cell,
                               CompoundName, Formula, Publication,
                               RefcodePublicationConnection, ExperimentalInfo,
@@ -134,14 +133,20 @@ class RefcodeShortSerializer(serializers.ModelSerializer):
         )
 
     def get_formula(self, obj):
-        formula = get_object_or_404(Formula, refcode=obj)
-        if formula.formula_moiety:
-            return formula.formula_moiety
-        return formula.formula_sum
+        try:
+            formula = Formula.objects.get(refcode=obj)
+            if formula.formula_moiety:
+                return formula.formula_moiety
+            return formula.formula_sum
+        except Exception:
+            pass
 
     def get_temperature(self, obj):
-        exp_info = get_object_or_404(ExperimentalInfo, refcode=obj)
-        return exp_info.structure_determination_temperature
+        try:
+            exp_info = ExperimentalInfo.objects.get(refcode=obj)
+            return exp_info.structure_determination_temperature
+        except Exception:
+            pass
 
 
 class RefcodeFullSerializer(serializers.ModelSerializer):
@@ -166,8 +171,11 @@ class RefcodeFullSerializer(serializers.ModelSerializer):
         )
 
     def get_publication(self, obj):
-        publication = get_object_or_404(RefcodePublicationConnection, refcode=obj).publication
-        return PublicationSerializer(publication).data
+        try:
+            publication = RefcodePublicationConnection.objects.get(refcode=obj).publication
+            return PublicationSerializer(publication).data
+        except Exception:
+            pass
 
 
 class CifUploadSerializer(serializers.ModelSerializer):
