@@ -139,6 +139,12 @@ class CifFile(models.Model):
         max_length=200,
         verbose_name='Cif file'
     )
+    old_file_name = models.CharField(
+        verbose_name='File name when upload',
+        max_length=200,
+        blank=True,
+        null=True
+    )
 
 
 class Spacegroup(models.Model):
