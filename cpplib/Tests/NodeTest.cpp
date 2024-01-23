@@ -179,7 +179,7 @@ TEST(NodeTest, NeighboursSorting) {
 
 	for (size_t i = 0; i < 23; i++) {
 		ASSERT_EQ(node[i].neighboursSize(), node2[i].neighboursSize()) << "if i = " << i;
-		for (size_t j = 0; j < node[i].neighboursSize(); j++) {
+		for (AtomicIDType j = 0; j < node[i].neighboursSize(); j++) {
 			const auto& nei1 = (*(node[i].getNeighbour(j)));
 			const auto& nei2 = (*(node2[i].getNeighbour(j)));
 			if (!(nei1 == nei2))

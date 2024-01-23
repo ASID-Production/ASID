@@ -559,19 +559,19 @@ namespace geometry {
 			unsigned int j(0);
 			for (unsigned int i = 0; str[i] != '\0'; i++) {
 				switch (str[i]) {
-				case 'x': [[fallthrough]];
+				case 'x': // [[fallthrough]];
 				case 'X':
 					if (minus == true) mat.El(j, 0) = -1;
 					else mat.El(j, 0) = 1;
 					minus = false;
 					break;
-				case 'y': [[fallthrough]];
+				case 'y': // [[fallthrough]];
 				case 'Y':
 					if (minus == true) mat.El(j, 1) = -1;
 					else mat.El(j, 1) = 1;
 					minus = false;
 					break;
-				case 'z': [[fallthrough]];
+				case 'z': // [[fallthrough]];
 				case 'Z':
 					if (minus == true) mat.El(j, 2) = -1;
 					else mat.El(j, 2) = 1;
@@ -579,9 +579,9 @@ namespace geometry {
 					break;
 				case ',':
 					j++;
-					[[fallthrough]];
+					// [[fallthrough]];
 				case ' ':
-					[[fallthrough]];
+					// [[fallthrough]];
 				case '+':
 					break;
 				case '-':
