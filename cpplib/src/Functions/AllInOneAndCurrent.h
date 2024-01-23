@@ -30,6 +30,7 @@
 #include "../Classes/SearchGraph.h"
 #include "../Classes/FindMolecules.h"
 #include "../Classes/Distances.h"
+#include "../Classes/FindGeometry.h"
 
 using AtomType = uint8_t;
 using HType = uint8_t;
@@ -47,4 +48,6 @@ using CurrentSearchGraph = SearchGraph<AtomType, HType, AtomicIDType, MolecularI
 using CurrentPoint = geometry::Point<FloatingPointType>;
 using CurrentCell = geometry::Cell<FloatingPointType>;
 using CurrentFindMolecules = FindMolecules<AtomType, HType, AtomicIDType, FloatingPointType>;
+using CurrentFindGeometry = FindGeometry<AtomType, AtomicIDType, FloatingPointType>;
 using CurrentDistances = Distances<AtomType, FloatingPointType, AtomicIDType>;
+using CurrentFAMstr = FAM_Struct<AtomType, AtomicIDType, FloatingPointType>;
