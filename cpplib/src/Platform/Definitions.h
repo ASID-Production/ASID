@@ -42,3 +42,18 @@ API bool CompareGraph(const char* search1, const char* search2, const bool exact
 API const char* FindMoleculesInCell(const float* unit_cell, const char** symm, const int symm_s, const int* types, const float* xyz, const int types_s);
 API const char* FindMoleculesWithoutCell(const int* types, const float* xyz, const int types_s);
 
+API const char* FindDistanceWC(const int* types, const float* xyz, const int types_s, const int type1, const int type2, const float min_value, const float max_value);
+API const char* FindDistanceIC(const float* unit_cell, const char** symm, const int symm_s, const int* types, const float* xyz, const int types_s, const int type1, const int type2, const float min_value, const float max_value);
+API const char* FindAngleWC(const int* types, const float* xyz, const int types_s,
+	const int type1, const int type2, const int type3, const float min12, const float max12, const float min23, const float max23, const float min123, const float max123);
+API const char* FindAngleIC(const float* unit_cell, const char** symm, const int symm_s, const int* types, const float* xyz, const int types_s,
+	const int type1, const int type2, const int type3, const float min12, const float max12, const float min23, const float max23, const float min123, const float max123);
+API const char* FindTorsionWC(const int* types, const float* xyz, const int types_s,
+	const int type1, const int type2, const int type3, const int type4, const float min12, const float max12, const float min23, const float max23, const float min34, const float max34,
+	const float min123, const float max123, const float min234, const float max234, const float min1234, const float max1234);
+API const char* FindTorsionIC(const float* unit_cell, const char** symm, const int symm_s, const int* types, const float* xyz, const int types_s,
+	const int type1, const int type2, const int type3, const int type4, const float min12, const float max12, const float min23, const float max23, const float min34, const float max34,
+	const float min123, const float max123, const float min234, const float max234, const float min1234, const float max1234);
+
+
+

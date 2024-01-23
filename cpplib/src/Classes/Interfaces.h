@@ -28,6 +28,8 @@
 #pragma once
 #include <mutex>
 #include <vector>
+#include "../Classes/Geometry.h"
+#include "../Classes/FindMolecules.h"
 
 enum class ErrorStates {
 	dataIsEmpty
@@ -79,5 +81,19 @@ private:
 		size_type i = iterator_;
 		iterator_++;
 		return i;
+	}
+};
+
+struct ParseData {
+	template <class A, class AI, class T>
+	ParseData(FAM_Struct<A, AI, T>& fs, const int* types, const float* xyz, const int types_s) {
+		fs.points.reserve(types_s);
+		fs.types.reserve(types_s);
+		fs.sizePoints = types_s;
+		fs.sizeUnique = types_s;
+		for (int i = 0, i3 = 0; i < types_s; i++, i3 += 3) {
+			fs.types.emplace_back(types[i]);
+			fs.points.emplace_back(xyz[i3], xyz[i3 + 1], xyz[i3 + 2]);
+		}
 	}
 };
