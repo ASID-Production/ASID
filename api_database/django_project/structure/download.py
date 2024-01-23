@@ -61,7 +61,7 @@ def create_cif_text(structure: classmethod) -> str:
         unit_cell_params = {'_cell_length_a': cell.a, '_cell_length_b': cell.b,
                             '_cell_length_c': cell.c, '_cell_angle_alpha': cell.al,
                             '_cell_angle_beta': cell.be, '_cell_angle_gamma': cell.ga}
-        # if there is no data of paramaters' diviations, wright  parameters as is
+        # if there is no data of paramaters' diviations, write  parameters as is
         if value:
             return check_value_exist(cif_parameter, value, in_commas)
         return check_value_exist(cif_parameter, unit_cell_params[cif_parameter], in_commas)
@@ -72,7 +72,8 @@ def create_cif_text(structure: classmethod) -> str:
     text += check_value_exist('_database_code_depnum_ccdc_archive', structure.CCDC_number, True)
     text += check_value_exist('_chemical_formula_sum', structure.formula.formula_sum, True)
     text += check_value_exist('_chemical_formula_moiety', structure.formula.formula_moiety, True)
-    text += check_value_exist('_journal_coden_Cambridge', structure.publication.publication.journal.international_coden, False)
+    text += check_value_exist('_chemical_melting_point', structure.crystal_and_structure_info.melting_point, False)
+    # text += check_value_exist('_journal_coden_Cambridge', structure.publication.publication.journal.international_coden, False)
     text += check_value_exist('_journal_volume', structure.publication.publication.volume, False)
     text += check_value_exist('_journal_year', structure.publication.publication.year, False)
     text += check_value_exist('_journal_page_first', structure.publication.publication.page, False)
@@ -95,8 +96,10 @@ def create_cif_text(structure: classmethod) -> str:
         cos(radians(structure.cell.al)) ** 2 - cos(radians(structure.cell.be)) ** 2 - cos(radians(structure.cell.ga))
     )
 
-    text += check_value_exist('_cell_volume', volume, False)
+    text += check_value_exist('_cell_volume', round(volume, 3), False)
     text += check_value_exist('_exptl_crystal_density_diffrn', structure.experimental_info.calculated_density_value, False)
+    text += check_value_exist('_exptl_crystal_colour', structure.crystal_and_structure_info.color, True)
+    text += check_value_exist('_exptl_crystal_description', structure.crystal_and_structure_info.crystal_shape, True)
 
     if (structure.crystal_and_structure_info.bioactivity or
             structure.crystal_and_structure_info.phase_transitions or
@@ -104,8 +107,7 @@ def create_cif_text(structure: classmethod) -> str:
             structure.crystal_and_structure_info.sensitivity or
             structure.crystal_and_structure_info.pressure or
             structure.crystal_and_structure_info.disorder or
-            structure.crystal_and_structure_info.recrystallisation_solvent or
-            structure.crystal_and_structure_info.melting_point):
+            structure.crystal_and_structure_info.recrystallisation_solvent):
         text += '_exptl_special_details\n;\n'
         for param, value in {
             'bioactivity': structure.crystal_and_structure_info.bioactivity,
@@ -115,9 +117,17 @@ def create_cif_text(structure: classmethod) -> str:
             'pressure': structure.crystal_and_structure_info.pressure,
             'disorder': structure.crystal_and_structure_info.disorder,
             'recrystallisation solvent': structure.crystal_and_structure_info.recrystallisation_solvent,
-            'melting point': structure.crystal_and_structure_info.melting_point
         }.items():
-            text += f'{param}: {value}\n'
+            if (
+                    (param == 'bioactivity' and structure.crystal_and_structure_info.bioactivity) or
+                    (param == 'phase transitions' and structure.crystal_and_structure_info.phase_transitions) or
+                    (param == 'polymorph' and structure.crystal_and_structure_info.polymorph) or
+                    (param == 'sensitivity' and structure.crystal_and_structure_info.sensitivity) or
+                    (param == 'pressure' and structure.crystal_and_structure_info.pressure) or
+                    (param == 'disorder' and structure.crystal_and_structure_info.disorder) or
+                    (param == 'recrystallisation solvent' and structure.crystal_and_structure_info.recrystallisation_solvent)
+            ):
+                text += f'{param}: {value}\n'
         text += ';\n'
     else:
         text += '_exptl_special_details ?\n'
@@ -127,7 +137,8 @@ def create_cif_text(structure: classmethod) -> str:
     text += check_value_exist('_refine_ls_wR_factor_gt', structure.refinement_info.wR_factor, False, True)
     text += check_value_exist('_refine_ls_goodness_of_fit_ref', structure.refinement_info.gof, False, True)
     text += check_value_exist('_symmetry_cell_setting', structure.cell.spacegroup.get_system_display(), False)
-    text += check_value_exist('_symmetry_space_group_name_H-M', structure.cell.spacegroup.hall_name, True)
+    text += check_value_exist('_symmetry_space_group_name_H-M', structure.cell.spacegroup.name, True)
+    text += check_value_exist('_symmetry_space_group_name_Hall', structure.cell.spacegroup.hall_name, True)
     text += check_value_exist('_symmetry_Int_Tables_number', structure.cell.spacegroup.number, False)
 
     text += 'loop_\n_symmetry_equiv_pos_site_id\n_symmetry_equiv_pos_as_xyz\n'

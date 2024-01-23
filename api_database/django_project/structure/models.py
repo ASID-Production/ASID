@@ -45,12 +45,12 @@ CENTRINGS = [
 SYSTEMS = [
     (1, 'triclinic'),
     (2, 'monoclinic'),
-    (3, 'orthorombic'),
+    (3, 'orthorhombic'),
     (4, 'tetragonal'),
     (5, 'trigonal'),
     (6, 'hexagonal'),
     (7, 'cubic'),
-    (8, 'rhombohedron'),
+    (8, 'rhombohedral'),
 ]
 SHAPES = [
     ('block', 'block'),
