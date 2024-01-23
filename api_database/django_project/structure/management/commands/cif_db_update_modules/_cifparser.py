@@ -102,5 +102,5 @@ def get_coords(cif_block) -> str:
             if j > 4:
                 break
         atomic_sites += ' '.join(temp)
-        atomic_sites += ' '
+        atomic_sites += '\n'
     return atomic_sites, atoms

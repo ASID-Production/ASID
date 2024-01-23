@@ -91,13 +91,8 @@ class StructureViewSet(ReadOnlyModelViewSet):
                 break
             count_user_cifs += 1
         file = request.FILES.get('file')
-        # if object is not exists, create new structure object with defined refcode
-        if not CifFile.objects.filter(refcode__user=user).filter(old_file_name=file.name).exists():
-            refcode_obj = StructureCode.objects.create(user=user, refcode=refcode)
-            cif_file_obj = CifFile.objects.create(refcode=refcode_obj, file=file, old_file_name=file.name)
-        else:
-            cif_file_obj = CifFile.objects.get(refcode__user=user, old_file_name=file.name)
-            refcode = cif_file_obj.refcode.refcode
+        refcode_obj = StructureCode.objects.create(user=user, refcode=refcode)
+        cif_file_obj = CifFile.objects.create(refcode=refcode_obj, file=file, old_file_name=file.name)
         cif_file_path = os.path.join(settings.BASE_DIR, 'media', str(cif_file_obj.file))
         try:
             add_cif_data(

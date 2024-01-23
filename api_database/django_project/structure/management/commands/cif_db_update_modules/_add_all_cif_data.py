@@ -76,8 +76,8 @@ experimental_info = {
     'radiation_source': ['_diffrn_radiation_source'],
 }
 refinement_info = {
-    'r_factor': ['_refine_ls_R_factor_gt'],
-    'wR_factor': ['_refine_ls_wR_factor_ref'],
+    'r_factor': ['_refine_ls_r_factor_gt'],
+    'wR_factor': ['_refine_ls_wr_factor_ref'],
     'gof': ['_refine_ls_goodness_of_fit_ref'],
     'diff_density_max': ['_refine_diff_density_max'],
     'diff_density_min': ['_refine_diff_density_min'],
@@ -203,26 +203,22 @@ def get_or_create_space_group(cif_block):
         logger_1.info(f'Space group name: {space_group_name}')
     else:
         raise Exception('No space group found in cif!')
-
-    create = False
     hall = ''
     if '_symmetry_space_group_name_hall' in data_in_cif:
         hall = cif_block['_symmetry_space_group_name_hall']
         logger_1.info(f'Hall name: {hall}')
-        space_group, create = Spacegroup.objects.get_or_create(name=space_group_name, hall_name=hall)
-        if not create:
+        if Spacegroup.objects.filter(name=space_group_name, hall_name=hall).exists():
+            space_group = Spacegroup.objects.get(name=space_group_name, hall_name=hall)
             return space_group
     else:
-        if not create:
-            space_group = Spacegroup.objects.filter(name=space_group_name)
-            if space_group.count() == 1:
-                return space_group
-            elif space_group.count() > 1:
-                raise Exception('No space group found in cif!')
-            elif space_group.count() == 0:
-                # if such a group is not in the database, then add it
-                logger_1.info(f'Creating new space group object...')
-
+        space_group = Spacegroup.objects.filter(name=space_group_name)
+        if space_group.count() == 1:
+            return space_group[0]
+        elif space_group.count() > 1:
+            raise Exception('No space group found in cif!')
+        elif space_group.count() == 0:
+            # if such a group is not in the database, then add it
+            logger_1.info(f'Creating new space group object...')
     # sg number
     if '_space_group_it_number' in data_in_cif:
         sg_number = cif_block['_space_group_it_number']
@@ -240,9 +236,9 @@ def get_or_create_space_group(cif_block):
         if system_id:
             logger_1.info(f'Space group system number: {system_id}')
         else:
-            raise Exception('No space group number found in cif!')
+            raise Exception('No space group system found in cif!')
     else:
-        raise Exception('No space group number found in cif!')
+        raise Exception('No space group system found in cif!')
     # create a space group object
     space_group, create = Spacegroup.objects.get_or_create(
         name=space_group_name,
@@ -302,7 +298,7 @@ def add_cell(cif_block, space_group, struct_obj):
     cell, created = Cell.objects.get_or_create(
         a=float(a), b=float(b), c=float(c),
         al=float(al), be=float(be), ga=float(ga),
-        spacegroup=space_group[0], refcode=struct_obj,
+        spacegroup=space_group, refcode=struct_obj,
         centring=centring_id, zvalue=z_val
     )
     if '_cell_formula_units_Z_prime' in data_in_cif:
@@ -373,6 +369,15 @@ def add_journal_and_publication(cif_block, struct_obj):
     if '_journal_year' in cif_block[1].keys():
         year = int(cif_block[1]['_journal_year'])
         filtr['year'] = year
+    if '_journal_page_first' in cif_block[1].keys():
+        page = int(cif_block[1]['_journal_page_first'])
+        filtr['page'] = page
+    if '_journal_volume' in cif_block[1].keys():
+        volume = int(cif_block[1]['_journal_volume'])
+        filtr['volume'] = volume
+    if '_journal_doi' in cif_block[1].keys():
+        doi = int(cif_block[1]['_journal_doi'])
+        filtr['doi'] = doi
     if '_citation_year' in cif_block[1].keys():
         citation = cif_block[1].GetLoop('_citation_year')
         citation_keys = citation.GetItemOrder()
@@ -561,7 +566,7 @@ def add_universal(model, refcode_obj, cif_block, iucr_dict):
                         elif key == 'polymorph' and 'polymorph' in line:
                             value = line
                             break
-                        elif key == 'sensitivity' and {'decomposition', 'sensitve', 'oxidant', 'stable', 'chromic', 'ygroscopic', 'thermolabile'}.intersection(set(line.split())):
+                        elif key == 'sensitivity' and {'decomposition', 'sensitve', 'oxidant', 'stable', 'chromic', 'hygroscopic', 'thermolabile'}.intersection(set(line.split())):
                             value = line
                             break
                         elif key == 'pressure' and ('pressure' in line or re.search(r'[KkGgMmPa]{3}', line)):
@@ -579,6 +584,11 @@ def add_universal(model, refcode_obj, cif_block, iucr_dict):
                     value = ' '.join(value.split())
                 if key == 'extinction_coef':
                     value = float(value.split('(')[0])
+                if key == 'formula_moiety' or key == 'formula_sum':
+                    value = value.replace('\n', '')
+                    value = value.replace('\r', '')
+                if key in ['r_factor', 'wR_factor', 'gof']:
+                    value = float(value) * 100
                 if value and value != '?':
                     setattr(obj_obj, key, value)
                     break
