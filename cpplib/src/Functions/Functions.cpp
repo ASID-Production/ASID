@@ -86,14 +86,13 @@ API const char* FindMoleculesInCell(const float* unit_cell, const char** symm, c
 		symmv.emplace_back(symm[i]);
 	}
 
-	auto symmret = fc.GenerateSymm(famstr.points, symmv);
+	fc.GenerateSymm(famstr, symmv);
 	famstr.sizePoints = famstr.points.size();
 	famstr.types.reserve(famstr.sizePoints);
 	for (size_type i = famstr.sizeUnique; i < famstr.sizePoints; i++) {
-		famstr.types.emplace_back(famstr.types[symmret[i]]);
+		famstr.types.emplace_back(famstr.types[famstr.parseIndex[i]]);
 	}
 	fc.CreateSupercell(famstr.points, famstr.findCutoff(distances));
-
 	std::string errorMsg;
 	auto res = famstr.findBonds(distances, errorMsg, [fc](const CurrentPoint& p1, const CurrentPoint& p2) {return fc.distanceInCell(p1, p2); });
 
@@ -135,7 +134,7 @@ API const char* FindDistanceWC(const int* types, const float* xyz, const int typ
 	{
 		res += std::to_string(std::get<0>(raw[i])) + ':';
 		res += std::to_string(std::get<1>(raw[i])) + ':';
-		res += (std::to_string(std::get<2>(raw[i])) + ';') + '\n';
+		res += std::to_string(std::get<2>(raw[i])) + ";\n";
 	}
 	return res.c_str();
 }
@@ -153,11 +152,11 @@ API const char* FindDistanceIC(const float* unit_cell, const char** symm, const 
 		symmv.emplace_back(symm[i]);
 	}
 
-	auto symmret = fc.GenerateSymm(famstr.points, symmv);
+	fc.GenerateSymm(famstr, symmv);
 	famstr.sizePoints = famstr.points.size();
 	famstr.types.reserve(famstr.sizePoints);
 	for (size_type i = famstr.sizeUnique; i < famstr.sizePoints; i++) {
-		famstr.types.emplace_back(famstr.types[symmret[i]]);
+		famstr.types.emplace_back(famstr.types[famstr.parseIndex[i]]);
 	}
 	fc.CreateSupercell(famstr.points, static_cast<FloatingPointType>(8.5), 2);
 
@@ -216,11 +215,11 @@ API const char* FindAngleIC(const float* unit_cell, const char** symm, const int
 		symmv.emplace_back(symm[i]);
 	}
 
-	auto symmret = fc.GenerateSymm(famstr.points, symmv);
+	fc.GenerateSymm(famstr, symmv);
 	famstr.sizePoints = famstr.points.size();
 	famstr.types.reserve(famstr.sizePoints);
 	for (size_type i = famstr.sizeUnique; i < famstr.sizePoints; i++) {
-		famstr.types.emplace_back(famstr.types[symmret[i]]);
+		famstr.types.emplace_back(famstr.types[famstr.parseIndex[i]]);
 	}
 	fc.CreateSupercell(famstr.points, static_cast<FloatingPointType>(8.5), 2);
 
@@ -269,7 +268,7 @@ API const char* FindTorsionWC(const int* types, const float* xyz, const int type
 		res += std::to_string(std::get<1>(raw[i])) + ':';
 		res += std::to_string(std::get<2>(raw[i])) + ':';
 		res += std::to_string(std::get<3>(raw[i])) + ':';
-		res += (std::to_string(geometry::RadtoGrad(std::get<4>(raw[i]))) + ';') + '\n';
+		res += std::to_string(geometry::RadtoGrad(std::get<4>(raw[i]))) + ";\n";
 	}
 	return res.c_str();
 }
@@ -289,11 +288,11 @@ API const char* FindTorsionIC(const float* unit_cell, const char** symm, const i
 		symmv.emplace_back(symm[i]);
 	}
 
-	auto symmret = fc.GenerateSymm(famstr.points, symmv);
+	fc.GenerateSymm(famstr, symmv);
 	famstr.sizePoints = famstr.points.size();
 	famstr.types.reserve(famstr.sizePoints);
 	for (size_type i = famstr.sizeUnique; i < famstr.sizePoints; i++) {
-		famstr.types.emplace_back(famstr.types[symmret[i]]);
+		famstr.types.emplace_back(famstr.types[famstr.parseIndex[i]]);
 	}
 	fc.CreateSupercell(famstr.points, static_cast<FloatingPointType>(8.5), 2);
 

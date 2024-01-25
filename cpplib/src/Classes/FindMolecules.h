@@ -48,9 +48,12 @@ struct FAM_Struct {
 	using size_type = AI;
 	using BondType = Bond<AI>;
 	using DistancesType = Distances<A, T, size_type>;
+	using ParseIndexType = std::vector<size_t>;
 	// Data
 	AtomTypeConteinerType types;
 	PointConteinerType points;
+	ParseIndexType parseIndex;
+	
 	size_type sizeUnique = 0;
 	size_type sizePoints = 0;
 
@@ -59,6 +62,8 @@ struct FAM_Struct {
 	constexpr FAM_Struct(AtomTypeConteinerType&& t, PointConteinerType&& p) noexcept : types(std::move(t)), points(std::move(p)) {
 		sizeUnique = types.size();
 		sizePoints = points.size();
+		parseIndex.resize(sizeUnique);
+		std::iota(parseIndex.begin(), parseIndex.end(), 0); // Fill with 0, 1...
 	};
 
 	// Methods
@@ -66,9 +71,11 @@ struct FAM_Struct {
 		std::vector<BondType> res;
 		std::vector<AI> invalidAtoms;
 		for (size_type i = 0; i < sizePoints; i++) {
-			const auto type_i = types[i % sizeUnique];
+			const auto indexI = parseIndex[i];
+			const auto type_i = types[indexI];
 			for (size_type j = i + 1; j < sizePoints; j++) {
-				const auto type_j = types[j % sizeUnique];
+				const auto indexJ = parseIndex[j];
+				const auto type_j = types[indexJ];
 				T dist = distance_f(points[i], points[j]);
 				char isbond = distances.isBond(type_i, type_j, dist);
 				switch (isbond) {
@@ -79,10 +86,10 @@ struct FAM_Struct {
 					if (errorMSG.empty()) {
 						errorMSG = "Too short bond between ";
 						errorMSG += mend[type_i];
-						errorMSG += std::to_string(i % sizeUnique);
+						errorMSG += std::to_string(indexI);
 						errorMSG += " and ";
 						errorMSG += mend[type_j];
-						errorMSG += std::to_string(j % sizeUnique);
+						errorMSG += std::to_string(indexJ);
 						errorMSG += ", which is ";
 						errorMSG += std::to_string(dist);
 					}
@@ -111,8 +118,17 @@ struct FAM_Struct {
 		return std::fma(ret, 2, 0.0001f);
 	}
 
+	// Debug Method
+	void writeXYZ(std::string name) {
+		std::ofstream out;
+		const auto size = std::min(types.size(), points.size());
+		for (size_t i = 0; i < size; i++)
+		{
+			out << types[i] << ' '<< points[i].get(0) << ' ' << points[i].get(1) << ' ' << points[i].get(2) << '\n';
+		}
+		out.close();
+	}
 };
-
 
 template<class T>
 struct FAM_Cell : public geometry::Cell<T> {
@@ -120,25 +136,22 @@ struct FAM_Cell : public geometry::Cell<T> {
 	using PointConteinerType = std::vector<PointType>;
 	using base = geometry::Cell<T>;
 	FAM_Cell(base&& cell) : base(std::move(cell)) {}
-	std::vector<size_t> GenerateSymm(PointConteinerType& points, const std::vector<geometry::Symm<T>>& symm) {
-		const size_t p_s = points.size();
+	template <class A, class AI>
+	void GenerateSymm(FAM_Struct<A,AI,T>& fs, const std::vector<geometry::Symm<T>>& symm) {
+		const size_t p_s = fs.points.size();
 		const size_t s_s = symm.size();
-		std::vector<size_t> res(s_s);
-		res.resize(p_s);
-		std::iota(res.begin(), res.end(), 0); // Fill with 0, 1...
 
 		for (size_t p = 0; p < p_s; p++) {
-			const size_t p_start = points.size();
+			const size_t p_start = fs.points.size();
 			for (size_t s = 0; s < s_s; s++) {
-				auto newpoint = symm[s].GenSymmNorm(points[p]);
-				if (isTheSame_(points, newpoint, p, p_start)) {
+				auto newpoint = symm[s].GenSymmNorm(fs.points[p]);
+				if (isTheSame_(fs.points, newpoint, p, p_start)) {
 					continue;
 				}
-				points.push_back(newpoint.MoveToCell());
-				res.push_back(p);
+				fs.points.push_back(newpoint.MoveToCell());
+				fs.parseIndex.push_back(p);
 			}
 		}
-		return res;
 	}
 	void CreateSupercell(PointConteinerType& points, T cutoff, uint8_t minimum = 1) {
 
@@ -149,6 +162,10 @@ struct FAM_Cell : public geometry::Cell<T> {
 		points.reserve(static_cast<typename PointConteinerType::size_type>(sizePoints) * mult_super_cell);
 		for (uint8_t i = 0; i < 3; i++) {
 			uint8_t cur_mult_minus1 = (super.get(i) - uint8_t(1));
+			if (cur_mult_minus1 == 0)
+			{
+				continue;
+			}
 			uint8_t div2 = cur_mult_minus1 >> uint8_t(1);
 			sizePoints = points.size();
 			for (uint8_t j = 1; j <= div2; j++) {
@@ -213,11 +230,6 @@ private:
 		return false;
 	}
 };
-
-
-
-
-
 
 template<class A, class H, class AI, class T>
 class FindMolecules {
@@ -378,7 +390,7 @@ private:
 				if (is_member(cur_id, res) != -1) continue;
 				res.emplace_back(cur_id);
 			}
-			seen[res[low_pos]] = true;
+			seen[fs_.parseIndex[res[low_pos]]] = true;
 			low_pos++;
 		}
 		return res;
