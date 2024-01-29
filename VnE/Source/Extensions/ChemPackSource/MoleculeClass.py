@@ -159,11 +159,17 @@ class Molecule(aEntity):
         return self._points_list
 
     def genBonds(self):
+        import os
         if self.__len__() < 1:
             return
         b = [(c_float * 4)(*([c_float(a.atom_type)].__add__([c_float(coord) for coord in a.coord]))) for a in self.children]
         p = (POINTER(c_float) * len(b))(*b)
-        direct = '\\'.join(__file__.split('\\')[:-1] + ['GenBonds.dll'])
+        if os.name == 'nt':
+            direct = '\\'.join(__file__.split('\\')[:-1] + ['GenBonds.dll'])
+        elif os.name == 'posix':
+            direct = '\\'.join(__file__.split('\\')[:-1] + ['GenBonds.so'])
+        else:
+            raise Exception('Unsupported operating system')
         lib = CDLL(direct)
         lib.genBonds.restype = c_char_p
         lib.genBonds.argtypes = (c_uint, POINTER(POINTER(c_float)))

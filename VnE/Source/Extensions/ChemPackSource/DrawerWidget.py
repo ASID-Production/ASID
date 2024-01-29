@@ -1233,21 +1233,24 @@ class DrawWidget(DrawWidgetTypes[1], DrawWidgetTypes[0]):
             points = mol_sys.children[0].children.copy()
             pack = Pack()
             mem = {}
-
-            def rec(point, pack, mem, bonds):
+            nodes = {}
+            for point in points:
                 if point not in mem:
-                    points.remove(point)
-                    node = Node(pack, str_atom=atoms[point])
+                    if nodes.get(point, None) is not None:
+                        node = nodes[point]
+                    else:
+                        node = Node(pack, str_atom=atoms[point])
+                        nodes[point] = node
                     mem[point] = node
+                    for point2 in bonds[point]:
+                        if nodes.get(point2, None) is not None:
+                            node2 = nodes[point2]
+                        else:
+                            node2 = Node(pack, str_atom=atoms[point2])
+                            nodes[point2] = node2
+                        node.addConnect(node2)
                 else:
-                    return mem[point]
-                for point_2 in bonds[point]:
-                    node_2 = rec(point_2, pack, mem, bonds)
-                    node.addConnect(node_2)
-                return node
-
-            while points:
-                rec(points[0], pack, mem, bonds)
+                    continue
             a = []
             for sub_pack in sub_packs:
                 a.append(findSubGraph(pack, sub_pack))

@@ -144,7 +144,7 @@ def pars(file, bond=True, root=None):
         from .ChemPackSource.parsers import PARSER as parser
         PARSER = parser
     if TREE_MODEL is not None:
-        if os.path.splitext(file)[0] == 'paths' or os.path.splitext(file) == 'CPs':
+        if os.path.basename(file) == 'paths.pdb' or os.path.basename(file) == 'CPs.pdb':
             bond = False
         molsys, point_lists = PARSER.parsFile(file, bond=bond, root=root)
         return molsys, point_lists
