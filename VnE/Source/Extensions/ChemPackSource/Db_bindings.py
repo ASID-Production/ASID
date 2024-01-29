@@ -105,19 +105,11 @@ def uploadFile(file):
         files = [('file', (os.path.basename(file), open(file, 'rb'), 'application/octet-stream'))]
         headers = {'Authorization': f'Token {SESSION.user_token}'}
         resp = requests.request('POST', url, headers=headers, data={}, files=files)
-        a = 0
 
 
 def structureSearch(struct):
     from .DrawerWidget import Drawing
     struct: Drawing
-
-    '''{
-    "search_type": "substructure",
-    "nodes": ["[1, {'type': 'C', 'Hnum': 0,}]", "[2, {'type': 'Br', 'Hnum': 0, }]"],
-    "edges": ["[1, 2, {}]"]
-    }
-    '''
 
     def getEdges(struct):
         edges = []
@@ -178,6 +170,11 @@ def setup():
     global SERVER_PROC
     global SESSION
     SERVER_PROC = proc
+    try:
+        proc.wait(timeout=5)
+        raise Exception('Server Error')
+    except subprocess.TimeoutExpired:
+        pass
     SESSION = Session()
     return
 
