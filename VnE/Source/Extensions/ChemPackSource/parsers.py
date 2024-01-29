@@ -80,13 +80,24 @@ class FileParser:
             if flag == 'ATOM' or flag == 'HETATM':
                 coord = np.array([float(line[26:38]), float(line[38:46]), float(line[46:54])], dtype=np.float32)
                 atom_type = line[66:78].replace(' ', '').capitalize()
-                atom = MoleculeClass.Atom(coord.copy(), PALETTE.getName(atom_type), parent=mol, name=f'{line[i:11].replace(" ", "")}-{line[13:17].replace(" ", "")}')
+                atom = MoleculeClass.Atom(coord.copy(), PALETTE.getName(atom_type), parent=mol,
+                                          name=f'{line[i:11].replace(" ", "")}-{line[13:17].replace(" ", "")}',
+                                          pdb_atom_seq=int(line[i:11].replace(" ", "")),
+                                          pdb_res_name=line[17:20],
+                                          pdb_res_seq=int(line[22:26]),
+                                          pdb_flag=flag,
+                                          pdb_chain=line[20:22].replace(' ', ''))
                 point = point_class.Point(parent=atom_list, coord=coord, rad=atom_list,
-                                          color=PALETTE.point_dict[atom_type])
+                                          color=PALETTE.point_dict[atom_type],
+                                          name=f'{line[i:11].replace(" ", "")}-{line[13:17].replace(" ", "")}',
+                                          pdb_atom_seq=int(line[i:11].replace(" ", "")),
+                                          pdb_res_name=line[17:20],
+                                          pdb_res_seq=int(line[22:26]),
+                                          pdb_flag=flag,
+                                          pdb_chain=line[20:22].replace(' ', ''))
+                point.addProperty('label', point.name)
                 atom.assignPoint(point)
                 mol.addChild(atom)
-                point.addProperty('name', f'{line[i:11].replace(" ", "")}-{line[13:17].replace(" ", "")}')
-                point.addProperty('label', point.name)
         if bond:
             mol_sys.genBonds()
         if root is not None:
