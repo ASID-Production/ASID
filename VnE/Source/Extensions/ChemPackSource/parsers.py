@@ -39,10 +39,11 @@ class FileParser:
             for atom in mol.children:
                 coord = atom.coord.copy()
                 point = point_class.Point(parent=atom_list, coord=coord, rad=atom_list,
-                                          color=PALETTE.point_dict[PALETTE.getName(atom.atom_type)])
+                                          color=PALETTE.point_dict[PALETTE.getName(atom.atom_type)],
+                                          atom_type=atom.atom_type)
                 atom.assignPoint(point)
-                point.addProperty('name', f'{PALETTE.getName(atom.atom_type)}{i}')
-                point.addProperty('label', f'{PALETTE.getName(atom.atom_type)}{i}')
+                point.addProperty('name', f'{point.atom_type}{i}')
+                point.addProperty('label', f'{point.atom_type}{i}')
                 i += 1
             if bond:
                 bonds_l = point_class.PointsList(parent=mol_list, rad=0.1, name='Bonds')
@@ -71,32 +72,24 @@ class FileParser:
             line_ed = []
             i = 0
             x = line[i]
-            flag = ''
-            while x.isalpha():
-                flag += x
-                i += 1
-                x = line[i]
+            flag = line[0:6].replace(' ', '')
 
             if flag == 'ATOM' or flag == 'HETATM':
-                coord = np.array([float(line[26:38]), float(line[38:46]), float(line[46:54])], dtype=np.float32)
-                atom_type = line[66:78].replace(' ', '').capitalize()
+                coord = np.array([float(line[30:38]), float(line[38:46]), float(line[46:54])], dtype=np.float32)
+                atom_type = line[76:78].replace(' ', '').capitalize()
                 atom = MoleculeClass.Atom(coord.copy(), PALETTE.getName(atom_type), parent=mol,
-                                          name=f'{line[i:11].replace(" ", "")}-{line[13:17].replace(" ", "")}',
-                                          pdb_atom_seq=int(line[i:11].replace(" ", "")),
-                                          pdb_res_name=line[17:20],
-                                          pdb_res_seq=int(line[22:26]),
+                                          name=f'{line[6:11].replace(" ", "")}-{line[13:17].replace(" ", "")}',
                                           pdb_flag=flag,
-                                          pdb_chain=line[20:22].replace(' ', ''))
-                point = point_class.Point(parent=atom_list, coord=coord, rad=atom_list,
-                                          color=PALETTE.point_dict[atom_type],
-                                          name=f'{line[i:11].replace(" ", "")}-{line[13:17].replace(" ", "")}',
-                                          pdb_atom_seq=int(line[i:11].replace(" ", "")),
+                                          pdb_atom_seq=int(line[6:11].replace(" ", "")),
+                                          pdb_name=line[12:16].replace(" ", ""),
+                                          pdb_alt_loc=line[16],
                                           pdb_res_name=line[17:20],
+                                          pdb_chain=line[21],
                                           pdb_res_seq=int(line[22:26]),
-                                          pdb_flag=flag,
-                                          pdb_chain=line[20:22].replace(' ', ''))
-                point.addProperty('label', point.name)
-                atom.assignPoint(point)
+                                          pdb_iCode=line[26],
+                                          pdb_occupancy=float(line[54:60]),
+                                          pdb_tempFactor=float(line[60:66]),
+                                          pdb_charge=line[78:80])
                 mol.addChild(atom)
         if bond:
             mol_sys.genBonds()
@@ -108,7 +101,20 @@ class FileParser:
             for atom in mol.children:
                 coord = atom.coord.copy()
                 point = point_class.Point(parent=atom_list, coord=coord, rad=atom_list,
-                                          color=PALETTE.point_dict[PALETTE.getName(atom.atom_type)])
+                                          color=PALETTE.point_dict[PALETTE.getName(atom.atom_type)],
+                                          name=atom.name,
+                                          atom_type=atom.atom_type,
+                                          pdb_flag=atom.pdb_flag,
+                                          pdb_atom_seq=atom.pdb_atom_seq,
+                                          pdb_name=atom.pdb_name,
+                                          pdb_alt_loc=atom.pdb_alt_loc,
+                                          pdb_res_name=atom.pdb_res_name,
+                                          pdb_chain=atom.pdb_chain,
+                                          pdb_res_seq=atom.pdb_res_seq,
+                                          pdb_iCode=atom.pdb_Achar,
+                                          pdb_occupancy=atom.pdb_occupancy,
+                                          pdb_tempFactor=atom.tempFactor,
+                                          pdb_charge=atom.pdb_charge)
                 atom.assignPoint(point)
                 point.addProperty('name', atom.name)
                 point.addProperty('label', atom.name)

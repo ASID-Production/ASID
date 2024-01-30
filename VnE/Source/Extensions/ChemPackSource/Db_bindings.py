@@ -73,7 +73,6 @@ def search(text, search_type):
     data = json.loads(data)
     data_out = data['results']
     while data['next'] is not None:
-        print(data['next'])
         data = requests.get(data['next'])
         data = data.content.decode(data.apparent_encoding)
         data = json.loads(data)
@@ -137,7 +136,6 @@ def structureSearch(struct):
     data = json.loads(data)
     data_out = data['results']
     while data['next'] is not None:
-        print(data['next'])
         data = requests.get(data['next'], data=body)
         data = data.content.decode(data.apparent_encoding)
         data = json.loads(data)
@@ -158,7 +156,6 @@ def create_table(data):
     text_dict['Cell'] = f'a:          {data["cell"]["a"]:<10.3f}b:      {data["cell"]["b"]:<10.3f}c:            {data["cell"]["c"]:<10.3f}\n' \
                         f'alpha:   {data["cell"]["al"]:<10.2f}beta:  {data["cell"]["be"]:<10.2f}gamma: {data["cell"]["ga"]:<10.2f}\n' \
                         f'Volume:  {data["reduced_cells"][0]["volume"]}'
-    print(text_dict["Cell"])
 
     return text_dict
 

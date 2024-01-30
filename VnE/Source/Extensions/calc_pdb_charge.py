@@ -6,7 +6,6 @@ SEMI_RES = ['HIS']
 NEG_RES = ['ASP', 'GLU']
 
 DIALOG = None
-TEXT_EDIT = None
 LAYOUT = None
 
 
@@ -34,11 +33,9 @@ def execute():
             else:
                 if atom.pdb_res_name not in RES:
                     line = f'WARNING: Unknown res name {atom.pdb_res_name}, res seq: {atom.pdb_res_seq}'
-                    print(line)
                     text.append(line)
                 elif atom.pdb_res_name in SEMI_RES:
                     line = f'WARNING: Unknown charge for res name {atom.pdb_res_name}, res seq: {atom.pdb_res_seq}'
-                    print(line)
                     text.append(line)
                 elif atom.pdb_res_name in POS_RES:
                     charge += 1
@@ -48,13 +45,10 @@ def execute():
                     neg_res.append(atom)
                 mem.append(atom.pdb_res_seq)
         pos_line = f'Positive res: {", ".join([f"{x.pdb_res_seq}-{x.pdb_res_name}" for x in pos_res])}'
-        print(pos_line)
         text.append(pos_line)
         neg_line = f'Negative res: {", ".join([f"{x.pdb_res_seq}-{x.pdb_res_name}" for x in neg_res])}'
-        print(neg_line)
         text.append(neg_line)
         line = f'FINAL: Charge == {charge}'
-        print(line)
         text.append(line)
 
         class TextViewer(QtWidgets.QWidget):

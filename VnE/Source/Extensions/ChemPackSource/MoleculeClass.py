@@ -33,6 +33,32 @@ from ctypes import *
 from ..ChemPack import PALETTE
 
 
+class DefaultData:
+
+    __default_data = {
+        'name': 'X',
+        'atom_type': 999,
+        'coord': np.array([0,0,0], dtype=np.float32),
+        'pdb_flag': 'HETATM',
+        'pdb_atom_seq': 0,
+        'pdb_name': 'X',
+        'pdb_alt_loc': ' ',
+        'pdb_res_name': 'UND',
+        'pdb_chain': 'X',
+        'pdb_res_seq': 0,
+        'pdb_iCode': ' ',
+        'pdb_occupancy': 1.00,
+        'pdb_tempFactor': 0.00,
+        'pdb_charge': '  '
+    }
+
+    def __getattr__(self, item):
+        if item in DefaultData.__default_data:
+            return DefaultData.__default_data[item]
+        else:
+            return None
+
+
 class aIter(ABC):
     @abstractmethod
     def __init__(self):
@@ -89,7 +115,7 @@ class Bond:
         return self._parents
 
 
-class Atom:
+class Atom(DefaultData):
     def __init__(self, coord, atom_type: int, parent=None, **kwargs):
         self._parent = parent
         if parent is not None:
