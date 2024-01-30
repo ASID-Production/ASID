@@ -136,22 +136,60 @@ struct FAM_Cell : public geometry::Cell<T> {
 	using PointConteinerType = std::vector<PointType>;
 	using base = geometry::Cell<T>;
 	FAM_Cell(base&& cell) : base(std::move(cell)) {}
-	template <class A, class AI>
-	void GenerateSymm(FAM_Struct<A,AI,T>& fs, const std::vector<geometry::Symm<T>>& symm) {
+	template <class A, class AI> void GenerateSymm(FAM_Struct<A,AI,T>& fs, const std::vector<geometry::Symm<T>>& symm) const {
 		const size_t p_s = fs.points.size();
 		const size_t s_s = symm.size();
 
+		std::vector<bool> unique(p_s, true);
+
 		for (size_t p = 0; p < p_s; p++) {
+			if (unique[p] == false) // skip non unique atoms
+				continue;
 			const size_t p_start = fs.points.size();
 			for (size_t s = 0; s < s_s; s++) {
 				auto newpoint = symm[s].GenSymmNorm(fs.points[p]);
 				if (isTheSame_(fs.points, newpoint, p, p_start)) {
 					continue;
 				}
+				const size_t au = isAnotherUnique(fs.points, newpoint, p, fs.sizeUnique);
+				if (au != static_cast<size_t>(-1)) {
+					unique[au] = false;
+				}
 				fs.points.push_back(newpoint.MoveToCell());
 				fs.parseIndex.push_back(p);
 			}
 		}
+		// sort and recount unique atoms
+		// 1. Recount unique atoms and create shifting vector
+		size_t new_count = 0;
+		std::vector<size_t> shift(p_s, static_cast<size_t>(-1));
+		for (size_t i = 0; i < p_s; i++)
+		{
+			if (unique[i]) {
+				shift[i] = new_count;
+				if (i != new_count) {
+					fs.points[new_count] = fs.points[i];
+					fs.types[new_count] = fs.types[i];
+				}
+				new_count++;
+			}
+		}
+		fs.sizeUnique = new_count;
+		if (new_count == p_s) return;
+
+		// Creation and unique reorder completed
+		// 2. Reorder else and change parseIndex
+		const auto ds = p_s - new_count;
+		const auto fps = fs.points.size();
+		for (size_t i = p_s; i < fps; i++)
+		{
+			fs.points[i - ds] = fs.points[i];
+			fs.parseIndex[i - ds] = shift[fs.parseIndex[i]];
+		}
+		fs.points.resize(fps - ds);
+		fs.types.resize(new_count);
+		fs.parseIndex.resize(fps - ds);
+		fs.sizePoints = fps - ds;
 	}
 	void CreateSupercell(PointConteinerType& points, T cutoff, uint8_t minimum = 1) {
 
@@ -212,11 +250,11 @@ struct FAM_Cell : public geometry::Cell<T> {
 		return (base::fracToCart() * dp).r();
 	}
 private:
-	inline bool isTheSame(const PointType& p1, const PointType& p2) {
+	inline bool isTheSame(const PointType& p1, const PointType& p2) const {
 		constexpr T distanceCutoff = 0.1;
 		return distanceInCell(p1, p2) < distanceCutoff;
 	}
-	inline bool isTheSame_(PointConteinerType& points, const PointType& newpoint, size_t counter, size_t start_p) {
+	inline bool isTheSame_(PointConteinerType& points, const PointType& newpoint, const size_t counter, const size_t start_p) const {
 		if (isTheSame(newpoint, points[counter])) {
 			return true;
 		}
@@ -228,6 +266,15 @@ private:
 			}
 		}
 		return false;
+	}
+	inline size_t isAnotherUnique(const PointConteinerType& points, const PointType& newpoint, const size_t counter, const size_t sizeUnique) const {
+		for (size_t i = counter + 1; i < sizeUnique; i++)
+		{
+			if (isTheSame(newpoint, points[i])) {
+				return i;
+			}
+		}
+		return static_cast<size_t>(-1);
 	}
 };
 
@@ -248,7 +295,7 @@ private:
 public:
 	constexpr FindMolecules() noexcept = delete;
 	constexpr FindMolecules(FAMSType && fs) : fs_(std::move(fs)) {}
-	std::string findMolecules(const DistancesType& distances, std::vector<BondType>& bonds, std::vector<AI>& invalids,std::string & errorMsg) {
+	std::string findMolecules(const DistancesType& distances, std::vector<BondType>& bonds, const std::vector<AI>& invalids,std::string & errorMsg) {
 		std::vector<NodeType> net;
 		net.reserve(fs_.sizePoints);
 
@@ -278,7 +325,10 @@ public:
 
 		// 4. Add negative atoms
 		std::vector<bool> negative_atoms(fs_.sizePoints, false);
-
+		for (size_t i = 0; i < invalids.size(); i++)
+		{
+			negative_atoms[invalids[i]] = true;
+		}
 		for (size_type i = 0; i < fs_.sizePoints; i++) {
 			auto contacts = net[i].neighboursSize() + net[i].getHAtoms();
 			A type = net[i].getType();
