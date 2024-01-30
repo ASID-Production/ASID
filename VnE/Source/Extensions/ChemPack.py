@@ -218,6 +218,30 @@ def execute(model):
     return 0
 
 
+def save():
+    from .ChemPackSource.save_file import SAVE_FILE
+    from PySide6.QtWidgets import QFileDialog
+    import os
+
+    formats = SAVE_FILE.getFormats()
+    filters = f'*.{" *.".join([x for x in formats])}'
+    filename = QFileDialog.getSaveFileName(filter=filters)
+
+    if type(filename) == tuple:
+        filename = filename[0]
+
+    if filename != '':
+        format = os.path.basename(filename).split('.')[1]
+        mol_sys = None
+        for mol_l in MOLECULE_SYSTEMS:
+            if mol_l.pick == 1.0 and mol_l.isValid():
+                mol_sys = MOLECULE_SYSTEMS[mol_l]
+                break
+        if mol_sys is not None:
+            SAVE_FILE.save(mol_sys, filename, format)
+    return
+
+
 def setup(menu, model):
     from PySide6.QtGui import QAction
 
@@ -236,9 +260,13 @@ def setup(menu, model):
     action_DB.triggered.connect(DbSearch)
     cmenu.addAction(action_DB)
 
-    action = QAction('Open')
-    action.setShortcut('Ctrl+O')
-    cmenu.addAction(action)
-    action.triggered.connect(lambda: execute(model))
-    actions = [action, action_test, action_DB]
+    open_action = QAction('Open')
+    open_action.setShortcut('Ctrl+O')
+    cmenu.addAction(open_action)
+    open_action.triggered.connect(lambda: execute(model))
+    save_action = QAction('Save')
+    save_action.setShortcut('Ctrl+S')
+    cmenu.addAction(save_action)
+    save_action.triggered.connect(save)
+    actions = [open_action, action_test, action_DB, save_action]
     return actions

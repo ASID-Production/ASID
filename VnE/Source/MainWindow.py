@@ -175,9 +175,6 @@ class OpenGlWidget(QOpenGLWidget):
                 self.selection_model.select(index, QItemSelectionModel.Deselect)
             else:
                 self.selection_model.select(index, QItemSelectionModel.Select)
-
-        else:
-            print(None)
         self.update()
 
     def eventFilter(self, obj: 'QObject', event: 'QEvent') -> bool:
