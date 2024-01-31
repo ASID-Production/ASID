@@ -94,6 +94,7 @@ struct ParseData {
 		for (int i = 0, i3 = 0; i < types_s; i++, i3 += 3) {
 			fs.types.emplace_back(types[i]);
 			fs.points.emplace_back(xyz[i3], xyz[i3 + 1], xyz[i3 + 2]);
+			(fs.points.back()).MoveToCell();
 		}
 		fs.parseIndex.resize(types_s);
 		std::iota(fs.parseIndex.begin(), fs.parseIndex.end(), 0); // Fill with 0, 1...

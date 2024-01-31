@@ -142,6 +142,18 @@ struct FAM_Cell : public geometry::Cell<T> {
 
 		std::vector<bool> unique(p_s, true);
 
+		// Find all translated atoms in "unique" atoms
+		for (size_t i = 0; i < p_s; i++)
+		{
+			if (unique[i] == false) continue;
+			for (size_t j = i + 1; j < p_s; j++)
+			{
+				if (isTheSame(fs.points[i], fs.points[j])) {
+					unique[j] = false;
+				}
+			}
+		}
+
 		for (size_t p = 0; p < p_s; p++) {
 			if (unique[p] == false) // skip non unique atoms
 				continue;
