@@ -1,18 +1,17 @@
 # prepare vne
 cd VnE 
 python3 -m venv VisApp 
-./VisApp/Scripts/activate.bat 
+source VisApp/bin/activate
 pip install -r requirements.txt 
 cd .. 
-
 
 # prepare rsd
 cd api_database 
 python3 -m venv venv 
-venv/Scripts/activate.bat 
+source venv/bin/activate
 pip install -r requirements.txt 
-cd django_project 
-python3 manage.py migrate 
+cd ./django_project 
+python manage.py migrate 
 cd ../.. 
 
 # building dlls

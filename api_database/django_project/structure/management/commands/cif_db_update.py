@@ -39,11 +39,11 @@ from CifFile import ReadCif
 from structure.models import StructureCode
 import multiprocessing
 from django_project.loggers import cif_db_update_main_logger as logger_main
-import codecs
+import chardet
 
 NUM_OF_PROC = int(multiprocessing.cpu_count() / 2)  # number of physical processors
 MAX_TIME_WAIT = 600  # maximum time to wait for process completion (sec)
-CHUNK_SIZE = 1000  # size of the processed part of the array
+CHUNK_SIZE = 5000  # size of the processed part of the array
 
 
 def collect_cif_data(file: str, cif_blocks: dict, user_refcode=''):
@@ -51,14 +51,17 @@ def collect_cif_data(file: str, cif_blocks: dict, user_refcode=''):
     try:
         cif = ReadCif(file)
     except:
-        with codecs.open(file, 'r', encoding='ansi') as f1:
+        with open(file, 'rb') as fl:
+            result = chardet.detect(fl.read())
+            encoding = result['encoding']
+        with open(file, 'r', encoding=encoding) as f1:
             lines = f1.read()
-        with codecs.open(file, 'w', encoding='utf8') as f2:
+        with open(file, 'w', encoding='utf8') as f2:
             f2.write(lines)
         try:
             cif = ReadCif(file)
         except Exception as err:
-            logger_main.error(f"Exception: Failed to read cif file!", exc_info=True)
+            logger_main.error(f"Exception: Failed to read cif file {file}!", exc_info=True)
             return cif_blocks
     # look through each structural block in cif file
     for block in cif.items():
