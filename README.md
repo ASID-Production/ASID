@@ -38,23 +38,24 @@ See [Manual](/docs/Manual.md).
 ## Licenses <sup>[^](#top)</sup>
 
 #### Installed by PyPI dependencies
-|  Used Library           | Version        | License               |
-|:-----------------------:|:--------------:|:---------------------:|
-| `asgiref`               | 3.5.2          | [BSD 3-Clause License](https://github.com/django/asgiref/blob/main/LICENSE) |    
-| `Django`                | 3.2.16         | [BSD 3-Clause License](https://github.com/django/django/blob/main/LICENSE) |
-| `Django Filter`         | 22.1           | [BSD 3-Clause License](https://github.com/carltongibson/django-filter/blob/main/LICENSE) |
-| `Django REST framework` | 3.14.0         | [BSD 3-Clause License](https://github.com/encode/django-rest-framework/blob/master/LICENSE.md) |
-| `djoser`                | 2.1.0          | [MIT License](https://github.com/sunscrapers/djoser/blob/master/LICENSE) |
-| `drf-yasg`              | 1.21.4         | [BSD 3-Clause License](https://github.com/axnsan12/drf-yasg/blob/master/LICENSE.rst) |
-| `pytz`                  | 2022.5         | [MIT License](https://github.com/newvem/pytz/blob/master/LICENSE.txt) |
-| `numpy`                 | 1.25.2         | [BSD 3-Clause License](https://github.com/numpy/numpy/blob/main/LICENSE.txt) |
-| `gemmi`                 | 0.5.8          | [Mozilla Public License 2.0](https://github.com/project-gemmi/gemmi/blob/master/LICENSE.txt) |
-| `networkx`              | 2.8.8          | [BSD 3-Clause License](https://github.com/networkx/networkx/blob/main/LICENSE.txt) |
-| `PyCifRW`               | 4.4.5          | [PSF License, Version 2](https://github.com/jamesrhester/pycifrw/blob/development/LICENSE) |
-| `PySide6`               | 6.6.1          | [GNU LGPL v.3](https://doc.qt.io/qt-6/lgpl.html) |
-| `requests`              | 2.31.0         | [Apache License 2.0](https://github.com/psf/requests/blob/main/LICENSE) |
-| `FreeType`              | 2.4.0          | [BSD 3-Clause License](https://github.com/rougier/freetype-py/blob/master/LICENSE.txt) |
-| `PyOpenGL`              | 3.1.7          | [Custom License (based on BSD-3)](https://github.com/Distrotech/PyOpenGL/blob/master/license.txt) |
+|      Used Library       | Version | License               |
+|:-----------------------:|:-------:|:---------------------:|
+|        `asgiref`        |  3.5.2  | [BSD 3-Clause License](https://github.com/django/asgiref/blob/main/LICENSE) |    
+|        `Django`         | 3.2.16  | [BSD 3-Clause License](https://github.com/django/django/blob/main/LICENSE) |
+|     `Django Filter`     |  22.1   | [BSD 3-Clause License](https://github.com/carltongibson/django-filter/blob/main/LICENSE) |
+| `Django REST framework` | 3.14.0  | [BSD 3-Clause License](https://github.com/encode/django-rest-framework/blob/master/LICENSE.md) |
+|        `djoser`         |  2.1.0  | [MIT License](https://github.com/sunscrapers/djoser/blob/master/LICENSE) |
+|       `drf-yasg`        | 1.21.4  | [BSD 3-Clause License](https://github.com/axnsan12/drf-yasg/blob/master/LICENSE.rst) |
+|         `pytz`          | 2022.5  | [MIT License](https://github.com/newvem/pytz/blob/master/LICENSE.txt) |
+|         `numpy`         | 1.25.2  | [BSD 3-Clause License](https://github.com/numpy/numpy/blob/main/LICENSE.txt) |
+|         `gemmi`         |  0.5.8  | [Mozilla Public License 2.0](https://github.com/project-gemmi/gemmi/blob/master/LICENSE.txt) |
+|       `networkx`        |  2.8.8  | [BSD 3-Clause License](https://github.com/networkx/networkx/blob/main/LICENSE.txt) |
+|        `PyCifRW`        |  4.4.5  | [PSF License, Version 2](https://github.com/jamesrhester/pycifrw/blob/development/LICENSE) |
+|        `PySide6`        |  6.6.1  | [GNU LGPL v.3](https://doc.qt.io/qt-6/lgpl.html) |
+|       `requests`        | 2.31.0  | [Apache License 2.0](https://github.com/psf/requests/blob/main/LICENSE) |
+|       `FreeType`        |  2.4.0  | [BSD 3-Clause License](https://github.com/rougier/freetype-py/blob/master/LICENSE.txt) |
+|       `PyOpenGL`        |  3.1.7  | [Custom License (based on BSD-3)](https://github.com/Distrotech/PyOpenGL/blob/master/license.txt) |
+|        `chardet`        |  5.2.0  | [GNU LGPL v2.1](https://github.com/chardet/chardet/blob/main/LICENSE) |
 
 #### Used sourse code
 | Used Library | Version        | Link to changes | License               |
