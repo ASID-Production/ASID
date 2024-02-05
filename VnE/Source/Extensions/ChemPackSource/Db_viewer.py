@@ -29,7 +29,6 @@
 
 from PySide6 import QtWidgets
 from PySide6.QtCore import *
-from PySide6.QtUiTools import loadUiType
 from . import Db_bindings
 import typing
 import numpy as np
@@ -150,10 +149,10 @@ class InfoTableModel(QAbstractTableModel):
         return None
 
 
-SearchDialogTypes = loadUiType(r'.\Source\Extensions\ChemPackSource\ui\search_dialog.ui')
+from .ui import search_dialog
 
 
-class SearchDialog(SearchDialogTypes[1], SearchDialogTypes[0]):
+class SearchDialog(search_dialog.Ui_Dialog, QtWidgets.QDialog):
 
     SEARCH_TYPES = Db_bindings.search_types
 
@@ -181,10 +180,10 @@ class SearchDialog(SearchDialogTypes[1], SearchDialogTypes[0]):
         return self.search_type
 
 
-DbSettingsTypes = loadUiType(r'.\Source\Extensions\ChemPackSource\ui\Settings_dialog.ui')
+from .ui import Settings_dialog
 
 
-class DbSettings(DbSettingsTypes[1], DbSettingsTypes[0]):
+class DbSettings(Settings_dialog.Ui_Dialog, QtWidgets.QDialog):
     def __init__(self, parent=None):
         super().__init__()
         self.setupUi(self)
@@ -202,10 +201,10 @@ class DbSettings(DbSettingsTypes[1], DbSettingsTypes[0]):
             Db_bindings.SESSION.changeUrlBase(address)
 
 
-DbWindowtypes = loadUiType(r'.\Source\Extensions\ChemPackSource\ui\base_search_window.ui')
+from .ui import base_search_window
 
 
-class DbWindow(DbWindowtypes[1], DbWindowtypes[0]):
+class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
 
     def __init__(self, parent=None, ):
         super().__init__()
