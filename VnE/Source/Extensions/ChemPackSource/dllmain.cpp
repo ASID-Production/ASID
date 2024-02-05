@@ -19,7 +19,7 @@ decltype(auto) genMap()
     
     cout << "GenMap\n";
     ifstream stream;
-    stream.open(".\\Source\\Extensions\\ChemPackSource\\BondLength.ini");
+    stream.open("./Source/Extensions/ChemPackSource/BondLength.ini");
     if (!stream.is_open()) {
         cout << "File not open\n";
     }

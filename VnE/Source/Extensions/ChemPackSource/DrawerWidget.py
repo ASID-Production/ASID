@@ -29,7 +29,6 @@
 from abc import ABC, abstractmethod
 from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtCore import *
-from PySide6.QtUiTools import loadUiType
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
 from ..ChemPack import PALETTE
 from OpenGL.GL import *
@@ -1073,10 +1072,10 @@ class DrawerGL(QOpenGLWidget):
         return super().eventFilter(obj, event)
 
 
-DrawWidgetTypes = loadUiType(r'.\Source\Extensions\ChemPackSource\ui\Drawer_model_ui.ui')
+from .ui import Drawer_model_ui
 
 
-class DrawWidget(DrawWidgetTypes[1], DrawWidgetTypes[0]):
+class DrawWidget(Drawer_model_ui.Ui_Dialog, QtWidgets.QDialog):
 
     def __init__(self, parent=None):
         super().__init__()
@@ -1139,7 +1138,7 @@ class DrawWidget(DrawWidgetTypes[1], DrawWidgetTypes[0]):
 
         self.pushButton_7.pressed.connect(self.exportTable)
         self.pushButton_10.pressed.connect(lambda: drag_event.attach(self.openGl_drawer))
-        self.pushButton.pressed.connect(lambda: clear_event.attach(self.openGl_drawer))
+        self.pushButton_14.pressed.connect(lambda: clear_event.attach(self.openGl_drawer))
         self.pushButton_9.pressed.connect(lambda: contact_event.attach(self.openGl_drawer))
         self.pushButton_8.pressed.connect(lambda: angle_event.attach(self.openGl_drawer))
         self.pushButton_12.pressed.connect(lambda: avgDiff_event.attach(self.openGl_drawer))
@@ -1161,12 +1160,13 @@ class DrawWidget(DrawWidgetTypes[1], DrawWidgetTypes[0]):
         #self.pushButton_7.pressed.connect(self.openGl_drawer.save_template)
         self.gridLayout.addWidget(self.pushButton_6, 0, 0, 1, 2)
         self.gridLayout.addWidget(self.pushButton_10, 1, 0, 1, 2)
-        self.gridLayout.addWidget(self.pushButton, 2, 0, 1, 2)
-        self.gridLayout.addWidget(self.pushButton_11, 6, 0, 1, 2)
-        self.gridLayout.addWidget(self.pushButton_9, 7, 0, 1, 2)
-        self.gridLayout.addWidget(self.pushButton_8, 8, 0, 1, 2)
-        self.gridLayout.addWidget(self.pushButton_12, 9, 0, 1, 2)
-        self.gridLayout.addWidget(self.pushButton_13, 10, 0, 1, 2)
+        self.gridLayout.addWidget(self.pushButton_14, 2, 0, 1, 2)
+        self.gridLayout.addWidget(self.pushButton, 3, 0, 1, 2)
+        self.gridLayout.addWidget(self.pushButton_11, 7, 0, 1, 2)
+        self.gridLayout.addWidget(self.pushButton_9, 8, 0, 1, 2)
+        self.gridLayout.addWidget(self.pushButton_8, 9, 0, 1, 2)
+        self.gridLayout.addWidget(self.pushButton_12, 10, 0, 1, 2)
+        self.gridLayout.addWidget(self.pushButton_13, 11, 0, 1, 2)
 
         #self.tableWidget_2.itemChanged.connect(lambda x: self.asd(x, tab=1))
         #self.tableWidget_3.itemChanged.connect(lambda x: self.asd(x, tab=2))
