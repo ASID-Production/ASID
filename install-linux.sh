@@ -1,7 +1,7 @@
 # prepare vne
 cd VnE
 python3 -m venv VisApp
-source VisApp\bin\activate
+source VisApp/bin/activate
 pip install -r requirements.txt
 cd .. 
 
