@@ -162,7 +162,11 @@ def create_table(data):
 
 def setup():
     import subprocess
-    proc_cmd = '../api_database/venv/Scripts/python.exe ../api_database/django_project/manage.py runserver'.split(' ')
+    import os
+    if os.name == 'nt':
+        proc_cmd = '../api_database/venv/Scripts/python.exe ../api_database/django_project/manage.py runserver'.split(' ')
+    elif os.name == 'posix':
+        proc_cmd = '../api_database/venv/bin/python3 ../api_database/django_project/manage.py runserver'.split(' ')
     proc = subprocess.Popen(proc_cmd)
     global SERVER_PROC
     global SESSION
