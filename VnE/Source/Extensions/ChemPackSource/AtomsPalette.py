@@ -35,8 +35,8 @@ import numpy as np
 class Palette:
 
     def __init__(self):
-        path = '\\'.join(__file__.split('\\')[:-1])
-        self._palette = json.load(open(f'{path}\\palette.json', 'r'))
+        import os
+        self._palette = json.load(open(f'{os.path.dirname(__file__)}/palette.json', 'r'))
         self._palette_num = {}
         nums = []
         for key in self._palette:

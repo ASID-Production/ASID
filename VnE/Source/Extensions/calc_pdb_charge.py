@@ -72,7 +72,7 @@ def execute():
         dialog.show()
 
 
-def setup(menu, model):
+def setup(menu, model, *args, **kwargs):
     from PySide6.QtGui import QAction
 
     global TREE_MODEL

@@ -36,10 +36,10 @@ from . import *
 actions = []
 
 
-def getMenu(root_item):
+def getMenu(root_item, uniform_model, *args, **kwargs):
     menu = QMenu('Extensions')
     for extension in __all__:
         global actions
         module = globals()[extension]
-        actions += module.setup(menu, root_item)
+        actions += module.setup(menu, root_item, uniform_model)
     return menu

@@ -113,6 +113,9 @@ class UniformListModel(QAbstractListModel):
         self._root = None
         self.setModelData(data)
 
+    def root(self):
+        return self._root
+
     def setModelData(self, data):
         self.beginResetModel()
         if data is None:
