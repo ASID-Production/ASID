@@ -191,9 +191,9 @@ class Molecule(aEntity):
         b = [(c_float * 4)(*([c_float(a.atom_type)].__add__([c_float(coord) for coord in a.coord]))) for a in self.children]
         p = (POINTER(c_float) * len(b))(*b)
         if os.name == 'nt':
-            direct = '\\'.join(__file__.split('\\')[:-1] + ['GenBonds.dll'])
+            direct = f'{os.path.dirname(__file__)}/GenBonds.dll'
         elif os.name == 'posix':
-            direct = '\\'.join(__file__.split('\\')[:-1] + ['GenBonds.so'])
+            direct = f'{os.path.dirname(__file__)}/GenBonds.so'
         else:
             raise Exception('Unsupported operating system')
         lib = CDLL(direct)

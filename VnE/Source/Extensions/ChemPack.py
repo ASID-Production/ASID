@@ -196,7 +196,7 @@ def DbSearch():
     return
 
 
-def execute(model):
+def execute(model, uniform_model=None):
     from PySide6.QtWidgets import QFileDialog
     filter = '*.xyz *.pdb'
     filename = QFileDialog.getOpenFileName(filter=filter)
@@ -206,6 +206,11 @@ def execute(model):
     if filename != '':
 
         _, points_lists = pars(filename, root=TREE_MODEL.getRoot())
+        coords = np.array([a.coord for a in points_lists[1].children])
+        cent = np.sum(coords, axis=0)/len(coords)
+        if uniform_model is not None:
+            root = uniform_model.root()
+            root.rotation_point = cent.copy()
         if _ is not None:
             model.insertRow(model.rowCount())
             if points_lists is not None:
@@ -242,7 +247,7 @@ def save():
     return
 
 
-def setup(menu, model):
+def setup(menu, model, uniform_model=None, *args, **kwargs):
     from PySide6.QtGui import QAction
 
     global TREE_MODEL
@@ -263,7 +268,7 @@ def setup(menu, model):
     open_action = QAction('Open')
     open_action.setShortcut('Ctrl+O')
     cmenu.addAction(open_action)
-    open_action.triggered.connect(lambda: execute(model))
+    open_action.triggered.connect(lambda: execute(model, uniform_model))
     save_action = QAction('Save')
     save_action.setShortcut('Ctrl+S')
     cmenu.addAction(save_action)
