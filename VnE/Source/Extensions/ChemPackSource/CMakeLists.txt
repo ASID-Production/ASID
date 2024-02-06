@@ -51,7 +51,7 @@ if (UNIX)
     add_custom_command(
         TARGET GenBonds POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
-                $<TARGET_FILE:GenBonds>
+                ${CMAKE_CURRENT_BINARY_DIR}/libGenBonds.so
                 ${CMAKE_SOURCE_DIR}/VnE/Source/Extensions/ChemPackSource/GenBonds.so)
 endif (UNIX)
 
