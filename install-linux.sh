@@ -15,15 +15,21 @@ python manage.py migrate
 cd ../.. 
 
 # building dlls
-mkdir build-dir
-cd build-dir
-cmake ..
+mkdir build
+cd build
+cmake -DCMAKE_BUILD_TYPE=Release ..
 make
+cd ..
 
 # final cleanup 
 rm -rf cpplib 
 rm -rf .github 
 rm -rf .git 
+rm -rf build
 rm -f CMakeLists.txt 
 rm -f CMakeSettings.json 
 rm -f .gitignore* 
+rm -f VnE/Source/Extensions/ChemPackSource/GenBonds.dll
+rm -f VnE/Source/Extensions/ChemPackSource/CMakeLists.txt
+rm -f VnE/Source/Extensions/ChemPackSource/dllmain.cpp
+rm -f api_database/django_project/modules/c_modules/cpplib.dll
