@@ -234,6 +234,13 @@ class Drawing:
         self.connections.pop(point)
         self.contacts.pop(point)
         node = self.point_node.pop(point)
+        for cond_key in self.conditions_d:
+            conds = self.conditions_d[cond_key]
+            for cond in conds:
+                if node in cond.nodes:
+                    i = self.conditions_d[cond_key].index(cond)
+                    self.conditions_d[cond_key].pop(i)
+                    self.conditions_value_d[cond_key].pop(i)
         self.node_point.pop(node)
         node.delete()
         point.destroy()
@@ -952,6 +959,11 @@ class DrawerGL(QOpenGLWidget):
     newAvgDiff = Signal(name='avgDiff')
     newMaxMeanPlaneDiff = Signal(name='newMaxMeanPlaneDiff')
 
+    removeContact = Signal([int], name='newContact')
+    removeAngle = Signal([int], name='newAngle')
+    removeAvgDiff = Signal([int], name='avgDiff')
+    removeMaxMeanPlaneDiff = Signal([int], name='newMaxMeanPlaneDiff')
+
     class AtomType:
         def __init__(self, atom_type):
             self.atom_type = atom_type
@@ -1071,6 +1083,11 @@ class DrawerGL(QOpenGLWidget):
         self.update()
         return super().eventFilter(obj, event)
 
+    def clearDraw(self):
+        for point in self.drawing.points.children[0].children.copy():
+            self.drawing.remove_point(point)
+            self.ids.remove(point.id)
+
 
 from .ui import Drawer_model_ui
 
@@ -1120,6 +1137,11 @@ class DrawWidget(Drawer_model_ui.Ui_Dialog, QtWidgets.QDialog):
         self.openGl_drawer.newAvgDiff.connect(lambda: self.avgDiff_model.insertRows(self.avgDiff_model.rowCount(), 1))
         self.openGl_drawer.newMaxMeanPlaneDiff.connect(lambda: self.maxMeanPlaneDiff_model.insertRows(self.maxMeanPlaneDiff_model.rowCount(), 1))
 
+        self.openGl_drawer.removeContact.connect(lambda x: self.contacts_model.removeRows(x, 1))
+        self.openGl_drawer.removeAngle.connect(lambda x: self.angle_model.removeRows(x, 1))
+        self.openGl_drawer.removeAvgDiff.connect(lambda x: self.avgDiff_model.removeRows(x, 1))
+        self.openGl_drawer.removeMaxMeanPlaneDiff.connect(lambda x: self.maxMeanPlaneDiff_model.removeRows(x, 1))
+
         self.verticalLayout_8.addWidget(self.contacts_view)
         self.verticalLayout_9.addWidget(self.angle_view)
         self.verticalLayout_9.addWidget(self.angle_view)
@@ -1139,6 +1161,7 @@ class DrawWidget(Drawer_model_ui.Ui_Dialog, QtWidgets.QDialog):
         self.pushButton_7.pressed.connect(self.exportTable)
         self.pushButton_10.pressed.connect(lambda: drag_event.attach(self.openGl_drawer))
         self.pushButton_14.pressed.connect(lambda: clear_event.attach(self.openGl_drawer))
+        self.pushButton.pressed.connect(self.openGl_drawer.clearDraw)
         self.pushButton_9.pressed.connect(lambda: contact_event.attach(self.openGl_drawer))
         self.pushButton_8.pressed.connect(lambda: angle_event.attach(self.openGl_drawer))
         self.pushButton_12.pressed.connect(lambda: avgDiff_event.attach(self.openGl_drawer))
