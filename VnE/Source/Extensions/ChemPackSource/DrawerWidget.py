@@ -205,7 +205,8 @@ class Drawing:
         if ind == -1:
             return
         cond = self.conditions_d['contacts'].pop(ind)
-        point1, point2 = cond.nodes
+        node1, node2 = cond.nodes
+        point1, point2 = self.node_point[node1], self.node_point[node2]
         self.conditions_value_d['contacts'].pop(ind)
         self.contacts[point1][point2].parent.destroy()
         self.contacts[point1].pop(point2)
@@ -1137,10 +1138,10 @@ class DrawWidget(Drawer_model_ui.Ui_Dialog, QtWidgets.QDialog):
         self.openGl_drawer.newAvgDiff.connect(lambda: self.avgDiff_model.insertRows(self.avgDiff_model.rowCount(), 1))
         self.openGl_drawer.newMaxMeanPlaneDiff.connect(lambda: self.maxMeanPlaneDiff_model.insertRows(self.maxMeanPlaneDiff_model.rowCount(), 1))
 
-        self.openGl_drawer.removeContact.connect(lambda x: self.contacts_model.removeRows(x, 1))
+        '''self.openGl_drawer.removeContact.connect(lambda x: self.contacts_model.removeRows(x, 1))
         self.openGl_drawer.removeAngle.connect(lambda x: self.angle_model.removeRows(x, 1))
         self.openGl_drawer.removeAvgDiff.connect(lambda x: self.avgDiff_model.removeRows(x, 1))
-        self.openGl_drawer.removeMaxMeanPlaneDiff.connect(lambda x: self.maxMeanPlaneDiff_model.removeRows(x, 1))
+        self.openGl_drawer.removeMaxMeanPlaneDiff.connect(lambda x: self.maxMeanPlaneDiff_model.removeRows(x, 1))'''
 
         self.verticalLayout_8.addWidget(self.contacts_view)
         self.verticalLayout_9.addWidget(self.angle_view)
