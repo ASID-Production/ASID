@@ -39,17 +39,26 @@ def get_coords(cif_block) -> str:
     atomic_sites = ''
     atoms = []
     coords = cif_block[1].GetLoop('_atom_site_label')
-    for i, site in enumerate(coords, start=0):
-        atoms.append(site[0])
-        temp = site.copy()
+    order: list = coords.GetItemOrder()
+    lable_idx = order.index('_atom_site_label')
+    atom_type_idx = order.index('_atom_site_type_symbol')
+    x_idx = order.index('_atom_site_fract_x')
+    y_idx = order.index('_atom_site_fract_y')
+    z_idx = order.index('_atom_site_fract_z')
+    for site in coords:
+        atoms.append(site[lable_idx])
+        temp = list()
+        temp.append(site[lable_idx])
+        temp.append(site[atom_type_idx])
+        temp.append(site[x_idx])
+        temp.append(site[y_idx])
+        temp.append(site[z_idx])
         for j, element in enumerate(temp, start=0):
             if j == 0:
                 temp[j] = element.replace('?', '')
             if '(' in element:
                 idx = element.index('(')
                 temp[j] = element[:idx]
-            if j > 4:
-                break
         atomic_sites += ' '.join(temp)
         atomic_sites += ' '
     return atomic_sites, atoms
@@ -68,7 +77,11 @@ def get_data(cif_block):
     atoms_info = atomic_sites.split()
     for idx, element in enumerate(atoms_info, start=1):
         if idx % 5 == 2:
-            atoms_types.append(element_numbers[element])
+            element = re.findall(r'[A-Za-z]{1,3}', element)
+            if element and element[0] in element_numbers.keys():
+                atoms_types.append(element_numbers[element[0]])
+            else:
+                raise Exception(f'Error: check the element: {element}')
         elif idx % 5 == 3:
             coords = [atoms_info[idx - 1], atoms_info[idx], atoms_info[idx + 1]]
             atoms_coords.extend(map(float, coords))

@@ -63,6 +63,11 @@ class StructureFilter(FilterSet):
     # refcode search
     refcode = filters.CharFilter(method='filter_refcode')
     CCDC_number = filters.CharFilter(method='filter_CCDC_number')
+    # database search
+    CSD = filters.CharFilter(method='filter_CSD')
+    ICSD = filters.CharFilter(method='filter_ICSD')
+    COD = filters.CharFilter(method='filter_COD')
+    user_db = filters.CharFilter(method='filter_user_db')
     # name search
     name = filters.CharFilter(method='filter_name')
     # formula search
@@ -101,6 +106,38 @@ class StructureFilter(FilterSet):
         if value:
             for element in value.split():
                 queryset = queryset.filter(CCDC_number__icontains=element)
+        return queryset
+
+    def filter_ICSD(self, queryset, name, value):
+        if value:
+            queryset_temp = queryset
+            if value == 'False':
+                queryset_temp = queryset.filter(ICSD__isnull=True)
+            return queryset_temp
+        return queryset
+
+    def filter_CSD(self, queryset, name, value):
+        if value:
+            queryset_temp = queryset
+            if value == 'False':
+                queryset_temp = queryset.filter(CCDC_number__isnull=True)
+            return queryset_temp
+        return queryset
+
+    def filter_COD(self, queryset, name, value):
+        if value:
+            queryset_temp = queryset
+            if value == 'False':
+                queryset_temp = queryset.filter(COD__isnull=True)
+            return queryset_temp
+        return queryset
+
+    def filter_user_db(self, queryset, name, value):
+        if value:
+            queryset_temp = queryset
+            if value == 'False':
+                queryset_temp = queryset.filter(user__isnull=True)
+            return queryset_temp
         return queryset
 
     def filter_name(self, queryset, name, value):
