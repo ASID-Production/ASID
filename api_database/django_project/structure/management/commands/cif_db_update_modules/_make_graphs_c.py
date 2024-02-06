@@ -33,6 +33,7 @@ import json
 from ._element_numbers import element_numbers
 import os
 from django_project.loggers import set_prm_log
+import re
 
 
 def get_coords(cif_block) -> str:
