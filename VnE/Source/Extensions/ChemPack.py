@@ -255,7 +255,7 @@ def setup(menu, model, uniform_model=None, *args, **kwargs):
 
     createPalette()
 
-    cmenu = menu.addMenu('ChecmPack')
+    cmenu = menu.addMenu('ChemPack')
 
     action_test = QAction('Find Sub')
     action_test.triggered.connect(find_sub)
