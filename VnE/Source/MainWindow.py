@@ -175,9 +175,6 @@ class OpenGlWidget(QOpenGLWidget):
                 self.selection_model.select(index, QItemSelectionModel.Deselect)
             else:
                 self.selection_model.select(index, QItemSelectionModel.Select)
-
-        else:
-            print(None)
         self.update()
 
     def eventFilter(self, obj: 'QObject', event: 'QEvent') -> bool:
@@ -299,7 +296,7 @@ class MainWindow(QtWidgets.QMainWindow):
         from . import Extensions
 
         self.menu = self.menuBar()
-        self.extension_menu = Extensions.getMenu(self.model)
+        self.extension_menu = Extensions.getMenu(self.model, self.uniformModel)
         self.uniformAction = self.menu.addAction('Uniforms')
         self.menu.addMenu(self.extension_menu)
         self.uniformAction.triggered.connect(self.uniformWid.show)

@@ -144,7 +144,7 @@ def pars(file, bond=True, root=None):
         from .ChemPackSource.parsers import PARSER as parser
         PARSER = parser
     if TREE_MODEL is not None:
-        if os.path.splitext(file)[0] == 'paths' or os.path.splitext(file) == 'CPs':
+        if os.path.basename(file) == 'paths.pdb' or os.path.basename(file) == 'CPs.pdb':
             bond = False
         molsys, point_lists = PARSER.parsFile(file, bond=bond, root=root)
         return molsys, point_lists
@@ -196,7 +196,7 @@ def DbSearch():
     return
 
 
-def execute(model):
+def execute(model, uniform_model=None):
     from PySide6.QtWidgets import QFileDialog
     filter = '*.xyz *.pdb'
     filename = QFileDialog.getOpenFileName(filter=filter)
@@ -206,6 +206,11 @@ def execute(model):
     if filename != '':
 
         _, points_lists = pars(filename, root=TREE_MODEL.getRoot())
+        coords = np.array([a.coord for a in points_lists[1].children])
+        cent = np.sum(coords, axis=0)/len(coords)
+        if uniform_model is not None:
+            root = uniform_model.root()
+            root.rotation_point = cent.copy()
         if _ is not None:
             model.insertRow(model.rowCount())
             if points_lists is not None:
@@ -218,7 +223,31 @@ def execute(model):
     return 0
 
 
-def setup(menu, model):
+def save():
+    from .ChemPackSource.save_file import SAVE_FILE
+    from PySide6.QtWidgets import QFileDialog
+    import os
+
+    formats = SAVE_FILE.getFormats()
+    filters = f'*.{" *.".join([x for x in formats])}'
+    filename = QFileDialog.getSaveFileName(filter=filters)
+
+    if type(filename) == tuple:
+        filename = filename[0]
+
+    if filename != '':
+        format = os.path.basename(filename).split('.')[1]
+        mol_sys = None
+        for mol_l in MOLECULE_SYSTEMS:
+            if mol_l.pick == 1.0 and mol_l.isValid():
+                mol_sys = MOLECULE_SYSTEMS[mol_l]
+                break
+        if mol_sys is not None:
+            SAVE_FILE.save(mol_sys, filename, format)
+    return
+
+
+def setup(menu, model, uniform_model=None, *args, **kwargs):
     from PySide6.QtGui import QAction
 
     global TREE_MODEL
@@ -226,7 +255,7 @@ def setup(menu, model):
 
     createPalette()
 
-    cmenu = menu.addMenu('ChecmPack')
+    cmenu = menu.addMenu('ChemPack')
 
     action_test = QAction('Find Sub')
     action_test.triggered.connect(find_sub)
@@ -236,9 +265,13 @@ def setup(menu, model):
     action_DB.triggered.connect(DbSearch)
     cmenu.addAction(action_DB)
 
-    action = QAction('Open')
-    action.setShortcut('Ctrl+O')
-    cmenu.addAction(action)
-    action.triggered.connect(lambda: execute(model))
-    actions = [action, action_test, action_DB]
+    open_action = QAction('Open')
+    open_action.setShortcut('Ctrl+O')
+    cmenu.addAction(open_action)
+    open_action.triggered.connect(lambda: execute(model, uniform_model))
+    save_action = QAction('Save')
+    save_action.setShortcut('Ctrl+S')
+    cmenu.addAction(save_action)
+    save_action.triggered.connect(save)
+    actions = [open_action, action_test, action_DB, save_action]
     return actions

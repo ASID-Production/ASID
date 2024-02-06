@@ -32,17 +32,47 @@ import json
 
 search_types = ['refcode', 'name', 'elements', 'doi', 'authors', 'cell']
 
+SETUP = False
+SESSION = None
+SERVER_PROC = None
+
+
+class Session:
+    def __init__(self):
+        self.url_base = 'http://127.0.0.1:8000'
+        self.user_name = 'VnE'
+        self.user_password = '12345678AsD'
+        self.user_token = None
+        self.changeUser(self.user_name, self.user_password)
+
+    def changeUser(self, name, password):
+        b = requests.post(f'{self.url_base}/api/auth/users/', data={
+            "email": "user@example.com",
+            "username": f"{name}",
+            "first_name": "none",
+            "last_name": "none",
+            "password": f"{password}"
+        })
+        token = requests.post(f'{self.url_base}/api/auth/token/login/', data={
+            "username": f"{name}",
+            "password": f"{password}"
+        })
+        self.user_token = json.loads(token.text)['auth_token']
+
+    def changeUrlBase(self, address):
+        self.url_base = f'http://{address}'
+        self.changeUser(self.user_name, self.user_password)
+
 
 def search(text, search_type):
     if search_type == 'substructure':
         data_out = structureSearch(text)
         return data_out
-    data = requests.get(f'http://127.0.0.1:8000/api/v1/structures/?{search_type}={text}&limit=1000')
+    data = requests.get(f'{SESSION.url_base}/api/v1/structures/?{search_type}={text}&limit=1000')
     data = data.content.decode(data.apparent_encoding)
     data = json.loads(data)
     data_out = data['results']
     while data['next'] is not None:
-        print(data['next'])
         data = requests.get(data['next'])
         data = data.content.decode(data.apparent_encoding)
         data = json.loads(data)
@@ -50,28 +80,35 @@ def search(text, search_type):
     return data_out
 
 
+SESSION: Session
+
+
 def get_full_info(id):
-    data = requests.get(f'http://127.0.0.1:8000/api/v1/structures/{id}')
+    data = requests.get(f'{SESSION.url_base}/api/v1/structures/{id}')
     data = data.content.decode(data.apparent_encoding)
     data_out = json.loads(data)
     return data_out
 
 
 def getCif(id):
-    data = requests.get(f'http://127.0.0.1:8000/api/v1/structures/{id}/download/')
+    data = requests.get(f'{SESSION.url_base}/api/v1/structures/{id}/download/')
     return data.content
+
+
+def uploadFile(file):
+    import os
+
+    global TOKEN
+    if SESSION.user_token is not None:
+        url = f'{SESSION.url_base}/api/v1/structures/upload/'
+        files = [('file', (os.path.basename(file), open(file, 'rb'), 'application/octet-stream'))]
+        headers = {'Authorization': f'Token {SESSION.user_token}'}
+        resp = requests.request('POST', url, headers=headers, data={}, files=files)
 
 
 def structureSearch(struct):
     from .DrawerWidget import Drawing
     struct: Drawing
-
-    '''{
-    "search_type": "substructure",
-    "nodes": ["[1, {'type': 'C', 'Hnum': 0,}]", "[2, {'type': 'Br', 'Hnum': 0, }]"],
-    "edges": ["[1, 2, {}]"]
-    }
-    '''
 
     def getEdges(struct):
         edges = []
@@ -94,12 +131,11 @@ def structureSearch(struct):
     edges = getEdges(struct)
     body['nodes'] = nodes
     body['edges'] = edges
-    data = requests.get('http://127.0.0.1:8000/api/v1/structures/search/?limit=100000', data=body)
+    data = requests.get(f'{SESSION.url_base}/api/v1/structures/search/?limit=100000', data=body)
     data = data.content.decode(data.apparent_encoding)
     data = json.loads(data)
     data_out = data['results']
     while data['next'] is not None:
-        print(data['next'])
         data = requests.get(data['next'], data=body)
         data = data.content.decode(data.apparent_encoding)
         data = json.loads(data)
@@ -120,9 +156,32 @@ def create_table(data):
     text_dict['Cell'] = f'a:          {data["cell"]["a"]:<10.3f}b:      {data["cell"]["b"]:<10.3f}c:            {data["cell"]["c"]:<10.3f}\n' \
                         f'alpha:   {data["cell"]["al"]:<10.2f}beta:  {data["cell"]["be"]:<10.2f}gamma: {data["cell"]["ga"]:<10.2f}\n' \
                         f'Volume:  {data["reduced_cells"][0]["volume"]}'
-    print(text_dict["Cell"])
 
     return text_dict
+
+
+def setup():
+    import subprocess
+    import os
+    if os.name == 'nt':
+        proc_cmd = '../api_database/venv/Scripts/python.exe ../api_database/django_project/manage.py runserver'.split(' ')
+    elif os.name == 'posix':
+        proc_cmd = '../api_database/venv/bin/python3 ../api_database/django_project/manage.py runserver'.split(' ')
+    proc = subprocess.Popen(proc_cmd)
+    global SERVER_PROC
+    global SESSION
+    SERVER_PROC = proc
+    try:
+        proc.wait(timeout=5)
+        raise Exception('Server Error')
+    except subprocess.TimeoutExpired:
+        pass
+    SESSION = Session()
+    return
+
+
+if SETUP is False:
+    setup()
 
 
 if __name__ == '__main__':

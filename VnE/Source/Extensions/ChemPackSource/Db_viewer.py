@@ -29,7 +29,6 @@
 
 from PySide6 import QtWidgets
 from PySide6.QtCore import *
-from PySide6.QtUiTools import loadUiType
 from . import Db_bindings
 import typing
 import numpy as np
@@ -150,10 +149,10 @@ class InfoTableModel(QAbstractTableModel):
         return None
 
 
-SearchDialogTypes = loadUiType(r'.\Source\Extensions\ChemPackSource\ui\search_dialog.ui')
+from .ui import search_dialog
 
 
-class SearchDialog(SearchDialogTypes[1], SearchDialogTypes[0]):
+class SearchDialog(search_dialog.Ui_Dialog, QtWidgets.QDialog):
 
     SEARCH_TYPES = Db_bindings.search_types
 
@@ -181,10 +180,31 @@ class SearchDialog(SearchDialogTypes[1], SearchDialogTypes[0]):
         return self.search_type
 
 
-DbWindowtypes = loadUiType(r'.\Source\Extensions\ChemPackSource\ui\base_search_window.ui')
+from .ui import Settings_dialog
 
 
-class DbWindow(DbWindowtypes[1], DbWindowtypes[0]):
+class DbSettings(Settings_dialog.Ui_Dialog, QtWidgets.QDialog):
+    def __init__(self, parent=None):
+        super().__init__()
+        self.setupUi(self)
+        self.setWindowTitle('Db Settings')
+        self.pushButton.pressed.connect(lambda: self.setServerAddress(self.lineEdit.text()))
+        self.pushButton_2.pressed.connect(lambda: self.setUser(self.lineEdit_2.text(), self.lineEdit_3.text()))
+        self.pushButton_3.pressed.connect(lambda: self.setUser(self.lineEdit_2.text(), self.lineEdit_3.text()))
+
+    def setUser(self, user_name, password):
+        if user_name and password:
+            Db_bindings.SESSION.changeUser(user_name, password)
+
+    def setServerAddress(self, address):
+        if address:
+            Db_bindings.SESSION.changeUrlBase(address)
+
+
+from .ui import base_search_window
+
+
+class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
 
     def __init__(self, parent=None, ):
         super().__init__()
@@ -199,7 +219,7 @@ class DbWindow(DbWindowtypes[1], DbWindowtypes[0]):
         self.listView.selectionModel().currentChanged.connect(self.newSelection)
 
         self.search_dialog = SearchDialog(parent=self)
-
+        self.db_settings = DbSettings(parent=self)
 
         self.table_model = InfoTableModel()
         self.tableView: QtWidgets.QTableView
@@ -216,6 +236,10 @@ class DbWindow(DbWindowtypes[1], DbWindowtypes[0]):
         self.pushButton_2.pressed.connect(self.loadStruct)
 
         self.pushButton_3.pressed.connect(self.saveCif)
+
+        self.pushButton_4.pressed.connect(self.uploadFile)
+
+        self.pushButton_5.pressed.connect(self.db_settings.show)
 
     def setSpan(self):
         for i in range(self.table_model.rowCount()):
@@ -242,6 +266,11 @@ class DbWindow(DbWindowtypes[1], DbWindowtypes[0]):
                 out = open(filename, 'wb')
                 out.write(cif)
                 out.close()
+
+    def uploadFile(self):
+        filename = QtWidgets.QFileDialog.getOpenFileName(filter='*.cif')[0]
+        if filename:
+            Db_bindings.uploadFile(filename)
 
     def loadStruct(self):
 

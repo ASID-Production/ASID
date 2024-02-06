@@ -104,6 +104,7 @@ class SimpleDelegate(QtWidgets.QStyledItemDelegate):
             value = np.array(color.getRgbF(), dtype=np.float32)
             model.setData(index, value, role=99)
 
+
 class UniformListModel(QAbstractListModel):
 
     def __init__(self, parent=None, data=None):
@@ -111,6 +112,9 @@ class UniformListModel(QAbstractListModel):
         self.rows = 0
         self._root = None
         self.setModelData(data)
+
+    def root(self):
+        return self._root
 
     def setModelData(self, data):
         self.beginResetModel()
@@ -689,7 +693,6 @@ class ListView(QtWidgets.QListView):
         dialog.accepted.connect(lambda: addProp(self, lineEdit.text()))
         layout.addWidget(lineEdit)
         dialog.open()
-        print(lineEdit.text())
 
     def showContextMenu(self, pos: QPoint):
         menu = QtWidgets.QMenu('Context Menu', self)
@@ -699,7 +702,6 @@ class ListView(QtWidgets.QListView):
 
         action1.triggered.connect(self.addProperty)
         action2.triggered.connect(lambda: self.model().removeProperty(index=selected))
-        print
         menu.addAction(action1)
         menu.addAction(action2)
         menu.exec(self.mapToGlobal(pos))

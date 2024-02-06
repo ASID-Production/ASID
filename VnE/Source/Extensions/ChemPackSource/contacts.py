@@ -494,6 +494,8 @@ def findSubGraph(pack: Pack, sub_pack: Pack):
 
         sub_nodes_ind = [sub_node.pack.nodes.index(x) for x in sub_node.connect]
         nodes_ind = [pack.nodes.index(x) for x in node.connect]
+        if len(sub_nodes_ind) > len(nodes_ind):
+            return []
         mat = np.array([[comp_mat[sn][n] for n in nodes_ind] for sn in sub_nodes_ind])
         mapped = np.zeros(mat.shape[0], dtype=int)
         for i, csn in enumerate(sub_node.connect):

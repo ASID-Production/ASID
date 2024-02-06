@@ -29,7 +29,6 @@
 from abc import ABC, abstractmethod
 from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtCore import *
-from PySide6.QtUiTools import loadUiType
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
 from ..ChemPack import PALETTE
 from OpenGL.GL import *
@@ -235,6 +234,13 @@ class Drawing:
         self.connections.pop(point)
         self.contacts.pop(point)
         node = self.point_node.pop(point)
+        for cond_key in self.conditions_d:
+            conds = self.conditions_d[cond_key]
+            for cond in conds:
+                if node in cond.nodes:
+                    i = self.conditions_d[cond_key].index(cond)
+                    self.conditions_d[cond_key].pop(i)
+                    self.conditions_value_d[cond_key].pop(i)
         self.node_point.pop(node)
         node.delete()
         point.destroy()
@@ -953,6 +959,11 @@ class DrawerGL(QOpenGLWidget):
     newAvgDiff = Signal(name='avgDiff')
     newMaxMeanPlaneDiff = Signal(name='newMaxMeanPlaneDiff')
 
+    removeContact = Signal([int], name='newContact')
+    removeAngle = Signal([int], name='newAngle')
+    removeAvgDiff = Signal([int], name='avgDiff')
+    removeMaxMeanPlaneDiff = Signal([int], name='newMaxMeanPlaneDiff')
+
     class AtomType:
         def __init__(self, atom_type):
             self.atom_type = atom_type
@@ -1072,11 +1083,16 @@ class DrawerGL(QOpenGLWidget):
         self.update()
         return super().eventFilter(obj, event)
 
+    def clearDraw(self):
+        for point in self.drawing.points.children[0].children.copy():
+            self.drawing.remove_point(point)
+            self.ids.remove(point.id)
 
-DrawWidgetTypes = loadUiType(r'.\Source\Extensions\ChemPackSource\ui\Drawer_model_ui.ui')
+
+from .ui import Drawer_model_ui
 
 
-class DrawWidget(DrawWidgetTypes[1], DrawWidgetTypes[0]):
+class DrawWidget(Drawer_model_ui.Ui_Dialog, QtWidgets.QDialog):
 
     def __init__(self, parent=None):
         super().__init__()
@@ -1121,6 +1137,11 @@ class DrawWidget(DrawWidgetTypes[1], DrawWidgetTypes[0]):
         self.openGl_drawer.newAvgDiff.connect(lambda: self.avgDiff_model.insertRows(self.avgDiff_model.rowCount(), 1))
         self.openGl_drawer.newMaxMeanPlaneDiff.connect(lambda: self.maxMeanPlaneDiff_model.insertRows(self.maxMeanPlaneDiff_model.rowCount(), 1))
 
+        self.openGl_drawer.removeContact.connect(lambda x: self.contacts_model.removeRows(x, 1))
+        self.openGl_drawer.removeAngle.connect(lambda x: self.angle_model.removeRows(x, 1))
+        self.openGl_drawer.removeAvgDiff.connect(lambda x: self.avgDiff_model.removeRows(x, 1))
+        self.openGl_drawer.removeMaxMeanPlaneDiff.connect(lambda x: self.maxMeanPlaneDiff_model.removeRows(x, 1))
+
         self.verticalLayout_8.addWidget(self.contacts_view)
         self.verticalLayout_9.addWidget(self.angle_view)
         self.verticalLayout_9.addWidget(self.angle_view)
@@ -1139,7 +1160,8 @@ class DrawWidget(DrawWidgetTypes[1], DrawWidgetTypes[0]):
 
         self.pushButton_7.pressed.connect(self.exportTable)
         self.pushButton_10.pressed.connect(lambda: drag_event.attach(self.openGl_drawer))
-        self.pushButton.pressed.connect(lambda: clear_event.attach(self.openGl_drawer))
+        self.pushButton_14.pressed.connect(lambda: clear_event.attach(self.openGl_drawer))
+        self.pushButton.pressed.connect(self.openGl_drawer.clearDraw)
         self.pushButton_9.pressed.connect(lambda: contact_event.attach(self.openGl_drawer))
         self.pushButton_8.pressed.connect(lambda: angle_event.attach(self.openGl_drawer))
         self.pushButton_12.pressed.connect(lambda: avgDiff_event.attach(self.openGl_drawer))
@@ -1161,12 +1183,13 @@ class DrawWidget(DrawWidgetTypes[1], DrawWidgetTypes[0]):
         #self.pushButton_7.pressed.connect(self.openGl_drawer.save_template)
         self.gridLayout.addWidget(self.pushButton_6, 0, 0, 1, 2)
         self.gridLayout.addWidget(self.pushButton_10, 1, 0, 1, 2)
-        self.gridLayout.addWidget(self.pushButton, 2, 0, 1, 2)
-        self.gridLayout.addWidget(self.pushButton_11, 6, 0, 1, 2)
-        self.gridLayout.addWidget(self.pushButton_9, 7, 0, 1, 2)
-        self.gridLayout.addWidget(self.pushButton_8, 8, 0, 1, 2)
-        self.gridLayout.addWidget(self.pushButton_12, 9, 0, 1, 2)
-        self.gridLayout.addWidget(self.pushButton_13, 10, 0, 1, 2)
+        self.gridLayout.addWidget(self.pushButton_14, 2, 0, 1, 2)
+        self.gridLayout.addWidget(self.pushButton, 3, 0, 1, 2)
+        self.gridLayout.addWidget(self.pushButton_11, 7, 0, 1, 2)
+        self.gridLayout.addWidget(self.pushButton_9, 8, 0, 1, 2)
+        self.gridLayout.addWidget(self.pushButton_8, 9, 0, 1, 2)
+        self.gridLayout.addWidget(self.pushButton_12, 10, 0, 1, 2)
+        self.gridLayout.addWidget(self.pushButton_13, 11, 0, 1, 2)
 
         #self.tableWidget_2.itemChanged.connect(lambda x: self.asd(x, tab=1))
         #self.tableWidget_3.itemChanged.connect(lambda x: self.asd(x, tab=2))
@@ -1233,21 +1256,24 @@ class DrawWidget(DrawWidgetTypes[1], DrawWidgetTypes[0]):
             points = mol_sys.children[0].children.copy()
             pack = Pack()
             mem = {}
-
-            def rec(point, pack, mem, bonds):
+            nodes = {}
+            for point in points:
                 if point not in mem:
-                    points.remove(point)
-                    node = Node(pack, str_atom=atoms[point])
+                    if nodes.get(point, None) is not None:
+                        node = nodes[point]
+                    else:
+                        node = Node(pack, str_atom=atoms[point])
+                        nodes[point] = node
                     mem[point] = node
+                    for point2 in bonds[point]:
+                        if nodes.get(point2, None) is not None:
+                            node2 = nodes[point2]
+                        else:
+                            node2 = Node(pack, str_atom=atoms[point2])
+                            nodes[point2] = node2
+                        node.addConnect(node2)
                 else:
-                    return mem[point]
-                for point_2 in bonds[point]:
-                    node_2 = rec(point_2, pack, mem, bonds)
-                    node.addConnect(node_2)
-                return node
-
-            while points:
-                rec(points[0], pack, mem, bonds)
+                    continue
             a = []
             for sub_pack in sub_packs:
                 a.append(findSubGraph(pack, sub_pack))
