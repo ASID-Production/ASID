@@ -159,6 +159,8 @@ def add_author(cif_block, struct_obj, authors=None):
                 return 0
     # add to database
     for author in authors:
+        author = author.replace('\n', '')
+        author = author.replace('\r', '')
         if author[0] in ['\'', '"']:
             author = author[1:]
         if author[-1] in ['\'', '"']:
@@ -183,7 +185,7 @@ def add_author(cif_block, struct_obj, authors=None):
             author_obj, created = Author.objects.get_or_create(family_name=family, initials=initials)
         logger_1.info(f'Author: {author_obj}')
         struct_obj.authors.add(author_obj)
-        return author_obj
+    return author_obj
 
 
 def get_or_create_space_group(cif_block):

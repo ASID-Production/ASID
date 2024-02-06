@@ -201,6 +201,7 @@ def main(args, all_data=False, user_refcodes=''):
     cif_files = get_files(args)
     # split an array of cif files in parts of CHUNK_SIZE size
     for i in range(0, len(cif_files), CHUNK_SIZE):
+        print(i)
         logger_main.info(f"Start reading cif files")
         cif_blocks = manager_collect_cifs(cif_files[i:i + CHUNK_SIZE], user_refcodes)
         # Add all data from cif file
@@ -218,13 +219,14 @@ def main(args, all_data=False, user_refcodes=''):
         graphs: dict = create_graph_c(queue)
         # Checking which structures were not processed
         not_added_structures = set(refcodes_to_graph).difference(set(graphs.keys()))
-        logger_main.info(f"Graph Generation Results:\n"
-                         f"\tTotal structures: {len(cif_blocks)}\n"
-                         f"\tStructures without coordinates: {len(cif_blocks) - len(refcodes_to_graph)}\n"
-                         f"\tAdded {len(graphs.keys())} structures of {len(refcodes_to_graph)}\n"
-                         f"\tNot added {len(not_added_structures)} structures (addition error in {round(len(not_added_structures) / len(refcodes_to_graph) * 100, 2)} % cases)\n"
-                         f"\tList of unadded structures:\n"
-                         f"\t\t{', '.join(not_added_structures)}")
+        if len(refcodes_to_graph):
+            logger_main.info(f"Graph Generation Results:\n"
+                             f"\tTotal structures: {len(cif_blocks)}\n"
+                             f"\tStructures without coordinates: {len(cif_blocks) - len(refcodes_to_graph)}\n"
+                             f"\tAdded {len(graphs.keys())} structures of {len(refcodes_to_graph)}\n"
+                             f"\tNot added {len(not_added_structures)} structures (addition error in {round(len(not_added_structures) / len(refcodes_to_graph) * 100, 2)} % cases)\n"
+                             f"\tList of unadded structures:\n"
+                             f"\t\t{', '.join(not_added_structures)}")
         # Adding graphs to the database
         logger_main.info(f"Start adding graphs into the database")
         manager_upload_graphs_to_db(graphs)
