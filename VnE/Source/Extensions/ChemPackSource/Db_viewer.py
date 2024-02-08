@@ -299,10 +299,9 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
         if coord is not None:
             coord = coord['coordinates']
         if coord is not None:
-            line = coord.split(' ')
-            line = [x for x in line if x]
-            atoms = [line[i:i+5] for i in range(0, len(line), 5)]
-            coords = [np.array([float(y) for y in x[2:]], dtype=np.float32) for x in atoms]
+            line = coord.split('\n')
+            lines = [[y for y in x.split() if y] for x in line if x]
+            coords = [np.array([float(y) for y in x[2:5]], dtype=np.float32) for x in lines]
             coords += [np.array([0,0,0]),
                        np.array([1,0,0]),
                        np.array([0,1,0]),
@@ -314,7 +313,6 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
                                data['cell']['be'],
                                data['cell']['ga'],
                                coords)
-            a = 0
             if TREE_MODEL is not None:
                 mol_list = point_class.PointsList(parent=TREE_MODEL.getRoot(), name=data['refcode'])
                 molecule_sys = MoleculeClass.MoleculeSystem()
@@ -324,7 +322,6 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
                 cell = point_class.PointsList(parent=mol_list, name='cell')
 
                 o = coords[-4].copy()
-                o[2] = o[2] - 500
                 a = coords[-1]
                 b = coords[-2]
                 c = coords[-3]
@@ -355,11 +352,9 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
                 p = point_class.Point(parent=cell, color=np.array([0, 0, 0, 1], dtype=np.float32), coord=o+a+b+c)
                 p = point_class.Point(parent=cell, color=np.array([0, 0, 0, 1], dtype=np.float32), coord=o+b+c)
 
-
-                for i, atomd in enumerate(atoms):
+                for i, atomd in enumerate(lines):
                     atom = MoleculeClass.Atom(parent=mol, coord=coords[i], atom_type=PALETTE.getName(atomd[1]), name=atomd[0])
                     coord = atom.coord.copy()
-                    coord[2] = coord[2] - 500
                     point = point_class.Point(parent=atoms_list, coord=coord, color=PALETTE.point_dict[PALETTE.getName(atom.atom_type)], rad=atoms_list, name=atom.name, label=atom.name)
                     atom.assignPoint(point)
                 mol.genBonds()
