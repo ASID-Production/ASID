@@ -246,6 +246,15 @@ class Drawing:
         node.delete()
         point.destroy()
 
+    def removeBond(self, point1, point2):
+        if point1 in self.connections:
+            if point2 in self.connections[point1]:
+                self.connections[point1].pop(point2)
+        if point2 in self.connections:
+            if point1 in self.connections[point2]:
+                self.connections[point2].pop(point1)
+        self.point_node[point1].removeConnect(self.point_node[point2])
+
 
 class SolutionOrganizer:
 
@@ -471,6 +480,193 @@ class UniqueId:
         self.nums.sort()
 
 
+class Command(ABC):
+
+    stack = []
+    reverse_stack = []
+
+    def __init__(self, *args, **kwargs):
+        self.applied = False
+        return
+
+    @abstractmethod
+    def apply(self, *args, **kwargs):
+        self.applied = True
+        pass
+
+    @abstractmethod
+    def undo(self):
+        pass
+
+    @classmethod
+    def popStack(cls):
+        try:
+            command = cls.stack.pop()
+        except IndexError:
+            return
+        command.undo()
+        cls.reverse_stack.append(command)
+
+    @classmethod
+    def popReverseStack(cls):
+        try:
+            command = cls.reverse_stack.pop()
+        except IndexError:
+            return
+        command.apply()
+        cls.stack.append(command)
+
+    @classmethod
+    def appendStack(cls, command):
+        cls.stack.append(command)
+        cls.reverse_stack = []
+
+
+class DragCommand(Command):
+
+    def __init__(self):
+        Command.__init__(self)
+        self.pos = None
+        self.old_pos = None
+        self.point = None
+
+    def apply(self, point, old_pos, pos, *args, **kwargs):
+        Command.apply(self)
+        self.apply = lambda *largs, **lkwargs: DragCommand.apply(self, point, old_pos, pos, *args, **kwargs)
+        point.coord = pos
+        self.point = point
+        self.pos = pos
+        self.old_pos = old_pos
+
+    def undo(self):
+        if self.applied:
+            self.point = self.old_pos
+
+
+class CreateAtomCommand(Command):
+
+    def __init__(self, drawing, points_list):
+        Command.__init__(self)
+        self.drawing = drawing
+        self.point_list = points_list
+        self.kwargs = None
+        self.point = None
+
+    def apply(self, *args, **kwargs):
+        Command.apply(self)
+        self.apply = lambda *args, **kwargs: CreateAtomCommand.apply(self, *args, **kwargs)
+        self.point = point_class.Point(parent=self.point_list,
+                                       coord=kwargs['coord'],
+                                       rad=self.point_list,
+                                       label=kwargs['label'],
+                                       id=kwargs['id'],
+                                       atom_type=kwargs['atom_type'],
+                                       color=kwargs['color'])
+        self.drawing.add_point(self.point)
+        return self.point
+
+    def undo(self):
+        if self.applied:
+            DeleteAtomCommand(self.drawing, self.point_list).apply(self.point)
+
+
+class DeleteAtomCommand(Command):
+
+    def __init__(self, drawing, points_list):
+        Command.__init__(self)
+        self.drawing = drawing
+        self.point_list = points_list
+        self.kwargs = None
+        self.point = None
+
+    def apply(self, point, *args, **kwargs):
+        Command.apply(self)
+        self.kwargs = { 'coord': point.coord.copy(),
+                        'label': point.label,
+                        'id': point.id,
+                        'atom_type': point.atom_type,
+                        'color': point.color.copy()}
+        self.apply = lambda *args, **kwargs: DeleteAtomCommand.apply(self, self.point *args, **kwargs)
+        self.drawing.remove_point(point)
+        return
+
+    def undo(self):
+        if self.applied:
+            self.point = CreateAtomCommand(self.drawing, self.point_list).apply(*self.kwargs)
+
+
+class CreateBondCommand(Command):
+
+    def __init__(self, drawing, line_list):
+        Command.__init__(self)
+        self.drawing = drawing
+        self.line_list = line_list
+        self.point1 = None
+        self.point2 = None
+        self.line1 = None
+        self.line2 = None
+
+    def apply(self, point1, point2, *args, **kwargs):
+        Command.apply(self)
+        self.point1 = point1
+        self.point2 = point2
+        self.apply = lambda *args, **kwargs: CreateBondCommand.apply(self, point1, point2)
+
+        self.line1 = point_class.Point(parent=self.line_list, coord=self.point1, color=self.point1,
+                                       rad=self.point1)
+        self.line2 = point_class.Point(parent=self.line_list, coord=self.point2, color=self.point2,
+                                       rad=self.point2)
+        self.drawing.add_connection((self.point1, self.line1), (self.point2, self.line2))
+
+    def undo(self):
+        if self.applied:
+            DeleteBondCommand(self.drawing, self.line_list).apply(self.point1, self.point2)
+
+
+class DeleteBondCommand(Command):
+
+    def __init__(self, drawing, line_list):
+        Command.__init__(self)
+        self.drawing = drawing
+        self.line_list = line_list
+        self.point1 = None
+        self.point2 = None
+        self.line1 = None
+        self.line2 = None
+
+    def apply(self, point1, point2, *args, **kwargs):
+        Command.apply(self)
+        self.point1 = point1
+        self.point2 = point2
+        self.apply = lambda *args, **kwargs: DeleteBondCommand.apply(self, self.point1, self.point2)
+        self.drawing.removeBond(self.point1, self.point2)
+        self.line_list.children[0].destroy()
+        self.line_list.children[0].destroy()
+
+    def undo(self):
+        if self.applied:
+            CreateBondCommand(self.drawing, self.line_list).apply(self.point1, self.point2)
+
+
+class CompositeCommand(Command):
+
+    def __init__(self, *commands):
+        Command.__init__(self)
+        self.commands = commands
+        self.applied = True
+
+    def apply(self, *args, **kwargs):
+        Command.apply(self)
+        for command in self.commands:
+            if command.applied:
+                command.apply()
+
+    def undo(self):
+        if self.applied:
+            for command in self.commands[::-1]:
+                command.undo()
+
+
 class aEvent(ABC):
 
     class Timer:
@@ -564,10 +760,13 @@ class Drag(aDrawWidgetEvent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.drag_point = None
+        self.old_pos = None
+        self.pos = None
 
     def assertEvent(self, event: QtCore.QEvent, widget):
         if event.type() == QtCore.QEvent.MouseButtonPress and event.buttons() == QtCore.Qt.LeftButton:
             self.drag_point = widget.select(event.localPos())
+            self.old_pos = self.drag_point.coord
             self.timer.start()
 
         if event.type() == QtCore.QEvent.MouseMove and event.buttons() == QtCore.Qt.LeftButton:
@@ -575,13 +774,19 @@ class Drag(aDrawWidgetEvent):
                 self.timer.stop()
             if event.modifiers() == QtCore.Qt.NoModifier and self.timer.time() > self.tol:
                 if self.drag_point is not None:
-                    self.drag_point.coord = np.array([((event.localPos().x() / self.widget.width()) * 2 - 1),
+                    self.pos = np.array([((event.localPos().x() / self.widget.width()) * 2 - 1),
                                                       ((event.localPos().y() / self.widget.height()) * (-2) + 1) / (
                                                                   self.widget.width() / self.widget.height()),
                                                       0], dtype=np.float32)
+                    self.drag_point.coord = self.pos
 
         if event.type() == QtCore.QEvent.MouseButtonRelease:
+            com = DragCommand()
+            com.apply(self.drag_point, self.old_pos, self.pos)
+            com.appendStack(com)
             self.drag_point = None
+            self.pos = None
+            self.old_pos = None
             self.timer.stop()
 
 
@@ -608,6 +813,10 @@ class Draw(aDrawWidgetEvent):
         self.atom_type_label = 'C'
         self.atom_color = PALETTE.getColor('C')
 
+        self.create_atom1_command = None
+        self.create_atom2_command = None
+        self.create_bond_command = None
+
         self.point1 = None
         self.point2 = None
         self.line1 = None
@@ -624,40 +833,35 @@ class Draw(aDrawWidgetEvent):
                 self.timer.stop()
             if self.timer.time() > self.tol:
                 pos = event.localPos()
-                if self.point1 is None:
+                if self.create_atom1_command is None and self.point1 is None:
+                    self.create_atom1_command = CreateAtomCommand(self.widget.drawing, self.widget.p_list)
                     id = self.widget.ids.get()
-                    self.point1 = point_class.Point(parent=self.widget.p_list,
-                                                    coord=np.array([((pos.x() / self.widget.width()) * 2 - 1),
+                    self.point1 = self.create_atom1_command.apply(coord=np.array([((pos.x() / self.widget.width()) * 2 - 1),
                                                                     ((pos.y() / self.widget.height()) * (-2) + 1) / (
                                                                                 self.widget.width() / self.widget.height()),
                                                                     0], dtype=np.float32),
-                                                    rad=self.widget.p_list,
-                                                    label=self.atom_type_label + str(id),
-                                                    id=id,
-                                                    atom_type=self.atom_type,
-                                                    color=self.atom_color)
-                    self.widget.drawing.add_point(self.point1)
-                if self.point2 is None:
+                                                                  rad=self.widget.p_list,
+                                                                  label=self.atom_type_label + str(id),
+                                                                  id=id,
+                                                                  atom_type=self.atom_type,
+                                                                  color=self.atom_color)
+                if self.create_atom2_command is None:
+                    self.create_atom2_command = CreateAtomCommand(self.widget.drawing, self.widget.p_list)
                     id = self.widget.ids.get()
-                    self.point2 = point_class.Point(parent=self.widget.p_list,
-                                                    coord=np.array([((pos.x() / self.widget.width()) * 2 - 1),
+                    self.point2 = self.create_atom2_command.apply(coord=np.array([((pos.x() / self.widget.width()) * 2 - 1),
                                                                     ((pos.y() / self.widget.height()) * (-2) + 1) / (
                                                                                 self.widget.width() / self.widget.height()),
                                                                     0], dtype=np.float32),
-                                                    rad=self.widget.p_list,
-                                                    color=self.atom_color,
-                                                    atom_type=self.atom_type,
-                                                    label=self.atom_type_label + str(id),
-                                                    id=id)
-                    self.widget.drawing.add_point(self.point2)
+                                                                  rad=self.widget.p_list,
+                                                                  color=self.atom_color,
+                                                                  atom_type=self.atom_type,
+                                                                  label=self.atom_type_label + str(id),
+                                                                  id=id)
 
-                if self.line_list is None:
+                if self.create_bond_command is None:
                     self.line_list = point_class.PointsList(parent=self.widget.l_list)
-                    self.line1 = point_class.Point(parent=self.line_list, coord=self.point1, color=self.point1,
-                                                   rad=self.point1)
-                    self.line2 = point_class.Point(parent=self.line_list, coord=self.point2, color=self.point2,
-                                                   rad=self.point2)
-                    self.widget.drawing.add_connection((self.point1, self.line1), (self.point2, self.line2))
+                    self.create_bond_command = CreateBondCommand(self.widget.drawing, self.line_list)
+                    self.create_bond_command.apply(self.point1, self.point2)
                 else:
                     point2 = self.widget.select(pos)
                     if point2 is None or point2 is self.point2:
@@ -675,42 +879,43 @@ class Draw(aDrawWidgetEvent):
                 point2 = self.widget.select(event.localPos())
                 if point2 is not None and (point2 is not self.point2 and point2 is not self.point1):
                     self.widget.ids.remove(self.point2.id)
-                    self.widget.drawing.remove_point(self.point2)
+                    self.create_bond_command.undo()
+                    self.create_atom2_command.undo()
                     self.point2 = point2
                     self.line_list = point_class.PointsList(parent=self.widget.l_list)
-                    self.line1 = point_class.Point(parent=self.line_list, coord=self.point1, color=self.point1,
-                                                   rad=self.point1)
-                    self.line2 = point_class.Point(parent=self.line_list, coord=self.point2, color=self.point2,
-                                                   rad=self.point2)
-                    self.widget.drawing.add_connection((self.point1, self.line1), (self.point2, self.line2))
-
+                    self.create_bond_command = CreateBondCommand(self.widget.drawing, self.line_list)
+                    self.create_bond_command.apply(self.point1, self.point2)
                 elif self.point2 is None:
                     pos = event.localPos()
                     point_a = self.widget.select(pos)
                     if point_a is None:
                         id = self.widget.ids.get()
-                        point_a = point_class.Point(parent=self.widget.p_list,
-                                                    coord=np.array([((pos.x() / self.widget.width()) * 2 - 1),
+                        self.create_atom1_command = CreateAtomCommand(self.widget.drawing, self.widget.p_list)
+                        self.create_atom1_command.apply(coord=np.array([((pos.x() / self.widget.width()) * 2 - 1),
                                                                     ((pos.y() / self.widget.height()) * (-2) + 1) / (
-                                                                                self.widget.width() / self.widget.height()), 0],
-                                                                   dtype=np.float32),
-                                                    color=self.atom_color,
-                                                    rad=self.widget.p_list,
-                                                    id=id,
-                                                    atom_type=self.atom_type,
-                                                    label=self.atom_type_label + str(id))
-                        self.widget.drawing.add_point(point_a)
+                                                                                self.widget.width() / self.widget.height()), 0], dtype=np.float32),
+                                                        color=self.atom_color,
+                                                        rad=self.widget.p_list,
+                                                        id=id,
+                                                        atom_type=self.atom_type,
+                                                        label=self.atom_type_label + str(id))
+                        self.create_atom1_command.appendStack(self.create_atom1_command)
                     else:
                         point_a.label = self.atom_type_label + str(point_a.id)
                         point_a.color = self.atom_color
                         point_a.atom_type = self.atom_type
                         self.widget.drawing.changeAtomType(point_a)
+                else:
+                    coms = [x for x in [self.create_atom1_command, self.create_atom2_command, self.create_bond_command] if x]
+                    com = CompositeCommand(coms)
+                    com.appendStack(com)
 
                 self.point1 = None
                 self.point2 = None
-                self.line1 = None
-                self.line2 = None
                 self.line_list = None
+                self.create_atom1_command = None
+                self.create_atom2_command = None
+                self.create_bond_command = None
 
     def setType(self, atom_type):
         if type(atom_type) is list:
