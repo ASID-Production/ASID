@@ -131,7 +131,7 @@ def structureSearch(struct):
     edges = getEdges(struct)
     body['nodes'] = nodes
     body['edges'] = edges
-    data = requests.get(f'{SESSION.url_base}/api/v1/structures/search/?limit=100000', data=body)
+    data = requests.get(f'{SESSION.url_base}/api/v1/structures/search/?limit=1000', data=body)
     data = data.content.decode(data.apparent_encoding)
     data = json.loads(data)
     data_out = data['results']
