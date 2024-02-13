@@ -179,31 +179,40 @@ class Drawing:
                 self.contacts[point2][point1] = linep1
         else:
             self.add_point(point2)
+        return self.conditions_d['contacts'][-1]
 
     def addAngle(self, *points, split=-1):
         self.conditions_value_d['angle'].append(0.0)
         self.conditions_d['angle'].append(Condition(lambda x: x >= 0.0 or x <= 0.0, lambda *x: angle(x, rad=False, split=split), [self.point_node[x] for x in points]))
         self.conditions_d['angle'][-1].split = split
+        return self.conditions_d['angle'][-1]
 
     def addAvgDiff(self, *points, split=1):
         self.conditions_value_d['avgDiff'].append(0.0)
         self.conditions_d['avgDiff'].append(
             Condition(lambda x: x <= 0.0, lambda *x: avgDiff(x, split=split), [self.point_node[x] for x in points]))
         self.conditions_d['avgDiff'][-1].split = split
+        return self.conditions_d['avgDiff'][-1]
 
     def addMaxMeanPlaneDiff(self, *points):
         self.conditions_value_d['maxMeanPlaneDiff'].append(0.0)
         self.conditions_d['maxMeanPlaneDiff'].append(
             Condition(lambda x: x <= 0.0, lambda *x: maxMeanPlaneDiff(*x), [self.point_node[x] for x in points]))
+        return self.conditions_d['maxMeanPlaneDiff'][-1]
 
     def removeAngle(self, ind):
         if ind == -1:
             return
+        if type(ind) is Condition:
+            ind = self.conditions_d['angle'].index(ind)
         cond = self.conditions_d['angle'].pop(ind)
+        self.conditions_value_d['angle'].pop(ind)
 
     def removeContact(self, ind):
         if ind == -1:
             return
+        if type(ind) is Condition:
+            ind = self.conditions_d['contacts'].index(ind)
         cond = self.conditions_d['contacts'].pop(ind)
         node1, node2 = cond.nodes
         point1, point2 = self.node_point[node1], self.node_point[node2]
@@ -211,17 +220,25 @@ class Drawing:
         self.contacts[point1][point2].parent.destroy()
         self.contacts[point1].pop(point2)
         self.contacts[point2].pop(point1)
+        return cond
 
     def removeAvgDiff(self, ind):
         if ind == -1:
             return
+        if type(ind) is Condition:
+            ind = self.conditions_d['avgDiff'].index(ind)
         cond = self.conditions_d['avgDiff'].pop(ind)
+        self.conditions_value_d['avgDiff'].pop(ind)
+        return cond
 
     def removeMaxMeanPlaneDiff(self, ind):
         if ind == -1:
             return
+        if type(ind) is Condition:
+            ind = self.conditions_d['maxMeanPlaneDiff'].index(ind)
         cond = self.conditions_d['maxMeanPlaneDiff'].pop(ind)
         self.conditions_value_d['maxMeanPlaneDiff'].pop(ind)
+        return cond
 
     def remove_point(self, point):
         for point2 in self.connections[point].copy():
@@ -432,8 +449,10 @@ class TableModel(QAbstractTableModel):
 
 class TableView(QtWidgets.QTableView):
 
-    def __init__(self, remove, parent=None, model=None):
+    def __init__(self, remove, parent=None, model=None, widget=None):
+
         super().__init__(parent)
+        self.__widget = widget
         self._remove = remove
         self.setItemDelegate(SimpleDelegate(self))
         self.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -449,8 +468,11 @@ class TableView(QtWidgets.QTableView):
         super().mousePressEvent(e)
 
     def remove(self):
-        self._remove(self.currentIndex().row())
-        self.model().removeRows(self.currentIndex().row(), 1)
+        com = self._remove(self.widget, self.model())
+        com.apply(self.currentIndex().row())
+        com.appendStack(com)
+        #self._remove(self.currentIndex().row())
+        #self.model().removeRows(self.currentIndex().row(), 1)
 
     def showContextMenu(self, pos: QPoint):
         menu = QtWidgets.QMenu('Context Menu', self)
@@ -498,28 +520,28 @@ class Command(ABC):
     def undo(self):
         pass
 
-    @classmethod
-    def popStack(cls):
+    @staticmethod
+    def popStack():
         try:
-            command = cls.stack.pop()
+            command = Command.stack.pop()
         except IndexError:
             return
         command.undo()
-        cls.reverse_stack.append(command)
+        Command.reverse_stack.append(command)
 
-    @classmethod
-    def popReverseStack(cls):
+    @staticmethod
+    def popReverseStack():
         try:
-            command = cls.reverse_stack.pop()
+            command = Command.reverse_stack.pop()
         except IndexError:
             return
         command.apply()
-        cls.stack.append(command)
+        Command.stack.append(command)
 
-    @classmethod
-    def appendStack(cls, command):
-        cls.stack.append(command)
-        cls.reverse_stack = []
+    @staticmethod
+    def appendStack(command):
+        Command.stack.append(command)
+        Command.reverse_stack = []
 
 
 class DragCommand(Command):
@@ -528,71 +550,98 @@ class DragCommand(Command):
         Command.__init__(self)
         self.pos = None
         self.old_pos = None
-        self.point = None
+        self.cc_point = None
 
-    def apply(self, point, old_pos, pos, *args, **kwargs):
+    def payload(self, cc_point, pos, *args, **kwargs):
+        cc_point.point.coord = pos
+
+    def apply(self, cc_point, old_pos, pos, *args, **kwargs):
         Command.apply(self)
-        self.apply = lambda *largs, **lkwargs: DragCommand.apply(self, point, old_pos, pos, *args, **kwargs)
-        point.coord = pos
-        self.point = point
+        self.apply = lambda *args, **kwargs: self.payload(cc_point, pos, *args, **kwargs)
+        self.apply()
+        self.cc_point = cc_point
         self.pos = pos
         self.old_pos = old_pos
 
     def undo(self):
         if self.applied:
-            self.point = self.old_pos
+            self.payload(self.cc_point, self.old_pos)
 
 
 class CreateAtomCommand(Command):
 
-    def __init__(self, drawing, points_list):
+    def __init__(self, drawing, points_list, ids):
         Command.__init__(self)
         self.drawing = drawing
         self.point_list = points_list
+        self.ids = ids
         self.kwargs = None
         self.point = None
 
-    def apply(self, *args, **kwargs):
-        Command.apply(self)
-        self.apply = lambda *args, **kwargs: CreateAtomCommand.apply(self, *args, **kwargs)
+    def payload(self, *args, **kwargs):
+        id = self.ids.get()
         self.point = point_class.Point(parent=self.point_list,
                                        coord=kwargs['coord'],
                                        rad=self.point_list,
-                                       label=kwargs['label'],
-                                       id=kwargs['id'],
+                                       label=kwargs['label'] + str(id),
+                                       id=id,
                                        atom_type=kwargs['atom_type'],
-                                       color=kwargs['color'])
+                                       color=kwargs['color'],
+                                       create_command=kwargs['create_command'])
         self.drawing.add_point(self.point)
+        kwargs['create_command'].point = self.point
+        return self.point
+
+    def apply(self, *args, **kwargs):
+        Command.apply(self)
+        self.kwargs = kwargs
+        self.apply = lambda *args, **kwargs: self.payload(*args,  create_command=self, **self.kwargs)
+        self.apply()
         return self.point
 
     def undo(self):
         if self.applied:
-            DeleteAtomCommand(self.drawing, self.point_list).apply(self.point)
+            DeleteAtomCommand(self.drawing, self.point_list, self.ids).apply(self)
 
 
 class DeleteAtomCommand(Command):
 
-    def __init__(self, drawing, points_list):
+    def __init__(self, drawing, points_list, ids):
         Command.__init__(self)
         self.drawing = drawing
         self.point_list = points_list
+        self.ids = ids
         self.kwargs = None
-        self.point = None
+        self.cc_point = None
+        self.bond_commands = []
 
-    def apply(self, point, *args, **kwargs):
+    def payload(self, cc_point, *args, **kwargs):
+        for point2 in self.drawing.connections[cc_point.point].copy():
+            self.bond_commands.append(DeleteBondCommand(self.drawing, self.drawing.connections[cc_point.point][point2].parent))
+            self.bond_commands[-1].apply(cc_point, point2.create_command)
+        self.ids.remove(cc_point.point.id)
+        self.drawing.remove_point(cc_point.point)
+        cc_point.point = None
+
+    def apply(self, cc_point, *args, **kwargs):
         Command.apply(self)
+        point = cc_point.point
         self.kwargs = { 'coord': point.coord.copy(),
-                        'label': point.label,
+                        'label': ''.join([x for x in point.label if x.isalpha()]),
                         'id': point.id,
                         'atom_type': point.atom_type,
-                        'color': point.color.copy()}
-        self.apply = lambda *args, **kwargs: DeleteAtomCommand.apply(self, self.point *args, **kwargs)
-        self.drawing.remove_point(point)
-        return
+                        'color': point.color.copy(),
+                        'create_command': point.create_command}
+        self.cc_point = cc_point
+        self.apply = lambda *args, **kwargs: self.payload(self.cc_point)
+        self.apply()
 
     def undo(self):
         if self.applied:
-            self.point = CreateAtomCommand(self.drawing, self.point_list).apply(*self.kwargs)
+            self.point = CreateAtomCommand(self.drawing, self.point_list, self.ids).payload(**self.kwargs)
+            for bond_command in self.bond_commands:
+                bond_command.undo()
+            self.bond_commands = []
 
 
 class CreateBondCommand(Command):
@@ -601,26 +650,26 @@ class CreateBondCommand(Command):
         Command.__init__(self)
         self.drawing = drawing
         self.line_list = line_list
-        self.point1 = None
-        self.point2 = None
-        self.line1 = None
-        self.line2 = None
+        self.cc_point1 = None
+        self.cc_point2 = None
 
-    def apply(self, point1, point2, *args, **kwargs):
+    def payload(self, cc_point1, cc_point2, *args, **kwargs):
+        point1 = cc_point1.point
+        point2 = cc_point2.point
+        line1 = point_class.Point(parent=self.line_list, coord=point1, color=point1, rad=point1)
+        line2 = point_class.Point(parent=self.line_list, coord=point2, color=point2, rad=point2)
+        self.drawing.add_connection((point1, line1), (point2, line2))
+
+    def apply(self, cc_point1, cc_point2, *args, **kwargs):
         Command.apply(self)
-        self.point1 = point1
-        self.point2 = point2
-        self.apply = lambda *args, **kwargs: CreateBondCommand.apply(self, point1, point2)
-
-        self.line1 = point_class.Point(parent=self.line_list, coord=self.point1, color=self.point1,
-                                       rad=self.point1)
-        self.line2 = point_class.Point(parent=self.line_list, coord=self.point2, color=self.point2,
-                                       rad=self.point2)
-        self.drawing.add_connection((self.point1, self.line1), (self.point2, self.line2))
+        self.cc_point1 = cc_point1
+        self.cc_point2 = cc_point2
+        self.apply = lambda *args, **kwargs: self.payload(cc_point1, cc_point2)
+        self.apply()
 
     def undo(self):
         if self.applied:
-            DeleteBondCommand(self.drawing, self.line_list).apply(self.point1, self.point2)
+            DeleteBondCommand(self.drawing, self.line_list).apply(self.cc_point1, self.cc_point2)
 
 
 class DeleteBondCommand(Command):
@@ -629,23 +678,56 @@ class DeleteBondCommand(Command):
         Command.__init__(self)
         self.drawing = drawing
         self.line_list = line_list
-        self.point1 = None
-        self.point2 = None
-        self.line1 = None
-        self.line2 = None
+        self.cc_point1 = None
+        self.cc_point2 = None
 
-    def apply(self, point1, point2, *args, **kwargs):
+    def payload(self, cc_point1, cc_point2, *args, **kwargs):
+        point1 = cc_point1.point
+        point2 = cc_point2.point
+        self.drawing.removeBond(point1, point2)
+        self.line_list.children[0].destroy()
+        self.line_list.children[0].destroy()
+
+    def apply(self, cc_point1,  cc_point2, *args, **kwargs):
         Command.apply(self)
-        self.point1 = point1
-        self.point2 = point2
-        self.apply = lambda *args, **kwargs: DeleteBondCommand.apply(self, self.point1, self.point2)
-        self.drawing.removeBond(self.point1, self.point2)
-        self.line_list.children[0].destroy()
-        self.line_list.children[0].destroy()
+        self.cc_point1 = cc_point1
+        self.cc_point2 = cc_point2
+        self.apply = lambda *args, **kwargs: self.payload(cc_point1, cc_point2)
+        self.apply()
 
     def undo(self):
         if self.applied:
-            CreateBondCommand(self.drawing, self.line_list).apply(self.point1, self.point2)
+            CreateBondCommand(self.drawing, self.line_list).apply(self.cc_point1, self.cc_point2)
+
+
+class ChangeTypeCommand(Command):
+
+    def __init__(self, drawing):
+        Command.__init__(self)
+        self.old_type = None
+        self.old_label = None
+        self.old_color = None
+        self.cc_point = None
+        self.drawing = drawing
+
+    def payload(self, cc_point, atom_type, label, color, *args, **kwargs):
+        cc_point.point.label = label
+        cc_point.point.color = color
+        cc_point.point.atom_type = atom_type
+        self.drawing.changeAtomType(cc_point.point)
+
+    def apply(self, cc_point, atom_type, label, color, *args, **kwargs):
+        Command.apply(self)
+        self.cc_point = cc_point
+        self.old_type = cc_point.point.atom_type
+        self.old_label = cc_point.point.label
+        self.old_color = cc_point.point.color
+        self.apply = lambda *args, **kwargs: self.payload(self.cc_point, atom_type, label, color)
+        self.apply()
+
+    def undo(self):
+        if self.applied:
+            self.payload(self.cc_point, self.old_type, self.old_label, self.old_color)
 
 
 class CompositeCommand(Command):
@@ -665,6 +747,213 @@ class CompositeCommand(Command):
         if self.applied:
             for command in self.commands[::-1]:
                 command.undo()
+
+
+class ReverseCompositeCommand(Command):
+
+    def __init__(self, *commands):
+        Command.__init__(self)
+        self.commands = commands
+
+    def apply(self, *args, **kwargs):
+        Command.apply(self)
+        for command in self.commands[::-1]:
+            if command.applied:
+                command.undo()
+
+    def undo(self):
+        if self.applied:
+            for command in self.commands:
+                command.apply()
+
+
+class ConditionCommand(Command):
+
+    def __init__(self, widget):
+        Command.__init__(self)
+        self.cc_points = []
+        self.widget = widget
+        self.condition = None
+
+    @abstractmethod
+    def payload(self, *args, **kwargs):
+        pass
+
+    def removePayload(self, *args, **kwargs):
+        pass
+
+    def apply(self, *cc_points, **kwargs):
+        Command.apply(self)
+        self.cc_points = cc_points
+        self.apply = lambda *args, **kwargs: self.payload(*self.cc_points)
+        self.apply()
+
+    def undo(self):
+        if self.applied:
+            self.removePayload(self.cc_points)
+
+
+class ContactsCommand(ConditionCommand):
+
+    def __init__(self, widget, line_list):
+        ConditionCommand.__init__(self, widget)
+        self.line_list = line_list
+        self.__model = DRAW_WIDGET.contacts_model
+
+    def payload(self, *cc_points, **kwargs):
+        pc1, pc2 = cc_points[0].point, cc_points[1].point
+        dlp1 = point_class.Point(parent=self.line_list, color=pc1, coord=pc1, rad=pc1)
+        dlp2 = point_class.Point(parent=self.line_list, color=pc2, coord=pc2, rad=pc2)
+        self.condition = self.widget.drawing.add_contact((pc1, dlp1), (pc2, dlp2))
+        self.condition.create_command = self
+        self.widget.newContact.emit()
+
+    def removePayload(self, cc_points, *args, **kwargs):
+        if self.applied:
+            ind = self.widget.drawing.conditions_d['contacts'].index(self.condition)
+            self.__model.removeRows(ind, 1)
+            self.widget.drawing.removeContact(self.condition)
+
+
+class DeleteContactsCommand(ConditionCommand):
+
+    def __init__(self, widget, model):
+        ConditionCommand.__init__(self, widget)
+        self.__model = model
+        self.__cc_points = []
+        self.__line_list = None
+
+    def payload(self, ind, *args, **kwargs):
+        cond = self.widget.drawing.removeContact(ind)
+        self.__cc_points = [self.widget.drtawing.node_point[x].create_command for x in cond.nodes]
+        self.__line_list = self.cc_points[0].point.parent
+        self.__model.removeRows(ind, 1)
+
+    def removePayload(self, *args, **kwargs):
+        if self.applied:
+            ContactsCommand(self.widget, self.__line_list).apply(*self.__cc_points)
+
+
+class AngleCommand(ConditionCommand):
+
+    def __init__(self, widget):
+        ConditionCommand.__init__(self, widget)
+        self.split = -1
+        self.__model = DRAW_WIDGET.angle_model
+
+    def payload(self, *cc_points, **kwargs):
+        points = [x.point for x in cc_points]
+        self.condition = self.widget.drawing.addAngle(*points, split=self.split)
+        self.condition.create_command = self
+        self.widget.newAngle.emit()
+
+    def apply(self, *cc_points, **kwargs):
+        self.split = kwargs.get('split', -1)
+        ConditionCommand.apply(self, *cc_points, **kwargs)
+
+    def removePayload(self, cc_points, *args, **kwargs):
+        if self.applied:
+            ind = self.widget.drawing.conditions_d['angle'].index(self.condition)
+            self.__model.removeRows(ind, 1)
+            self.widget.drawing.removeAngle(self.condition)
+
+
+class DeleteAngleCommand(ConditionCommand):
+
+    def __init__(self, widget, model):
+        ConditionCommand.__init__(self, widget)
+        self.split = -1
+        self.__model = model
+        self.__cc_points = []
+
+    def payload(self, ind, *args, **kwargs):
+        cond = self.widget.drawing.removeAngle(ind)
+        self.split = cond.split
+        self.__cc_points = [self.widget.drtawing.node_point[x].create_command for x in cond.nodes]
+        self.__model.removeRows(ind, 1)
+
+    def removePayload(self, *args, **kwargs):
+        if self.applied:
+            AngleCommand(self.widget).apply(*self.__cc_points, split=self.split)
+
+
+class AvgDiffCommand(ConditionCommand):
+
+    def __init__(self, widget):
+        ConditionCommand.__init__(self, widget)
+        self.split = -1
+        self.__model = DRAW_WIDGET.avgDiff_model
+
+    def payload(self, *cc_points, **kwargs):
+        points = [x.point for x in cc_points]
+        self.condition = self.widget.drawing.addAvgDiff(*points, split=-1)
+        self.condition.create_command = self
+        self.widget.newAvgDiff.emit()
+
+    def apply(self, *cc_points, **kwargs):
+        self.split = kwargs.get('split', -1)
+        ConditionCommand.apply(self, *cc_points, **kwargs)
+
+    def removePayload(self, cc_points, *args, **kwargs):
+        if self.applied:
+            ind = self.widget.drawing.conditions_d['avgDiff'].index(self.condition)
+            self.__model.removeRows(ind, 1)
+            self.widget.drawing.removeAvgDiff(self.condition)
+
+
+class DeleteAvgDiffCommand(ConditionCommand):
+
+    def __init__(self, widget, model):
+        ConditionCommand.__init__(self, widget)
+        self.split = -1
+        self.__model = model
+        self.__cc_points = []
+
+    def payload(self, ind, *args, **kwargs):
+        cond = self.widget.drawing.removeAvgDiff(ind)
+        self.split = cond.split
+        self.__cc_points = [self.widget.drtawing.node_point[x].create_command for x in cond.nodes]
+        self.__model.removeRows(ind, 1)
+
+    def removePayload(self, *args, **kwargs):
+        if self.applied:
+            AvgDiffCommand(self.widget).apply(*self.__cc_points, split=self.split)
+
+
+class MaxMeanPlaneDiffCommand(ConditionCommand):
+
+    def __init__(self, widget):
+        ConditionCommand.__init__(self, widget)
+        self.__model = DRAW_WIDGET.maxMeanPlaneDiff_model
+
+    def payload(self, *cc_points, **kwargs):
+        points = [x.point for x in cc_points]
+        self.condition = self.widget.drawing.addMaxMeanPlaneDiff(*points)
+        self.condition.create_command = self
+        self.widget.newMaxMeanPlaneDiff.emit()
+
+    def removePayload(self, cc_points, *args, **kwargs):
+        if self.applied:
+            ind = self.widget.drawing.conditions_d['maxMeanPlaneDiff'].index(self.condition)
+            self.__model.removeRows(ind, 1)
+            self.widget.drawing.removeMaxMeanPlaneDiff(self.condition)
+
+
+class DeleteMaxMeanPlaneCommand(ConditionCommand):
+
+    def __init__(self, widget, model):
+        ConditionCommand.__init__(self, widget)
+        self.__model = model
+        self.__cc_points = []
+
+    def payload(self, ind, *args, **kwargs):
+        cond = self.widget.drawing.removeMaxMeanPlaneDiff(ind)
+        self.__cc_points = [self.widget.drtawing.node_point[x].create_command for x in cond.nodes]
+        self.__model.removeRows(ind, 1)
+
+    def removePayload(self, *args, **kwargs):
+        if self.applied:
+            MaxMeanPlaneDiffCommand(self.widget).apply(*self.__cc_points)
 
 
 class aEvent(ABC):
@@ -766,8 +1055,9 @@ class Drag(aDrawWidgetEvent):
     def assertEvent(self, event: QtCore.QEvent, widget):
         if event.type() == QtCore.QEvent.MouseButtonPress and event.buttons() == QtCore.Qt.LeftButton:
             self.drag_point = widget.select(event.localPos())
-            self.old_pos = self.drag_point.coord
-            self.timer.start()
+            if self.drag_point is not None:
+                self.old_pos = self.drag_point.coord
+                self.timer.start()
 
         if event.type() == QtCore.QEvent.MouseMove and event.buttons() == QtCore.Qt.LeftButton:
             if self.timer.run():
@@ -781,9 +1071,10 @@ class Drag(aDrawWidgetEvent):
                     self.drag_point.coord = self.pos
 
         if event.type() == QtCore.QEvent.MouseButtonRelease:
-            com = DragCommand()
-            com.apply(self.drag_point, self.old_pos, self.pos)
-            com.appendStack(com)
+            if self.drag_point is not None:
+                com = DragCommand()
+                com.apply(self.drag_point.create_command, self.old_pos, self.pos)
+                com.appendStack(com)
             self.drag_point = None
             self.pos = None
             self.old_pos = None
@@ -806,6 +1097,16 @@ class HighLight(aDrawWidgetEvent):
             self.point = point
 
 
+class UndoRedo(aDrawWidgetEvent):
+
+    def assertEvent(self, event: QtCore.QEvent, widget):
+        if event.type() == QtCore.QEvent.KeyPress:
+            if event.matches(QtGui.QKeySequence.Undo):
+                Command.popStack()
+            elif event.matches(QtGui.QKeySequence.Redo):
+                Command.popReverseStack()
+
+
 class Draw(aDrawWidgetEvent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -816,6 +1117,8 @@ class Draw(aDrawWidgetEvent):
         self.create_atom1_command = None
         self.create_atom2_command = None
         self.create_bond_command = None
+        self.change_type_command = None
+        self.drag_command = None
 
         self.point1 = None
         self.point2 = None
@@ -834,20 +1137,17 @@ class Draw(aDrawWidgetEvent):
             if self.timer.time() > self.tol:
                 pos = event.localPos()
                 if self.create_atom1_command is None and self.point1 is None:
-                    self.create_atom1_command = CreateAtomCommand(self.widget.drawing, self.widget.p_list)
-                    id = self.widget.ids.get()
+                    self.create_atom1_command = CreateAtomCommand(self.widget.drawing, self.widget.p_list, self.widget.ids)
                     self.point1 = self.create_atom1_command.apply(coord=np.array([((pos.x() / self.widget.width()) * 2 - 1),
                                                                     ((pos.y() / self.widget.height()) * (-2) + 1) / (
                                                                                 self.widget.width() / self.widget.height()),
                                                                     0], dtype=np.float32),
                                                                   rad=self.widget.p_list,
-                                                                  label=self.atom_type_label + str(id),
-                                                                  id=id,
+                                                                  label=self.atom_type_label,
                                                                   atom_type=self.atom_type,
                                                                   color=self.atom_color)
                 if self.create_atom2_command is None:
-                    self.create_atom2_command = CreateAtomCommand(self.widget.drawing, self.widget.p_list)
-                    id = self.widget.ids.get()
+                    self.create_atom2_command = CreateAtomCommand(self.widget.drawing, self.widget.p_list, self.widget.ids)
                     self.point2 = self.create_atom2_command.apply(coord=np.array([((pos.x() / self.widget.width()) * 2 - 1),
                                                                     ((pos.y() / self.widget.height()) * (-2) + 1) / (
                                                                                 self.widget.width() / self.widget.height()),
@@ -855,13 +1155,12 @@ class Draw(aDrawWidgetEvent):
                                                                   rad=self.widget.p_list,
                                                                   color=self.atom_color,
                                                                   atom_type=self.atom_type,
-                                                                  label=self.atom_type_label + str(id),
-                                                                  id=id)
+                                                                  label=self.atom_type_label)
 
                 if self.create_bond_command is None:
                     self.line_list = point_class.PointsList(parent=self.widget.l_list)
                     self.create_bond_command = CreateBondCommand(self.widget.drawing, self.line_list)
-                    self.create_bond_command.apply(self.point1, self.point2)
+                    self.create_bond_command.apply(self.point1.create_command, self.point2.create_command)
                 else:
                     point2 = self.widget.select(pos)
                     if point2 is None or point2 is self.point2:
@@ -878,36 +1177,38 @@ class Draw(aDrawWidgetEvent):
             if self.timer.time() > self.tol:
                 point2 = self.widget.select(event.localPos())
                 if point2 is not None and (point2 is not self.point2 and point2 is not self.point1):
-                    self.widget.ids.remove(self.point2.id)
                     self.create_bond_command.undo()
                     self.create_atom2_command.undo()
                     self.point2 = point2
                     self.line_list = point_class.PointsList(parent=self.widget.l_list)
                     self.create_bond_command = CreateBondCommand(self.widget.drawing, self.line_list)
-                    self.create_bond_command.apply(self.point1, self.point2)
+                    self.create_bond_command.apply(self.point1.create_command, self.point2.create_command)
+                    self.create_bond_command.appendStack(self.create_bond_command)
                 elif self.point2 is None:
                     pos = event.localPos()
                     point_a = self.widget.select(pos)
                     if point_a is None:
-                        id = self.widget.ids.get()
-                        self.create_atom1_command = CreateAtomCommand(self.widget.drawing, self.widget.p_list)
+                        self.create_atom1_command = CreateAtomCommand(self.widget.drawing, self.widget.p_list, self.widget.ids)
                         self.create_atom1_command.apply(coord=np.array([((pos.x() / self.widget.width()) * 2 - 1),
                                                                     ((pos.y() / self.widget.height()) * (-2) + 1) / (
                                                                                 self.widget.width() / self.widget.height()), 0], dtype=np.float32),
                                                         color=self.atom_color,
                                                         rad=self.widget.p_list,
-                                                        id=id,
                                                         atom_type=self.atom_type,
-                                                        label=self.atom_type_label + str(id))
+                                                        label=self.atom_type_label)
                         self.create_atom1_command.appendStack(self.create_atom1_command)
                     else:
-                        point_a.label = self.atom_type_label + str(point_a.id)
-                        point_a.color = self.atom_color
-                        point_a.atom_type = self.atom_type
-                        self.widget.drawing.changeAtomType(point_a)
+                        self.change_type_command = ChangeTypeCommand(self.widget.drawing)
+                        label = self.atom_type_label + str(point_a.id)
+                        color = self.atom_color
+                        atom_type = self.atom_type
+                        self.change_type_command.apply(point_a.create_command, atom_type, label, color)
+                        self.change_type_command.appendStack(self.change_type_command)
                 else:
-                    coms = [x for x in [self.create_atom1_command, self.create_atom2_command, self.create_bond_command] if x]
-                    com = CompositeCommand(coms)
+                    self.drag_command = DragCommand()
+                    self.drag_command.apply(self.point2.create_command, self.point2.coord, self.point2.coord)
+                    coms = [x for x in [self.create_atom1_command, self.create_atom2_command, self.create_bond_command, self.drag_command] if x]
+                    com = CompositeCommand(*coms)
                     com.appendStack(com)
 
                 self.point1 = None
@@ -916,6 +1217,7 @@ class Draw(aDrawWidgetEvent):
                 self.create_atom1_command = None
                 self.create_atom2_command = None
                 self.create_bond_command = None
+                self.change_type_command = None
 
     def setType(self, atom_type):
         if type(atom_type) is list:
@@ -933,6 +1235,7 @@ class Clear(aDrawWidgetEvent):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.point_d = None
+        self.delete_command = None
 
     def assertEvent(self, event: QtCore.QEvent, widget):
         if event.type() == QtCore.QEvent.MouseButtonPress and event.buttons() == QtCore.Qt.LeftButton:
@@ -944,11 +1247,13 @@ class Clear(aDrawWidgetEvent):
                 self.timer.stop()
             if self.timer.time() > self.tol:
                 if self.point_d is not None:
-                    self.widget.ids.remove(self.point_d.id)
-                    self.widget.drawing.remove_point(self.point_d)
+                    self.delete_command = DeleteAtomCommand(self.widget.drawing, self.point_d.parent, self.widget.ids)
+                    self.delete_command.apply(self.point_d.create_command)
+                    self.delete_command.appendStack(self.delete_command)
             else:
                 self.point_d = None
             self.point_d = None
+            self.delete_command = None
 
 
 class Contact(aDrawWidgetEvent):
@@ -968,12 +1273,15 @@ class Contact(aDrawWidgetEvent):
                         self.old_color = point.color
                         point.color = np.array([0, 1, 0, 1], dtype=np.float32)
                     elif self.pc1 is not None and point is not self.pc1:
+                        #dlp1 = point_class.Point(parent=dl_list, color=self.pc1, coord=self.pc1, rad=self.pc1)
+                        #dlp2 = point_class.Point(parent=dl_list, color=point, coord=point, rad=point)
+                        #self.widget.drawing.add_contact((self.pc1, dlp1), (point, dlp2))
+                        #self.widget.newContact.emit()
                         dl_list = point_class.PointsList(parent=self.widget.dl_list)
-                        dlp1 = point_class.Point(parent=dl_list, color=self.pc1, coord=self.pc1, rad=self.pc1)
-                        dlp2 = point_class.Point(parent=dl_list, color=point, coord=point, rad=point)
-                        self.widget.drawing.add_contact((self.pc1, dlp1), (point, dlp2))
+                        com = ContactsCommand(self.widget, dl_list)
+                        com.apply(self.pc1.create_command, point.create_command)
+                        com.appendStack(com)
                         self.pc1.color = self.old_color
-                        self.widget.newContact.emit()
                         self.pc1 = None
 
             if event.buttons() == QtCore.Qt.RightButton:
@@ -1050,8 +1358,11 @@ class Angle(aDrawWidgetEvent):
                     for point, color in zip(self.p1, self.old_colors[0]):
                         point.color = color
                     points = self.p1
-                    self.widget.drawing.addAngle(*points, split=-1)
-                    self.widget.newAngle.emit()
+                    #self.widget.drawing.addAngle(*points, split=-1)
+                    #self.widget.newAngle.emit()
+                    com = AngleCommand(self.widget)
+                    com.apply(*[x.create_command for x in points], split=-1)
+                    com.appendStack(com)
                     self.p1 = []
                     self.p2 = []
                     self.old_colors = [[], []]
@@ -1069,8 +1380,11 @@ class Angle(aDrawWidgetEvent):
                         point.color = color
                     points = self.p1 + self.p2
                     split = len(self.p1)
-                    self.widget.drawing.addAngle(*points, split=split)
-                    self.widget.newAngle.emit()
+                    #self.widget.drawing.addAngle(*points, split=split)
+                    #self.widget.newAngle.emit()
+                    com = AngleCommand(self.widget)
+                    com.apply(*[x.create_command for x in points], split=split)
+                    com.appendStack(com)
                     self.p1 = []
                     self.p2 = []
                     self.old_colors = [[], []]
@@ -1117,8 +1431,11 @@ class AvgDiff(aDrawWidgetEvent):
                         point.color = color
                     points = self.p1 + self.p2
                     split = len(self.p1)
-                    self.widget.drawing.addAvgDiff(*points, split=split)
-                    self.widget.newAvgDiff.emit()
+                    #self.widget.drawing.addAvgDiff(*points, split=split)
+                    #self.widget.newAvgDiff.emit()
+                    com = AvgDiffCommand(self.widget)
+                    com.apply(*[x.create_command for x in points], split=split)
+                    com.appendStack(com)
                     self.p1 = []
                     self.p2 = []
                     self.old_colors = [[], []]
@@ -1151,8 +1468,11 @@ class MaxMeanPlaneDiff(aDrawWidgetEvent):
                     point.color = color
 
                 points = self.selected_points
-                self.widget.drawing.addMaxMeanPlaneDiff(*points)
-                self.widget.newMaxMeanPlaneDiff.emit()
+                #self.widget.drawing.addMaxMeanPlaneDiff(*points)
+                #self.widget.newMaxMeanPlaneDiff.emit()
+                com = MaxMeanPlaneDiffCommand(self.widget)
+                com.apply(*[x.create_command for x in points])
+                com.appendStack(com)
 
                 self.selected_points = []
                 self.old_colors = []
@@ -1162,13 +1482,8 @@ class DrawerGL(QOpenGLWidget):
 
     newContact = Signal(name='newContact')
     newAngle = Signal(name='newAngle')
-    newAvgDiff = Signal(name='avgDiff')
+    newAvgDiff = Signal(name='newAvgDiff')
     newMaxMeanPlaneDiff = Signal(name='newMaxMeanPlaneDiff')
-
-    removeContact = Signal([int], name='newContact')
-    removeAngle = Signal([int], name='newAngle')
-    removeAvgDiff = Signal([int], name='avgDiff')
-    removeMaxMeanPlaneDiff = Signal([int], name='newMaxMeanPlaneDiff')
 
     class AtomType:
         def __init__(self, atom_type):
@@ -1290,9 +1605,12 @@ class DrawerGL(QOpenGLWidget):
         return super().eventFilter(obj, event)
 
     def clearDraw(self):
-        for point in self.drawing.points.children[0].children.copy():
-            self.drawing.remove_point(point)
-            self.ids.remove(point.id)
+        commands = []
+        for com in Command.stack:
+            commands.append(com)
+        com = ReverseCompositeCommand(*commands)
+        com.apply()
+        com.appendStack(com)
 
 
 from .ui import Drawer_model_ui
@@ -1330,13 +1648,17 @@ class DrawWidget(Drawer_model_ui.Ui_Dialog, QtWidgets.QDialog):
                                         data=lambda x: self.openGl_drawer.drawing.labelMaxMeanPlaneDiff(x).__getitem__(1),
                                         setter=lambda ind, dist: self.openGl_drawer.drawing.setDataMaxMeanPlaneDiff(ind, dist))
 
-        self.contacts_view = TableView(remove=lambda x: self.openGl_drawer.drawing.removeContact(x), parent=self, model=self.contacts_model)
+        #self.contacts_view = TableView(remove=lambda x: self.openGl_drawer.drawing.removeContact(x), parent=self, model=self.contacts_model)
+        self.contacts_view = TableView(remove=DeleteContactsCommand, parent=self, model=self.contacts_model, widget=self.openGl_drawer)
 
-        self.angle_view = TableView(remove=lambda x: self.openGl_drawer.drawing.removeAngle(x), parent=self, model=self.angle_model)
+        #self.angle_view = TableView(remove=lambda x: self.openGl_drawer.drawing.removeAngle(x), parent=self, model=self.angle_model)
+        self.angle_view = TableView(remove=DeleteAngleCommand, parent=self, model=self.angle_model)
 
-        self.avgDiff_view = TableView(remove=lambda x: self.openGl_drawer.drawing.removeAvgDiff(x), parent=self, model=self.avgDiff_model)
+        #self.avgDiff_view = TableView(remove=lambda x: self.openGl_drawer.drawing.removeAvgDiff(x), parent=self, model=self.avgDiff_model)
+        self.avgDiff_view = TableView(remove=DeleteAvgDiffCommand, parent=self, model=self.avgDiff_model)
 
-        self.maxMeanPlaneDiff_view = TableView(remove=lambda x: self.openGl_drawer.drawing.removeMaxMeanPlaneDiff(x), parent=self, model=self.maxMeanPlaneDiff_model)
+        #self.maxMeanPlaneDiff_view = TableView(remove=lambda x: self.openGl_drawer.drawing.removeMaxMeanPlaneDiff(x), parent=self, model=self.maxMeanPlaneDiff_model)
+        self.maxMeanPlaneDiff_view = TableView(remove=DeleteMaxMeanPlaneCommand, parent=self, model=self.maxMeanPlaneDiff_model)
 
         self.openGl_drawer.newContact.connect(lambda: self.contacts_model.insertRows(self.contacts_model.rowCount(), 1))
         self.openGl_drawer.newAngle.connect(lambda: self.angle_model.insertRows(self.angle_model.rowCount(), 1))
@@ -1355,6 +1677,7 @@ class DrawWidget(Drawer_model_ui.Ui_Dialog, QtWidgets.QDialog):
         self.verticalLayout_10.addWidget(self.maxMeanPlaneDiff_view)
 
         HighLight().attach(self.openGl_drawer)
+        UndoRedo().attach(self.openGl_drawer)
         drag_event = Drag(exclusive=True, exclusive_group=1)
         drag_event.attach(self.openGl_drawer)
         self.draw_event = Draw(exclusive=True, exclusive_group=1)
