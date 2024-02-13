@@ -115,7 +115,10 @@ struct FAM_Struct {
 			auto var = distances.maxDistance(types[i], types[i]);
 			if (var > ret) ret = var;
 		}
-		return std::fma(ret, 2, 0.0001f);
+		if constexpr (std::is_same_v<T,float>)
+			return std::fmaf(ret, 2, 0.0001f);
+		else
+			return static_cast<T>(std::fma(ret, 2, 0.0001f));
 	}
 
 	// Debug Method
@@ -458,6 +461,3 @@ private:
 		return res;
 	}
 };
-
-
-

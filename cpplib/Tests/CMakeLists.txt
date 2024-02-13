@@ -37,6 +37,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 include(FetchContent)
 FetchContent_Declare(
   googletest
+  DOWNLOAD_EXTRACT_TIMESTAMP
   URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
 )
 # For Windows: Prevent overriding the parent project's compiler/linker settings
