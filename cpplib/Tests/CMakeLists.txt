@@ -58,6 +58,12 @@ target_link_libraries(
     cpplibLib
 )
 
+add_custom_command(
+        TARGET MyTests POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+                ${CMAKE_SOURCE_DIR}/module/BondLength.ini
+                ${CMAKE_CURRENT_BINARY_DIR}/cpplib/Tests/module/BondLength.ini)
+
 include(GoogleTest)
 gtest_discover_tests(${PROJECT_NAME})
 

@@ -30,7 +30,59 @@
 #include <type_traits> // for std::conditional
 #include <vector>
 #include <string>
+#include <array> // for std::array in XAtom
 
+template<class A>
+class XAtom {
+public:
+	static constexpr char size = 7;
+private:
+	static constexpr char counter = size;
+	std::array<A, size+1> types = {0, 0, 0, 0, 0, 0, 0, 0};
+public:
+	// Constructors
+	constexpr XAtom() = default;
+	constexpr XAtom(const A input) {
+		types[0] = input;
+		types[counter] += 1;
+	}
+
+	constexpr void AddTypeUnsafe(const A t) {
+		types[types[counter]] = t;
+		types[counter]++;
+	}
+	constexpr bool AddTypeSafe(const A t) {
+		if (types[types[counter]] == size) return false;
+		AddTypeUnsafe(t);
+		return true;
+	}
+
+	// implicit conversion
+	constexpr operator A() const noexcept {
+		// check for single type
+		if (types[counter] == 1) return types[0];
+		else return A(0);
+	}
+
+	// operators
+	constexpr bool operator==(const A& other) const noexcept {
+		for (char i = 0; i < types[counter]; i++)
+		{
+			if (types[i] == other)
+				return true;
+		}
+		return false;
+	}
+	constexpr bool operator!=(const A& other) const noexcept {
+		for (char i = 0; i < types[counter]; i++)
+		{
+			if (types[i] == other)
+				return false;
+		}
+		return true;
+	}
+
+};
 
 template<class A, class H>
 // H - integral type
@@ -40,6 +92,9 @@ public:
 	A type;
 	H hAtoms;
 
+	template <class A1,class H1>
+	friend class BaseNode;
+
 	//Constructors
 	constexpr BaseNode() = default;
 	constexpr BaseNode(const A type1, const H hAtoms1) noexcept : type(type1), hAtoms(hAtoms1) {}
@@ -47,16 +102,19 @@ public:
 	constexpr BaseNode(BaseNode<A, H>&&) noexcept = default;
 
 	// Operators
-	constexpr bool operator==(const BaseNode<A, H>& other) const noexcept {
+	template <class A1, class H1>
+	constexpr bool operator==(const BaseNode<A1, H1>& other) const noexcept {
 		return type == other.type &&
 			hAtoms == other.hAtoms;
 	}
-	constexpr bool operator<(const BaseNode<A, H>& other) const noexcept {
+	template <class A1, class H1>
+	constexpr bool operator<(const BaseNode<A1, H1>& other) const noexcept {
 		if (type != other.type)
 			return type < other.type;
 		return hAtoms < other.hAtoms;
 	}
-	constexpr bool operator>(const BaseNode<A, H>& other) const noexcept {
+	template <class A1, class H1>
+	constexpr bool operator>(const BaseNode<A1, H1>& other) const noexcept {
 		if (type != other.type)
 			return type > other.type;
 		return hAtoms > other.hAtoms;
@@ -70,6 +128,9 @@ public:
 	using base = BaseNode<A, H>;
 	using NeighbourValueType = Node*;
 	using NeighboursType = std::vector<NeighbourValueType>;
+
+	template <class X, class H1, class AI1>
+	friend class Node;
 private:
 	// Data
 	AI id_ = 0;
@@ -91,8 +152,9 @@ public:
 		: base(t1, h1), neighbours_(std::move(neighbours)), id_(id) {}
 
 	// Operators
-	bool operator==(const Node& other) const noexcept {
-		return (((base&)(*this)) == ((const base&)other)) &&
+	template <class X>
+	bool operator==(const Node<X,H,AI>& other) const noexcept {
+		return (((base&)(*this)) == ((const Node<X, H, AI>::base&)other)) &&
 			(neighbours_.size() == other.neighbours_.size());
 	}
 
@@ -113,10 +175,10 @@ public:
 	bool operator<=(const Node& other) const noexcept {
 		return this->operator==(other) || this->operator<(other);
 	}
-
-	bool notExactCompare(const Node& other) const noexcept {
-		return ((const base&)(*this)).type == ((const base&)other).type &&
-			((const base&)(*this)).hAtoms <= ((const base&)other).hAtoms &&
+	template<class X>
+	bool notExactCompare(const Node<X,H,AI>& other) const noexcept {
+		return ((const base&)(*this)).type == ((const Node<X, H, AI>::base&)other).type &&
+			((const base&)(*this)).hAtoms <= ((const Node<X, H, AI>::base&)other).hAtoms &&
 			(neighbours_.size() <= other.neighbours_.size());
 	}
 
