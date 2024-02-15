@@ -1724,6 +1724,8 @@ class DrawWidget(Drawer_model_ui.Ui_Dialog, QtWidgets.QDialog):
         #self.tableWidget_3.itemChanged.connect(lambda x: self.asd(x, tab=2))
 
     def changeDraw(self, atom_type):
+        if type(atom_type) is list and len(atom_type) == 1:
+            atom_type = atom_type[0]
         self.draw_event.setType(atom_type)
         self.draw_event.attach(self.openGl_drawer)
 
