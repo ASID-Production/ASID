@@ -47,7 +47,7 @@ class FileParser:
             return None, None
         return self.SUPPORTED_FORMATS[ext](file_path, bond, root)
 
-    def parsXyz(self, file_path, bond, root):
+    def parsXyz(self, file_path, bond, root, *args, **kwargs):
         mol_list, atom_list, bonds_l = None, None, None
         file = open(file_path, 'r')
         mol_sys = MoleculeClass.MoleculeSystem()
@@ -92,7 +92,7 @@ class FileParser:
                             bonds.append(bond)
         return mol_sys, (mol_list, atom_list, bonds_l)
 
-    def parsPdb(self, file_path, bond, root):
+    def parsPdb(self, file_path, bond, root, *args, **kwargs):
         mol_list, atom_list, bonds_l = None, None, None
         file = open(file_path, 'r')
         mol_sys = MoleculeClass.MoleculeSystem()
@@ -162,5 +162,133 @@ class FileParser:
                             bonds.append(bond)
         return mol_sys, (mol_list, atom_list, bonds_l)
 
+    def parsCpProp(self, file_path, bond, root, *args, **kwargs):
+        mol_list, atom_list, bonds_l = None, None, None
+        file = open(file_path, 'r')
+        mol_sys = MoleculeClass.MoleculeSystem()
+        mol = MoleculeClass.Molecule(parent=mol_sys)
+
+        types = {'3,-3': 6,
+                 '3,-1': 7,
+                 '3,+1': 8,
+                 '3,+3': 9}
+        attrs = [('Position (Bohr)', 'coord'),
+                 ('Density of all electrons', 'density_of_all_electrons'),
+                 ('Density of Alpha electrons', 'density_of_alpha_electrons'),
+                 ('Density of Beta electrons', 'density_of_beta_electrons'),
+                 ('Spin density of electrons', 'spin_density_of_electrons'),
+                 ('Lagrangian kinetic energy G(r)', 'lagrangian_kinetic_energy_G(r)'),
+                 ('G(r) in X,Y,Z', 'G(r)_xyz'),
+                 ('Hamiltonian kinetic energy K(r)', 'hamiltonian_kinetic_energy_K(r)'),
+                 ('Potential energy density V(r)', 'potential_energy_density_V(r)'),
+                 ('Energy density E(r) or H(r)', 'energy_density_E(r)_H(r)'),
+                 ('Laplacian of electron density', 'laplacian_of_electron_density'),
+                 ('Electron localization function (ELF)', 'electron_localization_function_ELF'),
+                 ('Localized orbital locator (LOL)', 'localized_orbital_locator_LOL'),
+                 ('Local information entropy', 'local_information_entropy'),
+                 ('Reduced density gradient (RDG)', 'reduced_density_gradient_RDG'),
+                 ('Reduced density gradient with promolecular approximation', 'reduced_density_gradient_with_promolecular_approximation'),
+                 ('Sign(lambda2)*rho', 'sign(lambda2)*rho'),
+                 ('Sign(lambda2)*rho with promolecular approximation', 'sign(lambda2)*rho_with_promolecular_approximation'),
+                 ('Corr. hole for alpha, ref.', 'corr_hole_for_alpha_ref'),
+                 ('Source function, ref.', 'source_function_ref'),
+                 ('Wavefunction value for orbital         1 ', 'wavefunction_value_for_orbital_1'),
+                 ('Average local ionization energy (ALIE)', 'average_local_ionization_energy_ALIE'),
+                 ('Delta_g (under promolecular approximation)', 'delta_g_under_promolecular_approximation'),
+                 ('Delta_g (under Hirshfeld partition)', 'delta_g_under_hirshfeld_partition'),
+                 ('User-defined real space function', 'user_defined_real_space_function'),
+                 ('ESP from nuclear charges', 'ESP_from_nuclear_charges')]
+        spec_attrs = [('Components of gradient in x/y/z are', 'electron_density_gradient_xyz'),
+                      ('Norm of gradient is', 'norm_of_gradient'),
+                      ('Components of Laplacian in x/y/z are', 'laplacian_xyz'),
+                      ('Total', 'norm_of_laplacian'),
+                      ('Hessian matrix', 'hessian_matrix'),
+                      ('Eigenvalues of Hessian', 'eigenvalues_of_hessian'),
+                      ('Eigenvectors(columns) of Hessian', 'eigenvectors_of_hessian'),
+                      ('Determinant of Hessian', 'determinant_of_Hessian'),
+                      ('Ellipticity of electron density', 'ellipticity_of_electron_density'),
+                      ('eta index', 'eta_index')]
+
+        def parsCp(file, num, type):
+
+            def pars_attr_line(file, line: str, i):
+                nonlocal cp_attrs
+                nonlocal coord
+                if i == 0:
+                    coord = np.array([float(x) for x in line[line.find(':')+1:-1].split() if x], dtype=np.float32)/1.8897
+                elif i == 6:
+                    value = np.array([float(x) for x in line[line.find(':')+1:-1].split() if x], dtype=np.float32)
+                    cp_attrs[attrs[i][1]] = value
+                elif i == 18 or i == 19:
+                    loc = line.find(':')
+                    loc2 = line.find(':', loc+1)
+                    value = np.array([float(x) for x in line[loc+1:loc2].split() if x], dtype=np.float32)
+                    value2 = [x for x in line[loc2+1:-1].split() if x][0]
+                    if value2 == 'NaN':
+                        value2 = None
+                    else:
+                        value2 = float(value2)
+                    value = [value, value2]
+                    cp_attrs[attrs[i][1]] = value
+                else:
+                    value = [float(x) for x in line[line.find(':')+1:-1].split() if x][0]
+                    cp_attrs[attrs[i][1]] = value
+
+            def pars_spec_attr_line(file, line: str, i):
+                nonlocal cp_spec_attrs
+                if i == 0 or i == 2:
+                    line = file.__next__()
+                    value = np.array([float(x) for x in line[:-1].split() if x], dtype=np.float32)
+                    cp_spec_attrs[spec_attrs[i][1]] = value
+                elif i == 4 or i == 6:
+                    matr = []
+                    for _ in range(3):
+                        line = file.__next__()
+                        value = [float(x) for x in line[:-1].split() if x]
+                        matr.append(value)
+                    value = np.array(matr, dtype=np.float32)
+                    cp_spec_attrs[spec_attrs[i][1]] = value
+                elif i == 5:
+                    value = np.array([float(x) for x in line[line.find(':')+1:-1].split() if x], dtype=np.float32)
+                    cp_spec_attrs[spec_attrs[i][1]] = value
+                else:
+                    value = [float(x) for x in line[line.find(':')+1:-1].split() if x][0]
+                    cp_spec_attrs[spec_attrs[i][1]] = value
+
+            cp_attrs = {x[1]: None for x in attrs[1:]}
+            cp_attrs['type'] = type
+            attrs_len = len(attrs)
+            cp_spec_attrs = {x[1]: None for x in spec_attrs}
+            spec_attrs_len = len(spec_attrs)
+            pars = pars_attr_line
+            coord = None
+            atom_type = types[type]
+            i = 0
+            attrs_comp = attrs
+            for line in file:
+                if attrs_comp[i][0] in line:
+                    pars(file, line, i)
+                    i += 1
+                    if i == attrs_len and pars is pars_attr_line:
+                        pars = pars_spec_attr_line
+                        attrs_comp = spec_attrs
+                        i = 0
+                    elif i == spec_attrs_len and pars is pars_spec_attr_line:
+                        if file.__next__() == ' \n':
+                            break
+                        else:
+                            raise ValueError
+            cp_attrs.update(cp_spec_attrs)
+            point = MoleculeClass.Atom(coord, atom_type, parent=mol, **cp_attrs)
+            return point
+
+        for line in file:
+            if '----------------' in line:
+                line_ed = line.split()
+                line_ed = [x for x in line_ed if x]
+                num = int(line_ed[2][:-1])
+                type = line_ed[4][1:-1]
+                parsCp(file, num, type)
+        return mol_sys, (mol_list, atom_list, bonds_l)
 
 PARSER = FileParser()
