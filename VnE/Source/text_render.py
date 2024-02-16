@@ -38,7 +38,7 @@ class Font:
     """Fonts class"""
 
     # line simbols
-    line = 'qwertyuiop[]asdfghjkl;zxcvbnm,./"QWERTYUIOP{}ASDFGHJKL:ZXCVBNM<>?1234567890*-+!@#$%^&()_ '
+    line = 'qwertyuiop[]asdfghjkl;zxcvbnm,./"QWERTYUIOP{}ASDFGHJKL:ZXCVBNM<>?1234567890*-+!@#$%^&()_ \'\"'
 
     def __init__(self):
         self.char_map = {}

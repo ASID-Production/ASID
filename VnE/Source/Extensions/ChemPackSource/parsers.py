@@ -104,10 +104,14 @@ class FileParser:
             if flag == 'ATOM' or flag == 'HETATM':
                 coord = np.array([float(line[30:38]), float(line[38:46]), float(line[46:54])], dtype=np.float32)
                 atom_type = line[76:78].replace(' ', '').capitalize()
+                try:
+                    atom_seq = int(line[6:11].replace(" ", ""))
+                except ValueError:
+                    atom_seq = -1
                 atom = MoleculeClass.Atom(coord.copy(), PALETTE.getName(atom_type), parent=mol,
                                           name=f'{int(line[22:26]):>4}-{line[17:20]}{line[6:11].replace(" ", ""): >5}-{line[12:16].replace(" ", "")}',
                                           pdb_flag=flag,
-                                          pdb_atom_seq=int(line[6:11].replace(" ", "")),
+                                          pdb_atom_seq=atom_seq,
                                           pdb_name=line[12:16].replace(" ", ""),
                                           pdb_alt_loc=line[16],
                                           pdb_res_name=line[17:20],
@@ -177,19 +181,19 @@ class FileParser:
                  ('Density of Alpha electrons', 'density_of_alpha_electrons'),
                  ('Density of Beta electrons', 'density_of_beta_electrons'),
                  ('Spin density of electrons', 'spin_density_of_electrons'),
-                 ('Lagrangian kinetic energy G(r)', 'lagrangian_kinetic_energy_G(r)'),
+                 ('Lagrangian kinetic energy G(r)', 'lagrangian_kinetic_energy_G_r'),
                  ('G(r) in X,Y,Z', 'G(r)_xyz'),
-                 ('Hamiltonian kinetic energy K(r)', 'hamiltonian_kinetic_energy_K(r)'),
-                 ('Potential energy density V(r)', 'potential_energy_density_V(r)'),
-                 ('Energy density E(r) or H(r)', 'energy_density_E(r)_H(r)'),
+                 ('Hamiltonian kinetic energy K(r)', 'hamiltonian_kinetic_energy_K_r'),
+                 ('Potential energy density V(r)', 'potential_energy_density_V_r'),
+                 ('Energy density E(r) or H(r)', 'energy_density_E_r_H_r'),
                  ('Laplacian of electron density', 'laplacian_of_electron_density'),
                  ('Electron localization function (ELF)', 'electron_localization_function_ELF'),
                  ('Localized orbital locator (LOL)', 'localized_orbital_locator_LOL'),
                  ('Local information entropy', 'local_information_entropy'),
                  ('Reduced density gradient (RDG)', 'reduced_density_gradient_RDG'),
                  ('Reduced density gradient with promolecular approximation', 'reduced_density_gradient_with_promolecular_approximation'),
-                 ('Sign(lambda2)*rho', 'sign(lambda2)*rho'),
-                 ('Sign(lambda2)*rho with promolecular approximation', 'sign(lambda2)*rho_with_promolecular_approximation'),
+                 ('Sign(lambda2)*rho', 'sign_lambda2_rho'),
+                 ('Sign(lambda2)*rho with promolecular approximation', 'sign_lambda2_rho_with_promolecular_approximation'),
                  ('Corr. hole for alpha, ref.', 'corr_hole_for_alpha_ref'),
                  ('Source function, ref.', 'source_function_ref'),
                  ('Wavefunction value for orbital         1 ', 'wavefunction_value_for_orbital_1'),

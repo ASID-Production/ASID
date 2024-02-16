@@ -55,6 +55,8 @@ class DefaultData:
     def __getattr__(self, item):
         if item in DefaultData.__default_data:
             return DefaultData.__default_data[item]
+        elif item.startswith('__') and item.endswith('__'):
+            raise AttributeError
         else:
             return None
 
@@ -101,12 +103,18 @@ class aEntity(ABC):
 
     def removeChild(self, child):
         if child in self.children:
-            self.children.pop(child)
+            self.children.remove(child)
 
 
 class Bond:
     def __init__(self, atom1, atom2):
         self._parents = [atom1, atom2]
+
+    def __contains__(self, item):
+        return self._parents.__contains__(item)
+
+    def get(self, atom):
+        return self._parents[self._parents.index(atom)-1]
 
     def changeParent(self, pos, parent):
         self._parents[pos] = parent
@@ -151,6 +159,9 @@ class Atom(DefaultData):
     def parent(self):
         return self._parent
 
+    def setParent(self, parent):
+        self._parent = parent
+
     def remove(self):
         if self.parent() is not None:
             self.parent().removeChild(self)
@@ -167,7 +178,7 @@ class Molecule(aEntity):
     """Molecule class"""
 
     def __init__(self, parent=None):
-        super().__init__(parent)
+        aEntity.__init__(self, parent=parent)
         self._points_list = None
 
     def addChild(self, child):
@@ -177,6 +188,7 @@ class Molecule(aEntity):
         elif type(child) is Atom:
             if child not in self.children:
                 self.children.append(child)
+                child.setParent(self)
 
     def assignPoint(self, point):
         self._points_list = point
@@ -213,7 +225,7 @@ class MoleculeSystem(aEntity):
     """Molecule system class, main class"""
 
     def __init__(self, parent=None):
-        super().__init__(parent)
+        aEntity.__init__(self, parent=parent)
 
     def genBonds(self):
         for child in self.children:
