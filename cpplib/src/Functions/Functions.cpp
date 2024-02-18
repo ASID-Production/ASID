@@ -479,6 +479,46 @@ static PyObject* cpplib_FindMoleculesWithoutCell(PyObject* self, PyObject* args)
 	return PyUnicode_FromString(ret);
 }
 
+// [[type,x,y,z],...], str
+static PyObject* cpplib_GenSymm(PyObject* self, PyObject* args) {
+	char* str = NULL;
+	PyObject* arg = NULL;
+
+	PyArg_UnpackTuple(args, "Os", 2, 2, arg, str);
+
+	const Py_ssize_t s = PyList_Size(arg);
+	std::vector<AtomType> types;
+	types.reserve(s);
+	std::vector<CurrentPoint> points;
+	points.reserve(s);
+
+	for (Py_ssize_t i = 0; i < s; i++) {
+		PyObject* tp = PyList_GetItem(arg, i);
+		types.emplace_back(PyLong_AsLong(PyList_GetItem(tp, 0)));
+		points.emplace_back(PyFloat_AsDouble(PyList_GetItem(tp, 1)), PyFloat_AsDouble(PyList_GetItem(tp, 2)), PyFloat_AsDouble(PyList_GetItem(tp, 3)));
+	}
+
+	std::vector<geometry::Symm<FloatingPointType>> symm;
+	symm.emplace_back(str,false);
+
+	FAM_Struct<AtomType, AtomicIDType, FloatingPointType> famstr(std::move(types), std::move(points));
+	FAM_Cell<FloatingPointType> fcell(CurrentCell(10, 10, 10, 90, 90, 90, true));
+	fcell.GenerateSymm(famstr, symm);
+
+
+	std::string line;
+	for (Py_ssize_t i = s; i < famstr.sizePoints; i++)
+	{
+		PyObject* lst = PyList_New(0);
+		PyList_Append(lst, PyLong_FromLong(famstr.types[famstr.parseIndex[i]]));
+		PyList_Append(lst, PyFloat_FromDouble(famstr.points[i].get(0)));
+		PyList_Append(lst, PyFloat_FromDouble(famstr.points[i].get(1)));
+		PyList_Append(lst, PyFloat_FromDouble(famstr.points[i].get(2)));
+		PyList_Append(arg, lst);
+	}
+	return PyUnicode_FromString(line.c_str());
+}
+
 
 
 
@@ -487,10 +527,11 @@ static PyObject* cpplib_FindMoleculesWithoutCell(PyObject* self, PyObject* args)
 
 static struct PyMethodDef methods[] = {
 	{ "GenBonds", cpplib_GenBonds, METH_O, "Generate bond list"},
+	{ "GenSymm", cpplib_GenSymm, METH_VARARGS, "Generates symmetry by symm code"},
 	{ "SearchMain", cpplib_SearchMain, METH_VARARGS, "Compare graph with data"},
 	{ "CompareGraph", cpplib_CompareGraph, METH_VARARGS, "Compare two graphs"},
 	{ "FindMoleculesInCell", cpplib_FindMoleculesInCell, METH_VARARGS, "Create graph from cell"},
-	{ "FindMoleculesWithoutCell", cpplib_FindMoleculesWithoutCell, METH_VARARGS, "Create graph from xyz"},
+	{ "FindMoleculesWithoutCell", cpplib_FindMoleculesWithoutCell, METH_VARARGS, "Create graph from xyz"},	
 	
 	{ NULL, NULL, 0, NULL }
 };
