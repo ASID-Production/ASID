@@ -99,20 +99,15 @@ target_include_directories(cpplib
 add_custom_command(
         TARGET cpplib POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
-                ${CMAKE_SOURCE_DIR}/cpplib/BondLength.ini
-                ${CMAKE_CURRENT_BINARY_DIR}/cpplib/Tests/modules/c_modules/BondLength.ini)
-add_custom_command(
-    TARGET cpplib POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy
-            ${CMAKE_SOURCE_DIR}/cpplib/BondLength.ini
-            ${CMAKE_SOURCE_DIR}/api_database/django_project/modules/c_modules/BondLength.ini)
+                ${CMAKE_SOURCE_DIR}/module/BondLength.ini
+                ${CMAKE_CURRENT_BINARY_DIR}/cpplib/Tests/module/BondLength.ini)
 
 if (UNIX)
     add_custom_command(
         TARGET cpplib POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
                 $<TARGET_FILE:cpplib>
-                ${CMAKE_SOURCE_DIR}/api_database/django_project/modules/c_modules/cpplib.so)
+                ${CMAKE_SOURCE_DIR}/module/cpplib.so)
 endif (UNIX)
 
 if (WIN32)
@@ -120,7 +115,7 @@ if (WIN32)
         TARGET cpplib POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
                 $<TARGET_FILE:cpplib>
-                ${CMAKE_SOURCE_DIR}/api_database/django_project/modules/c_modules/cpplib.pyd)
+                ${CMAKE_SOURCE_DIR}/module/cpplib.pyd)
 endif (WIN32)
 
 endif(CMAKE_BUILD_TYPE MATCHES Release)
