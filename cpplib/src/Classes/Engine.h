@@ -35,7 +35,7 @@
 template<class A>
 class XAtom {
 public:
-	static constexpr char size = 7;
+	static constexpr char size = 118;
 private:
 	static constexpr char counter = size;
 	std::array<A, size+1> types = {0, 0, 0, 0, 0, 0, 0, 0};
