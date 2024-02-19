@@ -33,10 +33,10 @@ template<class A, class H, class AI, class MI>
 class SearchGraph {
 public:
 	// Declarations
-	using RequestGraphType = MoleculeGraph<XAtom<A>, H, AI, MI>;
+	using RequestGraphType = MoleculeGraph<XAtom, H, AI, MI>;
 	using DatabaseGraphType = MoleculeGraph<A, H, AI, MI>;
 	using BondType = Bond<AI>;
-	using RequestNodeType = Node<XAtom<A>, H, AI>;
+	using RequestNodeType = Node<XAtom, H, AI>;
 	using DatabaseNodeType = Node<A, H, AI>;
 	using CompareVectorType = std::vector<AI>;
 	using Log = std::list<std::pair<BondType, BondType>>;

@@ -30,58 +30,50 @@
 #include <type_traits> // for std::conditional
 #include <vector>
 #include <string>
-#include <array> // for std::array in XAtom
 
-template<class A>
+#include <bitset> // for std::array in XAtom
+
 class XAtom {
 public:
+
 	static constexpr char size = 118;
 private:
-	static constexpr char counter = size;
-	std::array<A, size+1> types = {0, 0, 0, 0, 0, 0, 0, 0};
+	char simple_representation = 0;
+	std::bitset<size+1> types = {0};
 public:
 	// Constructors
 	constexpr XAtom() = default;
-	constexpr XAtom(const A input) {
-		types[0] = input;
-		types[counter] += 1;
+	constexpr XAtom(char input) {
+		simple_representation = input;
+		if (input > 0) {
+			types.set(input);
+		}
 	}
 
-	constexpr void AddTypeUnsafe(const A t) {
-		types[types[counter]] = t;
-		types[counter]++;
-	}
-	constexpr bool AddTypeSafe(const A t) {
-		if (types[types[counter]] == size) return false;
-		AddTypeUnsafe(t);
-		return true;
+	inline void AddType(const char t) {
+		types.set(t);
 	}
 
-	// implicit conversion
-	constexpr operator A() const noexcept {
-		// check for single type
-		if (types[counter] == 1) return types[0];
-		else return A(0);
-	}
 
 	// operators
-	constexpr bool operator==(const A& other) const noexcept {
-		for (char i = 0; i < types[counter]; i++)
-		{
-			if (types[i] == other)
-				return true;
-		}
-		return false;
+	inline bool operator==(const char other) const noexcept {
+		return types[other];
 	}
-	constexpr bool operator!=(const A& other) const noexcept {
-		for (char i = 0; i < types[counter]; i++)
-		{
-			if (types[i] == other)
-				return false;
-		}
-		return true;
+	inline bool operator!=(const char other) const noexcept {
+		return !types[other];
 	}
-
+	inline bool operator<(const XAtom& other) const noexcept {
+		return simple_representation < other.simple_representation;
+	}
+	inline bool operator>(const XAtom& other) const noexcept {
+		return simple_representation > other.simple_representation;
+	}
+	inline bool operator==(const XAtom& other) const noexcept {
+		return simple_representation == other.simple_representation;
+	}
+	inline bool operator!=(const XAtom& other) const noexcept {
+		return simple_representation != other.simple_representation;
+	}
 };
 
 template<class A, class H>

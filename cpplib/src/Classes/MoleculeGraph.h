@@ -93,12 +93,12 @@ public:
 				{
 					ss >> next_xty;
 					if (next_xty <= 0) break;
-					real.AddTypeUnsafe(next_xty);
+					real.AddType(static_cast<char>(next_xty));
 				}
 
 				for (AI i = 1; i < sn; i++)
 				{
-					if (static_cast<char>(this->operator[](i).getType()) == static_cast<char>(xty)) {
+					if (this->operator[](i).getType() == static_cast<char>(xty)) {
 						this->operator[](i).setType(real);
 					}
 				}
@@ -157,8 +157,8 @@ public:
 	// For Search
 	constexpr AI findStart() const {
 		const AI s = size();
-		AI m = 0;
-		for (AI i = 1; i < s; i++) {
+		AI m = 1;
+		for (AI i = 2; i < s; i++) {
 			if (base::operator[](i) > base::operator[](m))
 				m = i;
 		}

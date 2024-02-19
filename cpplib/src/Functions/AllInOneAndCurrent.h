@@ -32,7 +32,7 @@
 #include "../Classes/Distances.h"
 #include "../Classes/FindGeometry.h"
 
-using AtomType = int8_t;
+using AtomType = char;
 using HType = int8_t;
 using AtomicIDType = uint32_t;
 using MolecularIDType = uint32_t;
@@ -42,7 +42,7 @@ using FloatingPointType = float;
 
 using CurrentBaseNode = BaseNode<AtomType, HType>;
 using CurrentNode = Node<AtomType, HType, AtomicIDType>;
-using CurrentRequestGraph = MoleculeGraph<XAtom<AtomType>, HType, AtomicIDType, MolecularIDType>;
+using CurrentRequestGraph = MoleculeGraph<XAtom, HType, AtomicIDType, MolecularIDType>;
 using CurrentDatabaseGraph = MoleculeGraph<AtomType, HType, AtomicIDType, MolecularIDType>;
 
 using CurrentSearchGraph = SearchGraph<AtomType, HType, AtomicIDType, MolecularIDType>;
