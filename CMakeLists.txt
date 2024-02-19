@@ -96,12 +96,6 @@ target_include_directories(cpplib
         ${PROJECT_SOURCE_DIR}/cpplib/src/Platform
 )
 
-add_custom_command(
-        TARGET cpplib POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy
-                ${CMAKE_SOURCE_DIR}/module/BondLength.ini
-                ${CMAKE_CURRENT_BINARY_DIR}/cpplib/Tests/module/BondLength.ini)
-
 if (UNIX)
     add_custom_command(
         TARGET cpplib POST_BUILD
@@ -119,7 +113,5 @@ if (WIN32)
 endif (WIN32)
 
 endif(CMAKE_BUILD_TYPE MATCHES Release)
-
-
 add_subdirectory ("cpplib/Tests")
 

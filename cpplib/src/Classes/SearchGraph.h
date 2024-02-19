@@ -33,9 +33,11 @@ template<class A, class H, class AI, class MI>
 class SearchGraph {
 public:
 	// Declarations
-	using MoleculeGraphType = MoleculeGraph<A, H, AI, MI>;
+	using RequestGraphType = MoleculeGraph<XAtom, H, AI, MI>;
+	using DatabaseGraphType = MoleculeGraph<A, H, AI, MI>;
 	using BondType = Bond<AI>;
-	using NodeType = Node<A, H, AI>;
+	using RequestNodeType = Node<XAtom, H, AI>;
+	using DatabaseNodeType = Node<A, H, AI>;
 	using CompareVectorType = std::vector<AI>;
 	using Log = std::list<std::pair<BondType, BondType>>;
 
@@ -44,19 +46,19 @@ private:
 	AI inputSize_ = 0;
 	AI dataSize_ = 0;
 	// Data
-	MoleculeGraphType input_;
-	MoleculeGraphType data_;
+	RequestGraphType input_;
+	DatabaseGraphType data_;
 	CompareVectorType comp_;
 	Log log_;
 	std::vector<bool> usedInComp_;
 
 public:
 	constexpr SearchGraph() = default;
-	constexpr void setupInput(MoleculeGraphType&& molGraph) noexcept {
+	constexpr void setupInput(RequestGraphType&& molGraph) noexcept {
 		input_ = std::move(molGraph);
 		inputSize_ = input_.size();
 	}
-	constexpr void setupData(MoleculeGraphType&& molGraph) noexcept {
+	constexpr void setupData(DatabaseGraphType&& molGraph) noexcept {
 		data_ = std::move(molGraph);
 		dataSize_ = data_.size();
 	}
@@ -102,7 +104,7 @@ public:
 	}
 private:
 	// Node comparision
-	constexpr bool compare(const NodeType& inputNode, const NodeType& dataNode, const bool exact) const noexcept {
+	constexpr bool compare(const RequestNodeType& inputNode, const DatabaseNodeType& dataNode, const bool exact) const noexcept {
 		if (compareLow(inputNode, dataNode, exact) == false)
 			return false;
 
@@ -122,7 +124,7 @@ private:
 		}
 		return true;
 	}
-	constexpr bool compareLow(const NodeType& inputNode, const NodeType& dataNode, const bool exact) const noexcept {
+	constexpr bool compareLow(const RequestNodeType& inputNode, const DatabaseNodeType& dataNode, const bool exact) const noexcept {
 		if (exact) {
 			return inputNode == dataNode;
 		} else {

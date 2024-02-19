@@ -34,22 +34,21 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
-static void ChildThreadFunc(const CurrentMoleculeGraph& input, const AtomicIDType MaxAtom, SearchDataInterface<MolecularIDType, size_type>& dataInterface, const bool exact);
+static void ChildThreadFunc(const CurrentRequestGraph& input, const AtomicIDType MaxAtom, SearchDataInterface<MolecularIDType, size_type>& dataInterface, const bool exact);
 
-static const CurrentDistances* p_distances = nullptr;
-static const CurrentDistances& distances = *p_distances;
+const CurrentDistances* p_distances = nullptr;
 
 API bool CompareGraph(const char* search1, const char* search2, const bool exact) {
 	CurrentSearchGraph graph;
-	graph.setupInput(CurrentMoleculeGraph(search1));
-	graph.setupData(CurrentMoleculeGraph(search2));
+	graph.setupInput(CurrentRequestGraph(search1));
+	graph.setupData(CurrentDatabaseGraph(search2));
 	graph.prepareToSearch();
 	return graph.startFullSearch(exact);
 }
 API int* SearchMain(const char* search, const char** data, const int data_s, const int np, const bool exact) {
 	static std::vector<int> result;
 
-	CurrentMoleculeGraph input(search);
+	CurrentRequestGraph input(search);
 	SearchDataInterface<MolecularIDType, size_type> databuf(data, data_s);
 	std::vector<std::thread> threads;
 	const size_t nThreads = std::min(std::min(static_cast<unsigned int>(np), std::thread::hardware_concurrency()), static_cast<unsigned int>(data_s)) - 1;
@@ -71,7 +70,7 @@ API int* SearchMain(const char* search, const char** data, const int data_s, con
 
 API const char* FindMoleculesInCell(const float* unit_cell, const char** symm, const int symm_s, const int* types, const float* xyz, const int types_s) {
 	static std::string ret;
-
+	auto& distances = *(p_distances);
 	if (distances.isReady() == false) {
 		ret = std::string(";Error! Could not open BondLength.ini");
 		return ret.c_str();
@@ -106,6 +105,7 @@ API const char* FindMoleculesInCell(const float* unit_cell, const char** symm, c
 }
 API const char* FindMoleculesWithoutCell(const int* types, const float* xyz, const int types_s) {
 	static std::string ret;
+	auto& distances = *(p_distances);
 
 	if (distances.isReady() == false) {
 		ret = std::string(";Error! Could not open BondLength.ini");
@@ -325,7 +325,7 @@ API const char* FindTorsionIC(const float* unit_cell, const char** symm, const i
 }
 
 // Single thread function
-static void ChildThreadFunc(const CurrentMoleculeGraph& input, const AtomicIDType MaxAtom, SearchDataInterface<MolecularIDType, size_type>& dataInterface, const bool exact) {
+static void ChildThreadFunc(const CurrentRequestGraph& input, const AtomicIDType MaxAtom, SearchDataInterface<MolecularIDType, size_type>& dataInterface, const bool exact) {
 	CurrentSearchGraph graph;
 	while (true) {
 		auto next = dataInterface.getNext();
@@ -333,7 +333,7 @@ static void ChildThreadFunc(const CurrentMoleculeGraph& input, const AtomicIDTyp
 			return;
 		}
 		graph.setupInput(input.makeCopy());
-		CurrentMoleculeGraph molData(next);
+		CurrentDatabaseGraph molData(next);
 		auto id = molData.getID();
 		graph.setupData(move(molData));
 		graph.prepareToSearch();
@@ -356,6 +356,7 @@ inline static void useDistances (PyObject* self) {
 // [[type,x,y,z],[...]...] in, str out
 static PyObject* cpplib_GenBonds(PyObject* self, PyObject* arg) {
 	useDistances(self);
+	auto& distances = *(p_distances);
 	const Py_ssize_t s = PyList_Size(arg);
 	std::vector<AtomType> types;
 	types.reserve(s);
@@ -518,9 +519,6 @@ static PyObject* cpplib_GenSymm(PyObject* self, PyObject* args) {
 	}
 	return PyUnicode_FromString(line.c_str());
 }
-
-
-
 
 
 

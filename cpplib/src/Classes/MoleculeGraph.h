@@ -29,6 +29,7 @@
 #include "Engine.h" // for Node and Bond
 #include <sstream> // for explicit string constructor
 #include <vector> // for using std::vector
+#include <type_traits> // for std::fundamental
 
 template<class A, class H, class AI, class MI>
 class MoleculeGraph : private std::vector<Node<A, H, AI> > {
@@ -51,15 +52,16 @@ public:
 	explicit constexpr MoleculeGraph(const char* str) {
 		base nodes;
 		std::stringstream ss(str);
-		MI id {};
+		MI id{};
 		ss >> id_;
-		AI sn {};
+		AI sn{};
 		ss >> sn;
-		AI sb {};
+		AI sb{};
 		ss >> sb;
 		sn++;
 		base::reserve(sn);
-		base::emplace_back(0, 0, 0);
+		base::emplace_back(A(0), H(0), AI(0));
+
 
 		// Atomic loop
 		for (AI i = 1; i < sn; i++) {
@@ -67,7 +69,7 @@ public:
 			ss >> a;
 			int b;
 			ss >> b;
-			base::emplace_back(a, b, i);
+			base::emplace_back(A(a), H(b), AI(i));
 		}
 		// Bond loop
 		for (AI i = 0; i < sb; i++) {
@@ -76,6 +78,37 @@ public:
 			int b;
 			ss >> b;
 			base::operator[](a).addBondWithSort(base::operator[](b));
+		}
+		if constexpr (std::is_fundamental<A>::value == false) {
+			int xty;
+
+			if (!(ss >> xty))
+				return;
+			//-1 6 7 8 -2 8 16 -3 9 17 0
+			while (xty != 0) {
+				A real;
+				int next_xty;
+				auto& xtsize = A::size;
+				for (char i = 0; i < xtsize; i++)
+				{
+					ss >> next_xty;
+					if (next_xty <= 0) break;
+					real.AddType(static_cast<char>(next_xty));
+				}
+
+				for (AI i = 1; i < sn; i++)
+				{
+					if (this->operator[](i).getType() == static_cast<char>(xty)) {
+						this->operator[](i).setType(real);
+					}
+				}
+				// Foolproof
+				while (next_xty > 0) {
+					ss >> next_xty;
+				}
+				xty = next_xty;
+			}
+
 		}
 	}
 
@@ -124,8 +157,8 @@ public:
 	// For Search
 	constexpr AI findStart() const {
 		const AI s = size();
-		AI m = 0;
-		for (AI i = 1; i < s; i++) {
+		AI m = 1;
+		for (AI i = 2; i < s; i++) {
 			if (base::operator[](i) > base::operator[](m))
 				m = i;
 		}

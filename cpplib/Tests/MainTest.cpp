@@ -32,11 +32,23 @@
 #include <chrono>
 #include <future>
 #include "../src/Platform/Definitions.h"
+#include "../src/Functions/AllInOneAndCurrent.h"
 
 #pragma warning( disable : 4305 )
 
 using namespace std;
 
+CurrentDistances testdistances("BondLength.ini");
+
+
+TEST(SearchMainTest, 107403t) {
+	const char search[]{ "1 11 11 17 0 6 0 6 0 6 0 6 0 6 0 7 0 6 0 6 0 6 0 6 0 1 2 2 3 2 10 3 4 3 5 5 6 5 7 7 8 8 9 8 10 10 11" };
+	const char data[]{ "107403 18 20 17 0 6 0 6 1 6 1 6 0 6 1 7 0 6 0 6 0 6 0 6 0 6 1 17 0 6 1 6 1 6 0 8 0 6 3 1 2 2 3 2 4 3 5 4 6 5 7 5 8 6 8 7 9 8 10 9 11 9 12 10 13 10 11 11 14 12 15 14 16 15 16 16 17 17 18" };
+	auto dat = &(data[0]);
+	const int* res;
+	ASSERT_NO_THROW({ res = SearchMain(search, &dat, 1, 1, false); });
+	EXPECT_EQ(res[0], 1);
+}
 TEST(SearchMainTest, Tricycle92807t) {
 	const char search[] {"1 2 1 6 0 6 0 1 2"};
 	const char data[] {"92807 35 63 6 1 6 0 17 0 6 0 6 0 17 1 17 1 6 1 17 0 6 0 17 0 6 1 7 2 6 3 17 0 7 1 6 0 6 2 6 1 15 0 6 2 6 0 8 0 6 2 6 1 6 1 6 1 8 0 6 2 7 1 6 0 6 1 6 0 6 1 6 1 1 21 1 31 1 2 1 6 1 17 1 34 2 31 2 29 2 6 2 8 2 34 2 17 3 10 4 23 4 30 4 10 5 33 5 11 5 12 6 34 7 25 7 32 7 22 8 29 8 18 8 34 8 26 9 10 10 15 12 19 13 20 13 14 13 21 14 21 14 31 14 32 14 17 16 20 16 24 17 21 17 31 17 32 17 22 18 29 18 22 18 25 18 26 19 27 20 28 20 30 21 31 22 31 22 25 22 32 22 26 24 33 25 32 25 26 26 29 27 35 29 34 31 32 33 35"};
@@ -58,14 +70,6 @@ TEST(SearchMainTest, Tricycle52403f) {
 TEST(SearchMainTest, 85443t) {
 	const char search[] {"1 11 11 17 0 6 0 6 0 6 0 6 0 6 0 7 0 6 0 6 0 6 0 6 0 1 2 2 3 2 10 3 4 3 5 5 6 5 7 7 8 8 9 8 10 10 11"};
 	const char data[] {"85443 19 21 17 0 6 0 6 0 6 0 6 0 6 1 6 0 6 1 7 0 6 1 6 2 6 3 6 1 6 1 6 1 6 2 6 1 6 3 6 3 1 2 2 3 2 4 3 5 3 6 4 7 4 8 5 9 5 10 6 11 6 12 7 9 7 13 8 14 10 15 10 16 11 16 13 17 14 17 15 18 15 19"};
-	auto dat = &(data[0]);
-	const int* res;
-	ASSERT_NO_THROW({res = SearchMain(search, &dat, 1, 1, false);});
-	EXPECT_EQ(res[0], 1);
-}
-TEST(SearchMainTest, 107403t) {
-	const char search[] {"1 11 11 17 0 6 0 6 0 6 0 6 0 6 0 7 0 6 0 6 0 6 0 6 0 1 2 2 3 2 10 3 4 3 5 5 6 5 7 7 8 8 9 8 10 10 11"};
-	const char data[] {"107403 18 20 17 0 6 0 6 1 6 1 6 0 6 1 7 0 6 0 6 0 6 0 6 0 6 1 17 0 6 1 6 1 6 0 8 0 6 3 1 2 2 3 2 4 3 5 4 6 5 7 5 8 6 8 7 9 8 10 9 11 9 12 10 13 10 11 11 14 12 15 14 16 15 16 16 17 17 18"};
 	auto dat = &(data[0]);
 	const int* res;
 	ASSERT_NO_THROW({res = SearchMain(search, &dat, 1, 1, false);});
@@ -108,6 +112,7 @@ TEST(CompareGraphTest, Tricycle484021t) {
 }
 
 TEST(FindMoleculesInCellTest, AADRIB) {
+	p_distances = &testdistances;
 	float cell[] = { 17.125, 11.453, 8.590, 90, 109.18, 90 };
 	const char symm[][32]{ "x,y,z", "-x,1/2+y,-z" };
 
@@ -125,6 +130,7 @@ TEST(FindMoleculesInCellTest, AADRIB) {
 	EXPECT_TRUE(std::string(res).find(";") == std::string::npos);
 }
 TEST(FindMoleculesInCellTest, AAXTHP) {
+	p_distances = &testdistances;
 	float cell[] = { 8.332, 13.644, 16.345, 90, 90, 90 };
 	const char symm[][32]{ "x,y,z", "1/2+x,1/2-y,-z", "-x,1/2+y,1/2-z", "1/2-x,-y,1/2+z" };
 
@@ -142,6 +148,7 @@ TEST(FindMoleculesInCellTest, AAXTHP) {
 	EXPECT_TRUE(std::string(res).find(";") == std::string::npos);
 }
 TEST(FindMoleculesInCellTest, AABHTZ) {
+	p_distances = &testdistances;
 	float cell[] = { 11.372 ,  10.272 ,  7.359 ,  108.75 ,  71.07 ,  96.16 };
 	const char symm[][32]{ "x,y,z", "-x,-y,-z" };
 
@@ -160,6 +167,7 @@ TEST(FindMoleculesInCellTest, AABHTZ) {
 }
 
 TEST(FindMoleculesInCellTest, ABABAH) {
+	p_distances = &testdistances;
 	float cell[] = { 12.3717, 7.772, 32.821, 90.0, 90.0, 90.0 };
 	const char symm[][32]{ "x,y,z", "1/2-x,-y,1/2+z", "-x,1/2+y,1/2-z", "1/2+x,1/2-y,-z", "-x,-y,-z", "-1/2+x,y,-1/2-z", "x,-1/2-y,-1/2+z", "-1/2-x,-1/2+y,z" };
 
@@ -178,6 +186,7 @@ TEST(FindMoleculesInCellTest, ABABAH) {
 }
 
 TEST(FindMoleculesInCellTest, AZIVIO) {
+	p_distances = &testdistances;
 
 	float cell[] = { 20.479, 7.9523, 22.452, 90.0, 114.108, 90.0 };
 	const char symm[][32]{ "x,y,z", "x,-y,1/2+z", "1/2+x,1/2+y,z", "1/2+x,1/2-y,1/2+z", "-x,-y,-z", "-x,y,-1/2-z", "-1/2-x,-1/2-y,-z", "-1/2-x,-1/2+y,-1/2-z" };
@@ -195,6 +204,7 @@ TEST(FindMoleculesInCellTest, AZIVIO) {
 }
 
 TEST(FindMoleculesInCellTest, EKESIW) {
+	p_distances = &testdistances;
 
 	float cell[] = { 6.83, 11.339, 14.627, 94.58, 95.92, 102.54 };
 	const char symm[][32]{ "x,y,z", "-x,-y,-z" };
@@ -213,6 +223,7 @@ TEST(FindMoleculesInCellTest, EKESIW) {
 }
 
 TEST(FindMoleculesWithoutCellTest, C3H6O2) {
+	p_distances = &testdistances;
 	int types[] = {1,8,8,6,6,1,1,6,1,1,1};
 
 	float xyz[] = { 0.438335628 ,     0.000000000  ,   -4.767885621 ,
@@ -229,6 +240,7 @@ TEST(FindMoleculesWithoutCellTest, C3H6O2) {
 	auto res = FindMoleculesWithoutCell(types, xyz, 11);
 }
 TEST(FindMoleculesWithoutCellTest, MonoO) {
+	p_distances = &testdistances;
 	int types[] = { 1 };
 
 	float xyz[] = { 0.438335628 , -0.587240971, -3.993208195 };
@@ -236,6 +248,7 @@ TEST(FindMoleculesWithoutCellTest, MonoO) {
 }
 
 TEST(FindDistanceTest, C3H6O2) {
+	p_distances = &testdistances;
 	int types[] = { 1,8,8,6,6,1,1,6,1,1,1 };
 
 	float xyz[] = { 0.438335628 ,     0.000000000  ,   -4.767885621 ,

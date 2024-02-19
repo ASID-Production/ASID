@@ -367,7 +367,7 @@ public:
 		std::vector<std::vector<AI>> molecules;
 		std::vector<HashType> hashs;
 		for (AI i = 0; i < fs_.sizeUnique; i++) {
-			if (net[i].getType() == 1 || seen[i] == true)
+			if (net[i].getType() == A(1) || seen[i] == true)
 				continue;
 			seen[i] = true;
 			auto singleTable = findNextMolecule(i, net, seen);
