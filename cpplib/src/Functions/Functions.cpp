@@ -541,6 +541,5 @@ static struct PyModuleDef cpplib_module = {
 
 PyMODINIT_FUNC PyInit_cpplib(void)
 {
-	PyObject* module = PyModule_Create(&cpplib_module);
-	return module;
+	return PyModule_Create(&cpplib_module);
 }
