@@ -15,3 +15,5 @@
 *.cif
 /api_database/data
 /api_database/media
+/cpplib/.vs
+/cpplib/Tests/.vs

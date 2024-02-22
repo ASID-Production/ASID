@@ -49,67 +49,18 @@ public:
 	constexpr MoleculeGraph(MoleculeGraph&&) noexcept = default;
 	explicit constexpr MoleculeGraph(base&& other, MI) noexcept(std::is_nothrow_move_constructible<base>::value)
 		: base(std::move(other)) {}
-	explicit constexpr MoleculeGraph(const char* str) {
-		base nodes;
+	static constexpr MoleculeGraph<A, H, AI, MI> ReadData(const char* str) {
+		MoleculeGraph mg;
 		std::stringstream ss(str);
-		MI id{};
-		ss >> id_;
-		AI sn{};
-		ss >> sn;
-		AI sb{};
-		ss >> sb;
-		sn++;
-		base::reserve(sn);
-		base::emplace_back(A(0), H(0), AI(0));
-
-
-		// Atomic loop
-		for (AI i = 1; i < sn; i++) {
-			int a;
-			ss >> a;
-			int b;
-			ss >> b;
-			base::emplace_back(A(a), H(b), AI(i));
-		}
-		// Bond loop
-		for (AI i = 0; i < sb; i++) {
-			int a;
-			ss >> a;
-			int b;
-			ss >> b;
-			base::operator[](a).addBondWithSort(base::operator[](b));
-		}
-		if constexpr (std::is_fundamental<A>::value == false) {
-			int xty;
-
-			if (!(ss >> xty))
-				return;
-			//-1 6 7 8 -2 8 16 -3 9 17 0
-			while (xty != 0) {
-				A real;
-				int next_xty;
-				auto& xtsize = A::size;
-				for (char i = 0; i < xtsize; i++)
-				{
-					ss >> next_xty;
-					if (next_xty <= 0) break;
-					real.AddType(static_cast<char>(next_xty));
-				}
-
-				for (AI i = 1; i < sn; i++)
-				{
-					if (this->operator[](i).getType() == static_cast<char>(xty)) {
-						this->operator[](i).setType(real);
-					}
-				}
-				// Foolproof
-				while (next_xty > 0) {
-					ss >> next_xty;
-				}
-				xty = next_xty;
-			}
-
-		}
+		mg.parseMainstring(ss);
+		return mg;
+	}
+	static constexpr MoleculeGraph<A, H, AI, MI> ReadInput(const char* str) {
+		MoleculeGraph mg;
+		std::stringstream ss(str);
+		const auto sn = mg.parseMainstring(ss);
+		mg.parseMultiatom(ss, sn);
+		return mg;
 	}
 
 	constexpr AI size() const noexcept {
@@ -239,5 +190,65 @@ public:
 	// Interface Const ID(ref)
 	constexpr const auto& getID() const noexcept {
 		return id_;
+	}
+private: 
+	inline AI parseMainstring(std::stringstream& ss) {
+		MI id {};
+		ss >> id_;
+		AI sn {};
+		ss >> sn;
+		AI sb {};
+		ss >> sb;
+		sn++;
+		base::reserve(sn);
+		base::emplace_back(A(0), H(0), AI(0));
+
+
+		// Atomic loop
+		for (AI i = 1; i < sn; i++) {
+			int a;
+			ss >> a;
+			int b;
+			ss >> b;
+			base::emplace_back(A(a), H(b), AI(i));
+		}
+		// Bond loop
+		for (AI i = 0; i < sb; i++) {
+			int a;
+			ss >> a;
+			int b;
+			ss >> b;
+			base::operator[](a).addBondWithSort(base::operator[](b));
+		}
+		return sn;
+	}
+	inline void parseMultiatom(std::stringstream & ss, const AI sn) {
+		int xty;
+
+		if (!(ss >> xty))
+			return;
+		//-1 6 7 8 -2 8 16 -3 9 17 0
+		while (xty != 0) {
+			A real(static_cast<char>(xty));
+			int next_xty;
+			auto& xtsize = A::size;
+			for (char i = 0; i < xtsize; i++)
+			{
+				ss >> next_xty;
+				if (next_xty <= 0) break;
+				real.AddType(static_cast<char>(next_xty));
+			}
+			for (AI i = 1; i < sn; i++)
+			{
+				if (this->operator[](i).getType() == static_cast<char>(xty)) {
+					this->operator[](i).setType(real);
+				}
+			}
+			// Foolproof
+			while (next_xty > 0) {
+				ss >> next_xty;
+			}
+			xty = next_xty;
+		}
 	}
 };

@@ -40,15 +40,15 @@ const CurrentDistances* p_distances = nullptr;
 
 API bool CompareGraph(const char* search1, const char* search2, const bool exact) {
 	CurrentSearchGraph graph;
-	graph.setupInput(CurrentRequestGraph(search1));
-	graph.setupData(CurrentDatabaseGraph(search2));
+	graph.setupInput(CurrentRequestGraph::ReadInput(search1));
+	graph.setupData(CurrentDatabaseGraph::ReadData(search2));
 	graph.prepareToSearch();
 	return graph.startFullSearch(exact);
 }
 API int* SearchMain(const char* search, const char** data, const int data_s, const int np, const bool exact) {
 	static std::vector<int> result;
 
-	CurrentRequestGraph input(search);
+	CurrentRequestGraph input = CurrentRequestGraph::ReadInput(search);
 	SearchDataInterface<MolecularIDType, size_type> databuf(data, data_s);
 	std::vector<std::thread> threads;
 	const size_t nThreads = std::min(std::min(static_cast<unsigned int>(np), std::thread::hardware_concurrency()), static_cast<unsigned int>(data_s)) - 1;
@@ -71,7 +71,7 @@ API int* SearchMain(const char* search, const char** data, const int data_s, con
 API const char* FindMoleculesInCell(const float* unit_cell, const char** symm, const int symm_s, const int* types, const float* xyz, const int types_s) {
 	static std::string ret;
 	auto& distances = *(p_distances);
-	if (distances.isReady() == false) {
+	if (p_distances->isReady() == false) {
 		ret = std::string(";Error! Could not open BondLength.ini");
 		return ret.c_str();
 	}
@@ -333,7 +333,7 @@ static void ChildThreadFunc(const CurrentRequestGraph& input, const AtomicIDType
 			return;
 		}
 		graph.setupInput(input.makeCopy());
-		CurrentDatabaseGraph molData(next);
+		CurrentDatabaseGraph molData = CurrentDatabaseGraph::ReadData(next);
 		auto id = molData.getID();
 		graph.setupData(move(molData));
 		graph.prepareToSearch();
