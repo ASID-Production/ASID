@@ -96,8 +96,9 @@ def set_only_CHNO(graphs):
     filtr = {}
     for i, model in enumerate(ELEMENTS_SET_CLASSES, start=1):
         for element in get_fields_list(model):
-            if element not in ['refcode', 'id', 'C', 'H', 'N', 'O']:
-                filtr[f'refcode__element_set_{i}__{element.capitalize()}__isnull'] = True
+            if element not in ['id', 'C', 'H', 'N', 'O'] and len(element) <= 3:
+                filtr[f'refcode__elements__element_set_{i}__isnull'] = True
+                filtr[f'refcode__elements__element_set_{i}__{element.capitalize()}__isnull'] = True
     structures = graphs.filter(**filtr)
     for structure in structures:
         substr, created = Substructure1.objects.get_or_create(refcode=structure.refcode)
@@ -109,8 +110,9 @@ def set_no_C(graphs):
     filtr = {}
     for i, model in enumerate(ELEMENTS_SET_CLASSES, start=1):
         for element in get_fields_list(model):
-            if element not in ['refcode', 'id'] and element == 'C':
-                filtr[f'refcode__element_set_{i}__{element.capitalize()}__isnull'] = True
+            if element == 'C':
+                filtr[f'refcode__elements__element_set_{i}__isnull'] = True
+                filtr[f'refcode__elements__element_set_{i}__{element.capitalize()}__isnull'] = True
                 break
     structures = graphs.filter(**filtr)
     for structure in structures:
@@ -123,9 +125,10 @@ def set_elements(graphs, attr_name, element_set):
     filtr = []
     for i, model in enumerate(ELEMENTS_SET_CLASSES, start=1):
         for element in get_fields_list(model):
-            if element not in ['refcode', 'id'] and element in element_set:
+            if element in element_set:
                 temp = dict()
-                temp[f'refcode__element_set_{i}__{element.capitalize()}__isnull'] = False
+                temp[f'refcode__elements__element_set_{i}__isnull'] = False
+                temp[f'refcode__elements__element_set_{i}__{element.capitalize()}__isnull'] = False
                 filtr.append(Q(**temp))
     custom_filter = filtr[0]
     for i in range(1, len(element_set), 1):

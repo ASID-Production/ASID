@@ -26,9 +26,9 @@
 #
 # *****************************************************************************************
 
-from rest_framework.pagination import PageNumberPagination
+from django.apps import AppConfig
 
 
-class LimitPagination(PageNumberPagination):
-    page_size_query_param = 'limit'
-    ordering = 'refcode'
+class QCStructureConfig(AppConfig):
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'qc_structure'

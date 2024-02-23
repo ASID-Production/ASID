@@ -31,6 +31,10 @@ import sys
 import os
 from django.conf import settings
 
+level = logging.WARNING
+if settings.DEBUG:
+    level = logging.INFO
+
 
 def set_logs():
     logging.basicConfig(
@@ -42,7 +46,7 @@ def set_logs():
 
 def set_prm_log(prm):
     add_graphs_logger = logging.getLogger('add_graphs_logger')
-    add_graphs_logger.setLevel(logging.INFO)
+    add_graphs_logger.setLevel(level)
     add_graphs_handler = logging.FileHandler(os.path.join(settings.BASE_DIR, 'logs', f'process_{str(prm)}.log'), mode="w")
     add_graphs_formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
     add_graphs_handler.setFormatter(add_graphs_formatter)
@@ -65,29 +69,36 @@ user_handler.setFormatter(user_formatter)
 user_logger.addHandler(user_handler)
 
 substructure_logger = logging.getLogger('substructure_logger')
-substructure_logger.setLevel(logging.INFO)
+substructure_logger.setLevel(level)
 substructure_handler = logging.FileHandler(os.path.join(settings.BASE_DIR, 'logs', 'add_substructure_filtration.log'), mode='w')
 substructure_formatter = logging.Formatter('%(asctime)s: %(levelname)s: %(message)s: %(name)s')
 substructure_handler.setFormatter(substructure_formatter)
 substructure_logger.addHandler(substructure_handler)
 
 all_cif_data_logger = logging.getLogger('all_cif_data_logger')
-all_cif_data_logger.setLevel(logging.INFO)
+all_cif_data_logger.setLevel(level)
 all_cif_data_handler = logging.FileHandler(os.path.join(settings.BASE_DIR, 'logs', 'add_all_cif_data.log'), mode='w')
 formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
 all_cif_data_handler.setFormatter(formatter)
 all_cif_data_logger.addHandler(all_cif_data_handler)
 
 add_graphs_to_db_logger = logging.getLogger('add_graphs_to_db_logger')
-add_graphs_to_db_logger.setLevel(logging.INFO)
+add_graphs_to_db_logger.setLevel(level)
 add_graphs_to_db_handler = logging.FileHandler(os.path.join(settings.BASE_DIR, 'logs', 'add_graphs_to_db.log'), mode='w')
 formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
 add_graphs_to_db_handler.setFormatter(formatter)
 add_graphs_to_db_logger.addHandler(add_graphs_to_db_handler)
 
 cif_db_update_main_logger = logging.getLogger('cif_db_update_main')
-cif_db_update_main_logger.setLevel(logging.INFO)
+cif_db_update_main_logger.setLevel(level)
 cif_db_update_main_handler = logging.FileHandler(os.path.join(settings.BASE_DIR, 'logs', 'cif_db_update.log'), mode='a')
 formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
 cif_db_update_main_handler.setFormatter(formatter)
 cif_db_update_main_logger.addHandler(cif_db_update_main_handler)
+
+vasp_logger = logging.getLogger('vasp_logger')
+vasp_logger.setLevel(level)
+vasp_handler = logging.FileHandler(os.path.join(settings.BASE_DIR, 'logs', 'vasp.log'), mode='w')
+formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
+vasp_handler.setFormatter(formatter)
+vasp_logger.addHandler(vasp_handler)

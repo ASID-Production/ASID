@@ -97,6 +97,7 @@ DJANGO_CPROFILE_MIDDLEWARE_REQUIRE_STAFF = False
 
 INSTALLED_APPS = [
     'structure.apps.StructureConfig',
+    'qc_structure.apps.QCStructureConfig',
     'users.apps.UsersConfig',
     'api.apps.ApiConfig',
     'modules.apps.ModulesConfig',

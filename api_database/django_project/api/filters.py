@@ -159,11 +159,12 @@ class StructureFilter(FilterSet):
                 # find database table with current element
                 for i, model in enumerate(
                         [ElementsSet1, ElementsSet2,
-                        ElementsSet3, ElementsSet4, ElementsSet5,
-                        ElementsSet6, ElementsSet7, ElementsSet8], start=1):
+                         ElementsSet3, ElementsSet4, ElementsSet5,
+                         ElementsSet6, ElementsSet7, ElementsSet8], start=1):
                     # add filter, the quality of the element
                     if elem.capitalize() in get_fields_list(model):
-                        filtr[f'element_set_{i}__{elem.capitalize()}__exact'] = float(count)
+                        filtr[f'elements__element_set_{i}__isnull'] = False
+                        filtr[f'elements__element_set_{i}__{elem.capitalize()}__exact'] = float(count)
                         break
                 # if element was not found, return empty queryset
                 else:
@@ -179,14 +180,12 @@ class StructureFilter(FilterSet):
                 # find database table with current element
                 for i, model in enumerate(
                         [ElementsSet1, ElementsSet2,
-                        ElementsSet3, ElementsSet4, ElementsSet5,
-                        ElementsSet6, ElementsSet7, ElementsSet8], start=1):
+                         ElementsSet3, ElementsSet4, ElementsSet5,
+                         ElementsSet6, ElementsSet7, ElementsSet8], start=1):
                     # add filter, that element must be not Null
                     if element.capitalize() in get_fields_list(model):
-                        if not exclude:
-                            filtr[f'element_set_{i}__{element.capitalize()}__isnull'] = False
-                        else:
-                            filtr[f'element_set_{i}__{element.capitalize()}__isnull'] = True
+                        filtr[f'elements__element_set_{i}__isnull'] = exclude
+                        filtr[f'elements__element_set_{i}__{element.capitalize()}__isnull'] = exclude
                         break
                 # if element was not found, return empty queryset
                 else:

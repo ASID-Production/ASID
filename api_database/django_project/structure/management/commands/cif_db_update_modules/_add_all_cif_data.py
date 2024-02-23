@@ -29,8 +29,7 @@
 from structure.models import (StructureCode, Author, Spacegroup, SYSTEMS,
                               Cell, CENTRINGS, ReducedCell, Journal,
                               Publication, RefcodePublicationConnection, Formula,
-                              ElementsSet1, ElementsSet2, ElementsSet3, ElementsSet4,
-                              ElementsSet5, ElementsSet6, ElementsSet7, ElementsSet8,
+                              get_elements_list, ElementsManager,
                               CompoundName, ExperimentalInfo, RefinementInfo,
                               CrystalAndStructureInfo)
 from django_project.loggers import all_cif_data_logger as logger_1
@@ -124,10 +123,6 @@ journal = {
     'name': ['_citation_journal_abbrev'],
     'fullname': ['_journal_name_full'],
 }
-
-
-def get_fields_list(model):
-    return [field.name for field in model._meta.get_fields()]
 
 
 def add_refcode(cif_block, refcode):
@@ -425,6 +420,7 @@ def add_element_composition(cif_block, struct_obj):
     if Formula.objects.filter(refcode=struct_obj).exists():
         formula_sum = struct_obj.formula.formula_sum
         formula_moiety = struct_obj.formula.formula_moiety
+        elements_from_formula = dict()
         if formula_sum:
             elements = formula_sum.split()
             for element in elements:
@@ -434,15 +430,9 @@ def add_element_composition(cif_block, struct_obj):
                     count = float(count[0])
                 else:
                     count = 1
-                # we look for which model this atom is in and save the result
-                for model in [ElementsSet1, ElementsSet2,
-                              ElementsSet3, ElementsSet4, ElementsSet5,
-                              ElementsSet6, ElementsSet7, ElementsSet8]:
-                    if atom_type in get_fields_list(model):
-                        elem_obj, created = model.objects.get_or_create(refcode=struct_obj)
-                        setattr(elem_obj, atom_type, count)
-                        elem_obj.save()
-                        break
+                elements_from_formula[atom_type] = count
+            el_manager, created = ElementsManager.objects.get_or_create(refcode=struct_obj)
+            el_manager.save_elements(elements_from_formula)
             return 0
         elif formula_moiety:
             moiety_formula = dict()
@@ -532,16 +522,8 @@ def add_element_composition(cif_block, struct_obj):
                                 else:
                                     moiety_formula[atom_type] = count
             if moiety_formula:
-                for atom, count in moiety_formula.items():
-                    # we look for which model this atom is in and save the result
-                    for model in [ElementsSet1, ElementsSet2,
-                                  ElementsSet3, ElementsSet4, ElementsSet5,
-                                  ElementsSet6, ElementsSet7, ElementsSet8]:
-                        if atom in get_fields_list(model):
-                            elem_obj, created = model.objects.get_or_create(refcode=struct_obj)
-                            setattr(elem_obj, atom, count)
-                            elem_obj.save()
-                            break
+                el_manager, created = ElementsManager.objects.get_or_create(refcode=struct_obj)
+                el_manager.save_elements(moiety_formula)
                 return 0
     logger_1.warring(
         f'Any chemcal composition was not found\n'
