@@ -61,8 +61,11 @@ def set_elements(analyse_mol):
     num_nodes = int(mol_data[1])
     for idx, el in enumerate(mol_data[3:], start=1):
         if idx < num_nodes * 2 and idx % 2 == 1:
-            element = NUM_ELEM_DICT[int(el)]
-            elem_found.add(element)
+            if int(el) > 0:
+                element = NUM_ELEM_DICT[int(el)]
+                elem_found.add(element)
+            else:
+                return 0
     return elem_found
 
 
@@ -78,17 +81,19 @@ def set_filter(analyse_mol):
             result[attr_name] = [False, obj_name]
 
     elem_found = set_elements(analyse_mol)
-    for attr_name, elements in SET_ELEMENTS.items():
-        if elem_found.intersection(set(elements)):
-            result[attr_name] = [True, 'Substructure1']
+    # only if no multitypes
+    if elem_found:
+        for attr_name, elements in SET_ELEMENTS.items():
+            if elem_found.intersection(set(elements)):
+                result[attr_name] = [True, 'Substructure1']
+            else:
+                result[attr_name] = [False, 'Substructure1']
+        if {'C', 'N', 'O'}.issubset(elem_found):
+            result['only_CHNO'] = [True, 'Substructure1']
         else:
-            result[attr_name] = [False, 'Substructure1']
-    if {'C', 'N', 'O'}.issubset(elem_found):
-        result['only_CHNO'] = [True, 'Substructure1']
-    else:
-        result['only_CHNO'] = [False, 'Substructure1']
-    if 'C' not in elem_found:
-        result['no_C'] = [True, 'Substructure1']
-    else:
-        result['no_C'] = [False, 'Substructure1']
+            result['only_CHNO'] = [False, 'Substructure1']
+        if 'C' not in elem_found:
+            result['no_C'] = [True, 'Substructure1']
+        else:
+            result['no_C'] = [False, 'Substructure1']
     return result

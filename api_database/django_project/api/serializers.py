@@ -213,3 +213,5 @@ class SearchSerializer(serializers.Serializer):
     nodes = NodesListField(child=serializers.CharField(max_length=100), allow_empty=False, required=True)
     # edges input: ['(1, 2, {"distance": "1.250",})', '(2, 3, {"distance": "1.340",})', ...]
     edges = EdgesListField(child=serializers.CharField(max_length=100), allow_empty=True)
+    chunk_size = serializers.IntegerField(required=False, default=0, min_value=0)
+    iter_num = serializers.IntegerField(required=False, default=0, min_value=0)
