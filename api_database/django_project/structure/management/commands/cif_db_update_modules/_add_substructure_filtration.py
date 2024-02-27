@@ -92,66 +92,70 @@ def dell_old_data(refcode):
     filters2.delete()
 
 
-def set_only_CHNO(graphs):
+def set_only_CHNO(graphs, substructure_obj=Substructure1, filter_template='refcode__elements__element_set'):
     filtr = {}
     for i, model in enumerate(ELEMENTS_SET_CLASSES, start=1):
         for element in get_fields_list(model):
             if element not in ['id', 'C', 'H', 'N', 'O'] and len(element) <= 3:
-                filtr[f'refcode__elements__element_set_{i}__isnull'] = True
-                filtr[f'refcode__elements__element_set_{i}__{element.capitalize()}__isnull'] = True
+                filtr[f'{filter_template}_{i}__isnull'] = True
+                filtr[f'{filter_template}_{i}__{element.capitalize()}__isnull'] = True
     structures = graphs.filter(**filtr)
     for structure in structures:
-        substr, created = Substructure1.objects.get_or_create(refcode=structure.refcode)
+        substr, created = substructure_obj.objects.get_or_create(refcode=structure.refcode)
         substr.only_CHNO = True
         substr.save()
 
 
-def set_no_C(graphs):
+def set_no_C(graphs, substructure_obj=Substructure1, filter_template='refcode__elements__element_set'):
     filtr = {}
     for i, model in enumerate(ELEMENTS_SET_CLASSES, start=1):
         for element in get_fields_list(model):
             if element == 'C':
-                filtr[f'refcode__elements__element_set_{i}__isnull'] = True
-                filtr[f'refcode__elements__element_set_{i}__{element.capitalize()}__isnull'] = True
+                filtr[f'{filter_template}_{i}__isnull'] = True
+                filtr[f'{filter_template}_{i}__{element.capitalize()}__isnull'] = True
                 break
     structures = graphs.filter(**filtr)
     for structure in structures:
-        substr, created = Substructure1.objects.get_or_create(refcode=structure.refcode)
+        substr, created = substructure_obj.objects.get_or_create(refcode=structure.refcode)
         substr.no_C = True
         substr.save()
 
 
-def set_elements(graphs, attr_name, element_set):
+def set_elements(
+        graphs, attr_name, element_set,
+        substructure_obj=Substructure1,
+        filter_template='refcode__elements__element_set'
+):
     filtr = []
     for i, model in enumerate(ELEMENTS_SET_CLASSES, start=1):
         for element in get_fields_list(model):
             if element in element_set:
                 temp = dict()
-                temp[f'refcode__elements__element_set_{i}__isnull'] = False
-                temp[f'refcode__elements__element_set_{i}__{element.capitalize()}__isnull'] = False
+                temp[f'{filter_template}_{i}__isnull'] = False
+                temp[f'{filter_template}_{i}__{element.capitalize()}__isnull'] = False
                 filtr.append(Q(**temp))
     custom_filter = filtr[0]
     for i in range(1, len(element_set), 1):
         custom_filter = custom_filter | filtr[i]
     structures = graphs.filter(custom_filter)
     for structure in structures:
-        substr, created = Substructure1.objects.get_or_create(refcode=structure.refcode)
+        substr, created = substructure_obj.objects.get_or_create(refcode=structure.refcode)
         setattr(substr, attr_name, True)
         substr.save()
 
 
-def start_dll_and_write(template_graph, analyse_data_c, size, NUM_OF_PROC, attr_name, obj_name):
+def start_dll_and_write(
+        template_graph, analyse_data,
+        size, NUM_OF_PROC, attr_name,
+        obj_to_save, struct_obj=StructureCode
+):
+    analyse_data_c = (ctypes.c_char_p * size)(*[s.encode() for s in analyse_data])
     template = ctypes.c_char_p(template_graph.encode())
     dll = settings.GET_DLL()
     output = dll.SearchMain(template, analyse_data_c, size, NUM_OF_PROC, False)
     for i in range(1, output[0] + 1):
-        refcode = StructureCode.objects.get(id=output[i])
-        if obj_name == 'Substructure1':
-            substr, created = Substructure1.objects.get_or_create(refcode=refcode)
-        elif obj_name == 'Substructure2':
-            substr, created = Substructure2.objects.get_or_create(refcode=refcode)
-        else:
-            raise Exception('Invalid obj_name value!')
+        refcode = struct_obj.objects.get(id=output[i])
+        substr, created = obj_to_save.objects.get_or_create(refcode=refcode)
         setattr(substr, attr_name, True)
         substr.save()
 
@@ -167,13 +171,14 @@ def add_substructure_filters(refcodes, NUM_OF_PROC=1):
         Substructure2.objects.get_or_create(refcode=structure.refcode)
 
     substructure_logger.info('Add substructure filtration...')
+    models = {'Substructure1': Substructure1,
+              'Substructure2': Substructure2}
     size = structures.count()
     analyse_data = structures.values_list('graph', flat=True)
     if analyse_data:
-        analyse_data_c = (ctypes.c_char_p * size)(*[s.encode() for s in analyse_data])
         for attr_name, data in TEMPLATES.items():
             template_graph, obj_name = data
-            start_dll_and_write(template_graph, analyse_data_c, size, NUM_OF_PROC, attr_name, obj_name)
+            start_dll_and_write(template_graph, analyse_data, size, NUM_OF_PROC, attr_name, models[obj_name])
 
     substructure_logger.info('Add element filtration...')
     set_only_CHNO(structures)

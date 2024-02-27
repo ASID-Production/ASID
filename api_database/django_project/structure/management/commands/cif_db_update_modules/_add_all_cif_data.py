@@ -180,7 +180,8 @@ def add_author(cif_block, struct_obj, authors=None):
             author_obj, created = Author.objects.get_or_create(family_name=family, initials=initials)
         logger_1.info(f'Author: {author_obj}')
         struct_obj.authors.add(author_obj)
-    return author_obj
+        return author_obj
+    return 0
 
 
 def get_or_create_space_group(cif_block):
@@ -306,7 +307,7 @@ def add_cell(cif_block, space_group, struct_obj):
         add_cell_parms_with_error([1, cif_block], struct_obj)
 
 
-def add_reduced_cell(cif_block, struct_obj):
+def add_reduced_cell(struct_obj):
     centrings = dict((v, k) for v, k in CENTRINGS)
     centring = centrings[struct_obj.cell.centring]
     params = [struct_obj.cell.a, struct_obj.cell.b, struct_obj.cell.c,
@@ -596,7 +597,7 @@ def add_all_cif_data(cifs: dict):
         logger_1.info(f'Add unit cell')
         add_cell(cif_block[1], space_group, struct_obj)
         logger_1.info(f'Add reduced cell')
-        add_reduced_cell(cif_block[1], struct_obj)
+        add_reduced_cell(struct_obj)
         logger_1.info(f'Add compound name')
         add_universal(CompoundName, struct_obj, cif_block, compound_names)
         logger_1.info(f'Add experimental info')

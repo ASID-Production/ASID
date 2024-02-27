@@ -54,20 +54,6 @@ def set_prm_log(prm):
     return add_graphs_logger
 
 
-error_logger = logging.getLogger('Error_logger')
-error_logger.setLevel(logging.ERROR)
-error_handler = logging.FileHandler(os.path.join(settings.BASE_DIR, 'logs', 'errors.log'))
-formatter = logging.Formatter('%(asctime)s: %(levelname)s: %(message)s: %(name)s')
-error_handler.setFormatter(formatter)
-error_logger.addHandler(error_handler)
-
-user_logger = logging.getLogger('User_logger')
-user_logger.setLevel(logging.INFO)
-user_handler = logging.FileHandler(os.path.join(settings.BASE_DIR, 'logs', 'users.log'))
-user_formatter = logging.Formatter('%(asctime)s: %(message)s')
-user_handler.setFormatter(user_formatter)
-user_logger.addHandler(user_handler)
-
 substructure_logger = logging.getLogger('substructure_logger')
 substructure_logger.setLevel(level)
 substructure_handler = logging.FileHandler(os.path.join(settings.BASE_DIR, 'logs', 'add_substructure_filtration.log'), mode='w')
@@ -89,16 +75,16 @@ formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
 add_graphs_to_db_handler.setFormatter(formatter)
 add_graphs_to_db_logger.addHandler(add_graphs_to_db_handler)
 
-cif_db_update_main_logger = logging.getLogger('cif_db_update_main')
-cif_db_update_main_logger.setLevel(level)
-cif_db_update_main_handler = logging.FileHandler(os.path.join(settings.BASE_DIR, 'logs', 'cif_db_update.log'), mode='a')
-formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
-cif_db_update_main_handler.setFormatter(formatter)
-cif_db_update_main_logger.addHandler(cif_db_update_main_handler)
-
 vasp_logger = logging.getLogger('vasp_logger')
 vasp_logger.setLevel(level)
 vasp_handler = logging.FileHandler(os.path.join(settings.BASE_DIR, 'logs', 'vasp.log'), mode='w')
 formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
 vasp_handler.setFormatter(formatter)
 vasp_logger.addHandler(vasp_handler)
+
+cif_db_update_main_logger = logging.getLogger('cif_db_update_main')
+cif_db_update_main_logger.setLevel(level)
+cif_db_update_main_handler = logging.FileHandler(os.path.join(settings.BASE_DIR, 'logs', 'cif_db_update.log'), mode='a')
+formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
+cif_db_update_main_handler.setFormatter(formatter)
+cif_db_update_main_logger.addHandler(cif_db_update_main_handler)

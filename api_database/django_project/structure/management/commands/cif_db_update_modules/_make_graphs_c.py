@@ -132,7 +132,7 @@ def make_graph_c(params, coords, types, refcode, add_graphs_logger, symops):
 
 
 def save(params, coords, types, refcode, symops):
-    f = open('test_' + refcode + '.txt', 'w')
+    f = open('test_' + str(refcode) + '.txt', 'w')
     f.write(str(params).replace('[', '{').replace(']', '}') + ', ')
     f.write(str(symops).replace('[', '{').replace(']', '}') + ', ')
     f.write(str(len(symops)).replace('[', '').replace(']', '') + ', ')

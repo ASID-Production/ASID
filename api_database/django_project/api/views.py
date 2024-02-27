@@ -29,12 +29,18 @@
 from rest_framework.viewsets import ReadOnlyModelViewSet
 from structure.models import StructureCode, CifFile, CoordinatesBlock
 from structure.download import create_cif_text
+from qc_structure.models import QCStructureCode, VaspFile, QCCoordinatesBlock
+from qc_structure.vasp import vasp_parser as add_vasp_data
+from qc_structure.export.cif import qc_get_cif_content
+from .serializers import (RefcodeShortSerializer, RefcodeFullSerializer, CifUploadSerializer,
+                          SearchSerializer, QCRefcodeShortSerializer, QCRefcodeFullSerializer,
+                          VaspUploadSerializer)
 from .serializers import RefcodeShortSerializer, RefcodeFullSerializer, CifUploadSerializer, SearchSerializer
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from django.http import HttpResponse
 from django_filters.rest_framework import DjangoFilterBackend
-from .filters import StructureFilter
+from .filters import StructureFilter, QCStructureFilter
 from .substructure_filtration import set_filter
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
@@ -58,6 +64,25 @@ MAX_STRS_SIZE = 30000
 CHUNK_SIZE = 10000  # the number of structures for search in
 
 
+async def qc_structure_search_view(request):
+    view = APIView()
+    request = view.initialize_request(request)
+    serializer = SearchSerializer(data=request.data)
+    if not serializer.is_valid():
+        return HttpResponse(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    response = await structure_search(
+        request,
+        serializer,
+        out_serializer_model=QCRefcodeShortSerializer,
+        structure_code_model=QCStructureCode,
+        qc=True
+    )
+    return response
+
+
 async def structure_search_view(request):
     view = APIView()
     request = view.initialize_request(request)
@@ -72,7 +97,13 @@ async def structure_search_view(request):
 
 
 @sync_to_async(thread_sensitive=False)
-def structure_search(request, serializer):
+def structure_search(
+        request,
+        serializer,
+        qc=False,
+        out_serializer_model=RefcodeShortSerializer,
+        structure_code_model=StructureCode
+):
     chunk_size = serializer.data.get('chunk_size')
     iter_num = serializer.data.get('iter_num')
     search_type = serializer.data.get('search_type')
@@ -107,7 +138,10 @@ def structure_search(request, serializer):
         ):
             analyse_data_split = data['analyse_data_split']
     if not analyse_data_split:
-        analyse_data, size = get_search_queryset_with_filtration(template_data)
+        if not qc:
+            analyse_data, size = get_search_queryset_with_filtration(template_data)
+        else:
+            analyse_data, size = get_search_queryset_with_filtration_qc(template_data)
         # split search for CHUNK_SIZE structures parts and then merge the result
         analyse_data_split = list(zip_longest(*[iter(analyse_data)] * CHUNK_SIZE, fillvalue=''))
         cache.set(f'{request.user}-cache', {
@@ -131,18 +165,18 @@ def structure_search(request, serializer):
         if partial:
             break
     # get queryset on search result
-    refcodes = StructureCode.objects.none()
+    refcodes = structure_code_model.objects.none()
     if len(out_refcode_ids) > MAX_STRS_SIZE:
         for i in range(0, len(out_refcode_ids), MAX_STRS_SIZE):
-            qset = StructureCode.objects.filter(id__in=out_refcode_ids[i:i + MAX_STRS_SIZE])
+            qset = structure_code_model.objects.filter(id__in=out_refcode_ids[i:i + MAX_STRS_SIZE])
             refcodes = sorted(
                 chain(refcodes, qset),
                 key=lambda structure: structure.refcode, reverse=False)
     else:
-        refcodes = StructureCode.objects.filter(id__in=out_refcode_ids).order_by('refcode')
+        refcodes = structure_code_model.objects.filter(id__in=out_refcode_ids).order_by('refcode')
     paginator = LimitPagination()
     pages = paginator.paginate_queryset(refcodes, request)
-    out_serializer = RefcodeShortSerializer(pages, many=True)
+    out_serializer = out_serializer_model(pages, many=True)
     response = paginator.get_paginated_response(out_serializer.data)
     response.accepted_renderer = JSONRenderer()
     response.accepted_media_type = "application/json"
@@ -155,9 +189,15 @@ def structure_search(request, serializer):
 
 
 class StructureViewSet(ReadOnlyModelViewSet):
-    queryset = StructureCode.objects.all()
     filter_backends = (DjangoFilterBackend,)
     filterset_class = StructureFilter
+
+    def get_queryset(self):
+        if self.request.user.is_authenticated:
+            queryset = (StructureCode.objects.filter(user=self.request.user) |
+                        StructureCode.objects.filter(user__isnull=True))
+            return queryset
+        return StructureCode.objects.filter(user__isnull=True)
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -206,7 +246,86 @@ class StructureViewSet(ReadOnlyModelViewSet):
                 {'errors': f'Structure information was not added! {error_message}'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        return Response(status=status.HTTP_201_CREATED)
+        out_serializer = RefcodeFullSerializer(refcode_obj)
+        return Response(
+            out_serializer.data,
+            status=status.HTTP_201_CREATED
+        )
+
+
+class QCStructureViewSet(ReadOnlyModelViewSet):
+    filter_backends = (DjangoFilterBackend,)
+    filterset_class = QCStructureFilter
+
+    def get_queryset(self):
+        if self.request.user.is_authenticated:
+            queryset = (QCStructureCode.objects.filter(user=self.request.user) |
+                        QCStructureCode.objects.filter(user__isnull=True))
+            return queryset
+        return QCStructureCode.objects.filter(user__isnull=True)
+
+    def get_serializer_class(self):
+        if self.action == 'list':
+            return QCRefcodeShortSerializer
+        return QCRefcodeFullSerializer
+
+    @action(
+        detail=True,
+        methods=['GET'],
+        url_path='export/cif'
+    )
+    def export_cif(self, request, pk):
+        qc_structure = get_object_or_404(QCStructureCode, pk=pk)
+        filename = f'{qc_structure.refcode}.cif'
+        content = qc_get_cif_content(qc_structure)
+        response = HttpResponse(content, content_type='text/plain')
+        response['Content-Disposition'] = f'attachment; filename={filename}'
+        return response
+
+    @action(
+        detail=True,
+        methods=['GET'],
+    )
+    def download(self, request, pk):
+        qc_structure = get_object_or_404(QCStructureCode, pk=pk)
+        filename = f'{qc_structure.refcode}.cif'
+        vasp_file = open(os.path.join(settings.BASE_DIR, 'media', str(qc_structure.vasp_file.file)), 'r')
+        content = vasp_file.readlines()
+        response = HttpResponse(content, content_type='text/xml')
+        response['Content-Disposition'] = f'attachment; filename={filename}'
+        return response
+
+    @action(
+        detail=False,
+        methods=['POST'],
+        permission_classes=[IsAuthenticated],
+        serializer_class=[VaspUploadSerializer],
+        url_path='upload/vasp'
+    )
+    def upload_vasp(self, request):
+        user = request.user
+        count_user_vasp = QCStructureCode.objects.filter(user=user).count()
+        while True:
+            refcode = 'user-' + str(user.id) + '-vasp-' + str(count_user_vasp + 1)
+            if QCStructureCode.objects.filter(refcode=refcode).count() == 0:
+                break
+            count_user_vasp += 1
+        file = request.FILES.get('file')
+        refcode_obj = QCStructureCode.objects.create(user=user, refcode=refcode)
+        vasp_file_obj = VaspFile.objects.create(refcode=refcode_obj, file=file)
+        vasp_file_path = os.path.join(settings.BASE_DIR, 'media', str(vasp_file_obj.file))
+        try:
+            add_vasp_data(structure_obj=refcode_obj, file=vasp_file_path)
+        except Exception as error_message:
+            return Response(
+                {'errors': f'Structure information was not added! {error_message}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        out_serializer = QCRefcodeFullSerializer(refcode_obj)
+        return Response(
+            out_serializer.data,
+            status=status.HTTP_201_CREATED
+        )
 
 
 def get_search_queryset_with_filtration(template):
@@ -217,6 +336,19 @@ def get_search_queryset_with_filtration(template):
         is_true, obj_name = data
         if is_true:
             filtrs[f'refcode__{obj_name.lower()}__{filtr}'] = is_true
+    structures = graphs.filter(**filtrs)
+    analyse_data = structures.values_list('graph', flat=True)
+    return analyse_data, structures.count()
+
+
+def get_search_queryset_with_filtration_qc(template):
+    graphs = QCCoordinatesBlock.objects.filter(graph__isnull=False)
+    filters = set_filter(template)
+    filtrs = dict()
+    for filtr, data in filters.items():
+        is_true, obj_name = data
+        if is_true:
+            filtrs[f'refcode__qc_{obj_name.lower()}__{filtr}'] = is_true
     structures = graphs.filter(**filtrs)
     analyse_data = structures.values_list('graph', flat=True)
     return analyse_data, structures.count()

@@ -31,7 +31,13 @@ from structure.models import (StructureCode, ElementsSet1, ElementsSet2,
                               ElementsSet3, ElementsSet4, ElementsSet5,
                               ElementsSet6, ElementsSet7, ElementsSet8,
                               CENTRINGS)
+from qc_structure.models import QCStructureCode, PROGRAMS
 from gemmi import UnitCell, SpaceGroup, GruberVector
+
+ELEMENTS_SET_CLASSES = [
+    ElementsSet1, ElementsSet2, ElementsSet3, ElementsSet4,
+    ElementsSet5, ElementsSet6, ElementsSet7, ElementsSet8
+]
 
 
 def get_fields_list(model):
@@ -96,9 +102,12 @@ class StructureFilter(FilterSet):
 
     def filter_refcode(self, queryset, name, value):
         if value:
-            queryset_temp = queryset
+            queryset_temp = 0
             for element in value.split():
-                queryset_temp = queryset.filter(refcode__istartswith=element)
+                if queryset_temp:
+                    queryset_temp = queryset_temp | queryset.filter(refcode__istartswith=element)
+                else:
+                    queryset_temp = queryset.filter(refcode__istartswith=element)
             return queryset_temp
         return queryset
 
@@ -158,9 +167,7 @@ class StructureFilter(FilterSet):
                     return queryset.none()
                 # find database table with current element
                 for i, model in enumerate(
-                        [ElementsSet1, ElementsSet2,
-                         ElementsSet3, ElementsSet4, ElementsSet5,
-                         ElementsSet6, ElementsSet7, ElementsSet8], start=1):
+                        ELEMENTS_SET_CLASSES, start=1):
                     # add filter, the quality of the element
                     if elem.capitalize() in get_fields_list(model):
                         filtr[f'elements__element_set_{i}__isnull'] = False
@@ -179,9 +186,7 @@ class StructureFilter(FilterSet):
             for element in value.split():
                 # find database table with current element
                 for i, model in enumerate(
-                        [ElementsSet1, ElementsSet2,
-                         ElementsSet3, ElementsSet4, ElementsSet5,
-                         ElementsSet6, ElementsSet7, ElementsSet8], start=1):
+                        ELEMENTS_SET_CLASSES, start=1):
                     # add filter, that element must be not Null
                     if element.capitalize() in get_fields_list(model):
                         filtr[f'elements__element_set_{i}__isnull'] = exclude
@@ -227,6 +232,124 @@ class StructureFilter(FilterSet):
                 reduced_cells__be__range=(params[4] - params[4] * abc_diviation, params[4] + params[4] * angle_diviation),
                 reduced_cells__ga__range=(params[5] - params[5] * abc_diviation, params[5] + params[5] * angle_diviation),
                 cell__centring__exact=centrings[params[6].upper()]
+            )
+            return queryset
+        return queryset
+
+
+class QCStructureFilter(FilterSet):
+    refcode = filters.CharFilter(method='filter_refcode')
+    user_db = filters.CharFilter(method='filter_user_db')
+    program = filters.CharFilter(method='filter_program')
+    name = filters.CharFilter(method='filter_name')
+    formula = filters.CharFilter(method='filter_formula')
+    elements = filters.CharFilter(method='filter_elements')
+    no_elements = filters.CharFilter(method='filter_no_elements')
+    cell = filters.CharFilter(method='filter_cell')
+
+    class Meta:
+        model = QCStructureCode
+        fields = []
+
+    def filter_refcode(self, queryset, name, value):
+        if value:
+            queryset_temp = 0
+            for element in value.split():
+                if queryset_temp:
+                    queryset_temp = queryset_temp | queryset.filter(refcode__istartswith=element)
+                else:
+                    queryset_temp = queryset.filter(refcode__istartswith=element)
+            return queryset_temp
+        return queryset
+
+    def filter_user_db(self, queryset, name, value):
+        if value:
+            queryset_temp = queryset
+            if value == 'False':
+                queryset_temp = queryset.filter(user__isnull=True)
+            return queryset_temp
+        return queryset
+
+    def filter_program(self, queryset, name, value):
+        if value:
+            queryset_temp = 0
+            for element in value.split():
+                if element in PROGRAMS:
+                    filtr = {f'qc_prog__{element}__isnull': False}
+                    if queryset_temp:
+                        queryset_temp = queryset_temp | queryset.filter(**filtr)
+                    else:
+                        queryset_temp = queryset.filter(**filtr)
+            if queryset_temp:
+                return queryset_temp
+        return queryset
+
+    def filter_name(self, queryset, name, value):
+        if value:
+            for element in value.split():
+                queryset = queryset.filter(qc_name__systematic_name__icontains=element) | queryset.filter(qc_name__trivial_name__icontains=element)
+        return queryset
+
+    def filter_formula(self, queryset, name, value):
+        if value:
+            filtr = {}
+            for element in value.split():
+                elem, count = split_element_and_count(element)
+                if elem == 'error':
+                    return queryset.none()
+                for i, model in enumerate(ELEMENTS_SET_CLASSES, start=1):
+                    if elem.capitalize() in get_fields_list(model):
+                        filtr[f'qc_elements__element_set_{i}__isnull'] = False
+                        filtr[f'qc_elements__element_set_{i}__{elem.capitalize()}__exact'] = float(count)
+                        break
+                else:
+                    return queryset.none()
+            return queryset.filter(**filtr)
+        return queryset
+
+    def filter_elements(self, queryset, name, value, exclude=False):
+        if value:
+            filtr = {}
+            for element in value.split():
+                for i, model in enumerate(ELEMENTS_SET_CLASSES, start=1):
+                    if element.capitalize() in get_fields_list(model):
+                        filtr[f'qc_elements__element_set_{i}__isnull'] = exclude
+                        filtr[f'qc_elements__element_set_{i}__{element.capitalize()}__isnull'] = exclude
+                        break
+                else:
+                    return queryset.none()
+            return queryset.filter(**filtr)
+        return queryset
+
+    def filter_no_elements(self, queryset, name, value):
+        return self.filter_elements(queryset, name, value, True)
+
+    def filter_cell(self, queryset, name, value):
+        """
+        Unit cell search.
+        Format: a,b,c,al,be,ga,centring,parameter_deviation(value_or_none),angle_deviation(value_or_none);
+        Example: 6,7,8,90,90,90,P,0.015,0.02
+        """
+        if value:
+            raw_params = value.split(',')
+            params = list(map(float, raw_params[:6]))
+            params = get_reduced_cell(params, raw_params[6].upper())
+            params.extend(raw_params[6:])
+            abc_diviation = 0.015
+            angle_diviation = 0.02
+            centrings = dict((v, k) for k, v in CENTRINGS)
+            if params[7] != 'none':
+                abc_diviation = float(params[7])
+            if params[8] != 'none':
+                angle_diviation = float(params[8])
+            queryset = queryset.filter(
+                qc_reduced_cells__a__range=(params[0] - params[0] * abc_diviation, params[0] + params[0] * angle_diviation),
+                qc_reduced_cells__b__range=(params[1] - params[1] * abc_diviation, params[1] + params[1] * angle_diviation),
+                qc_reduced_cells__c__range=(params[2] - params[2] * abc_diviation, params[2] + params[2] * angle_diviation),
+                qc_reduced_cells__al__range=(params[3] - params[3] * abc_diviation, params[3] + params[3] * angle_diviation),
+                qc_reduced_cells__be__range=(params[4] - params[4] * abc_diviation, params[4] + params[4] * angle_diviation),
+                qc_reduced_cells__ga__range=(params[5] - params[5] * abc_diviation, params[5] + params[5] * angle_diviation),
+                qc_cell__centring__exact=centrings[params[6].upper()]
             )
             return queryset
         return queryset

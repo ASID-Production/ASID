@@ -39,6 +39,11 @@ import os
 
 User = get_user_model()
 
+PROGRAMS = [
+    'orca', 'vasp', 'qchem', 'gaussian', 'nwchem',
+    'abinit', 'crystal', 'gamess', 'mopac', 'quantum_espresso'
+]
+
 
 class QCStructureCode(models.Model):
     '''Table with codes.'''
@@ -172,7 +177,7 @@ class QCElementsManager(AbstractElementsManager):
     '''Refcode to ElementsSets relations.'''
     refcode = models.OneToOneField(
         QCStructureCode,
-        related_name='elements',
+        related_name='qc_elements',
         on_delete=models.PROTECT
     )
     element_set_1 = models.ForeignKey(
@@ -240,4 +245,11 @@ class QCProperties(models.Model):
         related_name='qc_properties',
         on_delete=models.CASCADE
     )
-    energy = models.FloatField(verbose_name='Final energy in eV')
+    energy = models.FloatField(
+        verbose_name='Final energy in eV',
+        null=True, blank=True
+    )
+    calculated_density = models.FloatField(
+        verbose_name='Calculated crystal density in g/cm^3',
+        null=True, blank=True
+    )

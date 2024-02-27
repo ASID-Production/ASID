@@ -29,7 +29,10 @@
 
 import os
 import ctypes
-from sys import platform
+import sys
+
+# add path to cpplib module
+sys.path.append('./modules/c_modules/')
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -43,7 +46,7 @@ if not os.path.exists(os.path.join(BASE_DIR, 'logs')):
 
 
 def GET_DLL():
-    if 'linux' in platform:
+    if 'linux' in sys.platform:
         dll = ctypes.CDLL(os.path.join(BASE_DIR, 'modules', 'c_modules', CPPLIB + '.so'))
     else:
         dll = ctypes.WinDLL(os.path.join(BASE_DIR, 'modules', 'c_modules', CPPLIB + '.dll'))
@@ -80,7 +83,7 @@ def GET_DLL():
 SECRET_KEY = 'django-insecure-%v12=ty4+&c--ynk514n^3gg*_*q+6kb4=34vw@abxi4*cl2lj'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = False
 
 ALLOWED_HOSTS = ['*']
 
