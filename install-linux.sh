@@ -10,7 +10,8 @@ cd api_database
 python3 -m venv venv 
 source venv/bin/activate
 pip install -r requirements.txt 
-cd ./django_project 
+cd ./django_project
+python manage.py makemigrations
 python manage.py migrate 
 cd ../.. 
 

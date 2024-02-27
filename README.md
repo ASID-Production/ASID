@@ -57,8 +57,3 @@ See [Manual](/docs/Manual.md).
 |       `PyOpenGL`        |  3.1.7   | [Custom License (based on BSD-3)](https://github.com/Distrotech/PyOpenGL/blob/master/license.txt) |
 |        `chardet`        |  5.2.0   | [GNU LGPL v2.1](https://github.com/chardet/chardet/blob/main/LICENSE) |
 |       `Pymatgen`        | 2024.2.8 | [MIT License](https://github.com/materialsproject/pymatgen/blob/master/LICENSE) |
-
-#### Used sourse code
-| Used Library | Version        | Link to changes | License               |
-|:------------:|:--------------:|:---------------:|:---------------------:|
-| `Pymatgen`   | [6b520e3](https://github.com/materialsproject/pymatgen/tree/6b520e307fea25d890261b3916ecfc6fe802ae94)          | no changes | [MIT License](https://github.com/materialsproject/pymatgen/tree/6b520e307fea25d890261b3916ecfc6fe802ae94/LICENSE.rst) |
