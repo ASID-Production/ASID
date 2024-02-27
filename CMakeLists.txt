@@ -37,7 +37,7 @@ set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 project(cpplibLib)
-find_package(Python3 COMPONENTS Interpreter Development)
+find_package(Python COMPONENTS Interpreter Development EXACT 3.10)
 message(NOTICE "Python include dirs: ${Python3_INCLUDE_DIRS}")
 include_directories(SYSTEM ${Python3_INCLUDE_DIRS})
 
@@ -70,7 +70,8 @@ target_include_directories(cpplibLib
 ############################################################
 
 project(cpplib)
-find_package(Python COMPONENTS Interpreter Development)
+find_package(Python COMPONENTS Interpreter Development EXACT 3.10)
+
 message(NOTICE "Python include dirs: ${Python3_INCLUDE_DIRS}")
 include_directories(SYSTEM ${Python3_INCLUDE_DIRS})
 

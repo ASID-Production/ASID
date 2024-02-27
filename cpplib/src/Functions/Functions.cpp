@@ -40,15 +40,15 @@ const CurrentDistances* p_distances = nullptr;
 
 API bool CompareGraph(const char* search1, const char* search2, const bool exact) {
 	CurrentSearchGraph graph;
-	graph.setupInput(CurrentRequestGraph(search1));
-	graph.setupData(CurrentDatabaseGraph(search2));
+	graph.setupInput(CurrentRequestGraph::ReadInput(search1));
+	graph.setupData(CurrentDatabaseGraph::ReadData(search2));
 	graph.prepareToSearch();
 	return graph.startFullSearch(exact);
 }
 API int* SearchMain(const char* search, const char** data, const int data_s, const int np, const bool exact) {
 	static std::vector<int> result;
 
-	CurrentRequestGraph input(search);
+	CurrentRequestGraph input = CurrentRequestGraph::ReadInput(search);
 	SearchDataInterface<MolecularIDType, size_type> databuf(data, data_s);
 	std::vector<std::thread> threads;
 	const size_t nThreads = std::min(std::min(static_cast<unsigned int>(np), std::thread::hardware_concurrency()), static_cast<unsigned int>(data_s)) - 1;
@@ -71,7 +71,7 @@ API int* SearchMain(const char* search, const char** data, const int data_s, con
 API const char* FindMoleculesInCell(const float* unit_cell, const char** symm, const int symm_s, const int* types, const float* xyz, const int types_s) {
 	static std::string ret;
 	auto& distances = *(p_distances);
-	if (distances.isReady() == false) {
+	if (p_distances->isReady() == false) {
 		ret = std::string(";Error! Could not open BondLength.ini");
 		return ret.c_str();
 	}
@@ -333,7 +333,7 @@ static void ChildThreadFunc(const CurrentRequestGraph& input, const AtomicIDType
 			return;
 		}
 		graph.setupInput(input.makeCopy());
-		CurrentDatabaseGraph molData(next);
+		CurrentDatabaseGraph molData = CurrentDatabaseGraph::ReadData(next);
 		auto id = molData.getID();
 		graph.setupData(move(molData));
 		graph.prepareToSearch();
@@ -387,7 +387,7 @@ static PyObject* cpplib_SearchMain(PyObject* self, PyObject* args) {
 	long np = 0;
 	bool exact = false;
 
-	PyArg_UnpackTuple(args, "sOlp", 4, 4, search, o, np, exact);
+	PyArg_UnpackTuple(args, "sOlp", 4, 4, &search, &o, &np, &exact);
 
 	const Py_ssize_t s = PyList_Size(o);
 	const int ds = static_cast<int>(s);
@@ -411,7 +411,7 @@ static PyObject* cpplib_CompareGraph(PyObject* self, PyObject* args)
 	const char* s1 = NULL;
 	const char* s2 = NULL;
 	bool b = false;
-	PyArg_UnpackTuple(args, "ssp", 3, 3, s1, s2, b);
+	PyArg_UnpackTuple(args, "ssp", 3, 3, &s1, &s2, &b);
 
 	if (CompareGraph(s1, s2, b)) {
 		return Py_True;
@@ -427,7 +427,7 @@ static PyObject* cpplib_FindMoleculesInCell(PyObject* self, PyObject* args) {
 	PyObject* oxyz = NULL;
 	PyObject* otypes = NULL;
 
-	PyArg_UnpackTuple(args, "OOOO", 4, 4, ocell, osymm, otypes, oxyz);
+	PyArg_UnpackTuple(args, "OOOO", 4, 4, &ocell, &osymm, &otypes, &oxyz);
 
 	float cell[6];
 	for (Py_ssize_t i = 0; i < 6; i++) {
@@ -462,7 +462,7 @@ static PyObject* cpplib_FindMoleculesWithoutCell(PyObject* self, PyObject* args)
 	PyObject* oxyz = NULL;
 	PyObject* otypes = NULL;
 
-	PyArg_UnpackTuple(args, "OO", 2, 2, otypes, oxyz);
+	PyArg_UnpackTuple(args, "OO", 2, 2, &otypes, &oxyz);
 
 
 	Py_ssize_t s = PyList_Size(otypes);
@@ -485,7 +485,7 @@ static PyObject* cpplib_GenSymm(PyObject* self, PyObject* args) {
 	char* str = NULL;
 	PyObject* arg = NULL;
 
-	PyArg_UnpackTuple(args, "Os", 2, 2, arg, str);
+	PyArg_UnpackTuple(args, "Os", 2, 2, &arg, &str);
 
 	const Py_ssize_t s = PyList_Size(arg);
 	std::vector<AtomType> types;
@@ -541,6 +541,5 @@ static struct PyModuleDef cpplib_module = {
 
 PyMODINIT_FUNC PyInit_cpplib(void)
 {
-	PyObject* module = PyModule_Create(&cpplib_module);
-	return module;
+	return PyModule_Create(&cpplib_module);
 }

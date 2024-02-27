@@ -27,9 +27,9 @@
 // ******************************************************************************************
 #pragma once
 #include "Geometry.h"
+#include "FindMolecules.h"
 #include <vector>
 #include <tuple>
-#include <FindMolecules.h>
 
 template <class A, class AI, class T>
 class FindGeometry {
@@ -43,7 +43,7 @@ private:
 	
 public:
 	FindGeometry() = delete;
-	FindGeometry(const FAM_Struct<A, AI, T>& famstr) noexcept : fs(famstr) {};
+	explicit FindGeometry(const FAM_Struct<A, AI, T>& famstr) noexcept : fs(famstr) {};
 	auto findDistance(A t1, A t2, T d12_l, T d12_h) const {
 		std::vector<std::tuple<size_t, size_t, T>> res;
 		const bool mirror = t1 == t2;

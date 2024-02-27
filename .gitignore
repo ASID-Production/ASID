@@ -1,6 +1,8 @@
 ﻿# cpplib ignores
 /.vs
 /out
+/cpplib/.vs
+/cpplib/Tests/.vs
 
 # api_database ignores
 /api_database/__pycache__
