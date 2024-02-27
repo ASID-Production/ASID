@@ -57,6 +57,9 @@ class QCStructureCode(models.Model):
         verbose_name='Owner'
     )
 
+    class Meta:
+        verbose_name_plural = 'QCStructureCodes'
+
     def __str__(self):
         return self.refcode
 
@@ -78,6 +81,9 @@ class QCProgram(models.Model):
     gamess = models.BooleanField(verbose_name='GAMESS calculation', blank=True, null=True)
     mopac = models.BooleanField(verbose_name='MOPAC calculation', blank=True, null=True)
     quantum_espresso = models.BooleanField(verbose_name='Quantum ESPRESSO calculation', blank=True, null=True)
+
+    class Meta:
+        verbose_name_plural = 'QCPrograms'
 
 
 def vasp_user_directory_path(instance, filename):
@@ -112,6 +118,9 @@ class QCCell(AbstractCell):
         verbose_name='space group'
     )
 
+    class Meta:
+        verbose_name_plural = 'QCCells'
+
 
 class QCReducedCell(AbstractReducedCell):
     '''Niggli cell.'''
@@ -124,6 +133,7 @@ class QCReducedCell(AbstractReducedCell):
 
     class Meta:
         unique_together = (('refcode', 'a', 'b', 'c', 'al', 'be', 'ga'),)
+        verbose_name_plural = 'QCReducedCells'
 
 
 class QCCompoundName(AbstractCompoundName):
@@ -132,6 +142,9 @@ class QCCompoundName(AbstractCompoundName):
         QCStructureCode,
         related_name='qc_name',
         on_delete=models.CASCADE)
+
+    class Meta:
+        verbose_name_plural = 'QCCompoundNames'
 
 
 class QCCoordinatesBlock(AbstractCoordinatesBlock):
@@ -171,6 +184,9 @@ class QCFormula(AbstractFormula):
         related_name='qc_formula',
         on_delete=models.CASCADE
     )
+
+    class Meta:
+        verbose_name_plural = 'QCFormulas'
 
 
 class QCElementsManager(AbstractElementsManager):
@@ -237,6 +253,9 @@ class QCElementsManager(AbstractElementsManager):
         null=True
     )
 
+    class Meta:
+        verbose_name_plural = 'QCElements'
+
 
 class QCProperties(models.Model):
     '''Quantum chemistry calculation properties.'''
@@ -253,3 +272,6 @@ class QCProperties(models.Model):
         verbose_name='Calculated crystal density in g/cm^3',
         null=True, blank=True
     )
+
+    class Meta:
+        verbose_name_plural = 'QCProperties'
