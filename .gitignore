@@ -1,6 +1,8 @@
 ﻿# cpplib ignores
 /.vs
 /out
+/cpplib/.vs
+/cpplib/Tests/.vs
 
 # api_database ignores
 /api_database/__pycache__
@@ -15,5 +17,3 @@
 *.cif
 /api_database/data
 /api_database/media
-/cpplib/.vs
-/cpplib/Tests/.vs
