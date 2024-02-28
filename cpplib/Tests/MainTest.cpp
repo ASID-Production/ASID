@@ -38,7 +38,7 @@
 
 using namespace std;
 
-CurrentDistances testdistances("module/BondLength.ini");
+CurrentDistances testdistances("../../../../../module/BondLength.ini");
 
 
 TEST(SearchMainTest, 107403t) {

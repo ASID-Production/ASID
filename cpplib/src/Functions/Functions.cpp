@@ -69,6 +69,7 @@ API int* SearchMain(const char* search, const char** data, const int data_s, con
 }
 
 API const char* FindMoleculesInCell(const float* unit_cell, const char** symm, const int symm_s, const int* types, const float* xyz, const int types_s) {
+
 	static std::string ret;
 	auto& distances = *(p_distances);
 	if (p_distances->isReady() == false) {
@@ -348,11 +349,10 @@ inline static void useDistances (PyObject* self) {
 		return;
 	std::string full(PyUnicode_AsUTF8(PyObject_GetAttrString(self, "__file__")));
 	auto found = full.find_last_of("\\/");
-	auto bond_filename = full.substr(0, found)+"BondLength.ini";
+	auto bond_filename = full.substr(0, found+1)+"BondLength.ini";
 	static CurrentDistances dist(bond_filename);
 	p_distances = &dist;
 }
-
 // [[type,x,y,z],[...]...] in, str out
 static PyObject* cpplib_GenBonds(PyObject* self, PyObject* arg) {
 	useDistances(self);
@@ -388,12 +388,12 @@ static PyObject* cpplib_SearchMain(PyObject* self, PyObject* args) {
 	bool exact = false;
 
 	PyArg_UnpackTuple(args, "sOlp", 4, 4, &search, &o, &np, &exact);
-
 	const Py_ssize_t s = PyList_Size(o);
 	const int ds = static_cast<int>(s);
 	std::vector<const char*> data(ds, nullptr);
+	
 	for (Py_ssize_t i = 0; i < s; i++) {
-		data[i] = PyUnicode_AsUTF8(PyList_GetItem(PyList_GetItem(o, i), 0));
+		data[i] = PyUnicode_AsUTF8(PyList_GetItem(o, i));
 	}
 
 	int * ret = SearchMain(search, &(data[0]), ds, np, exact);
@@ -401,7 +401,6 @@ static PyObject* cpplib_SearchMain(PyObject* self, PyObject* args) {
 	for (Py_ssize_t i = 1; i <= ret[0]; i++)
 	{
 		PyList_SetItem(ret_o, i - 1, PyLong_FromLong(ret[i]));
-		
 	}
 	return ret_o;
 }
@@ -422,11 +421,11 @@ static PyObject* cpplib_CompareGraph(PyObject* self, PyObject* args)
 }
 
 static PyObject* cpplib_FindMoleculesInCell(PyObject* self, PyObject* args) {
+	useDistances(self);
 	PyObject* ocell = NULL;
 	PyObject* osymm = NULL;
 	PyObject* oxyz = NULL;
 	PyObject* otypes = NULL;
-
 	PyArg_UnpackTuple(args, "OOOO", 4, 4, &ocell, &osymm, &otypes, &oxyz);
 
 	float cell[6];
@@ -446,10 +445,12 @@ static PyObject* cpplib_FindMoleculesInCell(PyObject* self, PyObject* args) {
 	const int types_s = static_cast<int>(s);
 
 	std::vector<int> types(types_s);
-	std::vector<float> xyz(types_s);
+	std::vector<float> xyz(types_s*3);
 	for (Py_ssize_t i = 0; i < s; i++) {
 		types[i] = PyLong_AsLong(PyList_GetItem(otypes, i));
-		xyz[i] = PyFloat_AsDouble(PyList_GetItem(oxyz, i));
+		xyz[i * 3] = PyFloat_AsDouble(PyList_GetItem(oxyz, i * 3));
+		xyz[i * 3 + 1] = PyFloat_AsDouble(PyList_GetItem(oxyz, i * 3 + 1));
+		xyz[i * 3 + 2] = PyFloat_AsDouble(PyList_GetItem(oxyz, i * 3 + 2));
 	}
 
 	const char* ret = FindMoleculesInCell(cell, &(symm[0]), symm_s, &(types[0]), &(xyz[0]), types_s);
@@ -458,6 +459,7 @@ static PyObject* cpplib_FindMoleculesInCell(PyObject* self, PyObject* args) {
 }
 
 static PyObject* cpplib_FindMoleculesWithoutCell(PyObject* self, PyObject* args) {
+	useDistances(self);
 
 	PyObject* oxyz = NULL;
 	PyObject* otypes = NULL;
@@ -472,7 +474,9 @@ static PyObject* cpplib_FindMoleculesWithoutCell(PyObject* self, PyObject* args)
 	std::vector<float> xyz(types_s);
 	for (Py_ssize_t i = 0; i < s; i++) {
 		types[i] = PyLong_AsLong(PyList_GetItem(otypes, i));
-		xyz[i] = PyFloat_AsDouble(PyList_GetItem(oxyz, i));
+		xyz[i * 3] = PyFloat_AsDouble(PyList_GetItem(oxyz, i * 3));
+		xyz[i * 3 + 1] = PyFloat_AsDouble(PyList_GetItem(oxyz, i * 3 + 1));
+		xyz[i * 3 + 2] = PyFloat_AsDouble(PyList_GetItem(oxyz, i * 3 + 2));
 	}
 
 	const char* ret = FindMoleculesWithoutCell( &(types[0]), &(xyz[0]), types_s);
