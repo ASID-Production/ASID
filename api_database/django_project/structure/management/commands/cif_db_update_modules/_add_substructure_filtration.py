@@ -32,9 +32,9 @@ from structure.models import (
     ElementsSet6, ElementsSet7, ElementsSet8
 )
 from django.db.models import Q
-import ctypes
 from django.conf import settings
 from django_project.loggers import substructure_logger
+import cpplib
 
 
 TEMPLATES = {
@@ -146,15 +146,12 @@ def set_elements(
 
 def start_dll_and_write(
         template_graph, analyse_data,
-        size, NUM_OF_PROC, attr_name,
+        NUM_OF_PROC, attr_name,
         obj_to_save, struct_obj=StructureCode
 ):
-    analyse_data_c = (ctypes.c_char_p * size)(*[s.encode() for s in analyse_data])
-    template = ctypes.c_char_p(template_graph.encode())
-    dll = settings.GET_DLL()
-    output = dll.SearchMain(template, analyse_data_c, size, NUM_OF_PROC, False)
-    for i in range(1, output[0] + 1):
-        refcode = struct_obj.objects.get(id=output[i])
+    output = cpplib.SearchMain(template_graph, list(analyse_data), NUM_OF_PROC, False)
+    for elem in output:
+        refcode = struct_obj.objects.get(id=elem)
         substr, created = obj_to_save.objects.get_or_create(refcode=refcode)
         setattr(substr, attr_name, True)
         substr.save()
@@ -173,12 +170,11 @@ def add_substructure_filters(refcodes, NUM_OF_PROC=1):
     substructure_logger.info('Add substructure filtration...')
     models = {'Substructure1': Substructure1,
               'Substructure2': Substructure2}
-    size = structures.count()
     analyse_data = structures.values_list('graph', flat=True)
     if analyse_data:
         for attr_name, data in TEMPLATES.items():
             template_graph, obj_name = data
-            start_dll_and_write(template_graph, analyse_data, size, NUM_OF_PROC, attr_name, models[obj_name])
+            start_dll_and_write(template_graph, analyse_data, NUM_OF_PROC, attr_name, models[obj_name])
 
     substructure_logger.info('Add element filtration...')
     set_only_CHNO(structures)

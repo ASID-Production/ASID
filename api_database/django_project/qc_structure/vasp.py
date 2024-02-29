@@ -37,7 +37,8 @@ from django_project.loggers import vasp_logger
 from math import cos, sqrt, radians
 import networkx as nx
 import re
-from structure.management.commands.cif_db_update_modules._make_graphs_c import make_graph_c, element_numbers
+from structure.management.commands.cif_db_update_modules._element_numbers import element_numbers
+from structure.management.commands.cif_db_update_modules._make_graphs_c import make_graph_c
 from structure.management.commands.cif_db_update_modules._add_substructure_filtration import (TEMPLATES, start_dll_and_write,
                                                                                               set_only_CHNO, set_no_C,
                                                                                               set_elements, SET_ELEMENTS)
@@ -287,7 +288,7 @@ def save_substructure(structure_obj):
     if graph:
         for attr_name, data in TEMPLATES.items():
             template_graph, obj_name = data
-            start_dll_and_write(template_graph, [graph, ], 1, 2, attr_name, models[obj_name], QCStructureCode)
+            start_dll_and_write(template_graph, [graph, ], 1, attr_name, models[obj_name], QCStructureCode)
 
     graph_query = QCCoordinatesBlock.objects.filter(refcode=structure_obj)
     set_only_CHNO(graph_query, QCSubstructure1, 'refcode__qc_elements__element_set')

@@ -27,8 +27,7 @@
 # *****************************************************************************************
 
 import networkx as nx
-from django.conf import settings
-import ctypes
+import cpplib
 import json
 from ._element_numbers import element_numbers
 import os
@@ -110,14 +109,7 @@ def get_data(cif_block):
 
 
 def make_graph_c(params, coords, types, refcode, add_graphs_logger, symops):
-    dll = settings.GET_DLL()
-    c_params = (ctypes.c_float * len(params))(*params)
-    c_types = (ctypes.c_int * len(types))(*types)
-    c_coords = (ctypes.c_float * len(coords))(*coords)
-    c_symops = (ctypes.c_char_p * len(symops))(*[s.encode() for s in symops])
-    mols = dll.FindMoleculesInCell(c_params, c_symops, len(symops), c_types, c_coords, len(types))
-    # transform to class str
-    mols = mols.decode()
+    mols = cpplib.FindMoleculesInCell(params, symops, types, coords)
     parse_mols = mols.split(';')
     if len(parse_mols) == 1:
         graph_str, = parse_mols

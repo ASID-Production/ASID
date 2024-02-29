@@ -48,7 +48,6 @@ from rest_framework.response import Response
 import networkx as nx
 from structure.management.commands.cif_db_update_modules._element_numbers import element_numbers
 from multiprocessing import cpu_count
-import ctypes
 from django.conf import settings
 from itertools import chain, zip_longest
 from structure.management.commands.cif_db_update import main as add_cif_data
@@ -58,6 +57,7 @@ from .pagination import LimitPagination
 from rest_framework.views import APIView
 from rest_framework.renderers import JSONRenderer
 from django.core.cache import cache
+import cpplib
 
 NUM_OF_PROC = int(cpu_count() / 2)
 MAX_STRS_SIZE = 30000
@@ -115,8 +115,6 @@ def structure_search(
     graph.add_nodes_from(serializer.data.get('nodes'))
     graph.add_edges_from(serializer.data.get('edges'))
     template_data = get_template_graph(graph)
-    array_template = ctypes.c_char_p(template_data.encode())
-    dll = settings.GET_DLL()
 
     if search_type == 'substructure':
         exact = False
@@ -139,9 +137,9 @@ def structure_search(
             analyse_data_split = data['analyse_data_split']
     if not analyse_data_split:
         if not qc:
-            analyse_data, size = get_search_queryset_with_filtration(template_data)
+            analyse_data = get_search_queryset_with_filtration(template_data)
         else:
-            analyse_data, size = get_search_queryset_with_filtration_qc(template_data)
+            analyse_data = get_search_queryset_with_filtration_qc(template_data)
         # split search for CHUNK_SIZE structures parts and then merge the result
         analyse_data_split = list(zip_longest(*[iter(analyse_data)] * CHUNK_SIZE, fillvalue=''))
         cache.set(f'{request.user}-cache', {
@@ -157,10 +155,9 @@ def structure_search(
         if chunk_size and iter_num < len(analyse_data_split):
             partial = True
             analyse_data = analyse_data_split[iter_num]
-        array_data = (ctypes.c_char_p * CHUNK_SIZE)(*[s.encode() for s in analyse_data])
-        output = dll.SearchMain(array_template, array_data, CHUNK_SIZE, NUM_OF_PROC, exact)
-        for j in range(1, output[0] + 1):
-            out_refcode_ids.append(output[j])
+        output = cpplib.SearchMain(template_data, list(analyse_data), NUM_OF_PROC, exact)
+        for elem in output:
+            out_refcode_ids.append(elem)
         # break if partial
         if partial:
             break
@@ -338,7 +335,7 @@ def get_search_queryset_with_filtration(template):
             filtrs[f'refcode__{obj_name.lower()}__{filtr}'] = is_true
     structures = graphs.filter(**filtrs)
     analyse_data = structures.values_list('graph', flat=True)
-    return analyse_data, structures.count()
+    return analyse_data
 
 
 def get_search_queryset_with_filtration_qc(template):
@@ -351,7 +348,7 @@ def get_search_queryset_with_filtration_qc(template):
             filtrs[f'refcode__qc_{obj_name.lower()}__{filtr}'] = is_true
     structures = graphs.filter(**filtrs)
     analyse_data = structures.values_list('graph', flat=True)
-    return analyse_data, structures.count()
+    return analyse_data
 
 
 def get_template_graph(graph):
