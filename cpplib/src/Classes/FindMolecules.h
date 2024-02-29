@@ -58,7 +58,7 @@ struct FAM_Struct {
 	size_type sizePoints = 0;
 
 	// Constructors
-	constexpr FAM_Struct() noexcept {};
+	constexpr FAM_Struct() noexcept = default;
 	constexpr FAM_Struct(AtomTypeConteinerType&& t, PointConteinerType&& p) noexcept : types(std::move(t)), points(std::move(p)) {
 		sizeUnique = types.size();
 		sizePoints = points.size();
@@ -119,7 +119,7 @@ struct FAM_Struct {
 	}
 
 	// Debug Method
-	void writeXYZ(std::string name) {
+	void writeXYZ(const std::string& name) {
 		std::ofstream out;
 		const auto size = std::min(types.size(), points.size());
 		for (size_t i = 0; i < size; i++)
@@ -135,7 +135,7 @@ struct FAM_Cell : public geometry::Cell<T> {
 	using PointType = geometry::Point<T>;
 	using PointConteinerType = std::vector<PointType>;
 	using base = geometry::Cell<T>;
-	FAM_Cell(base&& cell) : base(std::move(cell)) {}
+	explicit FAM_Cell(base&& cell) : base(std::move(cell)) {}
 	template <class A, class AI> void GenerateSymm(FAM_Struct<A,AI,T>& fs, const std::vector<geometry::Symm<T>>& symm) const {
 		const size_t p_s = fs.points.size();
 		const size_t s_s = symm.size();
@@ -306,7 +306,7 @@ private:
 
 public:
 	constexpr FindMolecules() noexcept = delete;
-	constexpr FindMolecules(FAMSType && fs) : fs_(std::move(fs)) {}
+	explicit constexpr FindMolecules(FAMSType && fs) : fs_(std::move(fs)) {}
 	std::string findMolecules(const DistancesType& distances, std::vector<BondType>& bonds, const std::vector<AI>& invalids,std::string & errorMsg) {
 		std::vector<NodeType> net;
 		net.reserve(fs_.sizePoints);

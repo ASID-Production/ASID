@@ -43,8 +43,7 @@ private:
 public:
 	// Constructors
 	constexpr XAtom() = default;
-	constexpr XAtom(char input) {
-		simple_representation = input;
+	explicit constexpr XAtom(char input) : simple_representation(input) {
 		if (input > 0) {
 			types.set(input);
 		}
@@ -146,7 +145,7 @@ public:
 	// Operators
 	template <class X>
 	bool operator==(const Node<X,H,AI>& other) const noexcept {
-		return (((base&)(*this)) == ((const Node<X, H, AI>::base&)other)) &&
+		return (((base&)(*this)) == ((const struct Node<X, H, AI>::base&)other)) &&
 			(neighbours_.size() == other.neighbours_.size());
 	}
 
@@ -169,8 +168,8 @@ public:
 	}
 	template<class X>
 	bool notExactCompare(const Node<X,H,AI>& other) const noexcept {
-		return ((const base&)(*this)).type == ((const Node<X, H, AI>::base&)other).type &&
-			((const base&)(*this)).hAtoms <= ((const Node<X, H, AI>::base&)other).hAtoms &&
+		return ((const base&)(*this)).type == ((const struct Node<X, H, AI>::base&)other).type &&
+			((const base&)(*this)).hAtoms <= ((const struct Node<X, H, AI>::base&)other).hAtoms &&
 			(neighbours_.size() <= other.neighbours_.size());
 	}
 
