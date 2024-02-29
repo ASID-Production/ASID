@@ -366,7 +366,9 @@ static PyObject* cpplib_GenBonds(PyObject* self, PyObject* arg) {
 	for (Py_ssize_t i = 0; i < s; i++) {
 		PyObject* tp = PyList_GetItem(arg, i);
 		types.emplace_back(static_cast<AtomType>(PyLong_AsLong(PyList_GetItem(tp, 0))));
-		points.emplace_back(PyFloat_AsDouble(PyList_GetItem(tp, 1)), PyFloat_AsDouble(PyList_GetItem(tp, 2)), PyFloat_AsDouble(PyList_GetItem(tp, 3)));
+		points.emplace_back(static_cast<FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(tp, 1))), 
+							static_cast<FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(tp, 2))), 
+							static_cast<FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(tp, 3))));
 	}
 	FAM_Struct<AtomType, AtomicIDType, FloatingPointType> famstr(std::move(types), std::move(points));
 	std::string errM;
@@ -384,19 +386,17 @@ static PyObject* cpplib_GenBonds(PyObject* self, PyObject* arg) {
 static PyObject* cpplib_SearchMain(PyObject* self, PyObject* args) {
 	char* search = NULL;
 	PyObject* o = NULL;
-	long np = 0;
+	int np = 0;
 	bool exact = false;
-
-	PyArg_UnpackTuple(args, "sOlp", 4, 4, &search, &o, &np, &exact);
+	PyArg_ParseTuple(args, "sOip", &search, &o, &np, &exact);
 	const Py_ssize_t s = PyList_Size(o);
 	const int ds = static_cast<int>(s);
 	std::vector<const char*> data(ds, nullptr);
-	
+
 	for (Py_ssize_t i = 0; i < s; i++) {
 		data[i] = PyUnicode_AsUTF8(PyList_GetItem(o, i));
 	}
-
-	int * ret = SearchMain(search, &(data[0]), ds, np, exact);
+	int * ret = SearchMain(search, data.data(), ds, np, exact);
 	PyObject* ret_o = PyList_New(ret[0]);
 	for (Py_ssize_t i = 1; i <= ret[0]; i++)
 	{
@@ -410,7 +410,7 @@ static PyObject* cpplib_CompareGraph(PyObject* self, PyObject* args)
 	const char* s1 = NULL;
 	const char* s2 = NULL;
 	bool b = false;
-	PyArg_UnpackTuple(args, "ssp", 3, 3, &s1, &s2, &b);
+	PyArg_ParseTuple(args, "ssp", &s1, &s2, &b);
 
 	if (CompareGraph(s1, s2, b)) {
 		return Py_True;
@@ -426,7 +426,7 @@ static PyObject* cpplib_FindMoleculesInCell(PyObject* self, PyObject* args) {
 	PyObject* osymm = NULL;
 	PyObject* oxyz = NULL;
 	PyObject* otypes = NULL;
-	PyArg_UnpackTuple(args, "OOOO", 4, 4, &ocell, &osymm, &otypes, &oxyz);
+	PyArg_ParseTuple(args, "OOOO", &ocell, &osymm, &otypes, &oxyz);
 
 	float cell[6];
 	for (Py_ssize_t i = 0; i < 6; i++) {
@@ -464,7 +464,7 @@ static PyObject* cpplib_FindMoleculesWithoutCell(PyObject* self, PyObject* args)
 	PyObject* oxyz = NULL;
 	PyObject* otypes = NULL;
 
-	PyArg_UnpackTuple(args, "OO", 2, 2, &otypes, &oxyz);
+	PyArg_ParseTuple(args, "OO", &otypes, &oxyz);
 
 
 	Py_ssize_t s = PyList_Size(otypes);
@@ -489,7 +489,7 @@ static PyObject* cpplib_GenSymm(PyObject* self, PyObject* args) {
 	char* str = NULL;
 	PyObject* arg = NULL;
 
-	PyArg_UnpackTuple(args, "Os", 2, 2, &arg, &str);
+	PyArg_ParseTuple(args, "Os", &arg, &str);
 
 	const Py_ssize_t s = PyList_Size(arg);
 	std::vector<AtomType> types;

@@ -93,6 +93,14 @@ TEST(SearchMainTest, Tricycle897641f) {
 	ASSERT_NO_THROW({res = SearchMain(search, &dat, 1, 1, false);});
 	EXPECT_EQ(res[0], 0);
 }
+TEST(SearchMainTest, NoBonds) {
+	const char search[] {"1 1 0 6 0"};
+	const char data[] {"1 1 0 6 0"};
+	auto dat = &(data[0]);
+	const int* res {};
+	ASSERT_NO_THROW({res = SearchMain(search, &dat, 1, 1, false); });
+	EXPECT_EQ(res[0], 1);
+}
 TEST(SearchMainTest, Tricycle484021t) {
 	const char search[] {"1 14 16 6 0 6 0 6 0 6 0 6 0 6 0 6 0 6 0 6 0 6 0 6 0 6 0 6 0 6 0 1 2 1 6 2 3 3 4 3 7 4 5 4 8 5 6 7 10 7 11 8 9 9 10 10 14 11 12 12 13 13 14"};
 	const char data[] {"484021 42 47 8 0 6 0 7 0 6 3 7 0 6 1 6 0 6 2 6 0 6 0 6 0 6 1 6 1 6 1 6 0 6 1 6 1 6 1 6 1 6 0 6 0 6 1 6 1 6 0 6 0 6 1 6 1 6 1 6 1 6 1 6 0 6 0 6 0 9 0 6 0 9 0 6 0 9 0 6 0 9 0 53 0 53 0 1 2 2 3 2 4 3 5 3 6 5 7 6 8 6 9 7 8 7 10 9 11 9 12 10 13 10 14 11 15 11 16 12 17 13 18 14 19 15 20 15 21 16 22 17 21 18 23 19 23 20 24 20 25 21 26 22 24 24 27 25 28 25 29 26 28 27 30 29 30 32 31 32 33 32 34 33 35 33 36 34 37 34 38 36 39 36 40 38 41 38 40 40 42"};
