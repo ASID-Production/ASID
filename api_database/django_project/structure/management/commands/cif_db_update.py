@@ -201,7 +201,6 @@ def main(args, all_data=False, user_refcodes=''):
     cif_files = get_files(args)
     # split an array of cif files in parts of CHUNK_SIZE size
     for i in range(0, len(cif_files), CHUNK_SIZE):
-        print(i)
         logger_main.info(f"Start reading cif files")
         cif_blocks = manager_collect_cifs(cif_files[i:i + CHUNK_SIZE], user_refcodes)
         # Add all data from cif file

@@ -29,8 +29,7 @@
 from structure.models import (StructureCode, Author, Spacegroup, SYSTEMS,
                               Cell, CENTRINGS, ReducedCell, Journal,
                               Publication, RefcodePublicationConnection, Formula,
-                              ElementsSet1, ElementsSet2, ElementsSet3, ElementsSet4,
-                              ElementsSet5, ElementsSet6, ElementsSet7, ElementsSet8,
+                              get_elements_list, ElementsManager,
                               CompoundName, ExperimentalInfo, RefinementInfo,
                               CrystalAndStructureInfo)
 from django_project.loggers import all_cif_data_logger as logger_1
@@ -126,10 +125,6 @@ journal = {
 }
 
 
-def get_fields_list(model):
-    return [field.name for field in model._meta.get_fields()]
-
-
 def add_refcode(cif_block, refcode):
     data_in_cif = cif_block.keys()
     struct_obj, created = StructureCode.objects.get_or_create(refcode=refcode)
@@ -185,7 +180,8 @@ def add_author(cif_block, struct_obj, authors=None):
             author_obj, created = Author.objects.get_or_create(family_name=family, initials=initials)
         logger_1.info(f'Author: {author_obj}')
         struct_obj.authors.add(author_obj)
-    return author_obj
+        return author_obj
+    return 0
 
 
 def get_or_create_space_group(cif_block):
@@ -311,7 +307,7 @@ def add_cell(cif_block, space_group, struct_obj):
         add_cell_parms_with_error([1, cif_block], struct_obj)
 
 
-def add_reduced_cell(cif_block, struct_obj):
+def add_reduced_cell(struct_obj):
     centrings = dict((v, k) for v, k in CENTRINGS)
     centring = centrings[struct_obj.cell.centring]
     params = [struct_obj.cell.a, struct_obj.cell.b, struct_obj.cell.c,
@@ -425,6 +421,7 @@ def add_element_composition(cif_block, struct_obj):
     if Formula.objects.filter(refcode=struct_obj).exists():
         formula_sum = struct_obj.formula.formula_sum
         formula_moiety = struct_obj.formula.formula_moiety
+        elements_from_formula = dict()
         if formula_sum:
             elements = formula_sum.split()
             for element in elements:
@@ -434,15 +431,9 @@ def add_element_composition(cif_block, struct_obj):
                     count = float(count[0])
                 else:
                     count = 1
-                # we look for which model this atom is in and save the result
-                for model in [ElementsSet1, ElementsSet2,
-                              ElementsSet3, ElementsSet4, ElementsSet5,
-                              ElementsSet6, ElementsSet7, ElementsSet8]:
-                    if atom_type in get_fields_list(model):
-                        elem_obj, created = model.objects.get_or_create(refcode=struct_obj)
-                        setattr(elem_obj, atom_type, count)
-                        elem_obj.save()
-                        break
+                elements_from_formula[atom_type] = count
+            el_manager, created = ElementsManager.objects.get_or_create(refcode=struct_obj)
+            el_manager.save_elements(elements_from_formula)
             return 0
         elif formula_moiety:
             moiety_formula = dict()
@@ -532,16 +523,8 @@ def add_element_composition(cif_block, struct_obj):
                                 else:
                                     moiety_formula[atom_type] = count
             if moiety_formula:
-                for atom, count in moiety_formula.items():
-                    # we look for which model this atom is in and save the result
-                    for model in [ElementsSet1, ElementsSet2,
-                                  ElementsSet3, ElementsSet4, ElementsSet5,
-                                  ElementsSet6, ElementsSet7, ElementsSet8]:
-                        if atom in get_fields_list(model):
-                            elem_obj, created = model.objects.get_or_create(refcode=struct_obj)
-                            setattr(elem_obj, atom, count)
-                            elem_obj.save()
-                            break
+                el_manager, created = ElementsManager.objects.get_or_create(refcode=struct_obj)
+                el_manager.save_elements(moiety_formula)
                 return 0
     logger_1.warring(
         f'Any chemcal composition was not found\n'
@@ -614,7 +597,7 @@ def add_all_cif_data(cifs: dict):
         logger_1.info(f'Add unit cell')
         add_cell(cif_block[1], space_group, struct_obj)
         logger_1.info(f'Add reduced cell')
-        add_reduced_cell(cif_block[1], struct_obj)
+        add_reduced_cell(struct_obj)
         logger_1.info(f'Add compound name')
         add_universal(CompoundName, struct_obj, cif_block, compound_names)
         logger_1.info(f'Add experimental info')

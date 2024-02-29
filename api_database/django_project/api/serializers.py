@@ -34,11 +34,19 @@ from structure.models import (StructureCode, Author, Spacegroup, Cell,
                               ReducedCell, ExperimentalInfo, RefinementInfo,
                               CoordinatesBlock, CrystalAndStructureInfo,
                               CifFile)
+from qc_structure.models import (QCStructureCode, QCCell, QCCompoundName, QCFormula,
+                                 QCReducedCell, QCCoordinatesBlock, QCProgram,
+                                 QCProperties, VaspFile)
 from djoser.serializers import UserSerializer, UserCreateSerializer
 from django.contrib.auth import get_user_model
 from .fields import NodesListField, EdgesListField
 
 User = get_user_model()
+
+
+#########################################################################
+#                    Structure Serializers                            #
+#########################################################################
 
 
 class AuthorSerializer(serializers.ModelSerializer):
@@ -213,3 +221,131 @@ class SearchSerializer(serializers.Serializer):
     nodes = NodesListField(child=serializers.CharField(max_length=100), allow_empty=False, required=True)
     # edges input: ['(1, 2, {"distance": "1.250",})', '(2, 3, {"distance": "1.340",})', ...]
     edges = EdgesListField(child=serializers.CharField(max_length=100), allow_empty=True)
+    chunk_size = serializers.IntegerField(required=False, default=0, min_value=0)
+    iter_num = serializers.IntegerField(required=False, default=0, min_value=0)
+
+
+#########################################################################
+#                    QCStructure Serializers                            #
+#########################################################################
+
+
+def get_fields_list(model):
+    return [field.name for field in model._meta.get_fields()]
+
+
+class QCCellSerializer(serializers.ModelSerializer):
+    spacegroup = SpacegroupSerializer(read_only=True)
+    centring = SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = QCCell
+        fields = ('id', 'spacegroup', 'centring', 'a', 'b', 'c', 'al', 'be', 'ga', 'zvalue')
+
+    def get_centring(self, obj):
+        return obj.get_centring_display()
+
+
+class QCReducedCellSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QCReducedCell
+        fields = ('id', 'a', 'b', 'c', 'al', 'be', 'ga', 'volume')
+
+
+class QCCompoundNameSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QCCompoundName
+        fields = ('id', 'systematic_name', 'trivial_name')
+
+
+class QCFormulaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QCFormula
+        fields = ('id', 'formula_moiety', 'formula_sum')
+
+
+class QCCoordinatesSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QCCoordinatesBlock
+        fields = ('id', 'coordinates', 'smiles', 'graph')
+
+
+class QCProgramSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QCProgram
+        fields = ('id', 'orca', 'vasp', 'qchem', 'gaussian',
+                  'nwchem', 'abinit', 'crystal', 'gamess',
+                  'mopac', 'quantum_espresso')
+
+
+class QCPropertiesSerializer(serializers.ModelSerializer):
+    energy = SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = QCProperties
+        fields = ('id', 'energy')
+
+    def get_energy(self, obj):
+        try:
+            energy = obj.energy
+            if energy:
+                return str(energy) + ' eV'
+        except Exception:
+            pass
+
+
+class QCRefcodeFullSerializer(serializers.ModelSerializer):
+    formula = QCFormulaSerializer(read_only=True, source='qc_formula')
+    cell = QCCellSerializer(read_only=True, source='qc_cell')
+    reduced_cells = QCReducedCellSerializer(many=True, read_only=True, source='qc_reduced_cells')
+    compound_name = QCCompoundNameSerializer(read_only=True, source='qc_name')
+    coordinates = QCCoordinatesSerializer(read_only=True, source='qc_coordinates')
+    properties = QCPropertiesSerializer(read_only=True, source='qc_properties')
+    programs = QCProgramSerializer(read_only=True, source='qc_prog')
+
+    class Meta:
+        model = QCStructureCode
+        fields = (
+            'id', 'refcode', 'cell', 'reduced_cells', 'compound_name',
+            'formula', 'coordinates', 'properties', 'programs'
+        )
+
+
+class QCRefcodeShortSerializer(serializers.ModelSerializer):
+    formula = SerializerMethodField(read_only=True, source='qc_formula')
+    program = SerializerMethodField(read_only=True, source='qc_prog')
+
+    class Meta:
+        model = QCStructureCode
+        fields = (
+            'id', 'refcode', 'program', 'formula'
+        )
+
+    def get_formula(self, obj):
+        try:
+            formula = QCFormula.objects.get(refcode=obj)
+            if formula.formula_moiety:
+                return formula.formula_moiety
+            return formula.formula_sum
+        except Exception:
+            pass
+
+    def get_program(self, obj):
+        try:
+            program = QCProgram.objects.get(refcode=obj)
+            fields = get_fields_list(QCProgram)
+            for field in fields:
+                if field not in ['id', 'refcode']:
+                    if getattr(program, field):
+                        return field
+        except Exception:
+            pass
+
+
+class VaspUploadSerializer(serializers.ModelSerializer):
+    systematic_name = serializers.CharField(max_length=200, required=False, default='')
+    trivial_name = serializers.CharField(max_length=200, required=False, default='')
+
+    class Meta:
+        model = VaspFile
+        fields = ('file', 'systematic_name', 'trivial_name')
