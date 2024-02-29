@@ -33,7 +33,10 @@ cmake_minimum_required(VERSION 3.14)
 # GoogleTest requires at least C++14
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+if (POLICY CMP0135)
 cmake_policy(SET CMP0135 OLD) 
+endif()
 include(FetchContent)
 FetchContent_Declare(
   gest
@@ -64,6 +67,6 @@ add_custom_command(
                 ${CMAKE_CURRENT_BINARY_DIR}/cpplib/Tests/module/BondLength.ini)
 
 include(GoogleTest)
-# gtest_discover_tests(${PROJECT_NAME})
+gtest_discover_tests(${PROJECT_NAME})
 
 

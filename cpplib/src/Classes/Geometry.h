@@ -191,17 +191,6 @@ namespace geometry {
 	public:
 		constexpr Matrix() noexcept = default;
 
-		constexpr Matrix(const Matrix<T>& r) noexcept {
-			if (this != &r) A = r.A;
-		}
-		constexpr Matrix<T>& operator=(const Matrix<T>& r) noexcept {
-			if (this != &r) A = r.A;
-			return *this;
-		}
-		constexpr Matrix<T>& operator=(Matrix<T>&& r) noexcept {
-			if (this != &r) A = std::move(r.A);
-			return *this;
-		}
 		template<class T2> explicit constexpr Matrix(const Matrix<T2>& r) noexcept {
 			A[0][0] = static_cast<T>(r.A[0][0]);
 			A[0][1] = static_cast<T>(r.A[0][1]);
@@ -212,10 +201,6 @@ namespace geometry {
 			A[2][0] = static_cast<T>(r.A[2][0]);
 			A[2][1] = static_cast<T>(r.A[2][1]);
 			A[2][2] = static_cast<T>(r.A[2][2]);
-		}
-		constexpr Matrix(Matrix<T>&& r) noexcept {
-			if (this == &r) return;
-			A = std::move(r.A);
 		}
 		template<class T2> explicit constexpr Matrix(Matrix<T2>&& r) noexcept {
 
@@ -519,25 +504,7 @@ namespace geometry {
 		matrix_t mat;
 		point_t point;
 		uint8_t mult = 1;
-		Symm() {}
-		Symm(const Symm<T>& in) noexcept : mult(in.mult), point(in.point), mat(in.mat) {}
-		Symm(Symm<T>&& in) noexcept : mult(std::move(in.mult)), point(std::move(in.point)), mat(std::move(in.mat)) {}
-		Symm<T>& operator= (const Symm<T>& other) noexcept {
-			if (&other != this) {
-				mat = other.mat;
-				point = other.point;
-				mult = other.mult;
-			}
-			return *this;
-		}
-		Symm<T>& operator= (Symm<T>&& other) noexcept {
-			if (&other != this) {
-				mat = other.mat;
-				point = other.point;
-				mult = other.mult;
-			}
-			return *this;
-		}
+		Symm() = default;
 		Symm<T> MirrorSymm() const {
 			Symm<T> out;
 			out.mat = this->mat.Invert();

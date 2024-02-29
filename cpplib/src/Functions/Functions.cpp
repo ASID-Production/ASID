@@ -365,7 +365,7 @@ static PyObject* cpplib_GenBonds(PyObject* self, PyObject* arg) {
 
 	for (Py_ssize_t i = 0; i < s; i++) {
 		PyObject* tp = PyList_GetItem(arg, i);
-		types.emplace_back(PyLong_AsLong(PyList_GetItem(tp, 0)));
+		types.emplace_back(static_cast<AtomType>(PyLong_AsLong(PyList_GetItem(tp, 0))));
 		points.emplace_back(PyFloat_AsDouble(PyList_GetItem(tp, 1)), PyFloat_AsDouble(PyList_GetItem(tp, 2)), PyFloat_AsDouble(PyList_GetItem(tp, 3)));
 	}
 	FAM_Struct<AtomType, AtomicIDType, FloatingPointType> famstr(std::move(types), std::move(points));
