@@ -84,7 +84,7 @@ def set_filter(analyse_mol):
                 result[attr_name] = [True, 'Substructure1']
             else:
                 result[attr_name] = [False, 'Substructure1']
-        if {'C', 'N', 'O'}.issubset(elem_found):
+        if elem_found.issubset({'C', 'N', 'O'}):
             result['only_CHNO'] = [True, 'Substructure1']
         else:
             result['only_CHNO'] = [False, 'Substructure1']

@@ -35,7 +35,6 @@ from qc_structure.export.cif import qc_get_cif_content
 from .serializers import (RefcodeShortSerializer, RefcodeFullSerializer, CifUploadSerializer,
                           SearchSerializer, QCRefcodeShortSerializer, QCRefcodeFullSerializer,
                           VaspUploadSerializer)
-from .serializers import RefcodeShortSerializer, RefcodeFullSerializer, CifUploadSerializer, SearchSerializer
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from django.http import HttpResponse
@@ -107,10 +106,10 @@ def structure_search(
     chunk_size = serializer.data.get('chunk_size')
     iter_num = serializer.data.get('iter_num')
     search_type = serializer.data.get('search_type')
-    if chunk_size:
-        global CHUNK_SIZE
-        CHUNK_SIZE = chunk_size
-
+    partial = True
+    if not chunk_size:
+        partial = False
+        chunk_size = CHUNK_SIZE
     graph = nx.Graph()
     graph.add_nodes_from(serializer.data.get('nodes'))
     graph.add_edges_from(serializer.data.get('edges'))
@@ -126,7 +125,7 @@ def structure_search(
             status=status.HTTP_400_BAD_REQUEST
         )
     analyse_data_split = list()
-    if chunk_size and request.user.is_authenticated:
+    if partial and request.user.is_authenticated:
         data = cache.get(f'{request.user}-cache')
         if (
                 data and
@@ -140,24 +139,22 @@ def structure_search(
             analyse_data = get_search_queryset_with_filtration(template_data)
         else:
             analyse_data = get_search_queryset_with_filtration_qc(template_data)
-        # split search for CHUNK_SIZE structures parts and then merge the result
-        analyse_data_split = list(zip_longest(*[iter(analyse_data)] * CHUNK_SIZE, fillvalue=''))
-        cache.set(f'{request.user}-cache', {
-            'analyse_data_split': analyse_data_split,
-            'search_type': search_type,
-            'template_data': template_data,
-            'chunk_size': chunk_size
-        })
+        # split search for chunk_size structures parts and then merge the result
+        analyse_data_split = list(zip_longest(*[iter(analyse_data)] * chunk_size, fillvalue=''))
+        if partial and request.user.is_authenticated:
+            cache.set(f'{request.user}-cache', {
+                'analyse_data_split': analyse_data_split,
+                'search_type': search_type,
+                'template_data': template_data,
+                'chunk_size': chunk_size
+            })
     out_refcode_ids = []
-    partial = False
     for analyse_data in analyse_data_split:
         # if partial return is needed
-        if chunk_size and iter_num < len(analyse_data_split):
-            partial = True
+        if partial and iter_num < len(analyse_data_split):
             analyse_data = analyse_data_split[iter_num]
         output = cpplib.SearchMain(template_data, list(analyse_data), NUM_OF_PROC, exact)
-        for elem in output:
-            out_refcode_ids.append(elem)
+        out_refcode_ids.extend(output)
         # break if partial
         if partial:
             break
