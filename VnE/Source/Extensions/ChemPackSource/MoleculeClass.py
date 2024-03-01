@@ -198,24 +198,15 @@ class Molecule(aEntity):
 
     def genBonds(self):
         import os
+        import cpplib
         if self.__len__() < 1:
             return
-        b = [(c_float * 4)(*([c_float(a.atom_type)].__add__([c_float(coord) for coord in a.coord]))) for a in self.children]
-        p = (POINTER(c_float) * len(b))(*b)
-        if os.name == 'nt':
-            direct = f'{os.path.dirname(__file__)}/GenBonds.dll'
-        elif os.name == 'posix':
-            direct = f'{os.path.dirname(__file__)}/GenBonds.so'
-        else:
-            raise Exception('Unsupported operating system')
-        lib = CDLL(direct)
-        lib.genBonds.restype = c_char_p
-        lib.genBonds.argtypes = (c_uint, POINTER(POINTER(c_float)))
-        line = lib.genBonds(c_uint(len(p)), p)
-        line = line.decode().split('\n')
-        line = [x for x in line if x]
-        for i, pair in enumerate(line):
-            pair = [self.children[int(x)] for x in pair.split(':')]
+        b = [[int(x.atom_type), float(x.coord[0]), float(x.coord[1]), float(x.coord[2])] for x in self.children]
+        res = cpplib.GenBonds(b).split()
+        res = [x.split(':') for x in res]
+        res = [[int(x[0]), int(x[1])] for x in res]
+        for ind in res:
+            pair = [self.children[ind[0]], self.children[ind[1]]]
             bond = Bond(*pair)
             pair[0].addBond(bond)
             pair[1].addBond(bond)
