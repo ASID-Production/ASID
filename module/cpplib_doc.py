@@ -82,6 +82,6 @@ def gen_symm(atoms: List[List[int | float]], symop: str):
         atoms: list of [list of atomic type and three real-space coordinate]
 			   type is integer, coordinates are floating point numbers.
 			   example [ [ 1 0.0 0.0 0.0 ], [9 0.5 0.5 0.5], ... ]
-		symops:  SYMM-code for structure. Should contain 'x,y,z' (equivalent) as first ([0]) symmetry - it is ignored.	
+		symops:  SYMM-code for structure. Should not be equivalent operation ('x,y,z').	
     """
     return cpplib.GenSymm(atoms, symop)

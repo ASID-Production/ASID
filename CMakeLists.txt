@@ -28,91 +28,83 @@
 
 cmake_minimum_required (VERSION 3.19)
 
+# add_compile_definitions(DEBUG_MESS_ON)
+
 if (POLICY CMP0141)
-  cmake_policy(SET CMP0141 NEW)
-  set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<IF:$<AND:$<C_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:MSVC>>,$<$<CONFIG:Debug,RelWithDebInfo>:EditAndContinue>,$<$<CONFIG:Debug,RelWithDebInfo>:ProgramDatabase>>")
+    cmake_policy(SET CMP0141 NEW)
+    set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<IF:$<AND:$<C_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:MSVC>>,$<$<CONFIG:Debug,RelWithDebInfo>:EditAndContinue>,$<$<CONFIG:Debug,RelWithDebInfo>:ProgramDatabase>>")
 endif()
 
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 project(cpplibLib)
-find_package(Python COMPONENTS Interpreter Development EXACT 3.10)
-message(NOTICE "Python include dirs: ${Python3_INCLUDE_DIRS}")
-include_directories(SYSTEM ${Python3_INCLUDE_DIRS})
+    find_package(Python COMPONENTS Interpreter Development EXACT 3.10)
+    include_directories(SYSTEM ${Python3_INCLUDE_DIRS})
 
-add_library(cpplibLib "cpplib/src/Functions/Functions.cpp" 
-                               "cpplib/src/BaseHeaders/Support.h"
-                               "cpplib/src/Classes/Distances.h"
-                               "cpplib/src/Classes/FindMolecules.h"
-                               "cpplib/src/Classes/Hash.h"
-                               "cpplib/src/Classes/Interfaces.h"
-                               "cpplib/src/Classes/MoleculeGraph.h"
-                               "cpplib/src/Classes/Engine.h"
-                               "cpplib/src/Classes/Geometry.h"
-                               "cpplib/src/Classes/SearchGraph.h"
-                               "cpplib/src/Platform/Definitions.h"
-                               "cpplib/src/Functions/AllInOneAndCurrent.h" 
-                               "cpplib/src/Classes/FindGeometry.h")
-target_link_libraries(cpplibLib ${PYTHON_LIBRARIES}
-        Python::Python
-)
+    add_library(cpplibLib "cpplib/src/Functions/Functions.cpp" 
+                           "cpplib/src/BaseHeaders/Support.h"
+                           "cpplib/src/BaseHeaders/DebugMes.h"
+                           "cpplib/src/Classes/Distances.h"
+                           "cpplib/src/Classes/FindMolecules.h"
+                           "cpplib/src/Classes/Hash.h"
+                           "cpplib/src/Classes/Interfaces.h"
+                           "cpplib/src/Classes/MoleculeGraph.h"
+                           "cpplib/src/Classes/Engine.h"
+                           "cpplib/src/Classes/Geometry.h"
+                           "cpplib/src/Classes/SearchGraph.h"
+                           "cpplib/src/Platform/Definitions.h"
+                           "cpplib/src/Functions/AllInOneAndCurrent.h" 
+                           "cpplib/src/Classes/FindGeometry.h")
+    target_link_libraries(cpplibLib ${PYTHON_LIBRARIES} Python::Python)
 
-target_include_directories(cpplibLib
-    PUBLIC 
+    target_include_directories(cpplibLib PUBLIC 
         ${PROJECT_SOURCE_DIR}/cpplib/src/BaseHeaders
         ${PROJECT_SOURCE_DIR}/cpplib/src/Classes
         ${PROJECT_SOURCE_DIR}/cpplib/src/Platform
-)
+    )
 
 ############################################################
 # Create a library cpplib
 ############################################################
 
 project(cpplib)
-find_package(Python COMPONENTS Interpreter Development EXACT 3.10)
+    find_package(Python COMPONENTS Interpreter Development EXACT 3.10)
 
-message(NOTICE "Python include dirs: ${Python3_INCLUDE_DIRS}")
-include_directories(SYSTEM ${Python3_INCLUDE_DIRS})
+    include_directories(SYSTEM ${Python3_INCLUDE_DIRS})
 
 
-#Generate the shared library from the library sources
-if(CMAKE_BUILD_TYPE MATCHES Release)
-  add_library(cpplib SHARED "cpplib/src/Functions/Functions.cpp")
-target_link_libraries(cpplib ${PYTHON_LIBRARIES}
-        Python::Python
-)
-set_target_properties(
-    cpplib
-    PROPERTIES
-        PREFIX ""
-        OUTPUT_NAME "cpplib"
-        LINKER_LANGUAGE C
-    )
+    #Generate the shared library from the library sources
+    if(CMAKE_BUILD_TYPE MATCHES Release)
+        add_library(cpplib SHARED "cpplib/src/Functions/Functions.cpp")
+        target_link_libraries(cpplib ${PYTHON_LIBRARIES} Python::Python)
+        set_target_properties(cpplib PROPERTIES
+            PREFIX ""
+            OUTPUT_NAME "cpplib"
+            LINKER_LANGUAGE C
+        )
 
-target_include_directories(cpplib
-    PUBLIC 
+    target_include_directories(cpplib PUBLIC 
         ${PROJECT_SOURCE_DIR}/cpplib/src/BaseHeaders
         ${PROJECT_SOURCE_DIR}/cpplib/src/Classes
         ${PROJECT_SOURCE_DIR}/cpplib/src/Platform
-)
+    )
 
-if (UNIX)
-    add_custom_command(
-        TARGET cpplib POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy
+    if (UNIX)
+        add_custom_command(
+            TARGET cpplib POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy
                 $<TARGET_FILE:cpplib>
                 ${CMAKE_SOURCE_DIR}/module/cpplib.so)
-endif (UNIX)
+    endif (UNIX)
 
-if (WIN32)
-    add_custom_command(
-        TARGET cpplib POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy
+    if (WIN32)
+        add_custom_command(
+            TARGET cpplib POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy
                 $<TARGET_FILE:cpplib>
                 ${CMAKE_SOURCE_DIR}/module/cpplib.pyd)
-endif (WIN32)
+    endif (WIN32)
 
 endif(CMAKE_BUILD_TYPE MATCHES Release)
 add_subdirectory ("cpplib/Tests")
-

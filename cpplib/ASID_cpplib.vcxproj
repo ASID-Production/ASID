@@ -64,18 +64,25 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
+    <LibraryPath>C:\Users\Alexander\AppData\Local\Programs\Python\Python310\libs;C:\Users\Alexander\AppData\Local\Programs\Python\Python310;$(VC_LibraryPath_x86);$(WindowsSDK_LibraryPath_x86)</LibraryPath>
+    <IncludePath>C:\Users\Alexander\AppData\Local\Programs\Python\Python310\include;C:\Users\Alexander\AppData\Local\Programs\Python\Python310;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <LibraryPath>$(LibraryPath)</LibraryPath>
+    <LibraryPath>C:\Users\Alexander\AppData\Local\Programs\Python\Python310\libs;C:\Users\Alexander\AppData\Local\Programs\Python\Python310;$(LibraryPath)</LibraryPath>
     <TargetExt>.pyd</TargetExt>
+    <IncludePath>C:\Users\Alexander\AppData\Local\Programs\Python\Python310\include;C:\Users\Alexander\AppData\Local\Programs\Python\Python310;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>true</LinkIncremental>
+    <LibraryPath>C:\Users\Alexander\AppData\Local\Programs\Python\Python310\libs;C:\Users\Alexander\AppData\Local\Programs\Python\Python310;$(VC_LibraryPath_x86);$(WindowsSDK_LibraryPath_x86)</LibraryPath>
+    <IncludePath>C:\Users\Alexander\AppData\Local\Programs\Python\Python310\include;C:\Users\Alexander\AppData\Local\Programs\Python\Python310;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
     <TargetExt>.pyd</TargetExt>
+    <LibraryPath>C:\Users\Alexander\AppData\Local\Programs\Python\Python310\libs;C:\Users\Alexander\AppData\Local\Programs\Python\Python310;$(VC_LibraryPath_x64);$(WindowsSDK_LibraryPath_x64)</LibraryPath>
+    <IncludePath>C:\Users\Alexander\AppData\Local\Programs\Python\Python310\include;C:\Users\Alexander\AppData\Local\Programs\Python\Python310;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -132,6 +139,7 @@
     <ClCompile Include="src\functions\Functions.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\BaseHeaders\DebugMes.h" />
     <ClInclude Include="src\baseheaders\Support.h" />
     <ClInclude Include="src\classes\Distances.h" />
     <ClInclude Include="src\classes\Engine.h" />
