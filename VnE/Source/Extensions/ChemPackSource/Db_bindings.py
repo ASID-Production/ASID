@@ -39,29 +39,54 @@ SERVER_PROC = None
 
 class Session:
     def __init__(self):
-        self.url_base = 'http://127.0.0.1:8000'
-        self.user_name = 'VnE'
-        self.user_password = '12345678AsD'
+        self.url_base = None
         self.user_token = None
-        self.changeUser(self.user_name, self.user_password)
 
-    def changeUser(self, name, password):
-        b = requests.post(f'{self.url_base}/api/auth/users/', data={
-            "email": "user@example.com",
-            "username": f"{name}",
-            "first_name": "none",
-            "last_name": "none",
-            "password": f"{password}"
-        })
-        token = requests.post(f'{self.url_base}/api/auth/token/login/', data={
-            "username": f"{name}",
-            "password": f"{password}"
-        })
-        self.user_token = json.loads(token.text)['auth_token']
+    def connectServer(self, address, port):
+        url_base = f'http://{address}:{port}'
+        if url_base != self.url_base:
+            self.user_token = None
+            self.url_base = url_base
 
-    def changeUrlBase(self, address):
-        self.url_base = f'http://{address}'
-        self.changeUser(self.user_name, self.user_password)
+    def login(self, name, passwd):
+        if self.url_base is not None:
+            b = requests.post(f'{self.url_base}/api/auth/users/', data={
+                "email": "user@example.com",
+                "username": f"{name}",
+                "first_name": "none",
+                "last_name": "none",
+                "password": f"{passwd}"
+            })
+            token = requests.post(f'{self.url_base}/api/auth/token/login/', data={
+                "username": f"{name}",
+                "password": f"{passwd}"
+            })
+            self.user_token = json.loads(token.text)['auth_token']
+
+    def startServer(self, port):
+        global SERVER_PROC
+        if SERVER_PROC is None:
+            import subprocess
+            import os
+            if os.name == 'nt':
+                proc_cmd1 = '../api_database/venv/Scripts/python.exe ../api_database/django_project/manage.py migrate'.split(' ')
+                proc_cmd2 = '../api_database/venv/Scripts/python.exe ../api_database/django_project/manage.py runserver'.split(' ')
+            elif os.name == 'posix':
+                proc_cmd1 = '../api_database/venv/bin/python3 ../api_database/django_project/manage.py migrate'.split(' ')
+                proc_cmd2 = '../api_database/venv/bin/python3 ../api_database/django_project/manage.py runserver'.split(' ')
+            proc = subprocess.Popen(proc_cmd1)
+            while proc.poll() is None:
+                pass
+            proc = subprocess.Popen(proc_cmd2)
+            SERVER_PROC = proc
+            try:
+                proc.wait(timeout=5)
+                raise Exception('Server Error')
+            except subprocess.TimeoutExpired:
+                pass
+            self.url_base = f'http://localhost:{port}'
+            self.user_token = None
+
 
 
 def search(text, search_type):
@@ -161,21 +186,7 @@ def create_table(data):
 
 
 def setup():
-    import subprocess
-    import os
-    if os.name == 'nt':
-        proc_cmd = '../api_database/venv/Scripts/python.exe ../api_database/django_project/manage.py runserver'.split(' ')
-    elif os.name == 'posix':
-        proc_cmd = '../api_database/venv/bin/python3 ../api_database/django_project/manage.py runserver'.split(' ')
-    proc = subprocess.Popen(proc_cmd)
-    global SERVER_PROC
     global SESSION
-    SERVER_PROC = proc
-    try:
-        proc.wait(timeout=5)
-        raise Exception('Server Error')
-    except subprocess.TimeoutExpired:
-        pass
     SESSION = Session()
     return
 

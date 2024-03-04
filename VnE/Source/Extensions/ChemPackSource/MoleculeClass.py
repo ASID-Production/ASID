@@ -55,6 +55,8 @@ class DefaultData:
     def __getattr__(self, item):
         if item in DefaultData.__default_data:
             return DefaultData.__default_data[item]
+        elif item.startswith('__') and item.endswith('__'):
+            raise AttributeError
         else:
             return None
 
@@ -101,12 +103,18 @@ class aEntity(ABC):
 
     def removeChild(self, child):
         if child in self.children:
-            self.children.pop(child)
+            self.children.remove(child)
 
 
 class Bond:
     def __init__(self, atom1, atom2):
         self._parents = [atom1, atom2]
+
+    def __contains__(self, item):
+        return self._parents.__contains__(item)
+
+    def get(self, atom):
+        return self._parents[self._parents.index(atom)-1]
 
     def changeParent(self, pos, parent):
         self._parents[pos] = parent
@@ -151,6 +159,9 @@ class Atom(DefaultData):
     def parent(self):
         return self._parent
 
+    def setParent(self, parent):
+        self._parent = parent
+
     def remove(self):
         if self.parent() is not None:
             self.parent().removeChild(self)
@@ -167,7 +178,7 @@ class Molecule(aEntity):
     """Molecule class"""
 
     def __init__(self, parent=None):
-        super().__init__(parent)
+        aEntity.__init__(self, parent=parent)
         self._points_list = None
 
     def addChild(self, child):
@@ -177,6 +188,7 @@ class Molecule(aEntity):
         elif type(child) is Atom:
             if child not in self.children:
                 self.children.append(child)
+                child.setParent(self)
 
     def assignPoint(self, point):
         self._points_list = point
@@ -186,24 +198,15 @@ class Molecule(aEntity):
 
     def genBonds(self):
         import os
+        import cpplib
         if self.__len__() < 1:
             return
-        b = [(c_float * 4)(*([c_float(a.atom_type)].__add__([c_float(coord) for coord in a.coord]))) for a in self.children]
-        p = (POINTER(c_float) * len(b))(*b)
-        if os.name == 'nt':
-            direct = f'{os.path.dirname(__file__)}/GenBonds.dll'
-        elif os.name == 'posix':
-            direct = f'{os.path.dirname(__file__)}/GenBonds.so'
-        else:
-            raise Exception('Unsupported operating system')
-        lib = CDLL(direct)
-        lib.genBonds.restype = c_char_p
-        lib.genBonds.argtypes = (c_uint, POINTER(POINTER(c_float)))
-        line = lib.genBonds(c_uint(len(p)), p)
-        line = line.decode().split('\n')
-        line = [x for x in line if x]
-        for i, pair in enumerate(line):
-            pair = [self.children[int(x)] for x in pair.split(':')]
+        b = [[int(x.atom_type), float(x.coord[0]), float(x.coord[1]), float(x.coord[2])] for x in self.children]
+        res = cpplib.GenBonds(b).split()
+        res = [x.split(':') for x in res]
+        res = [[int(x[0]), int(x[1])] for x in res]
+        for ind in res:
+            pair = [self.children[ind[0]], self.children[ind[1]]]
             bond = Bond(*pair)
             pair[0].addBond(bond)
             pair[1].addBond(bond)
@@ -213,7 +216,7 @@ class MoleculeSystem(aEntity):
     """Molecule system class, main class"""
 
     def __init__(self, parent=None):
-        super().__init__(parent)
+        aEntity.__init__(self, parent=parent)
 
     def genBonds(self):
         for child in self.children:

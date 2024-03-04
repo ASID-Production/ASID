@@ -188,17 +188,28 @@ class DbSettings(Settings_dialog.Ui_Dialog, QtWidgets.QDialog):
         super().__init__()
         self.setupUi(self)
         self.setWindowTitle('Db Settings')
-        self.pushButton.pressed.connect(lambda: self.setServerAddress(self.lineEdit.text()))
-        self.pushButton_2.pressed.connect(lambda: self.setUser(self.lineEdit_2.text(), self.lineEdit_3.text()))
-        self.pushButton_3.pressed.connect(lambda: self.setUser(self.lineEdit_2.text(), self.lineEdit_3.text()))
+        self.pushButton.pressed.connect(lambda: self.connectServer(self.lineEdit.text(), self.lineEdit_2.text()))
+        self.pushButton_2.pressed.connect(lambda: self.startServer(self.lineEdit_2.text()))
+        self.pushButton_3.pressed.connect(lambda: self.login(self.lineEdit_3.text(), self.lineEdit_4.text()))
 
-    def setUser(self, user_name, password):
-        if user_name and password:
-            Db_bindings.SESSION.changeUser(user_name, password)
+    def connectServer(self, address, port):
+        if len(address.split('.')) == 4:
+            try:
+                int(port)
+            except ValueError:
+                return
+            Db_bindings.SESSION.connectServer(address, port)
 
-    def setServerAddress(self, address):
-        if address:
-            Db_bindings.SESSION.changeUrlBase(address)
+    def startServer(self, port):
+        try:
+            int(port)
+        except ValueError:
+            return
+        Db_bindings.SESSION.startServer(port)
+
+    def login(self, name, passwd):
+        if name and passwd:
+            Db_bindings.SESSION.login(name, passwd)
 
 
 from .ui import base_search_window
