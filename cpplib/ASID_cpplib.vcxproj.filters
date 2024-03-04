@@ -56,6 +56,9 @@
     <ClInclude Include="src\platform\Definitions.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="src\BaseHeaders\DebugMes.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\module\BondLength.ini">

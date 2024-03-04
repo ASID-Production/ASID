@@ -230,7 +230,7 @@ private:
 		//-1 6 7 8 -2 8 16 -3 9 17 0
 		while (xty != 0) {
 			A real(static_cast<char>(xty));
-			int next_xty;
+			int next_xty = 0;
 			auto& xtsize = A::size;
 			for (char i = 0; i < xtsize; i++)
 			{

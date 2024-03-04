@@ -25,6 +25,7 @@
 //  ORCID:       0009-0003-5298-6836
 //
 // ******************************************************************************************
+#include "../BaseHeaders/DebugMes.h"
 #include "../Classes/Interfaces.h"
 #include "../Platform/Definitions.h"
 #include "AllInOneAndCurrent.h"
@@ -38,11 +39,17 @@ static void ChildThreadFunc(const CurrentRequestGraph& input, const AtomicIDType
 
 const CurrentDistances* p_distances = nullptr;
 
-API bool CompareGraph(const char* search1, const char* search2, const bool exact) {
+bool CompareGraph(const char* search1, const char* search2, const bool exact) {
+	deb_write("CompareGraph start");
 	CurrentSearchGraph graph;
+
+	deb_write("CompareGraph CurrentSearchGraph start ReadInput");
 	graph.setupInput(CurrentRequestGraph::ReadInput(search1));
+	deb_write("CompareGraph CurrentSearchGraph start ReadData");
 	graph.setupData(CurrentDatabaseGraph::ReadData(search2));
+	deb_write("CompareGraph CurrentSearchGraph start prepareSearch");
 	graph.prepareToSearch();
+	deb_write("CompareGraph CurrentSearchGraph start FullSearch");
 	return graph.startFullSearch(exact);
 }
 API int* SearchMain(const char* search, const char** data, const int data_s, const int np, const bool exact) {
@@ -384,19 +391,23 @@ static PyObject* cpplib_GenBonds(PyObject* self, PyObject* arg) {
 
 // SearchMain(
 static PyObject* cpplib_SearchMain(PyObject* self, PyObject* args) {
-	char* search = NULL;
+	const char* search = NULL;
 	PyObject* o = NULL;
 	int np = 0;
-	bool exact = false;
+	int exact = 0;
 	PyArg_ParseTuple(args, "sOip", &search, &o, &np, &exact);
 	const Py_ssize_t s = PyList_Size(o);
 	const int ds = static_cast<int>(s);
 	std::vector<const char*> data(ds, nullptr);
 
+	deb_write("search = ", search);
+	deb_write("np = ", np);
+	deb_write("exact = ", exact);
+	deb_write("py_CompareGraph invoke CompareGraph");
 	for (Py_ssize_t i = 0; i < s; i++) {
 		data[i] = PyUnicode_AsUTF8(PyList_GetItem(o, i));
 	}
-	int * ret = SearchMain(search, data.data(), ds, np, exact);
+	int* ret = SearchMain(search, data.data(), ds, np, (exact != 0));
 	PyObject* ret_o = PyList_New(ret[0]);
 	for (Py_ssize_t i = 1; i <= ret[0]; i++)
 	{
@@ -405,18 +416,23 @@ static PyObject* cpplib_SearchMain(PyObject* self, PyObject* args) {
 	return ret_o;
 }
 
-static PyObject* cpplib_CompareGraph(PyObject* self, PyObject* args)
+static PyObject * cpplib_CompareGraph(PyObject * self, PyObject * args)
 {
+	deb_write("py_CompareGraph in");
 	const char* s1 = NULL;
 	const char* s2 = NULL;
-	bool b = false;
+	int b = 0;
+	deb_write("py_CompareGraph arg parse start");
 	PyArg_ParseTuple(args, "ssp", &s1, &s2, &b);
-
-	if (CompareGraph(s1, s2, b)) {
-		return Py_True;
+	deb_write("s1 = ", s1);
+	deb_write("s2 = ", s2);
+	deb_write("exact = ", b);
+	deb_write("py_CompareGraph invoke CompareGraph");
+	if (CompareGraph(s1, s2, (b != 0))) {
+		Py_RETURN_TRUE;
 	}
 	else {
-		return Py_False;
+		Py_RETURN_FALSE;
 	}
 }
 

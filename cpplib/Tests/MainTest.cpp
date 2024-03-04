@@ -118,7 +118,13 @@ TEST(CompareGraphTest, Tricycle484021t) {
 	ASSERT_NO_THROW({res = CompareGraph(search, data, false);});
 	EXPECT_TRUE(res);
 }
-
+TEST(CompareGraphTest, s161834) {
+	const char search[] {"1 36 38 6 1 6 1 6 1 6 1 6 1 6 0 8 0 15 0 8 0 8 0 7 1 6 0 6 0 6 0 8 0 6 0 6 0 6 0 6 0 6 0 6 0 8 0 6 0 6 0 9 0 6 0 8 1 7 0 6 1 6 0 7 1 6 1 6 0 8 0 8 0 8 0 1 2 1 3 2 6 3 4 4 5 5 6 6 7 7 8 8 9 8 10 8 11 10 19 11 12 12 13 12 14 14 15 14 36 15 16 16 17 16 18 19 20 20 21 20 22 21 24 21 27 22 23 23 24 23 28 24 25 24 26 28 29 28 30 29 32 30 31 30 34 31 33 32 33 33 35"};
+	const char data[] {"161834 36 38 15 0 8 0 8 0 8 0 7 1 6 2 6 0 6 1 6 1 6 1 6 1 6 3 6 0 8 0 6 1 6 1 6 1 8 0 8 0 6 1 8 1 6 0 6 1 6 1 7 0 9 0 6 3 6 3 6 3 6 0 6 1 8 0 7 1 6 1 6 0 8 0 1 2 1 3 1 4 1 5 3 7 7 10 7 11 10 16 16 23 23 17 17 11 2 6 6 9 9 14 9 15 14 20 20 25 20 22 25 30 25 31 30 32 30 33 33 35 35 36 35 34 34 31 22 26 22 27 22 15 15 21 5 8 8 12 8 13 13 18 13 19 18 24 24 28 24 29"};
+	bool res = false;
+	ASSERT_NO_THROW({res = CompareGraph(search, data, false);});
+	EXPECT_TRUE(res);
+}
 TEST(FindMoleculesInCellTest, AADRIB) {
 	p_distances = &testdistances;
 	float cell[] = { 17.125, 11.453, 8.590, 90, 109.18, 90 };
@@ -249,7 +255,7 @@ TEST(FindMoleculesWithoutCellTest, C3H6O2) {
 }
 TEST(FindMoleculesWithoutCellTest, MonoO) {
 	p_distances = &testdistances;
-	int types[] = { 1 };
+	int types[] = { 6 };
 
 	float xyz[] = { 0.438335628 , -0.587240971, -3.993208195 };
 	auto res = FindMoleculesWithoutCell(types, xyz, 1);
