@@ -52,7 +52,7 @@ bool CompareGraph(const char* search1, const char* search2, const bool exact) {
 	deb_write("CompareGraph CurrentSearchGraph start FullSearch");
 	return graph.startFullSearch(exact);
 }
-API int* SearchMain(const char* search, const char** data, const int data_s, const int np, const bool exact) {
+int* SearchMain(const char* search, const char** data, const int data_s, const int np, const bool exact) {
 	static std::vector<int> result;
 
 	CurrentRequestGraph input = CurrentRequestGraph::ReadInput(search);
@@ -75,7 +75,7 @@ API int* SearchMain(const char* search, const char** data, const int data_s, con
 	return &(result[0]);
 }
 
-API const char* FindMoleculesInCell(const float* unit_cell, const char** symm, const int symm_s, const int* types, const float* xyz, const int types_s) {
+const char* FindMoleculesInCell(const float* unit_cell, const char** symm, const int symm_s, const int* types, const float* xyz, const int types_s) {
 
 	static std::string ret;
 	auto& distances = *(p_distances);
@@ -111,7 +111,7 @@ API const char* FindMoleculesInCell(const float* unit_cell, const char** symm, c
 
 	return ret.c_str();
 }
-API const char* FindMoleculesWithoutCell(const int* types, const float* xyz, const int types_s) {
+const char* FindMoleculesWithoutCell(const int* types, const float* xyz, const int types_s) {
 	static std::string ret;
 	auto& distances = *(p_distances);
 
@@ -131,7 +131,7 @@ API const char* FindMoleculesWithoutCell(const int* types, const float* xyz, con
 
 	return ret.c_str();
 }
-API const char* FindDistanceWC(const int* types, const float* xyz, const int types_s,const int type1, const int type2, const float min_value, const float max_value) {
+const char* FindDistanceWC(const int* types, const float* xyz, const int types_s,const int type1, const int type2, const float min_value, const float max_value) {
 	static std::string res;
 
 	FAM_Struct<AtomType, AtomicIDType, FloatingPointType> fs;
@@ -148,7 +148,7 @@ API const char* FindDistanceWC(const int* types, const float* xyz, const int typ
 	}
 	return res.c_str();
 }
-API const char* FindDistanceIC(const float* unit_cell, const char** symm, const int symm_s, const int* types, const float* xyz, const int types_s, const int type1, const int type2, const float min_value, const float max_value) {
+const char* FindDistanceIC(const float* unit_cell, const char** symm, const int symm_s, const int* types, const float* xyz, const int types_s, const int type1, const int type2, const float min_value, const float max_value) {
 	static std::string res;
 
 	FAM_Struct<AtomType, AtomicIDType, FloatingPointType> famstr;
@@ -188,8 +188,8 @@ API const char* FindDistanceIC(const float* unit_cell, const char** symm, const 
 	return res.c_str();
 }
 
-API const char* FindAngleWC(const int* types, const float* xyz, const int types_s, 
-							   const int type1, const int type2, const int type3, const float min12, const float max12, const float min23, const float max23, const float min123, const float max123) {
+const char* FindAngleWC(const int* types, const float* xyz, const int types_s,
+	const int type1, const int type2, const int type3, const float min12, const float max12, const float min23, const float max23, const float min123, const float max123) {
 	static std::string res;
 
 	FAM_Struct<AtomType, AtomicIDType, FloatingPointType> fs;
@@ -209,7 +209,7 @@ API const char* FindAngleWC(const int* types, const float* xyz, const int types_
 	}
 	return res.c_str();
 }
-API const char* FindAngleIC(const float* unit_cell, const char** symm, const int symm_s, const int* types, const float* xyz, const int types_s, 
+const char* FindAngleIC(const float* unit_cell, const char** symm, const int symm_s, const int* types, const float* xyz, const int types_s, 
 						const int type1, const int type2, const int type3, const float min12, const float max12, const float min23, const float max23, const float min123, const float max123) {
 	static std::string res;
 
@@ -254,7 +254,7 @@ API const char* FindAngleIC(const float* unit_cell, const char** symm, const int
 	return res.c_str();
 }
 
-API const char* FindTorsionWC(const int* types, const float* xyz, const int types_s,
+const char* FindTorsionWC(const int* types, const float* xyz, const int types_s,
 	const int type1, const int type2, const int type3, const int type4, const float min12, const float max12, const float min23, const float max23, const float min34, const float max34,
 	const float min123, const float max123, const float min234, const float max234, const float min1234, const float max1234) {
 	static std::string res;
@@ -281,7 +281,7 @@ API const char* FindTorsionWC(const int* types, const float* xyz, const int type
 	}
 	return res.c_str();
 }
-API const char* FindTorsionIC(const float* unit_cell, const char** symm, const int symm_s, const int* types, const float* xyz, const int types_s,
+const char* FindTorsionIC(const float* unit_cell, const char** symm, const int symm_s, const int* types, const float* xyz, const int types_s,
 	const int type1, const int type2, const int type3, const int type4, const float min12, const float max12, const float min23, const float max23, const float min34, const float max34,
 	const float min123, const float max123, const float min234, const float max234, const float min1234, const float max1234) {
 	static std::string res;
