@@ -248,6 +248,105 @@ static PyObject* cpplib_GenSymm(PyObject* self, PyObject* args) {
 	return PyUnicode_FromString(line.c_str());
 }
 
+static PyObject* cpplib_FindDistanceIC(PyObject* self, PyObject* args) {
+
+	PyObject* ocell = NULL;
+	PyObject* osymm = NULL;
+	PyObject* oxyz = NULL;
+	PyObject* otypes = NULL;
+	PyObject* oparams = NULL;
+	PyArg_ParseTuple(args, "OOOOO", &ocell, &osymm, &otypes, &oxyz, &oparams);
+
+	std::array<float, 6> cell;
+	for (Py_ssize_t i = 0; i < 6; i++) {
+		cell[i] = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(ocell, i)));
+	}
+
+	Py_ssize_t s = PyList_Size(osymm);
+	const int symm_s = static_cast<int>(s);
+
+	std::vector<const char*> symm(symm_s, nullptr);
+	for (Py_ssize_t i = 0; i < s; i++) {
+		symm[i] = PyUnicode_AsUTF8(PyList_GetItem(osymm, i));
+	}
+
+	s = PyList_Size(otypes);
+	const int types_s = static_cast<int>(s);
+
+	std::vector<int> types;
+	std::vector<float> xyz;
+	for (Py_ssize_t i = 0; i < s; i++) {
+		types[i] = static_cast<int>(PyLong_AsLong(PyList_GetItem(otypes, i)));
+		xyz[i * 3] = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(oxyz, i * 3)));
+		xyz[i * 3 + 1] = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(oxyz, i * 3 + 1)));
+		xyz[i * 3 + 2] = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(oxyz, i * 3 + 2)));
+	}
+
+
+	const std::array<int, 2> type { static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 0))),
+									static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 1))) };
+	std::pair<float, float> value;
+	value.first = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 2)));
+	value.second = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 3)));
+
+
+	if (value.first == 0) {
+		useDistances(self);
+		value.second = p_distances->minDistance(type[0], type[1]);
+	}
+	if (value.second == 0) {
+		useDistances(self);
+		value.second = p_distances->maxDistance(type[0], type[1]);
+	}
+
+
+	std::string ret = FindDistanceIC(cell, symm, types, xyz, type, value);
+
+	return PyUnicode_FromString(ret.c_str());
+}
+
+static PyObject* cpplib_FindDistanceWC(PyObject* self, PyObject* args) {
+
+	PyObject* oxyz = NULL;
+	PyObject* otypes = NULL;
+	PyObject* oparams = NULL;
+	PyArg_ParseTuple(args, "OOO", &otypes, &oxyz, &oparams);
+
+	Py_ssize_t s = PyList_Size(otypes);
+	const int types_s = static_cast<int>(s);
+
+	std::vector<int> types;
+	std::vector<float> xyz;
+	for (Py_ssize_t i = 0; i < s; i++) {
+		types[i] = static_cast<int>(PyLong_AsLong(PyList_GetItem(otypes, i)));
+		xyz[i * 3] = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(oxyz, i * 3)));
+		xyz[i * 3 + 1] = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(oxyz, i * 3 + 1)));
+		xyz[i * 3 + 2] = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(oxyz, i * 3 + 2)));
+	}
+
+
+	const std::array<int, 2> type{ static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 0))),
+									static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 1))) };
+	std::pair<float, float> value;
+	value.first = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 2)));
+	value.second = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 3)));
+
+
+	if (value.first == 0) {
+		useDistances(self);
+		value.second = p_distances->minDistance(type[0], type[1]);
+	}
+	if (value.second == 0) {
+		useDistances(self);
+		value.second = p_distances->maxDistance(type[0], type[1]);
+	}
+
+
+	std::string ret = FindDistanceWC(types, xyz, type, value);
+
+	return PyUnicode_FromString(ret.c_str());
+}
+
 
 
 
@@ -259,6 +358,8 @@ static struct PyMethodDef methods[] = {
 	{ "CompareGraph", cpplib_CompareGraph, METH_VARARGS, "Compare two graphs"},
 	{ "FindMoleculesInCell", cpplib_FindMoleculesInCell, METH_VARARGS, "Create graph from cell"},
 	{ "FindMoleculesWithoutCell", cpplib_FindMoleculesWithoutCell, METH_VARARGS, "Create graph from xyz"},
+	{ "FindDistanceIC", cpplib_FindDistanceIC, METH_VARARGS, "Find Distances with current parameters in cell"},
+	{ "FindDistanceWC", cpplib_FindDistanceWC, METH_VARARGS, "Find Distances with current parameters in xyz"},
 
 	{ NULL, NULL, 0, NULL }
 };
