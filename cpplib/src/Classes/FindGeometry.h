@@ -44,7 +44,7 @@ private:
 public:
 	FindGeometry() = delete;
 	explicit FindGeometry(const FAM_Struct<A, AI, T>& famstr) noexcept : fs(famstr) {};
-	auto findDistance(A t1, A t2, T d12_l, T d12_h) const {
+	auto findDistance(A t1, A t2, std::pair<T,T> d12) const {
 		std::vector<std::tuple<size_t, size_t, T>> res;
 		const bool mirror = t1 == t2;
 		for (size_t i = 0; i < fs.sizePoints; i++)
@@ -56,7 +56,7 @@ public:
 				if (i == j) continue;
 				if (fs.types[j] != t2) continue;
 				auto R = (fs.points[i] - fs.points[j]).r();
-				if (R > d12_l && R < d12_h)
+				if (R > d12.first && R < d12.second)
 					res.emplace_back(i, j, R);
 			}
 		}

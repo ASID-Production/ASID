@@ -96,7 +96,6 @@ struct ParseData {
 		for (int i = 0, i3 = 0; i < types_s; i++, i3 += 3) {
 			fs.types.emplace_back(types[i]);
 			fs.points.emplace_back(xyz[i3], xyz[i3 + 1], xyz[i3 + 2]);
-			(fs.points.back()).MoveToCell();
 		}
 		fs.parseIndex.resize(types_s);
 		std::iota(fs.parseIndex.begin(), fs.parseIndex.end(), 0); // Fill with 0, 1...
@@ -113,5 +112,24 @@ struct ParseData {
 		fs.parseIndex.resize(fs.sizeUnique);
 		std::iota(fs.parseIndex.begin(), fs.parseIndex.end(), 0); // Fill with 0, 1...
 	}
-	
+
+	template <class A, class AI, class T>
+	ParseData(FAM_Struct<A, AI, T>& fs, FAM_Cell<T>& fc, const std::vector<const char*>& symm, const std::vector<int>& types, const std::vector<float>& xyz) 
+		: ParseData(fs,types, xyz)
+	{
+
+		const auto symm_s = symm.size();
+		std::vector<geometry::Symm<FloatingPointType>> symmv;
+		symmv.reserve(symm_s - 1);
+		for (int i = 1; i < symm_s; i++) {
+			symmv.emplace_back(symm[i]);
+		}
+
+		fc.GenerateSymm(fs, symmv);
+		fs.sizePoints = static_cast<AtomicIDType>(fs.points.size());
+		fs.types.reserve(fs.sizePoints);
+		for (size_type i = fs.sizeUnique; i < fs.sizePoints; i++) {
+			fs.types.emplace_back(fs.types[fs.parseIndex[i]]);
+		}
+	}
 };
