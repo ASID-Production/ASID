@@ -74,6 +74,16 @@ def gen_bonds(atoms: List[List[int | float]]):
     """
     return cpplib.GenBonds(atoms)
 
+def gen_bonds_ex(atoms: List[List[int | float]]):
+    """
+    Find all bonds with length sin of molecules in a cluster.
+    Variables:
+        atoms: list of [list of atomic type and three real-space coordinate]
+			   type is integer, coordinates are floating point numbers.
+			   example [ [ 1 0.0 0.0 0.0 ], [9 0.5 0.5 0.5], ... ]
+    """
+    return cpplib.GenBonds(atoms)
+
 
 def gen_symm(atoms: List[List[int | float]], symop: str):
     """
