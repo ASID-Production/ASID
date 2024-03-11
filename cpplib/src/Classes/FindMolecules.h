@@ -47,6 +47,7 @@ struct FAM_Struct {
 	using PointConteinerType = std::vector<PointType>;
 	using size_type = AI;
 	using BondType = Bond<AI>;
+	using BondExType = BondEx<AI, T>;
 	using DistancesType = Distances<A, T, size_type>;
 	using ParseIndexType = std::vector<size_t>;
 	// Data
@@ -99,6 +100,48 @@ struct FAM_Struct {
 					// [[fallthrowgh]]
 				case  1:
 					res.emplace_back(i, j);
+					break;
+				default:
+					assert(false);
+					// should not triger default case;
+					break;
+				}
+			}
+		}
+		return std::make_pair(res, invalidAtoms);
+	}
+	constexpr auto findBondsEx(const DistancesType& distances, std::string& errorMSG, std::function<T(const PointType& p1, const PointType& p2)> distance_f) const {
+		std::vector<BondExType> res;
+		std::vector<AI> invalidAtoms;
+		for (size_type i = 0; i < sizePoints; i++) {
+			const auto indexI = parseIndex[i];
+			const auto type_i = types[indexI];
+			for (size_type j = i + 1; j < sizePoints; j++) {
+				const auto indexJ = parseIndex[j];
+				const auto type_j = types[indexJ];
+				T dist = distance_f(points[i], points[j]);
+				char isbond = distances.isBond(type_i, type_j, dist);
+				switch (isbond) {
+				case  0:
+					break;
+				case -1:
+					// Incorrect Bond marked, but also added to results
+					if (errorMSG.empty()) {
+						errorMSG = "Too short bond between ";
+						errorMSG += mend[type_i];
+						errorMSG += std::to_string(indexI);
+						errorMSG += " and ";
+						errorMSG += mend[type_j];
+						errorMSG += std::to_string(indexJ);
+						errorMSG += ", which is ";
+						errorMSG += std::to_string(dist);
+					}
+					invalidAtoms.push_back(i);
+					invalidAtoms.push_back(j);
+
+					// [[fallthrowgh]]
+				case  1:
+					res.emplace_back(i, j, dist);
 					break;
 				default:
 					assert(false);

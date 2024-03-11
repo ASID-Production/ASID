@@ -37,8 +37,8 @@ enum class ErrorStates {
 template<class MI, class size_type>
 class SearchDataInterface {
 	size_type iterator_ = 0;
-	size_type size_;
-	const char** rawdata_;
+	const size_type size_;
+	const std::vector<const char*> rawdata_;
 
 	std::mutex mutexIN_;
 	std::mutex mutexOUT_;
@@ -47,14 +47,16 @@ class SearchDataInterface {
 
 public:
 	SearchDataInterface() = delete;
-	explicit SearchDataInterface(const char** rawdata, size_type size) noexcept
-		: rawdata_(rawdata), size_(size) {
-		if (size > 1024)
+	explicit SearchDataInterface(std::vector<const char*>&& rawdata) noexcept
+		: rawdata_(rawdata), size_(rawdata.size()) {
+		if (size_ >= 1024)
 			ret_.reserve(1024);
 		else
-			ret_.reserve(static_cast<size_t>(size) + 1);
-		ret_.push_back(0);
+			ret_.reserve(static_cast<size_t>(size_));
 	};
+	inline size_type size() const noexcept {
+		return size_;
+	}
 	const char* getNext() {
 		try {
 			auto iter = getNextIterator();
@@ -67,7 +69,6 @@ public:
 	void push_result(const MI molecularID) {
 		std::lock_guard<std::mutex> lock(mutexOUT_);
 		ret_.push_back(molecularID);
-		ret_[0]++;
 	}
 	std::vector<int>&& getAllResults() noexcept {
 		std::lock_guard<std::mutex> lock(mutexOUT_);
@@ -86,7 +87,8 @@ private:
 
 struct ParseData {
 	template <class A, class AI, class T>
-	ParseData(FAM_Struct<A, AI, T>& fs, const int* types, const float* xyz, const int types_s) {
+	ParseData(FAM_Struct<A, AI, T>& fs, const std::vector<int>& types, const std::vector<float>& xyz) {
+		const auto types_s = types.size();
 		fs.points.reserve(types_s);
 		fs.types.reserve(types_s);
 		fs.sizePoints = types_s;
@@ -94,9 +96,40 @@ struct ParseData {
 		for (int i = 0, i3 = 0; i < types_s; i++, i3 += 3) {
 			fs.types.emplace_back(types[i]);
 			fs.points.emplace_back(xyz[i3], xyz[i3 + 1], xyz[i3 + 2]);
-			(fs.points.back()).MoveToCell();
 		}
 		fs.parseIndex.resize(types_s);
 		std::iota(fs.parseIndex.begin(), fs.parseIndex.end(), 0); // Fill with 0, 1...
+	}
+	template <class A, class AI, class T>
+	ParseData(FAM_Struct<A, AI, T>& fs, std::vector<A>&& types, std::vector<geometry::Point<T>>&& points) {
+		fs.types = std::move(types);
+		fs.points = std::move(points);
+		fs.sizePoints = fs.points.size();
+		fs.sizeUnique = fs.types.size();
+		for (int i = 0, i3 = 0; i < fs.sizePoints; i++) {
+			fs.points[i].MoveToCell();
+		}
+		fs.parseIndex.resize(fs.sizeUnique);
+		std::iota(fs.parseIndex.begin(), fs.parseIndex.end(), 0); // Fill with 0, 1...
+	}
+
+	template <class A, class AI, class T>
+	ParseData(FAM_Struct<A, AI, T>& fs, FAM_Cell<T>& fc, const std::vector<const char*>& symm, const std::vector<int>& types, const std::vector<float>& xyz) 
+		: ParseData(fs,types, xyz)
+	{
+
+		const auto symm_s = symm.size();
+		std::vector<geometry::Symm<FloatingPointType>> symmv;
+		symmv.reserve(symm_s - 1);
+		for (int i = 1; i < symm_s; i++) {
+			symmv.emplace_back(symm[i]);
+		}
+
+		fc.GenerateSymm(fs, symmv);
+		fs.sizePoints = static_cast<AtomicIDType>(fs.points.size());
+		fs.types.reserve(fs.sizePoints);
+		for (size_type i = fs.sizeUnique; i < fs.sizePoints; i++) {
+			fs.types.emplace_back(fs.types[fs.parseIndex[i]]);
+		}
 	}
 };

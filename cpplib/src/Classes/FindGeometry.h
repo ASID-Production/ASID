@@ -44,7 +44,7 @@ private:
 public:
 	FindGeometry() = delete;
 	explicit FindGeometry(const FAM_Struct<A, AI, T>& famstr) noexcept : fs(famstr) {};
-	auto findDistance(A t1, A t2, T d12_l, T d12_h) const {
+	auto findDistance(A t1, A t2, std::pair<T,T> d12) const {
 		std::vector<std::tuple<size_t, size_t, T>> res;
 		const bool mirror = t1 == t2;
 		for (size_t i = 0; i < fs.sizePoints; i++)
@@ -56,7 +56,7 @@ public:
 				if (i == j) continue;
 				if (fs.types[j] != t2) continue;
 				auto R = (fs.points[i] - fs.points[j]).r();
-				if (R > d12_l && R < d12_h)
+				if (R > d12.first && R < d12.second)
 					res.emplace_back(i, j, R);
 			}
 		}
@@ -80,10 +80,12 @@ public:
 			{
 				if (std::get<1>(v1[i]) != std::get<0>(v2[j]))
 					continue;
-				auto rad = PointType::angleRad(fs.points[std::get<0>(v1[i])], fs.points[std::get<1>(v1[i])], fs.points[std::get<1>(v2[i])]);
+				if (std::get<0>(v1[i]) == std::get<1>(v2[j]))
+					continue;
+				auto rad = PointType::angleRad(fs.points[std::get<0>(v1[i])], fs.points[std::get<1>(v1[i])], fs.points[std::get<1>(v2[j])]);
 				if (rad < A123_l || rad > A123_h)
 					continue;
-				res.emplace_back(std::get<0>(v1[i]), std::get<1>(v1[i]), std::get<1>(v2[i]), rad);
+				res.emplace_back(std::get<0>(v1[i]), std::get<1>(v1[i]), std::get<1>(v2[j]), rad);
 			}
 		}
 		if (is_v1_mirror) {
@@ -93,10 +95,12 @@ public:
 				{
 					if (std::get<0>(v1[i]) != std::get<0>(v2[j]))
 						continue;
-					auto rad = PointType::angleRad(fs.points[std::get<1>(v1[i])], fs.points[std::get<0>(v1[i])], fs.points[std::get<1>(v2[i])]);
+					if (std::get<1>(v1[i]) == std::get<1>(v2[j]))
+						continue;
+					auto rad = PointType::angleRad(fs.points[std::get<1>(v1[i])], fs.points[std::get<0>(v1[i])], fs.points[std::get<1>(v2[j])]);
 					if (rad < A123_l || rad > A123_h)
 						continue;
-					res.emplace_back(std::get<1>(v1[i]), std::get<0>(v1[i]), std::get<1>(v2[i]), rad);
+					res.emplace_back(std::get<1>(v1[i]), std::get<0>(v1[i]), std::get<1>(v2[j]), rad);
 				}
 			}
 		}
@@ -107,10 +111,12 @@ public:
 				{
 					if (std::get<1>(v1[i]) != std::get<1>(v2[j]))
 						continue;
-					auto rad = PointType::angleRad(fs.points[std::get<0>(v1[i])], fs.points[std::get<1>(v2[i])], fs.points[std::get<0>(v2[i])]);
+					if (std::get<0>(v1[i]) == std::get<0>(v2[j]))
+						continue;
+					auto rad = PointType::angleRad(fs.points[std::get<0>(v1[i])], fs.points[std::get<1>(v2[j])], fs.points[std::get<0>(v2[j])]);
 					if (rad < A123_l || rad > A123_h)
 						continue;
-					res.emplace_back(std::get<0>(v1[i]), std::get<1>(v2[i]), std::get<0>(v2[i]), rad);
+					res.emplace_back(std::get<0>(v1[i]), std::get<1>(v2[i]), std::get<0>(v2[j]), rad);
 				}
 			}
 		}
@@ -128,10 +134,10 @@ public:
 			{
 				if (std::get<1>(v1[i]) != std::get<0>(v2[j]) || std::get<2>(v1[i]) != std::get<1>(v2[j]) || std::get<0>(v1[i]) >= std::get<2>(v2[j]))
 					continue;
-				auto tor = PointType::torsionRad(fs.points[std::get<0>(v1[i])], fs.points[std::get<1>(v1[i])], fs.points[std::get<1>(v2[i])], fs.points[std::get<2>(v2[i])]);
+				auto tor = PointType::torsionRad(fs.points[std::get<0>(v1[i])], fs.points[std::get<1>(v1[i])], fs.points[std::get<1>(v2[j])], fs.points[std::get<2>(v2[j])]);
 				if (tor < t1234_l || tor > t1234_h) 
 					continue;
-				res.emplace_back(std::get<0>(v1[i]), std::get<1>(v1[i]), std::get<1>(v2[i]), std::get<2>(v2[i]), tor);	
+				res.emplace_back(std::get<0>(v1[i]), std::get<1>(v1[i]), std::get<1>(v2[j]), std::get<2>(v2[j]), tor);	
 			}
 		}
 		return res;

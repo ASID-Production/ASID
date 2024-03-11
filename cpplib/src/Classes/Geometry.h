@@ -384,6 +384,9 @@ namespace geometry {
 		explicit constexpr Cell(const value_type a = 10, const value_type b = 10, const value_type c = 10, const value_type alpha = 90, const value_type beta = 90, const value_type gamma = 90, const bool is_grad = true) {
 			create(a, b, c, alpha, beta, gamma, is_grad);
 		}
+		explicit constexpr Cell(const std::array<T,6>& ar, const bool is_grad = true) {
+			create(ar[0], ar[1], ar[2], ar[3], ar[4], ar[5], is_grad);
+		}
 		constexpr Cell(Cell&&) noexcept = default;
 		constexpr Cell(const Cell&) noexcept = default;
 		constexpr Cell& operator= (const Cell&) noexcept = default;
