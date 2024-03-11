@@ -85,7 +85,7 @@ def gen_bonds_ex(atoms: List[List[int | float]]):
     return cpplib.GenBonds(atoms)
 
 
-def FindDistanceWC(
+def find_distances_cell(
         cell_params: List[float], 
         symops: List[str], 
         atom_types: List[int],
@@ -105,15 +105,101 @@ def FindDistanceWC(
     return cpplib.FindDistanceIC(cell_params, symops, atom_types, xyz, params)
 
 
-def FindDistanceWC( 	   atom_types: List[int], 
+def find_distances_xyz(    atom_types: List[int], 
 						   xyz: List[float],
                            params: List[int | float]) -> str:
     """
     Find all distances with current params in a crystal.
     Variables:
 	  atom_types: list of atomic types
-	  xyz: list of atomic fractal coordinates - three to one atom
+	  xyz: list of atomic cartesian coordinates - three to one atom
       params: int type1, int type2, float min12, float max12
         min/max values could be zero - in this case bond's values will be used 
     """
-    return cpplib.FindDistanceWC(atom_types,xyz, params)
+    return cpplib.FindDistanceWC(atom_types, xyz, params)
+
+
+def find_angle_cell(
+        cell_params: List[float], 
+        symops: List[str], 
+        atom_types: List[int],
+        xyz: List[float],
+        params: List[int | float]) -> str:
+    """
+    Find all distances with current params in a cluster.
+    Variables:
+      cell_params:  list of exactly 6 cell parameters in strict order: [a, b, c, alpha, beta, gamma].
+        (a, b, c - are translation vectors (in Angstroms) and alpha, beta, gamma - are angles (in degrees)
+      symops:  SYMM-codes of structure. Should contain 'x,y,z' (equivalent) as first ([0]) symmetry - it is ignored.
+      atom_types: list of atomic types
+      xyz: list of atomic fractal coordinates - three to one atom
+      params: int type1, int type2, int type3,                     - types
+              float min12, float max12, float min23, float max23,  - distances min/max
+              float min123, float max123                           - angle min/max (in deg.)
+        totally 9 parameters should be defined
+        angles are calculated in the range (-180, +180] degrees.
+        min/max of distances could be zero - in this case bond's values will be used 
+    """
+    return cpplib.FindAngleIC(cell_params, symops, atom_types, xyz, params)
+
+
+def find_angle_xyz( 	   atom_types: List[int], 
+						   xyz: List[float],
+                           params: List[int | float]) -> str:
+    """
+    Find all distances with current params in a crystal.
+    Variables:
+	  atom_types: list of atomic types
+	  xyz: list of atomic cartesian coordinates - three to one atom
+      params: int type1, int type2, int type3,                     - types
+              float min12, float max12, float min23, float max23,  - distances min/max
+              float min123, float max123                           - angle min/max (in deg.)
+        totally 9 parameters should be defined
+        angles are calculated in the range (-180, +180] degrees.
+        min/max of distances could be zero - in this case bond's values will be used 
+    """
+    return cpplib.FindAngleWC(atom_types, xyz, params)
+
+
+def find_torsion_cell(
+        cell_params: List[float], 
+        symops: List[str], 
+        atom_types: List[int],
+        xyz: List[float],
+        params: List[int | float]) -> str:
+    """
+    Find all distances with current params in a cluster.
+    Variables:
+      cell_params:  list of exactly 6 cell parameters in strict order: [a, b, c, alpha, beta, gamma].
+        (a, b, c - are translation vectors (in Angstroms) and alpha, beta, gamma - are angles (in degrees)
+      symops:  SYMM-codes of structure. Should contain 'x,y,z' (equivalent) as first ([0]) symmetry - it is ignored.
+      atom_types: list of atomic types
+      xyz: list of atomic fractal coordinates - three to one atom
+      params: int type1, int type2, int type3, int type4 -- types
+              float min12, float max12, float min23, float max23, float min34, float max34, -- distances min/max
+              float min123, float max123, float min234, float max234, -- angles min/max (in deg.)
+              float min1234, float max1234 -- torsion min/max (in deg.)
+        totally 16 parameters should be defined
+        angles and torsions are calculated in the range (-180, +180] degrees.
+        min/max of distances could be zero - in this case bond's values will be used 
+    """
+    return cpplib.FindTorsionIC(cell_params, symops, atom_types, xyz, params)
+
+
+def find_torsion_xyz( 	   atom_types: List[int], 
+						   xyz: List[float],
+                           params: List[int | float]) -> str:
+    """
+    Find all distances with current params in a crystal.
+    Variables:
+	  atom_types: list of atomic types
+	  xyz: list of atomic cartesian coordinates - three to one atom
+      params: int type1, int type2, int type3, int type4 -- types
+              float min12, float max12, float min23, float max23, float min34, float max34, -- distances min/max
+              float min123, float max123, float min234, float max234, -- angles min/max (in deg.)
+              float min1234, float max1234 -- torsion min/max (in deg.)
+        totally 16 parameters should be defined
+        angles and torsions are calculated in the range (-180, +180] degrees.
+        min/max of distances could be zero - in this case bond's values will be used 
+    """
+    return cpplib.FindTorsionWC(atom_types, xyz, params)

@@ -80,10 +80,12 @@ public:
 			{
 				if (std::get<1>(v1[i]) != std::get<0>(v2[j]))
 					continue;
-				auto rad = PointType::angleRad(fs.points[std::get<0>(v1[i])], fs.points[std::get<1>(v1[i])], fs.points[std::get<1>(v2[i])]);
+				if (std::get<0>(v1[i]) == std::get<1>(v2[j]))
+					continue;
+				auto rad = PointType::angleRad(fs.points[std::get<0>(v1[i])], fs.points[std::get<1>(v1[i])], fs.points[std::get<1>(v2[j])]);
 				if (rad < A123_l || rad > A123_h)
 					continue;
-				res.emplace_back(std::get<0>(v1[i]), std::get<1>(v1[i]), std::get<1>(v2[i]), rad);
+				res.emplace_back(std::get<0>(v1[i]), std::get<1>(v1[i]), std::get<1>(v2[j]), rad);
 			}
 		}
 		if (is_v1_mirror) {
@@ -93,10 +95,12 @@ public:
 				{
 					if (std::get<0>(v1[i]) != std::get<0>(v2[j]))
 						continue;
-					auto rad = PointType::angleRad(fs.points[std::get<1>(v1[i])], fs.points[std::get<0>(v1[i])], fs.points[std::get<1>(v2[i])]);
+					if (std::get<1>(v1[i]) == std::get<1>(v2[j]))
+						continue;
+					auto rad = PointType::angleRad(fs.points[std::get<1>(v1[i])], fs.points[std::get<0>(v1[i])], fs.points[std::get<1>(v2[j])]);
 					if (rad < A123_l || rad > A123_h)
 						continue;
-					res.emplace_back(std::get<1>(v1[i]), std::get<0>(v1[i]), std::get<1>(v2[i]), rad);
+					res.emplace_back(std::get<1>(v1[i]), std::get<0>(v1[i]), std::get<1>(v2[j]), rad);
 				}
 			}
 		}
@@ -107,10 +111,12 @@ public:
 				{
 					if (std::get<1>(v1[i]) != std::get<1>(v2[j]))
 						continue;
-					auto rad = PointType::angleRad(fs.points[std::get<0>(v1[i])], fs.points[std::get<1>(v2[i])], fs.points[std::get<0>(v2[i])]);
+					if (std::get<0>(v1[i]) == std::get<0>(v2[j]))
+						continue;
+					auto rad = PointType::angleRad(fs.points[std::get<0>(v1[i])], fs.points[std::get<1>(v2[j])], fs.points[std::get<0>(v2[j])]);
 					if (rad < A123_l || rad > A123_h)
 						continue;
-					res.emplace_back(std::get<0>(v1[i]), std::get<1>(v2[i]), std::get<0>(v2[i]), rad);
+					res.emplace_back(std::get<0>(v1[i]), std::get<1>(v2[i]), std::get<0>(v2[j]), rad);
 				}
 			}
 		}
@@ -128,10 +134,10 @@ public:
 			{
 				if (std::get<1>(v1[i]) != std::get<0>(v2[j]) || std::get<2>(v1[i]) != std::get<1>(v2[j]) || std::get<0>(v1[i]) >= std::get<2>(v2[j]))
 					continue;
-				auto tor = PointType::torsionRad(fs.points[std::get<0>(v1[i])], fs.points[std::get<1>(v1[i])], fs.points[std::get<1>(v2[i])], fs.points[std::get<2>(v2[i])]);
+				auto tor = PointType::torsionRad(fs.points[std::get<0>(v1[i])], fs.points[std::get<1>(v1[i])], fs.points[std::get<1>(v2[j])], fs.points[std::get<2>(v2[j])]);
 				if (tor < t1234_l || tor > t1234_h) 
 					continue;
-				res.emplace_back(std::get<0>(v1[i]), std::get<1>(v1[i]), std::get<1>(v2[i]), std::get<2>(v2[i]), tor);	
+				res.emplace_back(std::get<0>(v1[i]), std::get<1>(v1[i]), std::get<1>(v2[j]), std::get<2>(v2[j]), tor);	
 			}
 		}
 		return res;

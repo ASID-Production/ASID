@@ -29,7 +29,44 @@
 #include <Python.h>
 #include "AllInOneAndCurrent.h"
 #include "Functions.h"
+#include "../Classes/Interfaces.h"
 #include "../BaseHeaders/DebugMes.h"
+
+static std::vector<float> pyListToVectorFloat(PyObject* plist) {
+	const Py_ssize_t s = PyList_Size(plist);
+	std::vector<float> ret(s);
+	for (Py_ssize_t i = 0; i < s; i++) {
+		ret[i] = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(plist, i)));
+	}
+	return ret;
+}
+static std::vector<CurrentPoint> pyListToVectorCurPoint(PyObject* plist) {
+	const Py_ssize_t s = PyList_Size(plist);
+	std::vector<CurrentPoint> ret;
+	ret.reserve(s);
+	for (Py_ssize_t i = 0; i < s; i+=3) {
+		ret.emplace_back(static_cast<FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(plist, i))),
+						 static_cast<FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(plist, i + 1))),
+						 static_cast<FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(plist, i + 2))));
+	}
+	return ret;
+}
+static std::vector<int> pyListToVectorInt(PyObject* plist) {
+	const Py_ssize_t s = PyList_Size(plist);
+	std::vector<int> ret(s);
+	for (Py_ssize_t i = 0; i < s; i++) {
+		ret[i] = static_cast<int>(PyLong_AsLong(PyList_GetItem(plist, i)));
+	}
+	return ret;
+}
+static std::vector<const char *> pyListToVectorCharP(PyObject* plist) {
+	const Py_ssize_t s = PyList_Size(plist);
+	std::vector<const char*> ret(s);
+	for (Py_ssize_t i = 0; i < s; i++) {
+		ret[i] = PyUnicode_AsUTF8(PyList_GetItem(plist, i));
+	}
+	return ret;
+}
 
 inline static void useDistances(PyObject* self) {
 	if (p_distances != nullptr)
@@ -105,15 +142,14 @@ static PyObject* cpplib_SearchMain(PyObject* self, PyObject* args) {
 	PyArg_ParseTuple(args, "sOip", &search, &o, &np, &exact);
 	const Py_ssize_t s = PyList_Size(o);
 	const int ds = static_cast<int>(s);
-	std::vector<const char*> data(ds, nullptr);
 
 	deb_write("search = ", search);
 	deb_write("np = ", np);
 	deb_write("exact = ", exact);
 	deb_write("py_CompareGraph invoke CompareGraph");
-	for (Py_ssize_t i = 0; i < s; i++) {
-		data[i] = PyUnicode_AsUTF8(PyList_GetItem(o, i));
-	}
+	auto data = pyListToVectorCharP(o);
+	deb_write("data.size = ", data.size());
+
 	const auto ret = SearchMain(search, std::move(data), np, (exact != 0));
 	const auto ret_s = ret.size();
 	PyObject* ret_o = PyList_New(0);
@@ -157,25 +193,9 @@ static PyObject* cpplib_FindMoleculesInCell(PyObject* self, PyObject* args) {
 		cell[i] = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(ocell, i)));
 	}
 
-	Py_ssize_t s = PyList_Size(osymm);
-	const int symm_s = static_cast<int>(s);
-
-	std::vector<const char*> symm(symm_s, nullptr);
-	for (Py_ssize_t i = 0; i < s; i++) {
-		symm[i] = PyUnicode_AsUTF8(PyList_GetItem(osymm, i));
-	}
-
-	s = PyList_Size(otypes);
-	const int types_s = static_cast<int>(s);
-
-	std::vector<int> types;
-	std::vector<float> xyz;
-	for (Py_ssize_t i = 0; i < s; i++) {
-		types[i] = static_cast<int>(PyLong_AsLong(PyList_GetItem(otypes, i)));
-		xyz[i * 3] = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(oxyz, i * 3)));
-		xyz[i * 3 + 1] = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(oxyz, i * 3 + 1)));
-		xyz[i * 3 + 2] = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(oxyz, i * 3 + 2)));
-	}
+	std::vector<const char*> symm = pyListToVectorCharP(osymm);
+	std::vector<int> types = pyListToVectorInt(otypes);
+	std::vector<float> xyz = pyListToVectorFloat(oxyz);
 
 	auto ret = FindMoleculesInCell(cell, symm, types, xyz);
 
@@ -262,26 +282,9 @@ static PyObject* cpplib_FindDistanceIC(PyObject* self, PyObject* args) {
 		cell[i] = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(ocell, i)));
 	}
 
-	Py_ssize_t s = PyList_Size(osymm);
-	const int symm_s = static_cast<int>(s);
-
-	std::vector<const char*> symm(symm_s, nullptr);
-	for (Py_ssize_t i = 0; i < s; i++) {
-		symm[i] = PyUnicode_AsUTF8(PyList_GetItem(osymm, i));
-	}
-
-	s = PyList_Size(otypes);
-	const int types_s = static_cast<int>(s);
-
-	std::vector<int> types;
-	std::vector<float> xyz;
-	for (Py_ssize_t i = 0; i < s; i++) {
-		types[i] = static_cast<int>(PyLong_AsLong(PyList_GetItem(otypes, i)));
-		xyz[i * 3] = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(oxyz, i * 3)));
-		xyz[i * 3 + 1] = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(oxyz, i * 3 + 1)));
-		xyz[i * 3 + 2] = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(oxyz, i * 3 + 2)));
-	}
-
+	std::vector<const char*> symm = pyListToVectorCharP(osymm);
+	std::vector<int> types = pyListToVectorInt(otypes);
+	std::vector<float> xyz = pyListToVectorFloat(oxyz);
 
 	const std::array<int, 2> type { static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 0))),
 									static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 1))) };
@@ -312,24 +315,14 @@ static PyObject* cpplib_FindDistanceWC(PyObject* self, PyObject* args) {
 	PyObject* oparams = NULL;
 	PyArg_ParseTuple(args, "OOO", &otypes, &oxyz, &oparams);
 
-	Py_ssize_t s = PyList_Size(otypes);
-	const int types_s = static_cast<int>(s);
-
-	std::vector<int> types;
-	std::vector<float> xyz;
-	for (Py_ssize_t i = 0; i < s; i++) {
-		types[i] = static_cast<int>(PyLong_AsLong(PyList_GetItem(otypes, i)));
-		xyz[i * 3] = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(oxyz, i * 3)));
-		xyz[i * 3 + 1] = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(oxyz, i * 3 + 1)));
-		xyz[i * 3 + 2] = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(oxyz, i * 3 + 2)));
-	}
-
+	std::vector<int> types = pyListToVectorInt(otypes);
+	std::vector<float> xyz = pyListToVectorFloat(oxyz);
 
 	const std::array<int, 2> type{ static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 0))),
 									static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 1))) };
 	std::pair<float, float> value;
-	value.first = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 2)));
-	value.second = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 3)));
+	value.first = static_cast<float>(PyLong_AsLong(PyList_GetItem(oparams, 2)));
+	value.second = static_cast<float>(PyLong_AsLong(PyList_GetItem(oparams, 3)));
 
 
 	if (value.first == 0) {
@@ -347,6 +340,197 @@ static PyObject* cpplib_FindDistanceWC(PyObject* self, PyObject* args) {
 	return PyUnicode_FromString(ret.c_str());
 }
 
+static PyObject* cpplib_FindAngleIC(PyObject* self, PyObject* args) {
+
+	PyObject* ocell = NULL;
+	PyObject* osymm = NULL;
+	PyObject* oxyz = NULL;
+	PyObject* otypes = NULL;
+	PyObject* oparams = NULL;
+	PyArg_ParseTuple(args, "OOOOO", &ocell, &osymm, &otypes, &oxyz, &oparams);
+
+	std::array<float, 6> cell;
+	for (Py_ssize_t i = 0; i < 6; i++) {
+		cell[i] = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(ocell, i)));
+	}
+
+	std::vector<const char*> symm = pyListToVectorCharP(osymm);
+	std::vector<int> types = pyListToVectorInt(otypes);
+	std::vector<float> xyz = pyListToVectorFloat(oxyz);
+
+	const std::array<int, 3> type{ static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 0))),
+									static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 1))),
+									static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 2))) };
+	char d = type.size();
+	std::array<std::pair<float, float>,2> value_d;
+	for (char i = 0; i < 2; i++, d+=2)
+	{
+		value_d[i].first = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d)));
+		value_d[i].second = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d + 1)));
+
+		if (value_d[i].first == 0) {
+			useDistances(self);
+			value_d[i].second = p_distances->minDistance(type[i], type[i + 1]);
+		}
+
+		if (value_d[i].second == 0) {
+			useDistances(self);
+			value_d[i].second = p_distances->maxDistance(type[i], type[i + 1]);
+		}
+	}
+
+	std::pair<float, float> value_a;
+
+	value_a.first = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d)));
+	value_a.second = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d + 1)));
+
+	std::string ret = FindAngleIC(cell, symm, types, xyz, type, value_d, value_a);
+
+	return PyUnicode_FromString(ret.c_str());
+}
+
+static PyObject* cpplib_FindAngleWC(PyObject* self, PyObject* args) {
+
+	PyObject* oxyz = NULL;
+	PyObject* otypes = NULL;
+	PyObject* oparams = NULL;
+	PyArg_ParseTuple(args, "OOO", &otypes, &oxyz, &oparams);
+
+	std::vector<int> types = pyListToVectorInt(otypes);
+	std::vector<float> xyz = pyListToVectorFloat(oxyz);
+
+	const std::array<int, 3> type{ static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 0))),
+									static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 1))),
+									static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 2))) };
+	char d = type.size();
+	std::array<std::pair<float, float>, 2> value_d;
+	for (char i = 0; i < 2; i++, d += 2)
+	{
+		value_d[i].first = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d)));
+		value_d[i].second = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d + 1)));
+
+		if (value_d[i].first == 0) {
+			useDistances(self);
+			value_d[i].second = p_distances->minDistance(type[i], type[i + 1]);
+		}
+
+		if (value_d[i].second == 0) {
+			useDistances(self);
+			value_d[i].second = p_distances->maxDistance(type[i], type[i + 1]);
+		}
+	}
+
+	std::pair<float, float> value_a;
+
+	value_a.first = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d)));
+	value_a.second = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d + 1)));
+
+	std::string ret = FindAngleWC(types, xyz, type, value_d, value_a);
+
+	return PyUnicode_FromString(ret.c_str());
+}
+
+static PyObject* cpplib_FindTorsionIC(PyObject* self, PyObject* args) {
+
+	PyObject* ocell = NULL;
+	PyObject* osymm = NULL;
+	PyObject* oxyz = NULL;
+	PyObject* otypes = NULL;
+	PyObject* oparams = NULL;
+	PyArg_ParseTuple(args, "OOOOO", &ocell, &osymm, &otypes, &oxyz, &oparams);
+
+	std::array<float, 6> cell;
+	for (Py_ssize_t i = 0; i < 6; i++) {
+		cell[i] = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(ocell, i)));
+	}
+
+	std::vector<const char*> symm = pyListToVectorCharP(osymm);
+	std::vector<int> types = pyListToVectorInt(otypes);
+	std::vector<float> xyz = pyListToVectorFloat(oxyz);
+
+	const std::array<int, 4> type{ static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 0))),
+									static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 1))),
+									static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 2))),
+									static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 3))) };
+	char d = type.size();
+	std::array<std::pair<float, float>, 3> value_d;
+	for (char i = 0; i < 3; i++, d += 2)
+	{
+		value_d[i].first = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d)));
+		value_d[i].second = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d + 1)));
+
+		if (value_d[i].first == 0) {
+			useDistances(self);
+			value_d[i].second = p_distances->minDistance(type[i], type[i + 1]);
+		}
+
+		if (value_d[i].second == 0) {
+			useDistances(self);
+			value_d[i].second = p_distances->maxDistance(type[i], type[i + 1]);
+		}
+	}
+	std::array<std::pair<float, float>, 2> value_a;
+	for (char i = 0; i < 2; i++, d += 2)
+	{
+		value_a[i].first = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d)));
+		value_a[i].second = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d + 1)));
+	}
+	std::pair<float, float> value_t;
+
+	value_t.first = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d)));
+	value_t.second = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d + 1)));
+	
+	std::string ret = FindTorsionIC(cell, symm, types, xyz, type, value_d, value_a, value_t);
+
+	return PyUnicode_FromString(ret.c_str());
+}
+
+static PyObject* cpplib_FindTorsionWC(PyObject* self, PyObject* args) {
+
+	PyObject* oxyz = NULL;
+	PyObject* otypes = NULL;
+	PyObject* oparams = NULL;
+	PyArg_ParseTuple(args, "OOO", &otypes, &oxyz, &oparams);
+
+	std::vector<int> types = pyListToVectorInt(otypes);
+	std::vector<float> xyz = pyListToVectorFloat(oxyz);
+
+	const std::array<int, 4> type{ static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 0))),
+									static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 1))),
+									static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 2))),
+									static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 3))) };
+	char d = type.size();
+	std::array<std::pair<float, float>, 3> value_d;
+	for (char i = 0; i < 3; i++, d += 2)
+	{
+		value_d[i].first = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d)));
+		value_d[i].second = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d + 1)));
+
+		if (value_d[i].first == 0) {
+			useDistances(self);
+			value_d[i].second = p_distances->minDistance(type[i], type[i + 1]);
+		}
+
+		if (value_d[i].second == 0) {
+			useDistances(self);
+			value_d[i].second = p_distances->maxDistance(type[i], type[i + 1]);
+		}
+	}
+	std::array<std::pair<float, float>, 2> value_a;
+	for (char i = 0; i < 2; i++, d += 2)
+	{
+		value_a[i].first = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d)));
+		value_a[i].second = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d + 1)));
+	}
+	std::pair<float, float> value_t;
+
+	value_t.first = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d)));
+	value_t.second = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d + 1)));
+
+	std::string ret = FindTorsionWC(types, xyz, type, value_d, value_a, value_t);
+
+	return PyUnicode_FromString(ret.c_str());
+}
 
 
 
@@ -358,8 +542,12 @@ static struct PyMethodDef methods[] = {
 	{ "CompareGraph", cpplib_CompareGraph, METH_VARARGS, "Compare two graphs"},
 	{ "FindMoleculesInCell", cpplib_FindMoleculesInCell, METH_VARARGS, "Create graph from cell"},
 	{ "FindMoleculesWithoutCell", cpplib_FindMoleculesWithoutCell, METH_VARARGS, "Create graph from xyz"},
-	{ "FindDistanceIC", cpplib_FindDistanceIC, METH_VARARGS, "Find Distances with current parameters in cell"},
-	{ "FindDistanceWC", cpplib_FindDistanceWC, METH_VARARGS, "Find Distances with current parameters in xyz"},
+	{ "FindDistanceIC", cpplib_FindDistanceIC, METH_VARARGS, "Find distances with current parameters in cell"},
+	{ "FindDistanceWC", cpplib_FindDistanceWC, METH_VARARGS, "Find distances with current parameters in xyz"},
+	{ "FindAngleIC", cpplib_FindAngleIC, METH_VARARGS, "Find angles with current parameters in cell"},
+	{ "FindAngleWC", cpplib_FindAngleWC, METH_VARARGS, "Find angles with current parameters in xyz"},
+	{ "FindTorsionIC", cpplib_FindTorsionIC, METH_VARARGS, "Find torsions with current parameters in cell"},
+	{ "FindTorsionWC", cpplib_FindTorsionWC, METH_VARARGS, "Find torsions with current parameters in xyz"},
 
 	{ NULL, NULL, 0, NULL }
 };
