@@ -146,17 +146,20 @@ static PyObject* cpplib_SearchMain(PyObject* self, PyObject* args) {
 	deb_write("search = ", search);
 	deb_write("np = ", np);
 	deb_write("exact = ", exact);
-	deb_write("py_CompareGraph invoke CompareGraph");
 	auto data = pyListToVectorCharP(o);
 	deb_write("data.size = ", data.size());
-
+	deb_write("py_SearchMain invoke SearchMain");
 	const auto ret = SearchMain(search, std::move(data), np, (exact != 0));
+	deb_write("py_SearchMain closes SearchMain");
 	const auto ret_s = ret.size();
 	PyObject* ret_o = PyList_New(0);
-	for (Py_ssize_t i = 0; i <= ret[0]; i++)
+	deb_write("py_SearchMain create return list");
+	
+	for (Py_ssize_t i = 0; i < ret_s; i++)
 	{
 		PyList_Append(ret_o, PyLong_FromLong(ret[i]));
 	}
+	deb_write("py_SearchMain return");
 	return ret_o;
 }
 

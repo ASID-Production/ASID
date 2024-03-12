@@ -28,7 +28,7 @@
 
 cmake_minimum_required (VERSION 3.19)
 
-# add_compile_definitions(DEBUG_MESS_ON)
+add_compile_definitions(DEBUG_MESS_ON)
 
 if (POLICY CMP0141)
     cmake_policy(SET CMP0141 NEW)
