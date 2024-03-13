@@ -5,6 +5,13 @@ source VisApp/bin/activate
 pip install -r requirements.txt 
 cd .. 
 
+# building dlls
+mkdir build
+cd build
+cmake -DCMAKE_BUILD_TYPE=Release ..
+make
+cd ..
+
 # prepare rsd
 cd api_database 
 python3 -m venv venv 
@@ -14,13 +21,6 @@ cd ./django_project
 python manage.py makemigrations
 python manage.py migrate 
 cd ../.. 
-
-# building dlls
-mkdir build
-cd build
-cmake -DCMAKE_BUILD_TYPE=Release ..
-make
-cd ..
 
 # final cleanup 
 rm -rf cpplib 
