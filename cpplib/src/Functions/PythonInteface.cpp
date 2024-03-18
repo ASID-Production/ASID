@@ -257,8 +257,6 @@ static PyObject* cpplib_GenSymm(PyObject* self, PyObject* args) {
 	FAM_Cell<FloatingPointType> fcell(CurrentCell(10, 10, 10, 90, 90, 90, true));
 	fcell.GenerateSymm(famstr, symm);
 
-
-	std::string line;
 	for (Py_ssize_t i = s; i < famstr.sizePoints; i++)
 	{
 		PyObject* lst = PyList_New(0);
@@ -268,7 +266,7 @@ static PyObject* cpplib_GenSymm(PyObject* self, PyObject* args) {
 		PyList_Append(lst, PyFloat_FromDouble(famstr.points[i].get(2)));
 		PyList_Append(arg, lst);
 	}
-	return PyUnicode_FromString(line.c_str());
+	return arg;
 }
 
 static PyObject* cpplib_FindDistanceIC(PyObject* self, PyObject* args) {
