@@ -88,7 +88,6 @@ class Session:
             self.user_token = None
 
 
-
 def search(text, search_type):
     if search_type == 'substructure':
         data_out = structureSearch(text)

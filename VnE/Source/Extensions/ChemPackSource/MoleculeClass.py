@@ -49,7 +49,15 @@ class DefaultData:
         'pdb_iCode': ' ',
         'pdb_occupancy': 1.00,
         'pdb_tempFactor': 0.00,
-        'pdb_charge': '  '
+        'pdb_charge': '  ',
+        'cif_sym_codes': [[0, 'x,y,z']],
+        'cif_cell_a': 1,
+        'cif_cell_b': 1,
+        'cif_cell_c': 1,
+        'cif_cell_al': 90,
+        'cif_cell_be': 90,
+        'cif_cell_ga': 90,
+        'cif_frac_coords': np.array([0,0,0], dtype=np.float32),
     }
 
     def __getattr__(self, item):
@@ -73,9 +81,10 @@ class aIter(ABC):
 
 class aEntity(ABC):
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, name=None):
         self.children = []
         self._parent = parent
+        self.name = name
         if self._parent is not None:
             self._parent.addChild(self)
 
@@ -172,7 +181,6 @@ class Atom(DefaultData):
 
     def point(self):
         return self._point
-
 
 class Molecule(aEntity):
     """Molecule class"""
