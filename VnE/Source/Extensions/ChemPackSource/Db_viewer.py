@@ -284,115 +284,22 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
             Db_bindings.uploadFile(filename)
 
     def loadStruct(self):
+        from ..ChemPack import pars
 
-        def fracToDec(a, b, c, al, be, ga, coords):
-            al = (al/180)*np.pi
-            be = (be/180)*np.pi
-            ga = (ga/180)*np.pi
-
-            sin = np.sin
-            cos = np.cos
-            cot = lambda x: np.tan(x)**-1
-            csc = lambda x: np.sin(x)**-1
-
-            mat = np.array([[a*sin(be)*np.sqrt(1-(cot(al)*cot(be) - csc(al)*csc(be)*cos(ga))**2), 0, 0],
-                            [a*csc(al)*cos(ga) - a*cot(al)*cos(be), b*sin(al), 0],
-                            [a*cos(be), b*cos(al), c]])
-            mat = mat.transpose()
-            for i in range(len(coords)):
-                coords[i] = (coords[i] @ mat).astype(dtype=np.float32)
-            return coords
+        if TREE_MODEL is None:
+            return
 
         data = self.table_model.selected()
         if data is None:
             return
-        coord = data['coordinates']
-        if coord is not None:
-            coord = coord['coordinates']
-        if coord is not None:
-            line = coord.split('\n')
-            lines = [[y for y in x.split() if y] for x in line if x]
-            coords = [np.array([float(y) for y in x[2:5]], dtype=np.float32) for x in lines]
-            coords += [np.array([0,0,0]),
-                       np.array([1,0,0]),
-                       np.array([0,1,0]),
-                       np.array([0,0,1])]
-            coords = fracToDec(data['cell']['a'],
-                               data['cell']['b'],
-                               data['cell']['c'],
-                               data['cell']['al'],
-                               data['cell']['be'],
-                               data['cell']['ga'],
-                               coords)
-            if TREE_MODEL is not None:
-                mol_list = point_class.PointsList(parent=TREE_MODEL.getRoot(), name=data['refcode'])
-                molecule_sys = MoleculeClass.MoleculeSystem()
-                mol = MoleculeClass.Molecule(parent=molecule_sys)
-                atoms_list = point_class.PointsList(parent=mol_list, name='atoms', rad=0.25)
-                bonds_list = point_class.PointsList(parent=mol_list, name='bonds', rad=0.1)
-                cell = point_class.PointsList(parent=mol_list, name='cell')
-
-                o = coords[-4].copy()
-                a = coords[-1]
-                b = coords[-2]
-                c = coords[-3]
-
-                p = point_class.Point(parent=cell, color=np.array([1,0,0,1], dtype=np.float32), coord=o, label='o')
-                p = point_class.Point(parent=cell, color=np.array([1,0,0,1], dtype=np.float32), coord=o+a, label='a')
-
-                p = point_class.Point(parent=cell, color=np.array([0,1,0,1], dtype=np.float32), coord=o)
-                p = point_class.Point(parent=cell, color=np.array([0,1,0,1], dtype=np.float32), coord=o+b, label='b')
-
-                p = point_class.Point(parent=cell, color=np.array([0,0,1,1], dtype=np.float32), coord=o)
-                p = point_class.Point(parent=cell, color=np.array([0,0,1,1], dtype=np.float32), coord=o+c, label='c')
-
-                l = [-1,-2,-3]
-                for i in range(-3, 0):
-                    z = l.copy()
-                    z.remove(i)
-                    for i2 in z:
-                        p = point_class.Point(parent=cell, color=np.array([0,0,0,1], dtype=np.float32), coord=o+coords[i])
-                        p = point_class.Point(parent=cell, color=np.array([0,0,0,1], dtype=np.float32), coord=o+coords[i2]+coords[i])
-
-                p = point_class.Point(parent=cell, color=np.array([0, 0, 0, 1], dtype=np.float32), coord=o+a+b+c)
-                p = point_class.Point(parent=cell, color=np.array([0, 0, 0, 1], dtype=np.float32), coord=o+a+b)
-
-                p = point_class.Point(parent=cell, color=np.array([0, 0, 0, 1], dtype=np.float32), coord=o+a+b+c)
-                p = point_class.Point(parent=cell, color=np.array([0, 0, 0, 1], dtype=np.float32), coord=o+a+c)
-
-                p = point_class.Point(parent=cell, color=np.array([0, 0, 0, 1], dtype=np.float32), coord=o+a+b+c)
-                p = point_class.Point(parent=cell, color=np.array([0, 0, 0, 1], dtype=np.float32), coord=o+b+c)
-
-                for i, atomd in enumerate(lines):
-                    atom = MoleculeClass.Atom(parent=mol, coord=coords[i], atom_type=PALETTE.getName(atomd[1]), name=atomd[0])
-                    coord = atom.coord.copy()
-                    point = point_class.Point(parent=atoms_list, coord=coord, color=PALETTE.point_dict[PALETTE.getName(atom.atom_type)], rad=atoms_list, name=atom.name, label=atom.name)
-                    atom.assignPoint(point)
-                mol.genBonds()
-
-                bonds = []
-                for atom in mol:
-                    for bond in atom.bonds():
-                        if bond not in bonds:
-                            bond_l = point_class.PointsList(parent=bonds_list, rad=bonds_list,
-                                                            name=f'{bond.parents()[0].point().name}_{bond.parents()[1].point().name}')
-                            b1 = point_class.Point(coord=bond.parents()[0].point(), color=bond.parents()[0].point(),
-                                                   rad=bond_l,
-                                                   parent=bond_l)
-                            b2 = point_class.Point(coord=bond.parents()[1].point(), color=bond.parents()[1].point(),
-                                                   rad=bond_l,
-                                                   parent=bond_l)
-                            bonds.append(bond)
-                MOLECULE_SYSTEMS[mol_list] = mol
-                mol.assignPoint(mol_list)
-                aind = TREE_MODEL.index(0, 0, by_point=atoms_list)
-                TREE_MODEL.attachObserver(aind, 'Sphere')
-                bind = TREE_MODEL.index(0, 0, by_point=bonds_list)
-                TREE_MODEL.attachObserver(bind, 'Bond')
-                bind = TREE_MODEL.index(0, 0, by_point=cell)
-                TREE_MODEL.attachObserver(bind, 'Line')
-                TREE_MODEL.update()
-
+        id = data['id']
+        cif = Db_bindings.getCif(id)
+        filename = f'temp/{id}.cif'
+        out = open(filename, 'wb')
+        out.write(cif)
+        out.close()
+        pars(filename, True, TREE_MODEL.getRoot())
+        return
 
 def show():
     global DB_VIEWER
