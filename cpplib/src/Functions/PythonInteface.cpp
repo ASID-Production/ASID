@@ -239,6 +239,7 @@ static PyObject* cpplib_GenSymm(PyObject* self, PyObject* args) {
 	PyArg_ParseTuple(args, "Os", &arg, &str);
 
 	const Py_ssize_t s = PyList_Size(arg);
+	deb_write("arg size = ", s);
 	std::vector<AtomType> types;
 	types.reserve(s);
 	std::vector<CurrentPoint> points;
@@ -257,6 +258,11 @@ static PyObject* cpplib_GenSymm(PyObject* self, PyObject* args) {
 	FAM_Cell<FloatingPointType> fcell(CurrentCell(10, 10, 10, 90, 90, 90, true));
 	fcell.GenerateSymm(famstr, symm);
 
+	deb_write("famstr.types.size() = ", famstr.types.size());
+	deb_write("famstr.points.size() = ", famstr.points.size());
+	deb_write("famstr.parseIndex.size() = ", famstr.parseIndex.size());
+	deb_write("famstr.sizePoints = ", famstr.sizePoints);
+
 	for (Py_ssize_t i = s; i < famstr.sizePoints; i++)
 	{
 		PyObject* lst = PyList_New(0);
@@ -266,6 +272,7 @@ static PyObject* cpplib_GenSymm(PyObject* self, PyObject* args) {
 		PyList_Append(lst, PyFloat_FromDouble(famstr.points[i].get(2)));
 		PyList_Append(arg, lst);
 	}
+	Py_INCREF(arg);
 	return arg;
 }
 

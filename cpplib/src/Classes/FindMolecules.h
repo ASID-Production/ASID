@@ -230,7 +230,10 @@ struct FAM_Cell : public geometry::Cell<T> {
 			}
 		}
 		fs.sizeUnique = new_count;
-		if (new_count == p_s) return;
+		if (new_count == p_s) {
+			fs.sizePoints = fs.points.size();
+			return;
+		}
 
 		// Creation and unique reorder completed
 		// 2. Reorder else and change parseIndex
