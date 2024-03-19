@@ -125,7 +125,7 @@ struct ParseData {
 			symmv.emplace_back(symm[i]);
 		}
 
-		fc.GenerateSymm(fs, symmv);
+		fc.GenerateSymm(fs, symmv, true);
 		fs.sizePoints = static_cast<AtomicIDType>(fs.points.size());
 		fs.types.reserve(fs.sizePoints);
 		for (size_type i = fs.sizeUnique; i < fs.sizePoints; i++) {

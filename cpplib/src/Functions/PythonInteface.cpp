@@ -235,8 +235,9 @@ static PyObject* cpplib_FindMoleculesWithoutCell(PyObject* self, PyObject* args)
 static PyObject* cpplib_GenSymm(PyObject* self, PyObject* args) {
 	char* str = NULL;
 	PyObject* arg = NULL;
+	bool mvtc = false;
 
-	PyArg_ParseTuple(args, "Os", &arg, &str);
+	PyArg_ParseTuple(args, "Osp", &arg, &str, &mvtc);
 
 	const Py_ssize_t s = PyList_Size(arg);
 	deb_write("arg size = ", s);
@@ -256,7 +257,7 @@ static PyObject* cpplib_GenSymm(PyObject* self, PyObject* args) {
 
 	FAM_Struct<AtomType, AtomicIDType, FloatingPointType> famstr(std::move(types), std::move(points));
 	FAM_Cell<FloatingPointType> fcell(CurrentCell(10, 10, 10, 90, 90, 90, true));
-	fcell.GenerateSymm(famstr, symm);
+	fcell.GenerateSymm(famstr, symm, mvtc);
 
 	deb_write("famstr.types.size() = ", famstr.types.size());
 	deb_write("famstr.points.size() = ", famstr.points.size());
