@@ -123,9 +123,16 @@ def DbSearch():
     Db_viewer.show()
     return
 
+
 def SymOp():
     from .ChemPackSource import Sym_op
     Sym_op.show()
+    return
+
+
+def exportData():
+    from .ChemPackSource import exportData
+    exportData.execute()
     return
 
 def execute(model, uniform_model=None):
@@ -202,5 +209,9 @@ def setup(menu, model, uniform_model=None, *args, **kwargs):
     action_sym_op.triggered.connect(SymOp)
     cmenu.addAction(action_sym_op)
 
-    actions = [open_action, action_test, action_DB, save_action, action_sym_op]
+    action_export = QAction('Export Data')
+    action_export.triggered.connect(exportData)
+    cmenu.addAction(action_export)
+
+    actions = [open_action, action_test, action_DB, save_action, action_sym_op, action_export]
     return actions
