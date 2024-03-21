@@ -133,7 +133,9 @@ def create_queue(cif_blocks: dict):
             '_atom_site_fract_x', '_atom_site_fract_y',
             '_atom_site_fract_z'}.issubset(cif_block[1].keys()
                                            ):
-            queue.put([refcode, cif_block])
+            struct_obj = StructureCode.objects.get(refcode=refcode)
+            symops = struct_obj.cell.spacegroup.symops
+            queue.put([refcode, cif_block, symops])
             refcodes_to_graph.append(refcode)
     return queue, refcodes_to_graph
 
@@ -206,7 +208,7 @@ def main(args, all_data=False, user_refcodes=''):
         # Add all data from cif file
         if all_data:
             logger_main.info(f"Start adding all information from the cif to the database")
-            add_all_cif_data(cif_blocks)
+            cif_blocks = add_all_cif_data(cif_blocks)
         # Adding coordinates and parameters with deviations
         logger_main.info(f"Start adding coordinates and cell parameters with deviations")
         manager_add_coords_and_params_to_db(cif_blocks)

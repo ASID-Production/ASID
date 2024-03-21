@@ -131,30 +131,9 @@ class CrystalInfoSerializer(serializers.ModelSerializer):
 
 
 class RefcodeShortSerializer(serializers.ModelSerializer):
-    formula = SerializerMethodField(read_only=True)
-    temperature = SerializerMethodField(read_only=True)
-
     class Meta:
         model = StructureCode
-        fields = (
-            'id', 'refcode', 'CCDC_number', 'formula', 'temperature'
-        )
-
-    def get_formula(self, obj):
-        try:
-            formula = Formula.objects.get(refcode=obj)
-            if formula.formula_moiety:
-                return formula.formula_moiety
-            return formula.formula_sum
-        except Exception:
-            pass
-
-    def get_temperature(self, obj):
-        try:
-            exp_info = ExperimentalInfo.objects.get(refcode=obj)
-            return exp_info.structure_determination_temperature
-        except Exception:
-            pass
+        fields = ('id', 'refcode')
 
 
 class RefcodeFullSerializer(serializers.ModelSerializer):
@@ -312,34 +291,9 @@ class QCRefcodeFullSerializer(serializers.ModelSerializer):
 
 
 class QCRefcodeShortSerializer(serializers.ModelSerializer):
-    formula = SerializerMethodField(read_only=True, source='qc_formula')
-    program = SerializerMethodField(read_only=True, source='qc_prog')
-
     class Meta:
         model = QCStructureCode
-        fields = (
-            'id', 'refcode', 'program', 'formula'
-        )
-
-    def get_formula(self, obj):
-        try:
-            formula = QCFormula.objects.get(refcode=obj)
-            if formula.formula_moiety:
-                return formula.formula_moiety
-            return formula.formula_sum
-        except Exception:
-            pass
-
-    def get_program(self, obj):
-        try:
-            program = QCProgram.objects.get(refcode=obj)
-            fields = get_fields_list(QCProgram)
-            for field in fields:
-                if field not in ['id', 'refcode']:
-                    if getattr(program, field):
-                        return field
-        except Exception:
-            pass
+        fields = ('id', 'refcode')
 
 
 class VaspUploadSerializer(serializers.ModelSerializer):

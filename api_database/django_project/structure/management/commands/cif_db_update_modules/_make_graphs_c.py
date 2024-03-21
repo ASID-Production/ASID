@@ -64,7 +64,7 @@ def get_coords(cif_block) -> str:
     return atomic_sites, atoms
 
 
-def get_data(cif_block):
+def get_data(cif_block, symops_db):
     params = [
         cif_block[1]['_cell_length_a'].split('(')[0], cif_block[1]['_cell_length_b'].split('(')[0],
         cif_block[1]['_cell_length_c'].split('(')[0], cif_block[1]['_cell_angle_alpha'].split('(')[0],
@@ -94,17 +94,8 @@ def get_data(cif_block):
         for symop in symops:
             if symop:
                 symops_list.append(symop[symops_idx])
-    elif '_symmetry_space_group_name_H-M' in cif_block[1].keys():
-        h_m_group = cif_block[1]['_symmetry_space_group_name_H-M']
-        file = open(os.path.join(os.path.dirname(__file__), '../symops.json'))
-        symops_json = json.load(file)
-        for i, item in enumerate(symops_json):
-            if i > 0:
-                if item['universal_h_m'] == h_m_group:
-                    symops_list = item['symops']
-                    break
-    if not symops_list:
-        raise Exception('No symmetry operations were found!')
+    else:
+        symops_list = symops_db.split(';')
     return params, atoms_coords, atoms_types, symops_list
 
 
@@ -117,7 +108,7 @@ def make_graph_c(params, coords, types, refcode, add_graphs_logger, symops):
         graph_str, warnings = parse_mols
         add_graphs_logger.warning(f"FindMoleculesInCellError in {refcode}:\n\t{warnings}")
     else:
-        raise Exception(f"Invalid lenth of mols list: {len(parse_mols)}")
+        raise Exception(f"Invalid length of mols list: {len(parse_mols)}")
     if graph_str.split()[1] == 0:
         raise Exception(f"There are no atoms in graph! May be the structure was unordered")
     return graph_str
@@ -168,13 +159,13 @@ def add_graphs_c(queue, return_dict, proc_num: int):
     add_graphs_logger = set_prm_log(proc_num)
     while True:
         try:
-            refcode, cif_block = queue.get(block=True, timeout=0.5)
+            refcode, cif_block, symops_db = queue.get(block=True, timeout=0.5)
         except Exception:
             # if the queue is empty, terminate the thread
             break
         try:
             add_graphs_logger.info(f"Start processing structure {refcode}")
-            params, coords, types, symops = get_data(cif_block)
+            params, coords, types, symops = get_data(cif_block, symops_db)
             add_graphs_logger.info(f"Received atomic coordinates and translation matrix")
             graph_str = make_graph_c(params, coords, types, refcode, add_graphs_logger, symops)
             add_graphs_logger.info(f"Received graph string")
