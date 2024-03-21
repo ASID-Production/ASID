@@ -194,7 +194,7 @@ class QCElementsManager(AbstractElementsManager):
     refcode = models.OneToOneField(
         QCStructureCode,
         related_name='qc_elements',
-        on_delete=models.PROTECT
+        on_delete=models.CASCADE
     )
     element_set_1 = models.ForeignKey(
         ElementsSet1,

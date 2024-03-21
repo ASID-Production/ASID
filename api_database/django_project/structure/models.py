@@ -835,7 +835,7 @@ class ElementsManager(AbstractElementsManager):
     refcode = models.OneToOneField(
         StructureCode,
         related_name='elements',
-        on_delete=models.PROTECT
+        on_delete=models.CASCADE
     )
     element_set_1 = models.ForeignKey(
         ElementsSet1,

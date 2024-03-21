@@ -37,6 +37,8 @@ import re
 from api.filters import get_reduced_cell
 from math import cos, sqrt, radians
 from ._cifparser import add_cell_parms_with_error
+import json
+import os
 
 compound_names = {
     'systematic_name': ['_chemical_name_systematic'],
@@ -111,13 +113,13 @@ crystal_and_structure_info = {
     'size_mid': ['_exptl_crystal_size_mid'],
 }
 formula = {
-        'formula_moiety': [
-            '_chemical_formula_moiety',
-            '_chemical_formula_structural',
-            '_chemical_formula_iupac'
-        ],
-        'formula_sum': ['_chemical_formula_sum']
-    }
+    'formula_moiety': [
+        '_chemical_formula_moiety',
+        '_chemical_formula_structural',
+        '_chemical_formula_iupac'
+    ],
+    'formula_sum': ['_chemical_formula_sum']
+}
 journal = {
     'international_coden': ['_journal_coden_cambridge'],
     'name': ['_citation_journal_abbrev'],
@@ -154,7 +156,7 @@ def add_author(cif_block, struct_obj, authors=None):
                 return 0
     # add to database
     for author in authors:
-        author = author.replace('\n', '')
+        author = str(author).replace('\n', '')
         author = author.replace('\r', '')
         if author[0] in ['\'', '"']:
             author = author[1:]
@@ -185,15 +187,62 @@ def add_author(cif_block, struct_obj, authors=None):
 
 
 def get_or_create_space_group(cif_block):
+
+    def get_sg_number_by_h_m_name(h_m_name: str):
+        file = open(os.path.join(os.path.dirname(__file__), '../symops.json'))
+        symops_list = json.load(file)
+        for i, symops in enumerate(symops_list):
+            if i > 0:
+                if symops['hermann_mauguin'] == h_m_name:
+                    return symops['number']
+
+    def get_system_from_numb(sg_number: int):
+        file = open(os.path.join(os.path.dirname(__file__), '../symops.json'))
+        symops_list = json.load(file)
+        for i, symops in enumerate(symops_list):
+            if i > 0:
+                if symops['number'] == sg_number:
+                    return symops['crystal_class']
+
     data_in_cif = cif_block.keys()
-    if '_symmetry_space_group_name_h-m' in data_in_cif:
-        space_group_name = cif_block['_symmetry_space_group_name_h-m'].split()
-        system = None
-        if '_space_group_crystal_system' in data_in_cif:
-            system = cif_block['_space_group_crystal_system']
-        elif '_symmetry_cell_setting' in data_in_cif:
-            system = cif_block['_symmetry_cell_setting']
-        logger_1.info(f'Crystal system: {system}')
+    # sg number
+    if '_space_group_it_number' in data_in_cif:
+        sg_number = int(cif_block['_space_group_it_number'])
+    elif '_symmetry_int_tables_number' in data_in_cif:
+        sg_number = int(cif_block['_symmetry_int_tables_number'])
+    elif '_symmetry_space_group_name_h-m' in data_in_cif:
+        sg_number = get_sg_number_by_h_m_name(cif_block['_symmetry_space_group_name_h-m'])
+    else:
+        raise Exception('No space group number found in cif!')
+    logger_1.info(f'Space group number: {sg_number}')
+    # system
+    if '_space_group_crystal_system' in data_in_cif:
+        system = cif_block['_space_group_crystal_system']
+    elif '_symmetry_cell_setting' in data_in_cif:
+        system = cif_block['_symmetry_cell_setting']
+    else:
+        system = get_system_from_numb(sg_number)
+    logger_1.info(f'Crystal system: {system}')
+    # get system number in db choices
+    if not system.isalpha():
+        system = get_system_from_numb(sg_number)
+    if system:
+        system_id = 0
+        for syst in SYSTEMS:
+            if system in syst:
+                system_id = syst[0]
+        if system_id:
+            logger_1.info(f'Space group system number: {system_id}')
+        else:
+            raise Exception('No space group system found in cif!')
+    else:
+        raise Exception('No space group system found in cif!')
+    # check if space group has already existed in db
+    if '_symmetry_space_group_name_h-m' in data_in_cif or '_space_group_name_h-m_alt' in data_in_cif:
+        if '_symmetry_space_group_name_h-m' in data_in_cif:
+            space_group_name = cif_block['_symmetry_space_group_name_h-m'].split()
+        else:
+            space_group_name = cif_block['_space_group_name_h-m_alt'].split()
         if system == 'monoclinic':
             if space_group_name[1] == '1' and space_group_name[3] == '1':
                 space_group_name = [space_group_name[0], space_group_name[2]]
@@ -202,8 +251,11 @@ def get_or_create_space_group(cif_block):
     else:
         raise Exception('No space group found in cif!')
     hall = ''
-    if '_symmetry_space_group_name_hall' in data_in_cif:
-        hall = cif_block['_symmetry_space_group_name_hall']
+    if '_symmetry_space_group_name_hall' in data_in_cif or '_space_group_name_hall' in data_in_cif:
+        if '_symmetry_space_group_name_hall' in data_in_cif:
+            hall = cif_block['_symmetry_space_group_name_hall']
+        else:
+            hall = cif_block['_space_group_name_hall']
         logger_1.info(f'Hall name: {hall}')
         if Spacegroup.objects.filter(name=space_group_name, hall_name=hall).exists():
             space_group = Spacegroup.objects.get(name=space_group_name, hall_name=hall)
@@ -217,26 +269,6 @@ def get_or_create_space_group(cif_block):
         elif space_group.count() == 0:
             # if such a group is not in the database, then add it
             logger_1.info(f'Creating new space group object...')
-    # sg number
-    if '_space_group_it_number' in data_in_cif:
-        sg_number = cif_block['_space_group_it_number']
-    elif '_symmetry_int_tables_number' in data_in_cif:
-        sg_number = cif_block['_symmetry_int_tables_number']
-    else:
-        raise Exception('No space group number found in cif!')
-    logger_1.info(f'Space group number: {sg_number}')
-    # system
-    if system:
-        system_id = 0
-        for syst in SYSTEMS:
-            if system in syst:
-                system_id = syst[0]
-        if system_id:
-            logger_1.info(f'Space group system number: {system_id}')
-        else:
-            raise Exception('No space group system found in cif!')
-    else:
-        raise Exception('No space group system found in cif!')
     # create a space group object
     space_group, create = Spacegroup.objects.get_or_create(
         name=space_group_name,
@@ -282,7 +314,12 @@ def add_cell(cif_block, space_group, struct_obj):
                                cif_block['_cell_angle_gamma'].split('(')[0])
     else:
         raise Exception('No unit cell parameters were found!')
-    centring = cif_block['_symmetry_space_group_name_h-m'].split()[0]
+    if space_group.name[0].upper() in ['P', 'I', 'A', 'B', 'C', 'F', 'R']:
+        centring = space_group.name[0]
+    elif space_group.name[1].upper() in ['P', 'I', 'A', 'B', 'C', 'F', 'R']:
+        centring = space_group.name[1]
+    else:
+        raise Exception('Invalid space group name: could not find centring in space group name!')
     centring_id = 0
     for item in CENTRINGS:
         if centring.replace('-', '') in item:
@@ -292,7 +329,8 @@ def add_cell(cif_block, space_group, struct_obj):
     if '_cell_formula_units_z' in data_in_cif:
         z_val = float(cif_block['_cell_formula_units_z'])
     else:
-        raise Exception('No Z value was found!')
+        logger_1.error('No Z value was found!')
+        z_val = len(space_group.symops.split(';'))
     cell, created = Cell.objects.get_or_create(
         a=float(a), b=float(b), c=float(c),
         al=float(al), be=float(be), ga=float(ga),
@@ -368,13 +406,13 @@ def add_journal_and_publication(cif_block, struct_obj):
         year = int(cif_block[1]['_journal_year'])
         filtr['year'] = year
     if '_journal_page_first' in cif_block[1].keys():
-        page = int(cif_block[1]['_journal_page_first'])
+        page = cif_block[1]['_journal_page_first']
         filtr['page'] = page
     if '_journal_volume' in cif_block[1].keys():
-        volume = int(cif_block[1]['_journal_volume'])
+        volume = cif_block[1]['_journal_volume']
         filtr['volume'] = volume
     if '_journal_doi' in cif_block[1].keys():
-        doi = int(cif_block[1]['_journal_doi'])
+        doi = cif_block[1]['_journal_doi']
         filtr['doi'] = doi
     if '_citation_year' in cif_block[1].keys():
         citation = cif_block[1].GetLoop('_citation_year')
@@ -390,8 +428,13 @@ def add_journal_and_publication(cif_block, struct_obj):
         if '_citation_page_first' in citation_keys:
             page = citation['_citation_page_first'][0]
             filtr['page'] = page
+    # filter is_null
+    filtr_is_null = dict()
+    for key in ['journal', 'page', 'volume', 'doi']:
+        if key not in filtr.keys():
+            filtr_is_null[f'{key}__isnull'] = True
     if year:
-        pub_obj, created = Publication.objects.get_or_create(**filtr)
+        pub_obj, created = Publication.objects.filter(**filtr_is_null).get_or_create(**filtr)
     else:
         return 0
     # authors
@@ -413,7 +456,9 @@ def add_journal_and_publication(cif_block, struct_obj):
         flag = add_authors_and_get_flag()
     # refcode connection
     if flag:
-        RefcodePublicationConnection.objects.get_or_create(refcode=struct_obj, publication=pub_obj)
+        ref_pub_obj, created = RefcodePublicationConnection.objects.get_or_create(refcode=struct_obj)
+        ref_pub_obj.publication = pub_obj
+        ref_pub_obj.save()
 
 
 def add_element_composition(cif_block, struct_obj):
@@ -540,6 +585,10 @@ def add_universal(model, refcode_obj, cif_block, iucr_dict):
         for data_key in values:
             if data_key in cif_block[1].keys():
                 value = cif_block[1][data_key]
+                if value == '?':
+                    break
+                if '(' in value and ')' in value and re.search(r'\d', value) and not re.search(r'[a-zA-Z]', value):
+                    value = float(value.split('(')[0])
                 if data_key == '_exptl_special_details':
                     for line in value.split('\n'):
                         if key == 'bioactivity' and 'drug' in line:
@@ -567,6 +616,8 @@ def add_universal(model, refcode_obj, cif_block, iucr_dict):
                             value = ''
                 if key == 'systematic_name':
                     value = ' '.join(value.split())
+                if key == 'wavelength' and type(value) == list:
+                    value = float(value[0].split(',')[0])
                 if key == 'extinction_coef':
                     value = float(value.split('(')[0])
                 if key == 'formula_moiety' or key == 'formula_sum':
@@ -574,10 +625,16 @@ def add_universal(model, refcode_obj, cif_block, iucr_dict):
                     value = value.replace('\r', '')
                 if key in ['r_factor', 'wR_factor', 'gof']:
                     value = float(value) * 100
-                if value and value != '?':
+                if value and value not in ['?', 'none']:
                     setattr(obj_obj, key, value)
                     break
-    obj_obj.save()
+    # if problems with attr values (first of all for COD structures)
+    try:
+        obj_obj.save()
+    except Exception as err:
+        key = str(err).split()[1].replace("'", '')
+        delattr(obj_obj, key)
+        obj_obj.save()
     return obj_obj
 
 
@@ -586,30 +643,42 @@ def add_all_cif_data(cifs: dict):
     Website https://xstar.sourceforge.net/astar/sf/output/cif_core.htm
     was used to parse the cif file codes
     """
+    cif_blocks = cifs.copy()
     for refcode, cif_block in cifs.items():
         logger_1.info(f'{refcode} in progres...')
         struct_obj = add_refcode(cif_block[1], refcode)
-        logger_1.info(f'Add authors')
-        add_author(cif_block[1], struct_obj)
-        logger_1.info(f'Check space group')
-        space_group = get_or_create_space_group(cif_block[1])
-        logger_1.info(f'Space group: {space_group}')
-        logger_1.info(f'Add unit cell')
-        add_cell(cif_block[1], space_group, struct_obj)
-        logger_1.info(f'Add reduced cell')
-        add_reduced_cell(struct_obj)
-        logger_1.info(f'Add compound name')
-        add_universal(CompoundName, struct_obj, cif_block, compound_names)
-        logger_1.info(f'Add experimental info')
-        add_universal(ExperimentalInfo, struct_obj, cif_block, experimental_info)
-        logger_1.info(f'Add refinement info')
-        add_universal(RefinementInfo, struct_obj, cif_block, refinement_info)
-        logger_1.info(f'Add crystal and structure info')
-        add_universal(CrystalAndStructureInfo, struct_obj, cif_block, crystal_and_structure_info)
-        logger_1.info(f'Add formula')
-        add_universal(Formula, struct_obj, cif_block, formula)
-        logger_1.info(f'Add journal and publication')
-        add_journal_and_publication(cif_block, struct_obj)
-        logger_1.info(f'Add element composition')
-        add_element_composition(cif_block, struct_obj)
-        logger_1.info(f'Information addition from {refcode} is completed successfully!')
+        try:
+            logger_1.info(f'Add authors')
+            add_author(cif_block[1], struct_obj)
+            logger_1.info(f'Check space group')
+            space_group = get_or_create_space_group(cif_block[1])
+            logger_1.info(f'Space group: {space_group}')
+            logger_1.info(f'Add unit cell')
+            add_cell(cif_block[1], space_group, struct_obj)
+            logger_1.info(f'Add reduced cell')
+            add_reduced_cell(struct_obj)
+            logger_1.info(f'Add compound name')
+            add_universal(CompoundName, struct_obj, cif_block, compound_names)
+            logger_1.info(f'Add experimental info')
+            add_universal(ExperimentalInfo, struct_obj, cif_block, experimental_info)
+            logger_1.info(f'Add refinement info')
+            add_universal(RefinementInfo, struct_obj, cif_block, refinement_info)
+            logger_1.info(f'Add crystal and structure info')
+            add_universal(CrystalAndStructureInfo, struct_obj, cif_block, crystal_and_structure_info)
+            logger_1.info(f'Add formula')
+            add_universal(Formula, struct_obj, cif_block, formula)
+            logger_1.info(f'Add journal and publication')
+            add_journal_and_publication(cif_block, struct_obj)
+            logger_1.info(f'Add element composition')
+            add_element_composition(cif_block, struct_obj)
+            logger_1.info(f'Information addition from {refcode} is completed successfully!')
+        except Exception as err:
+            message = f'Caught an exception for structure {refcode}\n{err}'
+            logger_1.error(message)
+            # delete object if something went wrong
+            struct_obj.delete()
+            cif_blocks.pop(refcode)
+            # if only 1 structure was upload raise error
+            if len(cifs) == 1:
+                raise Exception(err)
+    return cif_blocks

@@ -96,7 +96,7 @@ def get_coords(cif_block) -> str:
         idxs['occup'] = order.index('_atom_site_occupancy')
     if '_atom_site_b_iso_or_equiv' in order:
         if 'occup' not in idxs.keys():
-            idxs['occup'] = '1'
+            idxs['occup'] = 1
         idxs['b_iso'] = order.index('_atom_site_b_iso_or_equiv')
     for site in coords:
         atoms.append(site[idxs['lable']])
