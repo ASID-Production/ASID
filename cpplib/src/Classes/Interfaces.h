@@ -30,6 +30,7 @@
 #include <vector>
 #include "../Classes/Geometry.h"
 #include "../Classes/FindMolecules.h"
+#include "../Functions/AllInOneAndCurrent.h"
 
 enum class ErrorStates {
 	dataIsEmpty

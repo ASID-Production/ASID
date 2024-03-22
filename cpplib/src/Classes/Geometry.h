@@ -517,9 +517,9 @@ namespace geometry {
 		{
 			// separate into 3 domains
 			std::array<size_t, 3> bracket;
-			bracket[0] = strcspn(str, ",");
-			bracket[1] = strcspn(str + bracket[0] + 1, ",");
-			bracket[2] = strcspn(str + bracket[0] + 1 + bracket[1] + 1, "\0");
+			bracket[0] = findcomma(str);
+			bracket[1] = findcomma(str + bracket[0] + 1);
+			bracket[2] = findcomma(str + bracket[0] + 1 + bracket[1] + 1);
 
 			for (unsigned char i = 0; i < 3; i++)
 			{
@@ -545,6 +545,11 @@ namespace geometry {
 			return res;
 		}
 	private:
+		size_t findcomma(const char * str) {
+			size_t n = 0;
+			for (; str[n] != ',' && str[n] != '\0'; n++);
+			return n;
+		}
 		std::pair<point_t, T> parse(const char* str, const size_t len) const {
 			point_t p{ 0,0,0 };
 			T shift = 0;
