@@ -179,7 +179,7 @@ struct FAM_Cell : public geometry::Cell<T> {
 	using PointConteinerType = std::vector<PointType>;
 	using base = geometry::Cell<T>;
 	explicit FAM_Cell(base&& cell) : base(std::move(cell)) {}
-	template <class A, class AI> void GenerateSymm(FAM_Struct<A,AI,T>& fs, const std::vector<geometry::Symm<T>>& symm, const bool intoCell) const {
+	template <class A, class AI> void GenerateSymm(FAM_Struct<A,AI,T>& fs, const std::vector<geometry::Symm<T>>& symm, const bool intoCell = true) const {
 		const size_t p_s = fs.points.size();
 		const size_t s_s = symm.size();
 
@@ -192,7 +192,7 @@ struct FAM_Cell : public geometry::Cell<T> {
 			const size_t p_start = fs.points.size();
 			for (size_t s = 0; s < s_s; s++) {
 				PointType newpoint = intoCell ? symm[s].GenSymmNorm(fs.points[p]) : symm[s].GenSymm(fs.points[p]);
-				if (isTheSame_(fs.points, newpoint, p, p_start, intoCell)) {
+				if (isTheSame_(fs.points, newpoint, 0, p_start, intoCell)) {
 					continue;
 				}
 				const size_t au = isAnotherUnique(fs.points, newpoint, p, fs.sizeUnique, intoCell);

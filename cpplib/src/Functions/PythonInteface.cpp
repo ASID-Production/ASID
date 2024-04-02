@@ -32,6 +32,7 @@
 #include "../Classes/Interfaces.h"
 #include "../BaseHeaders/DebugMes.h"
 
+// Utilities section
 static std::vector<float> pyListToVectorFloat(PyObject* plist) {
 	const Py_ssize_t s = PyList_Size(plist);
 	std::vector<float> ret(s);
@@ -78,6 +79,7 @@ inline static void useDistances(PyObject* self) {
 	p_distances = &dist;
 }
 
+// Python section
 static PyObject* cpplib_GenBonds(PyObject* self, PyObject* arg) {
 	useDistances(self);
 	auto& distances = *(p_distances);
@@ -231,7 +233,6 @@ static PyObject* cpplib_FindMoleculesWithoutCell(PyObject* self, PyObject* args)
 	return PyUnicode_FromString(ret.c_str());
 }
 
-// [[type,x,y,z],...], str
 static PyObject* cpplib_GenSymm(PyObject* self, PyObject* args) {
 	PyObject* osymm = NULL;
 	PyObject* arg = NULL;
