@@ -39,7 +39,13 @@ set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 project(cpplibLib)
-    find_package(Python COMPONENTS Interpreter Development EXACT 3.10)
+    if (UNIX)
+        find_package(Python COMPONENTS Interpreter Development)
+    endif (UNIX)
+
+    if (WIN32)
+        find_package(Python COMPONENTS Interpreter Development EXACT 3.10)
+    endif (WIN32)
     include_directories(SYSTEM ${Python3_INCLUDE_DIRS})
 
     add_library(cpplibLib "cpplib/src/Functions/Functions.cpp" 
@@ -69,7 +75,14 @@ project(cpplibLib)
 ############################################################
 
 project(cpplib)
-    find_package(Python COMPONENTS Interpreter Development EXACT 3.10)
+
+    if (UNIX)
+        find_package(Python COMPONENTS Interpreter Development)
+    endif (UNIX)
+
+    if (WIN32)
+        find_package(Python COMPONENTS Interpreter Development EXACT 3.10)
+    endif (WIN32)
 
     include_directories(SYSTEM ${Python3_INCLUDE_DIRS})
 
