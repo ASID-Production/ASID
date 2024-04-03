@@ -40,104 +40,31 @@ PARSER = None
 
 TREE_MODEL = None
 
+UNIFORM_MODEL = None
+
+
+def loadMolSys(molsys, points_lists):
+    if TREE_MODEL is not None:
+        uniform_model = UNIFORM_MODEL
+        model = TREE_MODEL
+
+        coords = np.array([a.coord for a in points_lists[1].children])
+        cent = np.sum(coords, axis=0) / len(coords)
+        if uniform_model is not None:
+            root = uniform_model.root()
+            root.rotation_point = cent.copy()
+        if molsys is not None:
+            model.insertRow(model.rowCount())
+            if points_lists is not None:
+                if points_lists[1] is not None:
+                    atoms_index = model.index(0, 0, by_point=points_lists[1])
+                    model.attachObserver(atoms_index, 'Sphere')
+                if points_lists[2] is not None:
+                    bonds_index = model.index(0, 0, by_point=points_lists[2])
+                    model.attachObserver(bonds_index, 'Bond')
+
 
 def pars(file, bond=True, root=None):
-    '''from .ChemPackSource import MoleculeClass
-
-    def pars_xyz(bond=True):
-        i = 1
-        for line in file:
-            line_ed = [x for x in line[:-1].split(' ') if x]
-            if len(line_ed) == 4:
-                coord = np.array([float(x) for x in line_ed[1:]], dtype=np.float32)
-                if line_ed[0].isdigit():
-                    atom = MoleculeClass.Atom(coord.copy(), int(line_ed[0]), parent=mol)
-                else:
-                    atom = MoleculeClass.Atom(coord.copy(), PALETTE.getName(line_ed[0]), parent=mol)
-                coord[2] -= 500
-                if line_ed[0].isdigit():
-                    line_ed[0] = PALETTE.getName(line_ed[0])
-                point = point_class.Point(parent=atom_list, coord=coord, rad=atom_list,
-                                          color=PALETTE.point_dict[line_ed[0]])
-                atom.assignPoint(point)
-                mol.addChild(atom)
-                point.addProperty('name', f'{line_ed[0]}{i}')
-                point.addProperty('label', f'{line_ed[0]}{i}')
-                i += 1
-        if bond:
-            MOLECULE_SYSTEMS[molecule_list].genBonds()
-        bonds = []
-        for atom in mol:
-            for bond in atom.bonds():
-                if bond not in bonds:
-                    bond_l = point_class.PointsList(parent=bond_list)
-                    bond_l.addProperty('name', f'{bond.parents()[0].point().name}_{bond.parents()[1].point().name}')
-                    bond_l.addProperty('rad', bond_list)
-                    b1 = point_class.Point(coord=bond.parents()[0].point(), color=bond.parents()[0].point(), rad=bond_l,
-                                           parent=bond_l)
-                    b2 = point_class.Point(coord=bond.parents()[1].point(), color=bond.parents()[1].point(), rad=bond_l,
-                                           parent=bond_l)
-                    bonds.append(bond)
-        return
-
-    def pars_pdb(bond=True):
-        for line in file:
-            line_ed = [x for x in line[:-1].split(' ') if x]
-            line_ed = []
-            i = 0
-            x = line[i]
-            flag = ''
-            while x.isalpha():
-                flag += x
-                i += 1
-                x = line[i]
-
-            if flag == 'ATOM' or flag == 'HETATM':
-                coord = np.array([float(line[26:38]), float(line[38:46]), float(line[46:54])], dtype=np.float32)
-                atom_type = line[66:78].replace(' ', '').capitalize()
-                atom = MoleculeClass.Atom(coord.copy(), PALETTE.getName(atom_type), parent=mol)
-                coord[2] -= 500
-                point = point_class.Point(parent=atom_list, coord=coord, rad=atom_list,
-                                          color=PALETTE.point_dict[atom_type])
-                atom.assignPoint(point)
-                mol.addChild(atom)
-                point.addProperty('name', f'{line[i:11].replace(" ", "")}-{line[13:17].replace(" ", "")}')
-                point.addProperty('label', point.name)
-        if bond:
-            MOLECULE_SYSTEMS[molecule_list].genBonds()
-        bonds = []
-        for atom in mol:
-            for bond in atom.bonds():
-                if bond not in bonds:
-                    bond_l = point_class.PointsList(parent=bond_list)
-                    bond_l.addProperty('name', f'{bond.parents()[0].point().name}_{bond.parents()[1].point().name}')
-                    bond_l.addProperty('rad', bond_list)
-                    b1 = point_class.Point(coord=bond.parents()[0].point(), color=bond.parents()[0].point(), rad=bond_l,
-                                           parent=bond_l)
-                    b2 = point_class.Point(coord=bond.parents()[1].point(), color=bond.parents()[1].point(), rad=bond_l,
-                                           parent=bond_l)
-                    bonds.append(bond)
-        return
-
-    global MOLECULE_SYSTEMS
-    molecule_list = point_class.PointsList(parent=TREE_MODEL.getRoot())
-    MOLECULE_SYSTEMS[molecule_list] = MoleculeClass.MoleculeSystem()
-    molecule_list.addProperty('name', name)
-    atom_list = point_class.PointsList(parent=molecule_list)
-    atom_list.addProperty('name', 'Atoms')
-    atom_list.addProperty('rad', 0.25)
-    bond_list = point_class.PointsList(parent=molecule_list)
-    bond_list.addProperty('name', 'Bonds')
-    bond_list.addProperty('rad', 0.1)
-
-    mol = MoleculeClass.Molecule()
-    MOLECULE_SYSTEMS[molecule_list].addChild(mol)
-    mol.assignPoint(molecule_list)
-    if ext == 'xyz':
-        pars_xyz(bond)
-    elif ext == 'pdb':
-        pars_pdb(bond)
-    return molecule_list, (atom_list, bond_list)'''
     global PARSER
     global TREE_MODEL
     if PARSER is None:
@@ -146,8 +73,9 @@ def pars(file, bond=True, root=None):
     if TREE_MODEL is not None:
         if os.path.basename(file) == 'paths.pdb' or os.path.basename(file) == 'CPs.pdb':
             bond = False
-        molsys, point_lists = PARSER.parsFile(file, bond=bond, root=root)
-        return molsys, point_lists
+        molsys, points_lists = PARSER.parsFile(file, bond=bond, root=root)
+        loadMolSys(molsys, points_lists)
+        return molsys, points_lists
     else:
         molsys, _ = PARSER.parsFile(file)
         return molsys, None
@@ -196,30 +124,31 @@ def DbSearch():
     return
 
 
+def SymOp():
+    from .ChemPackSource import Sym_op
+    Sym_op.show()
+    return
+
+
+def exportData():
+    from .ChemPackSource import exportData
+    exportData.execute()
+    return
+
 def execute(model, uniform_model=None):
     from PySide6.QtWidgets import QFileDialog
-    filter = '*.xyz *.pdb'
+    global PARSER
+    if PARSER is None:
+        from .ChemPackSource.parsers import PARSER as parser
+        PARSER = parser
+    filter = PARSER.SUPPORTED_FORMATS.keys()
+    filter = ' '.join([f'*{x}' for x in filter])
     filename = QFileDialog.getOpenFileName(filter=filter)
     if type(filename) == tuple:
         filename = filename[0]
 
     if filename != '':
-
         _, points_lists = pars(filename, root=TREE_MODEL.getRoot())
-        coords = np.array([a.coord for a in points_lists[1].children])
-        cent = np.sum(coords, axis=0)/len(coords)
-        if uniform_model is not None:
-            root = uniform_model.root()
-            root.rotation_point = cent.copy()
-        if _ is not None:
-            model.insertRow(model.rowCount())
-            if points_lists is not None:
-                if points_lists[1] is not None:
-                    atoms_index = model.index(0, 0, by_point=points_lists[1])
-                    model.attachObserver(atoms_index, 'Sphere')
-                if points_lists[2] is not None:
-                    bonds_index = model.index(0, 0, by_point=points_lists[2])
-                    model.attachObserver(bonds_index, 'Bond')
     return 0
 
 
@@ -251,7 +180,9 @@ def setup(menu, model, uniform_model=None, *args, **kwargs):
     from PySide6.QtGui import QAction
 
     global TREE_MODEL
+    global UNIFORM_MODEL
     TREE_MODEL = model
+    UNIFORM_MODEL = uniform_model
 
     createPalette()
 
@@ -273,5 +204,14 @@ def setup(menu, model, uniform_model=None, *args, **kwargs):
     save_action.setShortcut('Ctrl+S')
     cmenu.addAction(save_action)
     save_action.triggered.connect(save)
-    actions = [open_action, action_test, action_DB, save_action]
+
+    action_sym_op = QAction('Symmetry operations')
+    action_sym_op.triggered.connect(SymOp)
+    cmenu.addAction(action_sym_op)
+
+    action_export = QAction('Export Data')
+    action_export.triggered.connect(exportData)
+    cmenu.addAction(action_export)
+
+    actions = [open_action, action_test, action_DB, save_action, action_sym_op, action_export]
     return actions

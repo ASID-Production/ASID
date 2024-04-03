@@ -38,7 +38,8 @@ class FileParser:
 
     def __init__(self):
         self.SUPPORTED_FORMATS = {'.xyz': self.parsXyz,
-                                  '.pdb': self.parsPdb}
+                                  '.pdb': self.parsPdb,
+                                  '.cif': self.parsCif}
 
     def parsFile(self, file_path, bond=True, root=None):
         _, ext = os.path.splitext(file_path)
@@ -51,52 +52,47 @@ class FileParser:
         mol_list, atom_list, bonds_l = None, None, None
         file = open(file_path, 'r')
         mol_sys = MoleculeClass.MoleculeSystem()
+        mol_sys.name = os.path.basename(file_path).split('.')[0]
+        mol_sys.file_name = file_path
         mol = MoleculeClass.Molecule(parent=mol_sys)
+        i = 0
         for line in file:
             line_p = [x for x in line[:-1].split(' ') if x]
             if len(line_p) < 4:
                 continue
             if PALETTE.getName(line_p[0]) != 999 and all([True if x.replace('.', '').replace('-', '').isdigit() else False for x in line_p[1:4]]):
-                coord = np.array([float(x) for x in line_p[1:]], dtype=np.float32)
-                atom = MoleculeClass.Atom(coord.copy(), PALETTE.getName(line_p[0]), parent=mol)
-        if bond:
-            mol_sys.genBonds()
-        if root is not None:
-            mol_list = point_class.PointsList(parent=root, name=os.path.basename(file_path).split('.')[0])
-            mol.assignPoint(mol_list)
-            MOLECULE_SYSTEMS[mol_list] = mol_sys
-            atom_list = point_class.PointsList(parent=mol_list, rad=0.25, name='Atoms')
-            i = 1
-            for atom in mol.children:
-                coord = atom.coord.copy()
-                point = point_class.Point(parent=atom_list, coord=coord, rad=atom_list,
-                                          color=PALETTE.point_dict[PALETTE.getName(atom.atom_type)],
-                                          atom_type=atom.atom_type)
-                atom.assignPoint(point)
-                point.addProperty('name', f'{point.atom_type}{i}')
-                point.addProperty('label', f'{point.atom_type}{i}')
                 i += 1
-            if bond:
-                bonds_l = point_class.PointsList(parent=mol_list, rad=0.1, name='Bonds')
-                bonds = []
-                for atom in mol:
-                    for bond in atom.bonds():
-                        if bond not in bonds:
-                            bond_l = point_class.PointsList(parent=bonds_l, name=f'{bond.parents()[0].point().name}_{bond.parents()[1].point().name}', rad=bonds_l)
-                            b1 = point_class.Point(coord=bond.parents()[0].point(), color=bond.parents()[0].point(),
-                                                   rad=bond_l,
-                                                   parent=bond_l)
-                            b2 = point_class.Point(coord=bond.parents()[1].point(), color=bond.parents()[1].point(),
-                                                   rad=bond_l,
-                                                   parent=bond_l)
-                            bonds.append(bond)
-        return mol_sys, (mol_list, atom_list, bonds_l)
+                coord = np.array([float(x) for x in line_p[1:]], dtype=np.float32)
+                atom = MoleculeClass.Atom(coord.copy(), PALETTE.getName(line_p[0]), parent=mol, name=f'{line_p[0]}{i}')
+        return self.parsMolSys(mol_sys, bond, root)
 
     def parsPdb(self, file_path, bond, root, *args, **kwargs):
         mol_list, atom_list, bonds_l = None, None, None
         file = open(file_path, 'r')
         mol_sys = MoleculeClass.MoleculeSystem()
+        mol_sys.name = os.path.basename(file_path).split('.')[0]
+        mol_sys.file_name = file_path
         mol = MoleculeClass.Molecule(parent=mol_sys)
+
+        def pointCreation(atom_list, atom):
+            coord = atom.coord.copy()
+            point = point_class.Point(parent=atom_list, coord=coord, rad=atom_list,
+                                      color=PALETTE.point_dict[PALETTE.getName(atom.atom_type)],
+                                      name=atom.name,
+                                      atom_type=atom.atom_type,
+                                      pdb_flag=atom.pdb_flag,
+                                      pdb_atom_seq=atom.pdb_atom_seq,
+                                      pdb_name=atom.pdb_name,
+                                      pdb_alt_loc=atom.pdb_alt_loc,
+                                      pdb_res_name=atom.pdb_res_name,
+                                      pdb_chain=atom.pdb_chain,
+                                      pdb_res_seq=atom.pdb_res_seq,
+                                      pdb_iCode=atom.pdb_Achar,
+                                      pdb_occupancy=atom.pdb_occupancy,
+                                      pdb_tempFactor=atom.tempFactor,
+                                      pdb_charge=atom.pdb_charge,
+                                      label=atom.pdb_name)
+            return point
 
         for line in file:
             flag = line[0:6].replace(' ', '')
@@ -122,54 +118,14 @@ class FileParser:
                                           pdb_tempFactor=float(line[60:66]),
                                           pdb_charge=line[78:80])
                 mol.addChild(atom)
-        if bond:
-            mol_sys.genBonds()
-        if root is not None:
-            mol_list = point_class.PointsList(parent=root, name=os.path.basename(file_path).split('.')[0])
-            mol.assignPoint(mol_list)
-            MOLECULE_SYSTEMS[mol_list] = mol_sys
-            atom_list = point_class.PointsList(parent=mol_list, rad=0.25, name='Atoms')
-            for atom in mol.children:
-                coord = atom.coord.copy()
-                point = point_class.Point(parent=atom_list, coord=coord, rad=atom_list,
-                                          color=PALETTE.point_dict[PALETTE.getName(atom.atom_type)],
-                                          name=atom.name,
-                                          atom_type=atom.atom_type,
-                                          pdb_flag=atom.pdb_flag,
-                                          pdb_atom_seq=atom.pdb_atom_seq,
-                                          pdb_name=atom.pdb_name,
-                                          pdb_alt_loc=atom.pdb_alt_loc,
-                                          pdb_res_name=atom.pdb_res_name,
-                                          pdb_chain=atom.pdb_chain,
-                                          pdb_res_seq=atom.pdb_res_seq,
-                                          pdb_iCode=atom.pdb_Achar,
-                                          pdb_occupancy=atom.pdb_occupancy,
-                                          pdb_tempFactor=atom.tempFactor,
-                                          pdb_charge=atom.pdb_charge)
-                atom.assignPoint(point)
-                point.addProperty('label', atom.pdb_name)
-            if bond:
-                bonds_l = point_class.PointsList(parent=mol_list, rad=0.1, name='Bonds')
-                bonds = []
-                for atom in mol:
-                    for bond in atom.bonds():
-                        if bond not in bonds:
-                            bond_l = point_class.PointsList(parent=bonds_l,
-                                                            name=f'{bond.parents()[0].point().name}_{bond.parents()[1].point().name}',
-                                                            rad=bonds_l)
-                            b1 = point_class.Point(coord=bond.parents()[0].point(), color=bond.parents()[0].point(),
-                                                   rad=bond_l,
-                                                   parent=bond_l)
-                            b2 = point_class.Point(coord=bond.parents()[1].point(), color=bond.parents()[1].point(),
-                                                   rad=bond_l,
-                                                   parent=bond_l)
-                            bonds.append(bond)
-        return mol_sys, (mol_list, atom_list, bonds_l)
+        return self.parsMolSys(mol_sys, bond, root, pointCreation)
 
     def parsCpProp(self, file_path, bond, root, *args, **kwargs):
         mol_list, atom_list, bonds_l = None, None, None
         file = open(file_path, 'r')
         mol_sys = MoleculeClass.MoleculeSystem()
+        mol_sys.name = os.path.basename(file_path).split('.')[0]
+        mol_sys.file_name = file_path
         mol = MoleculeClass.Molecule(parent=mol_sys)
 
         types = {'3,-3': 6,
@@ -294,5 +250,121 @@ class FileParser:
                 type = line_ed[4][1:-1]
                 parsCp(file, num, type)
         return mol_sys, (mol_list, atom_list, bonds_l)
+
+    def parsCif(self, file_path, bond, root, *args, **kwargs):
+        from gemmi import cif
+
+        def fracToDec(a, b, c, al, be, ga, coords):
+            al = (al/180)*np.pi
+            be = (be/180)*np.pi
+            ga = (ga/180)*np.pi
+
+            sin = np.sin
+            cos = np.cos
+            cot = lambda x: np.tan(x)**-1
+            csc = lambda x: np.sin(x)**-1
+
+            mat = np.array([[a*sin(be)*np.sqrt(1-(cot(al)*cot(be) - csc(al)*csc(be)*cos(ga))**2), 0, 0],
+                            [a*csc(al)*cos(ga) - a*cot(al)*cos(be), b*sin(al), 0],
+                            [a*cos(be), b*cos(al), c]])
+            mat = mat.transpose()
+            for i in range(len(coords)):
+                coords[i] = (coords[i] @ mat).astype(dtype=np.float32)
+            return coords
+
+        mol_list, atom_list, bonds_l = None, None, None
+        block = cif.read_file(file_path).sole_block()
+        mol_sys = MoleculeClass.MoleculeSystem()
+        mol_sys.file_name = file_path
+        mol_sys.name = os.path.basename(file_path).split('.')[0]
+        mol = MoleculeClass.Molecule(parent=mol_sys)
+
+        sym_codes = block.find(['_symmetry_equiv_pos_site_id', '_symmetry_equiv_pos_as_xyz'])
+        if not sym_codes:
+            sym_codes = block.find(['_space_group_symop_operation_xyz'])
+            sym_codes = [[i, x[0][1:-1]] for i, x in enumerate(sym_codes)]
+        else:
+            sym_codes = [[int(x[i]) if i < 1 else x[i] for i in range(len(x))] for x in sym_codes]
+        num = sym_codes[-1][0] + 1
+        added = [
+                 [num, 'x+1,y,z'],
+                 [num+1, 'x-1,y,z'],
+                 [num+2, 'x,y+1,z'],
+                 [num+3, 'x,y-1,z'],
+                 [num+4, 'x,y,z+1'],
+                 [num+5, 'x,y,z-1'],
+                ]
+        sym_codes += added
+
+        cell = block.find(['_cell_length_a', '_cell_length_b', '_cell_length_c', '_cell_angle_alpha', '_cell_angle_beta', '_cell_angle_gamma'])[0]
+        cell = [float(cell[x][:cell[x].find('(')]) if cell[x].find('(') != -1 else float(cell[x]) for x in range(len(cell))]
+
+        atoms = block.find(['_atom_site_label', '_atom_site_type_symbol', '_atom_site_fract_x', '_atom_site_fract_y', '_atom_site_fract_z'])
+        atoms = [[x[i] if i < 2 else float(x[i]) if x[i].find('(') == -1 else float(x[i][:x[i].find('(')]) for i in range(len(x))] for x in atoms]
+        coords = [x[2:] for x in atoms]
+        args = []
+        args += cell
+        args.append(coords)
+        dec_coords = fracToDec(*args)
+        for i, atom in enumerate(atoms):
+            cif_data = {'cif_sym_codes': sym_codes,
+                        'cif_cell_a': cell[0],
+                        'cif_cell_b': cell[1],
+                        'cif_cell_c': cell[2],
+                        'cif_cell_al': cell[3],
+                        'cif_cell_be': cell[4],
+                        'cif_cell_ga': cell[5],
+                        'cif_frac_coords': np.array(atom[2:], dtype=np.float32)}
+            coord = np.array(dec_coords[i], dtype=np.float32)
+            atom = MoleculeClass.Atom(coord.copy(), PALETTE.getName(atom[1]), parent=mol, name=atom[0], **cif_data)
+        return self.parsMolSys(mol_sys, bond, root)
+
+    def parsMolSys(self, mol_sys, bond, root, point_func=None, *args, **kwargs):
+        if point_func is None:
+            point_func = self._pointCreation
+        mol_list, atom_list, bonds_l = None, None, None
+        try:
+            mol = mol_sys.children[0]
+        except IndexError:
+            return mol_sys, (None, None, None)
+        if bond:
+            mol_sys.genBonds()
+        if root is not None:
+            mol_list = point_class.PointsList(parent=root, name=mol_sys.name)
+            mol.assignPoint(mol_list)
+            MOLECULE_SYSTEMS[mol_list] = mol_sys
+            atom_list = point_class.PointsList(parent=mol_list, rad=0.25, name='Atoms')
+            i = 1
+            for atom in mol.children:
+                coord = atom.coord.copy()
+                point = point_func(atom_list, atom)
+                atom.assignPoint(point)
+                i += 1
+            if bond:
+                bonds_l = point_class.PointsList(parent=mol_list, rad=0.1, name='Bonds')
+                bonds = []
+                for atom in mol:
+                    for bond in atom.bonds():
+                        if bond not in bonds:
+                            bond_l = point_class.PointsList(parent=bonds_l, name=f'{bond.parents()[0].point().name}_{bond.parents()[1].point().name}', rad=bonds_l)
+                            b1 = point_class.Point(coord=bond.parents()[0].point(), color=bond.parents()[0].point(),
+                                                   rad=bond_l,
+                                                   parent=bond_l)
+                            b2 = point_class.Point(coord=bond.parents()[1].point(), color=bond.parents()[1].point(),
+                                                   rad=bond_l,
+                                                   parent=bond_l)
+                            bonds.append(bond)
+        return mol_sys, (mol_list, atom_list, bonds_l)
+
+    @staticmethod
+    def _pointCreation(atom_list, atom):
+        coord = atom.coord.copy()
+        point = point_class.Point(parent=atom_list, coord=coord, rad=atom_list,
+                                  color=PALETTE.point_dict[PALETTE.getName(atom.atom_type)],
+                                  atom_type=atom.atom_type,
+                                  name=atom.name,
+                                  label=atom.name)
+        return point
+
 
 PARSER = FileParser()
