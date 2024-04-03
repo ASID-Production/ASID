@@ -238,7 +238,9 @@ static PyObject* cpplib_GenSymm(PyObject* self, PyObject* args) {
 	PyObject* arg = NULL;
 	bool mvtc = false;
 
+	deb_write("Parsing start");
 	PyArg_ParseTuple(args, "OOp", &arg, &osymm, &mvtc);
+	deb_write("Parsing: ParseTuple complete");
 
 	const Py_ssize_t s = PyList_Size(arg);
 	deb_write("arg size = ", s);
@@ -247,19 +249,24 @@ static PyObject* cpplib_GenSymm(PyObject* self, PyObject* args) {
 	std::vector<CurrentPoint> points;
 	points.reserve(s);
 
+	deb_write("Parsing: atom parsing started");
 	for (Py_ssize_t i = 0; i < s; i++) {
 		PyObject* tp = PyList_GetItem(arg, i);
 		types.emplace_back(PyLong_AsLong(PyList_GetItem(tp, 0)));
 		points.emplace_back(PyFloat_AsDouble(PyList_GetItem(tp, 1)), PyFloat_AsDouble(PyList_GetItem(tp, 2)), PyFloat_AsDouble(PyList_GetItem(tp, 3)));
 	}
+	deb_write("Parsing: atom parsing ended");
+	deb_write("Parsing: symm write started");
 
 	std::vector<const char*> nsymm = pyListToVectorCharP(osymm);
 
+	deb_write("Parsing: symm parsing started");
 	std::vector<geometry::Symm<FloatingPointType>> symm;
 	for (size_t i = 0; i < nsymm.size(); i++)
 	{
 		symm.emplace_back(nsymm[i]);
 	}
+	deb_write("Parsing ended");
 
 	FAM_Struct<AtomType, AtomicIDType, FloatingPointType> famstr(std::move(types), std::move(points));
 	FAM_Cell<FloatingPointType> fcell(CurrentCell(10, 10, 10, 90, 90, 90, true));

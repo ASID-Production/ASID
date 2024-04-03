@@ -28,7 +28,7 @@
 
 cmake_minimum_required (VERSION 3.19)
 
-# add_compile_definitions(DEBUG_MESS_ON)
+add_compile_definitions(DEBUG_MESS_ON)
 
 if (POLICY CMP0141)
     cmake_policy(SET CMP0141 NEW)
@@ -96,28 +96,24 @@ project(cpplib)
             OUTPUT_NAME "cpplib"
             LINKER_LANGUAGE C
         )
-
-    target_include_directories(cpplib PUBLIC 
-        ${PROJECT_SOURCE_DIR}/cpplib/src/BaseHeaders
-        ${PROJECT_SOURCE_DIR}/cpplib/src/Classes
-        ${PROJECT_SOURCE_DIR}/cpplib/src/Platform
-    )
-
-    if (UNIX)
-        add_custom_command(
-            TARGET cpplib POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy
-                $<TARGET_FILE:cpplib>
-                ${CMAKE_SOURCE_DIR}/module/cpplib.so)
-    endif (UNIX)
-
-    if (WIN32)
-        add_custom_command(
-            TARGET cpplib POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy
-                $<TARGET_FILE:cpplib>
-                ${CMAKE_SOURCE_DIR}/module/cpplib.pyd)
-    endif (WIN32)
-
-endif(CMAKE_BUILD_TYPE MATCHES Release)
+        target_include_directories(cpplib PUBLIC 
+            ${PROJECT_SOURCE_DIR}/cpplib/src/BaseHeaders
+            ${PROJECT_SOURCE_DIR}/cpplib/src/Classes
+            ${PROJECT_SOURCE_DIR}/cpplib/src/Platform
+        )
+        if (UNIX)
+            add_custom_command(
+                TARGET cpplib POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy
+                    $<TARGET_FILE:cpplib>
+                    ${CMAKE_SOURCE_DIR}/module/cpplib.so)
+        endif (UNIX)
+        if (WIN32)
+            add_custom_command(
+                TARGET cpplib POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy
+                    $<TARGET_FILE:cpplib>
+                    ${CMAKE_SOURCE_DIR}/module/cpplib.pyd)
+        endif (WIN32)
+    endif(CMAKE_BUILD_TYPE MATCHES Release)
 add_subdirectory ("cpplib/Tests")
