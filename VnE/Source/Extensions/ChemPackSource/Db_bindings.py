@@ -29,12 +29,24 @@
 
 import requests
 import json
+from PySide6.QtWidgets import QDialog, QLabel, QVBoxLayout
 
 search_types = ['refcode', 'name', 'elements', 'doi', 'authors', 'cell']
 
 SETUP = False
 SESSION = None
 SERVER_PROC = None
+
+
+class ErrorDialog(QDialog):
+
+    def __init__(self, label):
+        QDialog.__init__(self)
+        self.setWindowTitle('Error')
+        self.label = QLabel(label)
+        self.vblayout = QVBoxLayout()
+        self.vblayout.addWidget(self.label)
+        self.setLayout(self.vblayout)
 
 
 class Session:
@@ -128,6 +140,11 @@ def uploadFile(file):
         files = [('file', (os.path.basename(file), open(file, 'rb'), 'application/octet-stream'))]
         headers = {'Authorization': f'Token {SESSION.user_token}'}
         resp = requests.request('POST', url, headers=headers, data={}, files=files)
+        if resp.status_code == 400:
+            error = json.loads(resp.text)
+            SESSION.error_dialog = ErrorDialog(error['errors'])
+            SESSION.error_dialog.show()
+        a = 0
 
 
 def structureSearch(struct):
