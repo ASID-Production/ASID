@@ -33,9 +33,10 @@ import re
 
 def add_coords(cif_block: dict, structure: classmethod):
     # if there are coordinates in the file, then add them to the database
-    if {'_atom_site_label', '_atom_site_type_symbol',
-            '_atom_site_fract_x', '_atom_site_fract_y',
-            '_atom_site_fract_z'}.issubset(cif_block[1].keys()):
+    if {
+        '_atom_site_label', '_atom_site_fract_x',
+        '_atom_site_fract_y', '_atom_site_fract_z'
+    }.issubset(cif_block[1].keys()):
         coords, atoms = get_coords(cif_block)
         cb_obj, created = CoordinatesBlock.objects.get_or_create(refcode=structure)
         cb_obj.coordinates = coords
@@ -87,11 +88,13 @@ def get_coords(cif_block) -> str:
     order: list = coords.GetItemOrder()
     idxs = {
         'lable': order.index('_atom_site_label'),
-        'atom_type_idx': order.index('_atom_site_type_symbol'),
+        'atom_type_idx': '',
         'x_idx': order.index('_atom_site_fract_x'),
         'y_idx': order.index('_atom_site_fract_y'),
         'z_idx': order.index('_atom_site_fract_z')
     }
+    if '_atom_site_type_symbol' in order:
+        idxs['atom_type_idx'] = order.index('_atom_site_type_symbol')
     if '_atom_site_occupancy' in order:
         idxs['occup'] = order.index('_atom_site_occupancy')
     if '_atom_site_b_iso_or_equiv' in order:
@@ -101,8 +104,16 @@ def get_coords(cif_block) -> str:
     for site in coords:
         atoms.append(site[idxs['lable']])
         temp = list()
-        for value in idxs.values():
-            temp.append(site[value])
+        for key, value in idxs.items():
+            if not value and key == 'atom_type_idx':
+                value = re.findall(r'(^[a-zA-Z]{1,3})', site[idxs['lable']])
+                if value:
+                    value = value[0]
+                    temp.append(value)
+                else:
+                    raise Exception('No "_atom_site_type_symbol" key was found in cif file!')
+            else:
+                temp.append(site[value])
         for j, element in enumerate(temp, start=0):
             # remove question marks
             if j == 0:

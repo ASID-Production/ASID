@@ -571,7 +571,7 @@ def add_element_composition(cif_block, struct_obj):
                 el_manager, created = ElementsManager.objects.get_or_create(refcode=struct_obj)
                 el_manager.save_elements(moiety_formula)
                 return 0
-    logger_1.warring(
+    logger_1.waring(
         f'Any chemcal composition was not found\n'
         f'or formula sum and formula moiety have invalid format\n'
         f'and can not be parsed!'

@@ -41,7 +41,10 @@ def get_coords(cif_block) -> str:
     coords = cif_block[1].GetLoop('_atom_site_label')
     order: list = coords.GetItemOrder()
     lable_idx = order.index('_atom_site_label')
-    atom_type_idx = order.index('_atom_site_type_symbol')
+    if '_atom_site_type_symbol' in order:
+        atom_type_idx = order.index('_atom_site_type_symbol')
+    else:
+        atom_type_idx = ''
     x_idx = order.index('_atom_site_fract_x')
     y_idx = order.index('_atom_site_fract_y')
     z_idx = order.index('_atom_site_fract_z')
@@ -49,7 +52,15 @@ def get_coords(cif_block) -> str:
         atoms.append(site[lable_idx])
         temp = list()
         temp.append(site[lable_idx])
-        temp.append(site[atom_type_idx])
+        if atom_type_idx:
+            temp.append(site[atom_type_idx])
+        else:
+            value = re.findall(r'(^[a-zA-Z]{1,3})', site[lable_idx])
+            if value:
+                value = value[0]
+                temp.append(value)
+            else:
+                raise Exception('No "_atom_site_type_symbol" key was found in cif file!')
         temp.append(site[x_idx])
         temp.append(site[y_idx])
         temp.append(site[z_idx])
