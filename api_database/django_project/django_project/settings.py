@@ -38,6 +38,8 @@ sys.path.append(os.path.abspath(os.path.join(BASE_DIR, '../../module/')))
 # check logs directory exists
 if not os.path.exists(os.path.join(BASE_DIR, 'logs')):
     os.mkdir(os.path.join(BASE_DIR, 'logs'))
+if not os.path.exists(os.path.join(BASE_DIR, 'static')):
+    os.mkdir(os.path.join(BASE_DIR, 'static'))
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-%v12=ty4+&c--ynk514n^3gg*_*q+6kb4=34vw@abxi4*cl2lj'
@@ -196,9 +198,11 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 
 STATIC_URL = '/static/'
-STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
+STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+# to serve static with django
+FORCE_SERVE_STATIC = True
 
 # Default primary key field type
 

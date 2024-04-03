@@ -16,5 +16,6 @@
 .env
 .idea
 *.cif
-/api_database/data
-/api_database/media
+/api_database/django_project/data/
+/api_database/django_project/media/
+/api_database/django_project/static/
