@@ -59,6 +59,7 @@ class QCStructureCode(models.Model):
 
     class Meta:
         verbose_name_plural = 'QCStructureCodes'
+        ordering = ['refcode']
 
     def __str__(self):
         return self.refcode

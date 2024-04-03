@@ -26,23 +26,13 @@
 #
 # *****************************************************************************************
 
-from django.db import models
-from django.core.validators import RegexValidator
-from django.contrib.auth.models import AbstractUser
-
-STATUSES = [
-    ('student', 'student'),
-    ('PhD', 'PhD'),
-    ('Dr.', 'Dr.'),
-    ('Professor', 'Professor'),
-]
+from .models import User
+from django.contrib import admin
+from django.contrib.auth.admin import UserAdmin
 
 
-class User(AbstractUser):
-    # phone number validator
-    phone_regex = RegexValidator(regex=r'^\+{1}?\d{9,15}$',
-                                 message="Incorrect phone number format! Example: '+11234567890'")
+class CustomUserAdmin(UserAdmin):
+    list_filter = ('username', 'email')
 
-    phone_number = models.CharField(verbose_name='Phone Number', validators=[phone_regex], max_length=17, blank=True)
-    laboratory = models.CharField(verbose_name='Laboratory', max_length=250, blank=True)
-    email = models.EmailField(unique=True)
+
+admin.site.register(User, CustomUserAdmin)

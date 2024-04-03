@@ -62,7 +62,9 @@ def collect_cif_data(file: str, cif_blocks: dict, user_refcode=''):
             cif = ReadCif(file)
         except Exception as err:
             logger_main.error(f"Exception: Failed to read cif file {file}!", exc_info=True)
-            return cif_blocks
+            raise Exception(f"Exception: Failed to read cif file {file}:\n"
+                            f"Please ensure that all cif values with space symbols are in quotes!\n"
+                            f"{err}")
     # look through each structural block in cif file
     for block in cif.items():
         db = ''
@@ -84,7 +86,7 @@ def collect_cif_data(file: str, cif_blocks: dict, user_refcode=''):
             setattr(str_obj, db, True)
             str_obj.save()
         cif_blocks[refcode] = block
-        return cif_blocks
+    return cif_blocks
 
 
 def get_files(args):
@@ -120,7 +122,11 @@ def manager_collect_cifs(files, user_refcodes: dict):
 def manager_add_coords_and_params_to_db(cif_blocks):
     for refcode, cif_block in cif_blocks.items():
         structure, created = StructureCode.objects.get_or_create(refcode=refcode)
-        atoms = add_coords(cif_block, structure)
+        try:
+            atoms = add_coords(cif_block, structure)
+        except Exception as err:
+            structure.delete()
+            raise Exception(f'There is a problem with coordinates in {refcode} structure:\n{err}')
         add_cell_parms_with_error(cif_block, structure)
         add_other_info(atoms, structure)
 
@@ -129,10 +135,7 @@ def create_queue(cif_blocks: dict):
     queue = multiprocessing.Queue()
     refcodes_to_graph = []
     for refcode, cif_block in cif_blocks.items():
-        if {'_atom_site_label', '_atom_site_type_symbol',
-            '_atom_site_fract_x', '_atom_site_fract_y',
-            '_atom_site_fract_z'}.issubset(cif_block[1].keys()
-                                           ):
+        if StructureCode.objects.filter(refcode=refcode).exists():
             struct_obj = StructureCode.objects.get(refcode=refcode)
             symops = struct_obj.cell.spacegroup.symops
             queue.put([refcode, cif_block, symops])

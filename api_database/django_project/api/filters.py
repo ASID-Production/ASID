@@ -33,6 +33,7 @@ from structure.models import (StructureCode, ElementsSet1, ElementsSet2,
                               CENTRINGS)
 from qc_structure.models import QCStructureCode, PROGRAMS
 from gemmi import UnitCell, SpaceGroup, GruberVector
+import re
 
 ELEMENTS_SET_CLASSES = [
     ElementsSet1, ElementsSet2, ElementsSet3, ElementsSet4,
@@ -45,12 +46,11 @@ def get_fields_list(model):
 
 
 def split_element_and_count(element):
-    for i in range(len(element)):
-        if i < len(element) - 1 and element[i].isalpha() and element[i + 1].isdigit():
-            elem = element[:i + 1]
-            count = element[i + 1:]
-            return elem, count
-    return 'error', '404'
+    elem = re.findall(r'(^[A-Za-z]{1,3})', element)
+    count = re.findall(r'(\d+)', element)
+    if not count:
+        return elem[0], 1
+    return elem[0], count[0]
 
 
 def get_reduced_cell(params: list, centring: str) -> list:
@@ -118,6 +118,11 @@ class StructureFilter(FilterSet):
         return queryset
 
     def filter_ICSD(self, queryset, name, value):
+        if type(value) is bool:
+            if value:
+                value = 'True'
+            else:
+                value = 'False'
         if value:
             queryset_temp = queryset
             if value == 'False':
@@ -126,6 +131,11 @@ class StructureFilter(FilterSet):
         return queryset
 
     def filter_CSD(self, queryset, name, value):
+        if type(value) is bool:
+            if value:
+                value = 'True'
+            else:
+                value = 'False'
         if value:
             queryset_temp = queryset
             if value == 'False':
@@ -134,6 +144,11 @@ class StructureFilter(FilterSet):
         return queryset
 
     def filter_COD(self, queryset, name, value):
+        if type(value) is bool:
+            if value:
+                value = 'True'
+            else:
+                value = 'False'
         if value:
             queryset_temp = queryset
             if value == 'False':
@@ -142,6 +157,11 @@ class StructureFilter(FilterSet):
         return queryset
 
     def filter_user_db(self, queryset, name, value):
+        if type(value) is bool:
+            if value:
+                value = 'True'
+            else:
+                value = 'False'
         if value:
             queryset_temp = queryset
             if value == 'False':

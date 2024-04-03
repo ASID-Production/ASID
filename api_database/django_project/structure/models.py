@@ -278,6 +278,8 @@ class StructureCode(models.Model):
         verbose_name='Authors'
     )
 
+    class Meta:
+        ordering = ['refcode']
     def __str__(self):
         return self.refcode
 
