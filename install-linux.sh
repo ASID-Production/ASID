@@ -1,5 +1,5 @@
 # prepare vne
-cd VnE 
+cd VnE
 python3 -m venv VisApp 
 source VisApp/bin/activate
 pip install -r requirements.txt 
@@ -19,7 +19,8 @@ source venv/bin/activate
 pip install -r requirements.txt 
 cd ./django_project
 python manage.py makemigrations
-python manage.py migrate 
+python manage.py migrate
+python manage.py collectstatic
 cd ../.. 
 
 # final cleanup 
