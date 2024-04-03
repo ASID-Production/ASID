@@ -179,38 +179,28 @@ struct FAM_Cell : public geometry::Cell<T> {
 	using PointConteinerType = std::vector<PointType>;
 	using base = geometry::Cell<T>;
 	explicit FAM_Cell(base&& cell) : base(std::move(cell)) {}
-	template <class A, class AI> void GenerateSymm(FAM_Struct<A,AI,T>& fs, const std::vector<geometry::Symm<T>>& symm) const {
+	template <class A, class AI> void GenerateSymm(FAM_Struct<A,AI,T>& fs, const std::vector<geometry::Symm<T>>& symm, const bool intoCell = true) const {
 		const size_t p_s = fs.points.size();
 		const size_t s_s = symm.size();
 
-		std::vector<bool> unique(p_s, true);
-
 		// Find all translated atoms in "unique" atoms
-		for (size_t i = 0; i < p_s; i++)
-		{
-			if (unique[i] == false) continue;
-			for (size_t j = i + 1; j < p_s; j++)
-			{
-				if (isTheSame(fs.points[i], fs.points[j])) {
-					unique[j] = false;
-				}
-			}
-		}
+		std::vector<bool> unique = this->FindUnique(fs, p_s, intoCell);
 
 		for (size_t p = 0; p < p_s; p++) {
 			if (unique[p] == false) // skip non unique atoms
 				continue;
 			const size_t p_start = fs.points.size();
 			for (size_t s = 0; s < s_s; s++) {
-				auto newpoint = symm[s].GenSymmNorm(fs.points[p]);
-				if (isTheSame_(fs.points, newpoint, p, p_start)) {
+				PointType newpoint = intoCell ? symm[s].GenSymmNorm(fs.points[p]) : symm[s].GenSymm(fs.points[p]);
+				if (isTheSame_(fs.points, newpoint, 0, p_start, intoCell)) {
 					continue;
 				}
-				const size_t au = isAnotherUnique(fs.points, newpoint, p, fs.sizeUnique);
+				const size_t au = isAnotherUnique(fs.points, newpoint, p, fs.sizeUnique, intoCell);
 				if (au != static_cast<size_t>(-1)) {
 					unique[au] = false;
 				}
-				fs.points.push_back(newpoint.MoveToCell());
+				if (intoCell) fs.points.push_back(newpoint.MoveToCell());
+				else fs.points.push_back(newpoint);
 				fs.parseIndex.push_back(p);
 			}
 		}
@@ -230,7 +220,10 @@ struct FAM_Cell : public geometry::Cell<T> {
 			}
 		}
 		fs.sizeUnique = new_count;
-		if (new_count == p_s) return;
+		if (new_count == p_s) {
+			fs.sizePoints = fs.points.size();
+			return;
+		}
 
 		// Creation and unique reorder completed
 		// 2. Reorder else and change parseIndex
@@ -305,27 +298,44 @@ struct FAM_Cell : public geometry::Cell<T> {
 		return (base::fracToCart() * dp).r();
 	}
 private:
-	inline bool isTheSame(const PointType& p1, const PointType& p2) const {
-		constexpr T distanceCutoff = 0.1;
-		return distanceInCell(p1, p2) < distanceCutoff;
+	template <class A, class AI> inline std::vector<bool> FindUnique(const FAM_Struct<A,AI,T>& fs, const size_t p_s, const bool intoCell) const {
+		std::vector<bool> unique(p_s, true);
+
+		// Find all translated atoms in "unique" atoms
+		for (size_t i = 0; i < p_s; i++)
+		{
+			if (unique[i] == false) continue;
+			for (size_t j = i + 1; j < p_s; j++)
+			{
+				if (isTheSame(fs.points[i], fs.points[j], intoCell)) {
+					unique[j] = false;
+				}
+			}
+		}
+		return unique;
 	}
-	inline bool isTheSame_(PointConteinerType& points, const PointType& newpoint, const size_t counter, const size_t start_p) const {
-		if (isTheSame(newpoint, points[counter])) {
+	inline bool isTheSame(const PointType& p1, const PointType& p2, const bool intoCell) const {
+		constexpr T distanceCutoff = 0.1;
+		if (intoCell) return distanceInCell(p1, p2) < distanceCutoff;
+		else return (base::fracToCart() * (p2 - p1)).r() < distanceCutoff;
+	}
+	inline bool isTheSame_(PointConteinerType& points, const PointType& newpoint, const size_t counter, const size_t start_p, const bool intoCell) const {
+		if (isTheSame(newpoint, points[counter], intoCell)) {
 			return true;
 		}
 		const size_t sp = points.size();
 		for (size_t i = start_p; i < sp; i++)
 		{
-			if (isTheSame(newpoint, points[i])) {
+			if (isTheSame(newpoint, points[i], intoCell)) {
 				return true;
 			}
 		}
 		return false;
 	}
-	inline size_t isAnotherUnique(const PointConteinerType& points, const PointType& newpoint, const size_t counter, const size_t sizeUnique) const {
+	inline size_t isAnotherUnique(const PointConteinerType& points, const PointType& newpoint, const size_t counter, const size_t sizeUnique, const bool intoCell) const {
 		for (size_t i = counter + 1; i < sizeUnique; i++)
 		{
-			if (isTheSame(newpoint, points[i])) {
+			if (isTheSame(newpoint, points[i], intoCell)) {
 				return i;
 			}
 		}

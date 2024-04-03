@@ -26,7 +26,7 @@
 //
 // ******************************************************************************************
 #pragma once
-#include <cstdint>
+#include <cstdint> // for int8_t etc.
 #include <type_traits>
 #include <array>
 #include <vector>
@@ -78,7 +78,7 @@ namespace geometry {
 			auto ab = distance(a, b);
 			auto ac = distance(a, c);
 			auto bc = distance(b, c);
-			return std::acos(fma(ab,ab,fma(bc,bc,-ac*ac))/(ab*bc*2));
+			return std::acos(fma(ab, ab, fma(bc, bc, -ac * ac)) / (ab * bc * 2));
 		}
 		static constexpr T angleGrad(const Point& a, const Point& b, const Point& c) noexcept {
 			return RadtoGrad(angleRad(a, b, c));
@@ -92,8 +92,8 @@ namespace geometry {
 			auto v = b0 - b1 * (b0.a_[0] * b1.a_[0] + b0.a_[1] * b1.a_[1] + b0.a_[2] * b1.a_[2]);
 			auto w = b2 - b1 * (b2.a_[0] * b1.a_[0] + b2.a_[1] * b1.a_[1] + b2.a_[2] * b1.a_[2]);
 			auto x = v.a_[0] * w.a_[0] + v.a_[1] * w.a_[1] + v.a_[2] * w.a_[2];
-			auto y = (b1.a_[1] * v.a_[2] - b1.a_[2] * v.a_[1]) * w.a_[0] + 
-				(b1.a_[2] * v.a_[0] - b1.a_[0] * v.a_[2]) * w.a_[1] 
+			auto y = (b1.a_[1] * v.a_[2] - b1.a_[2] * v.a_[1]) * w.a_[0] +
+				(b1.a_[2] * v.a_[0] - b1.a_[0] * v.a_[2]) * w.a_[1]
 				+ (b1.a_[0] * v.a_[1] - b1.a_[1] * v.a_[0]) * w.a_[2];
 			return std::atan2(y, x);
 		}
@@ -384,7 +384,7 @@ namespace geometry {
 		explicit constexpr Cell(const value_type a = 10, const value_type b = 10, const value_type c = 10, const value_type alpha = 90, const value_type beta = 90, const value_type gamma = 90, const bool is_grad = true) {
 			create(a, b, c, alpha, beta, gamma, is_grad);
 		}
-		explicit constexpr Cell(const std::array<T,6>& ar, const bool is_grad = true) {
+		explicit constexpr Cell(const std::array<T, 6>& ar, const bool is_grad = true) {
 			create(ar[0], ar[1], ar[2], ar[3], ar[4], ar[5], is_grad);
 		}
 		constexpr Cell(Cell&&) noexcept = default;
@@ -506,123 +506,34 @@ namespace geometry {
 		using point_t = geometry::Point<T>;
 		matrix_t mat;
 		point_t point;
-		uint8_t mult = 1;
 		Symm() = default;
-		Symm<T> MirrorSymm() const {
-			Symm<T> out;
-			out.mat = this->mat.Invert();
-			out.point = -(this->point);
-			out.mult = this->mult;
+		Symm MirrorSymm() const {
+			Symm out;
+			out.mat = mat.Invert();
+			out.point = -(point);
 			return out;
 		}
-		void Multiplicity() {
-			point_t c(static_cast<T>(0.1), static_cast<T>(0.15), static_cast<T>(0.2));
-			point_t t(GenSymmNorm(c));
-			for (mult = 1; (t - c).r() > (static_cast<T>(0.001)); mult++) {
-				t = GenSymmNorm(t);
-			}
-		}
-		explicit Symm(const char* str, bool isLATT = false) noexcept : mat(), point(static_cast<T>(0.0), static_cast<T>(0.0), static_cast<T>(0.0))
+		explicit Symm(const char* str) noexcept : mat(), point(static_cast<T>(0.0), static_cast<T>(0.0), static_cast<T>(0.0))
 		{
-			bool minus = false;
-			bool correct = true;
-			unsigned int j(0);
-			for (unsigned int i = 0; str[i] != '\0'; i++) {
-				switch (str[i]) {
-				case 'x': // [[fallthrough]];
-				case 'X':
-					if (minus == true) mat.El(j, 0) = -1;
-					else mat.El(j, 0) = 1;
-					minus = false;
-					break;
-				case 'y': // [[fallthrough]];
-				case 'Y':
-					if (minus == true) mat.El(j, 1) = -1;
-					else mat.El(j, 1) = 1;
-					minus = false;
-					break;
-				case 'z': // [[fallthrough]];
-				case 'Z':
-					if (minus == true) mat.El(j, 2) = -1;
-					else mat.El(j, 2) = 1;
-					minus = false;
-					break;
-				case ',':
-					j++;
-					// [[fallthrough]];
-				case ' ':
-					// [[fallthrough]];
-				case '+':
-					break;
-				case '-':
-					minus = true;
-					break;
-				default:
+			// separate into 3 domains
+			std::array<size_t, 3> bracket;
+			bracket[0] = findcomma(str);
+			bracket[1] = findcomma(str + bracket[0] + 1);
+			bracket[2] = findcomma(str + bracket[0] + 1 + bracket[1] + 1);
+
+			for (unsigned char i = 0; i < 3; i++)
+			{
+				auto ret = parse(str, bracket[i]);
+				for (unsigned char j = 0; j < 3; j++)
 				{
-					unsigned int k(i);
-					for (; (str[i] >= '0' && str[i] <= '9') || str[i] == '.' || str[i] == '/'; i++);
-
-					switch (i - k) {
-					case 3:
-						if (str[k] == '1') {
-							switch (str[k + 2]) {
-							case '2':
-								point.set(j, static_cast<T>(0.5));
-								break;
-							case '3':
-								if (minus == true) point.set(j, static_cast<T>(2.0 / 3.0));
-								else point.set(j, static_cast<T>(1.0 / 3.0));
-								break;
-							case '4':
-								if (minus == true) point.set(j, static_cast<T>(0.75));
-								else point.set(j, static_cast<T>(0.25));
-								break;
-							case '6':
-								if (minus == true) point.set(j, static_cast<T>(5.0 / 6.0));
-								else point.set(j, static_cast<T>(1.0 / 6.0));
-								break;
-							}
-						}
-						else {
-							switch (str[k + 2]) {
-							case '3':
-								if (minus == true) point.set(j, static_cast<T>(1.0 / 3.0));
-								else point.set(j, static_cast<T>(2.0 / 3.0));
-								break;
-							case '4':
-								if (minus == true) point.set(j, static_cast<T>(0.25));
-								else point.set(j, static_cast<T>(0.75));
-								break;
-							case '5':
-								point.set(j, static_cast<T>(0.5));
-								break;
-							case '6':
-								if (minus == true) point.set(j, static_cast<T>(1.0 / 6.0));
-								else point.set(j, static_cast<T>(5.0 / 6.0));
-								break;
-							}
-
-						}
-						break;
-					case 4:
-						if ((minus == true && str[k + 2] == '7') || (minus == false && str[k + 2] != '7')) point.set(j, static_cast<T>(0.25));
-						else point.set(j, static_cast<T>(0.75));
-						break;
-					default:
-						// SHOULD NOT BE HERE
-						correct = false;
-						break;
-					}
-					minus = false;
-					i--;
+					mat.El(i, j) = ret.first.get(j);
 				}
-				}
+				point.set(i, ret.second);
+				str += (bracket[i] + 1);
 			}
-			if (correct == true)
-				Multiplicity();
-			else
-				mult = 0;
 		}
+
+
 		point_t GenSymm(const point_t& in) const
 		{
 			return (point + (mat * in));
@@ -633,5 +544,98 @@ namespace geometry {
 			res.MoveToCell();
 			return res;
 		}
+	private:
+		size_t findcomma(const char * str) {
+			size_t n = 0;
+			for (; str[n] != ',' && str[n] != '\0'; n++);
+			return n;
+		}
+		std::pair<point_t, T> parse(const char* str, const size_t len) const {
+			point_t p{ 0,0,0 };
+			T shift = 0;
+			bool minus = false;
+			for (unsigned int i = 0; i < len; i++)
+			{
+				switch (str[i]) {
+				case 'x': // [[fallthrough]];
+				case 'X':
+					if (minus == true) p.set(0, -1);
+					else p.set(0, 1);
+					minus = false;
+					break;
+				case 'y': // [[fallthrough]];
+				case 'Y':
+					if (minus == true) p.set(1, -1);
+					else p.set(1, 1);
+					minus = false;
+					break;
+				case 'z': // [[fallthrough]];
+				case 'Z':
+					if (minus == true) p.set(2, -1);
+					else p.set(2, 1);
+					minus = false;
+					break;
+				case ' ': // [[fallthrough]];
+				case '+':
+					break;
+				case '-':
+					minus = !(minus);
+					break;
+				default:
+
+					T partshift = parseshift(str, i, len);
+					if (minus) shift -= partshift;
+					else shift += partshift;
+					minus = false;
+					break;
+				}
+			}
+			return std::make_pair(p,shift);
+
+		}
+		T parseshift(const char* str, unsigned int& iter, const size_t len) const {
+			bool dot = false;
+			bool slash = false;
+
+			int upper = 0;
+			int lower = 1;
+			for (; iter < len; iter++)
+			{
+				if (str[iter] < '0' || str[iter] > '9')
+					switch (str[iter]) {
+					case '.':
+						dot = true;
+						break;
+					case '+':
+					case '-':
+						iter--;
+						return upper / static_cast<T>(lower);
+					case '/':
+						slash = true;
+						iter++;
+						lower = (str[iter] - '0');
+						break;
+					default:
+						//error
+						break;
+					}
+				else {
+					int num = (str[iter] - '0');
+					if (dot) {
+						upper = upper * 10 + num;
+						lower *= 10;
+					}
+					else if (slash) {
+						lower = lower * 10 + num;
+					}
+					else {
+						upper = upper * 10 + num;
+					}
+				}
+			}
+			iter--;
+			return upper / static_cast<T>(lower);
+		}
+
 	};
 }

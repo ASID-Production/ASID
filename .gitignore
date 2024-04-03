@@ -3,6 +3,7 @@
 /out
 /cpplib/.vs
 /cpplib/Tests/.vs
+/module/test.py
 
 # api_database ignores
 /api_database/__pycache__

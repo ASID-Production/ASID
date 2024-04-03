@@ -32,6 +32,7 @@
 #include "../Classes/Interfaces.h"
 #include "../BaseHeaders/DebugMes.h"
 
+// Utilities section
 static std::vector<float> pyListToVectorFloat(PyObject* plist) {
 	const Py_ssize_t s = PyList_Size(plist);
 	std::vector<float> ret(s);
@@ -78,6 +79,7 @@ inline static void useDistances(PyObject* self) {
 	p_distances = &dist;
 }
 
+// Python section
 static PyObject* cpplib_GenBonds(PyObject* self, PyObject* arg) {
 	useDistances(self);
 	auto& distances = *(p_distances);
@@ -146,17 +148,20 @@ static PyObject* cpplib_SearchMain(PyObject* self, PyObject* args) {
 	deb_write("search = ", search);
 	deb_write("np = ", np);
 	deb_write("exact = ", exact);
-	deb_write("py_CompareGraph invoke CompareGraph");
 	auto data = pyListToVectorCharP(o);
 	deb_write("data.size = ", data.size());
-
+	deb_write("py_SearchMain invoke SearchMain");
 	const auto ret = SearchMain(search, std::move(data), np, (exact != 0));
+	deb_write("py_SearchMain closes SearchMain");
 	const auto ret_s = ret.size();
 	PyObject* ret_o = PyList_New(0);
-	for (Py_ssize_t i = 0; i <= ret[0]; i++)
+	deb_write("py_SearchMain create return list");
+	
+	for (Py_ssize_t i = 0; i < ret_s; i++)
 	{
 		PyList_Append(ret_o, PyLong_FromLong(ret[i]));
 	}
+	deb_write("py_SearchMain return");
 	return ret_o;
 }
 
@@ -228,34 +233,50 @@ static PyObject* cpplib_FindMoleculesWithoutCell(PyObject* self, PyObject* args)
 	return PyUnicode_FromString(ret.c_str());
 }
 
-// [[type,x,y,z],...], str
 static PyObject* cpplib_GenSymm(PyObject* self, PyObject* args) {
-	char* str = NULL;
+	PyObject* osymm = NULL;
 	PyObject* arg = NULL;
+	bool mvtc = false;
 
-	PyArg_ParseTuple(args, "Os", &arg, &str);
+	deb_write("Parsing start");
+	PyArg_ParseTuple(args, "OOp", &arg, &osymm, &mvtc);
+	deb_write("Parsing: ParseTuple complete");
 
 	const Py_ssize_t s = PyList_Size(arg);
+	deb_write("arg size = ", s);
 	std::vector<AtomType> types;
 	types.reserve(s);
 	std::vector<CurrentPoint> points;
 	points.reserve(s);
 
+	deb_write("Parsing: atom parsing started");
 	for (Py_ssize_t i = 0; i < s; i++) {
 		PyObject* tp = PyList_GetItem(arg, i);
 		types.emplace_back(PyLong_AsLong(PyList_GetItem(tp, 0)));
 		points.emplace_back(PyFloat_AsDouble(PyList_GetItem(tp, 1)), PyFloat_AsDouble(PyList_GetItem(tp, 2)), PyFloat_AsDouble(PyList_GetItem(tp, 3)));
 	}
+	deb_write("Parsing: atom parsing ended");
+	deb_write("Parsing: symm write started");
 
+	std::vector<const char*> nsymm = pyListToVectorCharP(osymm);
+
+	deb_write("Parsing: symm parsing started");
 	std::vector<geometry::Symm<FloatingPointType>> symm;
-	symm.emplace_back(str, false);
+	for (size_t i = 0; i < nsymm.size(); i++)
+	{
+		symm.emplace_back(nsymm[i]);
+	}
+	deb_write("Parsing ended");
 
 	FAM_Struct<AtomType, AtomicIDType, FloatingPointType> famstr(std::move(types), std::move(points));
 	FAM_Cell<FloatingPointType> fcell(CurrentCell(10, 10, 10, 90, 90, 90, true));
-	fcell.GenerateSymm(famstr, symm);
+	fcell.GenerateSymm(famstr, symm, mvtc);
 
+	deb_write("famstr.types.size() = ", famstr.types.size());
+	deb_write("famstr.points.size() = ", famstr.points.size());
+	deb_write("famstr.parseIndex.size() = ", famstr.parseIndex.size());
+	deb_write("famstr.sizePoints = ", famstr.sizePoints);
 
-	std::string line;
 	for (Py_ssize_t i = s; i < famstr.sizePoints; i++)
 	{
 		PyObject* lst = PyList_New(0);
@@ -265,7 +286,8 @@ static PyObject* cpplib_GenSymm(PyObject* self, PyObject* args) {
 		PyList_Append(lst, PyFloat_FromDouble(famstr.points[i].get(2)));
 		PyList_Append(arg, lst);
 	}
-	return PyUnicode_FromString(line.c_str());
+	Py_INCREF(arg);
+	return arg;
 }
 
 static PyObject* cpplib_FindDistanceIC(PyObject* self, PyObject* args) {

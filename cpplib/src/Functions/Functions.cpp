@@ -112,8 +112,8 @@ std::string FindMoleculesWithoutCell(const std::vector<int>& types, std::vector<
 
 std::string FindDistanceWC(std::vector<int>& types,
 						   std::vector<float>& xyz,
-						   const std::array<int, 2> type,
-						   const std::pair<float, float> value) 
+						   const std::array<int, 2>& type,
+						   const std::pair<float, float>& value) 
 {
 	FAM_Struct<AtomType, AtomicIDType, FloatingPointType> fs;
 	ParseData(fs, types, xyz);
@@ -136,8 +136,8 @@ std::string FindDistanceIC(const std::array<float, 6>& unit_cell,
 						   std::vector<const char*>& symm, 
 						   std::vector<int>& types, 
 						   std::vector<float>& xyz,
-						   const std::array<int, 2> type,
-						   const std::pair<float,float> value) {
+						   const std::array<int, 2>& type,
+						   const std::pair<float,float>& value) {
 	FAM_Struct<AtomType, AtomicIDType, FloatingPointType> fs;
 	FAM_Cell<FloatingPointType> fc(CurrentCell(unit_cell, true));
 	ParseData(fs, fc, symm, types, xyz);
@@ -166,9 +166,9 @@ std::string FindDistanceIC(const std::array<float, 6>& unit_cell,
 
 std::string FindAngleWC(std::vector<int>& types,
 						std::vector<float>& xyz,
-						const std::array<int, 3> type,
-						const std::array<std::pair<float, float>, 2> value_d,
-						const std::pair<float, float> value_a)
+						const std::array<int, 3>& type,
+						const std::array<std::pair<float, float>, 2>& value_d,
+						const std::pair<float, float>& value_a)
 {
 	FAM_Struct<AtomType, AtomicIDType, FloatingPointType> fs;
 	ParseData(fs, types, xyz);
@@ -196,9 +196,9 @@ std::string FindAngleIC(const std::array<float, 6>& unit_cell,
 						std::vector<const char*>& symm,
 						std::vector<int>& types,
 						std::vector<float>& xyz,
-						const std::array<int, 3> type,
-						const std::array<std::pair<float, float>, 2> value_d,
-						const std::pair<float, float> value_a) 
+						const std::array<int, 3>& type,
+						const std::array<std::pair<float, float>, 2>& value_d,
+						const std::pair<float, float>& value_a) 
 {
 	FAM_Struct<AtomType, AtomicIDType, FloatingPointType> fs;
 	FAM_Cell<FloatingPointType> fc(CurrentCell(unit_cell, true));
@@ -233,10 +233,10 @@ std::string FindAngleIC(const std::array<float, 6>& unit_cell,
 
 std::string FindTorsionWC(std::vector<int>& types,
 						  std::vector<float>& xyz,
-						  const std::array<int, 4> type,
-						  const std::array<std::pair<float, float>, 3> value_d,
-						  const std::array<std::pair<float, float>, 2> value_a,
-						  const std::pair<float, float> value_t ) 
+						  const std::array<int, 4>& type,
+						  const std::array<std::pair<float, float>, 3>& value_d,
+						  const std::array<std::pair<float, float>, 2>& value_a,
+						  const std::pair<float, float>& value_t ) 
 {
 	FAM_Struct<AtomType, AtomicIDType, FloatingPointType> fs;
 	ParseData(fs, types, xyz);
@@ -271,10 +271,10 @@ std::string FindTorsionIC(const std::array<float, 6>& unit_cell,
 						  std::vector<const char*>& symm,
 						  std::vector<int>& types,
 						  std::vector<float>& xyz,
-						  const std::array<int, 4> type,
-						  const std::array<std::pair<float, float>, 3> value_d,
-						  const std::array<std::pair<float, float>, 2> value_a,
-						  const std::pair<float, float> value_t) {
+						  const std::array<int, 4>& type,
+						  const std::array<std::pair<float, float>, 3>& value_d,
+						  const std::array<std::pair<float, float>, 2>& value_a,
+						  const std::pair<float, float>& value_t) {
 	FAM_Struct<AtomType, AtomicIDType, FloatingPointType> fs;
 	FAM_Cell<FloatingPointType> fc(CurrentCell(unit_cell, true));
 	ParseData(fs, fc, symm, types, xyz);

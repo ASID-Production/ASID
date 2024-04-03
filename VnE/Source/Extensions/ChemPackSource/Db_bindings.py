@@ -88,7 +88,6 @@ class Session:
             self.user_token = None
 
 
-
 def search(text, search_type):
     if search_type == 'substructure':
         data_out = structureSearch(text)
@@ -156,15 +155,28 @@ def structureSearch(struct):
     edges = getEdges(struct)
     body['nodes'] = nodes
     body['edges'] = edges
-    data = requests.get(f'{SESSION.url_base}/api/v1/structures/search/?limit=1000', data=body)
+    body['chunk_size'] = 10000
+    body['iter_num'] = 0
+    if SESSION.user_token is not None:
+        headers = {'Authorization': f'Token {SESSION.user_token}'}
+        req = lambda: requests.get(f'{SESSION.url_base}/api/v1/structures/search/?limit=10000', data=body, headers=headers)
+    else:
+        req = lambda: requests.get(f'{SESSION.url_base}/api/v1/structures/search/?limit=10000', data=body)
+    data = req()
     data = data.content.decode(data.apparent_encoding)
     data = json.loads(data)
     data_out = data['results']
-    while data['next'] is not None:
-        data = requests.get(data['next'], data=body)
+    for iter in range(1, data['max_iter_num']+1):
+        body['iter_num'] = iter
+        data = req()
         data = data.content.decode(data.apparent_encoding)
         data = json.loads(data)
         data_out += data['results']
+    '''while data['next'] is not None:
+        data = requests.get(data['next'], data=body)
+        data = data.content.decode(data.apparent_encoding)
+        data = json.loads(data)
+        data_out += data['results']'''
     return data_out
 
 

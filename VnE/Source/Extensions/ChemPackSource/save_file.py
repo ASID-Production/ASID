@@ -67,7 +67,7 @@ class SaveFile:
                 ter_line = f'TER   {i:>5}{prev_atom.pdb_res_name:>9} {prev_atom.pdb_chain}{prev_atom.pdb_res_seq:>4}{prev_atom.pdb_iCode}\n'
                 out.write(ter_line)
                 i += 1
-            line = f'{atom.pdb_flag:<6}{i:>5} {atom.pdb_name:<4}{atom.pdb_alt_loc}{atom.pdb_res_name} {atom.pdb_chain}{atom.pdb_res_seq:>4}{atom.pdb_iCode}{atom.coord[0]:> 11.3f}{atom.coord[1]:> 8.3f}{atom.coord[2]:> 8.3f}{atom.pdb_occupancy:> 6.2f}{atom.pdb_tempFactor:> 6.2f}{PALETTE.getName(atom.atom_type):>12}{atom.pdb_charge}\n'
+            line = f'{atom.pdb_flag:<6}{i:>5} {atom.pdb_name:<4}{atom.pdb_alt_loc}{atom.pdb_res_name} {atom.pdb_chain}{atom.pdb_res_seq:>4}{atom.pdb_iCode}{atom.coord[0]:>11.3f}{atom.coord[1]:>8.3f}{atom.coord[2]:>8.3f}{atom.pdb_occupancy:>6.2f}{atom.pdb_tempFactor:>6.2f}{PALETTE.getName(atom.atom_type).upper():>12}{atom.pdb_charge}\n'
             out.write(line)
             prev_atom = atom
             i += 1
