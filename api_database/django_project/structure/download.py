@@ -27,6 +27,7 @@
 # *****************************************************************************************
 
 from math import cos, sqrt, radians
+from structure.models import CoordinatesBlock
 
 CIF_HEAD = '''
 #######################################################################
@@ -48,6 +49,13 @@ CIF_HEAD = '''
 def create_cif_text(structure: classmethod) -> str:
 
     def check_value_exist(cif_parameter: str, value, in_commas: bool, percent: bool = False) -> str:
+        # check commas need
+        if not in_commas and value and type(value) is str and len(value.split()) > 1:
+            try:
+                float(value)
+            except ValueError:
+                in_commas = True
+        # check exists
         if percent and value:
             value = float(value) / 100
         if value and in_commas:
@@ -154,9 +162,10 @@ def create_cif_text(structure: classmethod) -> str:
     text += check_value_exist('_cell_formula_units_Z', structure.cell.zvalue, False)
     text += check_value_exist('_cell_formula_units_Z_prime', structure.cell.zprime, False)
 
-    if structure.characteristics.has_3d_structure and structure.coordinates.coordinates:
-        text += 'loop_\n_atom_site_label\n_atom_site_type_symbol\n_atom_site_fract_x\n_atom_site_fract_y\n_atom_site_fract_z\n'
-        text += structure.coordinates.coordinates
+    if CoordinatesBlock.objects.filter(refcode=structure).exists():
+        if structure.characteristics.has_3d_structure and structure.coordinates.coordinates:
+            text += 'loop_\n_atom_site_label\n_atom_site_type_symbol\n_atom_site_fract_x\n_atom_site_fract_y\n_atom_site_fract_z\n'
+            text += structure.coordinates.coordinates
 
     text += '#END\n'
     return text

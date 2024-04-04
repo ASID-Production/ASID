@@ -236,6 +236,8 @@ class StructureViewSet(ReadOnlyModelViewSet):
                 user_refcodes={cif_file_path: refcode, }
             )
         except Exception as error_message:
+            if StructureCode.objects.filter(refcode=refcode).exists():
+                refcode_obj.delete()
             return Response(
                 {'errors': f'Structure information was not added! {error_message}'},
                 status=status.HTTP_400_BAD_REQUEST
