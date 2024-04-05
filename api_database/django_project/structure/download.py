@@ -31,16 +31,16 @@ from structure.models import CoordinatesBlock
 
 CIF_HEAD = '''
 #######################################################################
-#
-#             Atomistic Simulation Instruments and Database
-#                                ASID
-#
+#                                                                     #
+#             Atomistic Simulation Instruments and Database           #
+#                                ASID                                 #
+#                                                                     #
 #######################################################################
-#
-# This CIF file has been generated from the Atomistic Simulation 
-# Instruments and Database and include bibliographic, chemical, 
-# crystal, experimental, refinement and atomic coordinate data.
-#
+#                                                                     #
+# This CIF file has been generated from the Atomistic Simulation      # 
+# Instruments and Database and include bibliographic, chemical,       #
+# crystal, experimental, refinement and atomic coordinate data.       #
+#                                                                     #
 #######################################################################
 
 '''
@@ -81,12 +81,13 @@ def create_cif_text(structure: classmethod) -> str:
     text += check_value_exist('_chemical_formula_sum', structure.formula.formula_sum, True)
     text += check_value_exist('_chemical_formula_moiety', structure.formula.formula_moiety, True)
     text += check_value_exist('_chemical_melting_point', structure.crystal_and_structure_info.melting_point, False)
-    # text += check_value_exist('_journal_coden_Cambridge', structure.publication.publication.journal.international_coden, False)
-    text += check_value_exist('_journal_volume', structure.publication.publication.volume, False)
-    text += check_value_exist('_journal_year', structure.publication.publication.year, False)
-    text += check_value_exist('_journal_page_first', structure.publication.publication.page, False)
-    text += check_value_exist('_journal_name_full', structure.publication.publication.journal.fullname, True)
-    text += check_value_exist('_journal_DOI', structure.publication.publication.doi, True)
+    if hasattr(structure, "publication"):
+        # text += check_value_exist('_journal_coden_Cambridge', structure.publication.publication.journal.international_coden, False)
+        text += check_value_exist('_journal_volume', structure.publication.publication.volume, False)
+        text += check_value_exist('_journal_year', structure.publication.publication.year, False)
+        text += check_value_exist('_journal_page_first', structure.publication.publication.page, False)
+        text += check_value_exist('_journal_name_full', structure.publication.publication.journal.fullname, True)
+        text += check_value_exist('_journal_DOI', structure.publication.publication.doi, True)
 
     if structure.authors.count() > 0:
         text += 'loop_\n_publ_author_name\n'
@@ -162,7 +163,7 @@ def create_cif_text(structure: classmethod) -> str:
     text += check_value_exist('_cell_formula_units_Z', structure.cell.zvalue, False)
     text += check_value_exist('_cell_formula_units_Z_prime', structure.cell.zprime, False)
 
-    if CoordinatesBlock.objects.filter(refcode=structure).exists():
+    if hasattr(structure, "coordinates"):
         if structure.characteristics.has_3d_structure and structure.coordinates.coordinates:
             text += 'loop_\n_atom_site_label\n_atom_site_type_symbol\n_atom_site_fract_x\n_atom_site_fract_y\n_atom_site_fract_z\n'
             text += structure.coordinates.coordinates
