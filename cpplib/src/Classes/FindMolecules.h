@@ -192,7 +192,7 @@ struct FAM_Cell : public geometry::Cell<T> {
 			const size_t p_start = fs.points.size();
 			for (size_t s = 0; s < s_s; s++) {
 				PointType newpoint = intoCell ? symm[s].GenSymmNorm(fs.points[p]) : symm[s].GenSymm(fs.points[p]);
-				if (isTheSame_(fs.points, newpoint, 0, p_start, intoCell)) {
+				if (isTheSame_(fs.points, newpoint, intoCell)) {
 					continue;
 				}
 				const size_t au = isAnotherUnique(fs.points, newpoint, p, fs.sizeUnique, intoCell);
@@ -319,12 +319,9 @@ private:
 		if (intoCell) return distanceInCell(p1, p2) < distanceCutoff;
 		else return (base::fracToCart() * (p2 - p1)).r() < distanceCutoff;
 	}
-	inline bool isTheSame_(PointConteinerType& points, const PointType& newpoint, const size_t counter, const size_t start_p, const bool intoCell) const {
-		if (isTheSame(newpoint, points[counter], intoCell)) {
-			return true;
-		}
+	inline bool isTheSame_(PointConteinerType& points, const PointType& newpoint, const bool intoCell) const {
 		const size_t sp = points.size();
-		for (size_t i = start_p; i < sp; i++)
+		for (size_t i = 0; i < sp; i++)
 		{
 			if (isTheSame(newpoint, points[i], intoCell)) {
 				return true;

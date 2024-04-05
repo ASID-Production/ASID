@@ -263,16 +263,6 @@ extern "C" {
 			types.emplace_back(PyLong_AsLong(PyList_GetItem(tp, 0)));
 			points.emplace_back(PyFloat_AsDouble(PyList_GetItem(tp, 1)), PyFloat_AsDouble(PyList_GetItem(tp, 2)), PyFloat_AsDouble(PyList_GetItem(tp, 3)));
 		}
-		deb_write("Parsing: atom parsing ended");
-		deb_write("Parsing: symm write started");
-		deb_write("osymm = ", reinterpret_cast<uint64_t>(osymm));
-		deb_write("osymm is List ", PyList_Check(osymm));
-		deb_write("osymm is ListE ", PyList_CheckExact(osymm));
-		const Py_ssize_t ss = PyList_Size(osymm);
-		deb_write("osymm size = ", ss);
-		const Py_ssize_t rs = Py_REFCNT(osymm);
-		deb_write("osymm refcount = ", rs);
-
 		deb_write("pyListToVectorCharP invoking");
 		std::vector<const char*> nsymm; pyListToVectorCharP(osymm, &nsymm);
 

@@ -139,7 +139,7 @@ class SymOpDialog(QtWidgets.QDialog):
             sym_codes = atoms[0].cif_sym_codes
             sym_code = sym_codes[ind][1]
             data = [[x.atom_type, *list(x.cif_frac_coords)] for x in atoms]
-            new_atoms = cpplib.GenSymm(data, [sym_code], False)
+            new_atoms = cpplib.GenSymm(data, False, [sym_code])
             new_coords = [x[1:] for x in new_atoms]
             cell = [atoms[0].cif_cell_a,
                     atoms[0].cif_cell_b,
