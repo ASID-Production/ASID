@@ -243,7 +243,7 @@ def get_or_create_space_group(cif_block):
             space_group_name = cif_block['_symmetry_space_group_name_h-m'].split()
         else:
             space_group_name = cif_block['_space_group_name_h-m_alt'].split()
-        if system == 'monoclinic':
+        if system == 'monoclinic' and len(space_group_name) == 4:
             if space_group_name[1] == '1' and space_group_name[3] == '1':
                 space_group_name = [space_group_name[0], space_group_name[2]]
         space_group_name = ''.join(space_group_name)
