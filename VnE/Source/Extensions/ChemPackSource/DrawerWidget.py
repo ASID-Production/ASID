@@ -886,7 +886,7 @@ class AvgDiffCommand(ConditionCommand):
 
     def payload(self, *cc_points, **kwargs):
         points = [x.point for x in cc_points]
-        self.condition = self.widget.drawing.addAvgDiff(*points, split=-1)
+        self.condition = self.widget.drawing.addAvgDiff(*points, split=self.split)
         self.condition.create_command = self
         self.widget.newAvgDiff.emit()
 

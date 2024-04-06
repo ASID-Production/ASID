@@ -37,7 +37,6 @@ SETUP = False
 SESSION = None
 SERVER_PROC = None
 
-
 class ErrorDialog(QDialog):
 
     def __init__(self, label):
@@ -100,11 +99,18 @@ class Session:
             self.user_token = None
 
 
+SESSION: Session
+
+
 def search(text, search_type):
     if search_type == 'substructure':
         data_out = structureSearch(text)
         return data_out
-    data = requests.get(f'{SESSION.url_base}/api/v1/structures/?{search_type}={text}&limit=1000')
+    if SESSION.user_token:
+        headers = {'Authorization': f'Token {SESSION.user_token}'}
+        data = requests.get(f'{SESSION.url_base}/api/v1/structures/?{search_type}={text}&limit=1000', headers=headers)
+    else:
+        data = requests.get(f'{SESSION.url_base}/api/v1/structures/?{search_type}={text}&limit=1000')
     data = data.content.decode(data.apparent_encoding)
     data = json.loads(data)
     data_out = data['results']
@@ -114,9 +120,6 @@ def search(text, search_type):
         data = json.loads(data)
         data_out += data['results']
     return data_out
-
-
-SESSION: Session
 
 
 def get_full_info(id):
@@ -133,8 +136,6 @@ def getCif(id):
 
 def uploadFile(file):
     import os
-
-    global TOKEN
     if SESSION.user_token is not None:
         url = f'{SESSION.url_base}/api/v1/structures/upload/'
         files = [('file', (os.path.basename(file), open(file, 'rb'), 'application/octet-stream'))]
