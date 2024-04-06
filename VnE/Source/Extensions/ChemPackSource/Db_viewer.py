@@ -279,7 +279,7 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
                 out.close()
 
     def uploadFile(self):
-        filename = QtWidgets.QFileDialog.getOpenFileName(filter='*.cif')[0]
+        filename = QtWidgets.QFileDialog.getOpenFileName(filter='*.cif *.xml')[0]
         if filename:
             Db_bindings.uploadFile(filename)
 
