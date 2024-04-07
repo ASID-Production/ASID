@@ -243,22 +243,25 @@ extern "C" {
 	static PyObject* cpplib_GenSymm(PyObject* self, PyObject* args) {
 		PyObject* osymm = NULL;
 		PyObject* arg = NULL;
-		bool mvtc = false;
+		unsigned char flags;
 
 		deb_write("Parsing start");
-		if(!PyArg_ParseTuple(args, "OpO", &arg, &mvtc, &osymm)) {
+		if(!PyArg_ParseTuple(args, "ObO", &arg, &flags, &osymm)) {
 			deb_write("Parse Error");
+			Py_RETURN_NONE;
 		}
+		bool movetocell = flags & 1;
+		bool movemasstocell = flags & 2;
 
-		const Py_ssize_t s = PyList_Size(arg);
-		deb_write("arg size = ", s);
+		const Py_ssize_t s_points = PyList_Size(arg);
+		deb_write("arg size = ", s_points);
 		std::vector<AtomType> types;
-		types.reserve(s);
+		types.reserve(s_points);
 		std::vector<CurrentPoint> points;
-		points.reserve(s);
+		points.reserve(s_points);
 
 		deb_write("Parsing: atom parsing started");
-		for (Py_ssize_t i = 0; i < s; i++) {
+		for (Py_ssize_t i = 0; i < s_points; i++) {
 			PyObject* tp = PyList_GetItem(arg, i);
 			types.emplace_back(PyLong_AsLong(PyList_GetItem(tp, 0)));
 			points.emplace_back(PyFloat_AsDouble(PyList_GetItem(tp, 1)), PyFloat_AsDouble(PyList_GetItem(tp, 2)), PyFloat_AsDouble(PyList_GetItem(tp, 3)));
@@ -268,22 +271,46 @@ extern "C" {
 
 		deb_write("Parsing: symm parsing started");
 		std::vector<geometry::Symm<FloatingPointType>> symm;
-		for (size_t i = 0; i < nsymm.size(); i++)
+		const size_t ss = nsymm.size();
+		for (size_t i = 0; i < ss; i++)
 		{
 			symm.emplace_back(nsymm[i]);
 		}
 		deb_write("Parsing ended");
+		if (movemasstocell) {
+			deb_write("Move center of mass started");
+			CurrentPoint centerofmass(0, 0, 0);
+			for (size_t i = 0; i < s_points; i++)
+			{
+				centerofmass += points[i];
+			}
+			centerofmass /= s_points;
+			CurrentPoint ceilmass(std::ceil(centerofmass.get(0)), 
+							   std::ceil(centerofmass.get(1)), 
+							   std::ceil(centerofmass.get(2)));
+
+			for (size_t i = 0; i < ss; i++)
+			{
+				CurrentPoint movedcenter = symm[i].GenSymm(centerofmass);
+				CurrentPoint ceilmoved(std::ceil(movedcenter.get(0)), 
+										std::ceil(movedcenter.get(1)), 
+										std::ceil(movedcenter.get(2)));
+				symm[i].point += ceilmass - ceilmoved;
+			}
+
+			deb_write("Move center of mass ended");
+		}
 
 		FAM_Struct<AtomType, AtomicIDType, FloatingPointType> famstr(std::move(types), std::move(points));
-		FAM_Cell<FloatingPointType> fcell(CurrentCell(10, 10, 10, 90, 90, 90, true));
-		fcell.GenerateSymm(famstr, symm, mvtc);
+		FAM_Cell<FloatingPointType> fcell(CurrentCell(32, 32, 32, 90, 90, 90, true));
+		fcell.GenerateSymm(famstr, symm, movetocell);
 
 		deb_write("famstr.types.size() = ", famstr.types.size());
 		deb_write("famstr.points.size() = ", famstr.points.size());
 		deb_write("famstr.parseIndex.size() = ", famstr.parseIndex.size());
 		deb_write("famstr.sizePoints = ", famstr.sizePoints);
 
-		for (Py_ssize_t i = s; i < famstr.sizePoints; i++)
+		for (Py_ssize_t i = s_points; i < famstr.sizePoints; i++)
 		{
 			PyObject* lst = PyList_New(0);
 			PyList_Append(lst, PyLong_FromLong(famstr.types[famstr.parseIndex[i]]));

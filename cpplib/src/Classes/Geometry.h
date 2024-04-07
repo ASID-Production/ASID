@@ -127,54 +127,54 @@ namespace geometry {
 		constexpr Point operator/(const Point& right) const noexcept {
 			return Point(a_[0] / right.a_[0], a_[1] / right.a_[1], a_[2] / right.a_[2]);
 		}
-		constexpr Point operator/(const T b) const noexcept {
+		inline constexpr Point operator/(const T b) const noexcept {
 			return Point(a_[0] / b, a_[1] / b, a_[2] / b);
 		}
-		Point& operator+=(const Point& right) noexcept {
+		inline Point& operator+=(const Point& right) noexcept {
 			a_[0] += right.a_[0];
 			a_[1] += right.a_[1];
 			a_[2] += right.a_[2];
 			return *this;
 		}
-		Point& operator+=(const T right) noexcept {
+		inline Point& operator+=(const T right) noexcept {
 			a_[0] += right;
 			a_[1] += right;
 			a_[2] += right;
 			return *this;
 		}
-		Point& operator-=(const Point& right) noexcept {
+		inline Point& operator-=(const Point& right) noexcept {
 			a_[0] -= right.a_[0];
 			a_[1] -= right.a_[1];
 			a_[2] -= right.a_[2];
 			return *this;
 		}
-		Point& operator-=(const T right) noexcept {
+		inline Point& operator-=(const T right) noexcept {
 			a_[0] -= right;
 			a_[1] -= right;
 			a_[2] -= right;
 			return *this;
 		}
-		Point& operator*=(const T right) noexcept {
+		inline Point& operator*=(const T right) noexcept {
 			a_[0] *= right;
 			a_[1] *= right;
 			a_[2] *= right;
 			return *this;
 		}
-		Point& operator/=(const T right) noexcept {
+		inline Point& operator/=(const T right) noexcept {
 			a_[0] /= right;
 			a_[1] /= right;
 			a_[2] /= right;
 			return *this;
 		}
-		constexpr bool operator==(const Point& other) const noexcept {
+		constexpr inline bool operator==(const Point& other) const noexcept {
 			return a_[0] == other.a_[0] && a_[1] == other.a_[1] && a_[2] == other.a_[2];
 		}
 
-		constexpr T get(const unsigned char i) const noexcept {
+		constexpr inline T get(const unsigned char i) const noexcept {
 			return a_[i];
 		}
 
-		constexpr void set(const unsigned char i, const T newval) noexcept {
+		constexpr inline void set(const unsigned char i, const T newval) noexcept {
 			a_[i] = newval;
 		}
 	};
@@ -231,10 +231,10 @@ namespace geometry {
 		}
 		explicit constexpr Matrix(const_array_type& in) noexcept : A(in) {}
 		explicit constexpr Matrix(array_type&& in) noexcept : A(std::move(in)) {}
-		[[nodiscard]] constexpr T& El(const size_t a, const size_t b) noexcept {
+		[[nodiscard]] inline constexpr T& El(const size_t a, const size_t b) noexcept {
 			return A[a][b];
 		}
-		[[nodiscard]] constexpr T El(const size_t a, const size_t b) const noexcept {
+		[[nodiscard]] inline constexpr T El(const size_t a, const size_t b) const noexcept {
 			return A[a][b];
 		}
 		template<class T2>
