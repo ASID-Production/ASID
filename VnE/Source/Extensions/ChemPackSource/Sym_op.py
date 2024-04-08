@@ -51,6 +51,10 @@ class SymOpDialog(QtWidgets.QDialog):
         self.combo_box.currentIndexChanged.connect(self.changeSystem)
 
         self.main_layout.addWidget(self.cb_frame)
+
+        self.check_box = QtWidgets.QCheckBox('Center cell', self)
+        self.main_layout.addWidget(self.check_box)
+
         self.sop_frame = QtWidgets.QFrame(self)
         self.main_layout.addWidget(self.sop_frame)
 
@@ -139,7 +143,8 @@ class SymOpDialog(QtWidgets.QDialog):
             sym_codes = atoms[0].cif_sym_codes
             sym_code = sym_codes[ind][1]
             data = [[x.atom_type, *list(x.cif_frac_coords)] for x in atoms]
-            new_atoms = cpplib.GenSymm(data, False, [sym_code])
+            flag = 0b0 | (int(self.check_box.isChecked()) << 1)
+            new_atoms = cpplib.GenSymm(data, flag, [sym_code])
             new_coords = [x[1:] for x in new_atoms]
             cell = [atoms[0].cif_cell_a,
                     atoms[0].cif_cell_b,

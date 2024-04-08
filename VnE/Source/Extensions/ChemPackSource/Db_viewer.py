@@ -25,7 +25,7 @@
 #  ORCID:       0009-0003-5298-6836
 #
 # ******************************************************************************************
-
+import os.path
 
 from PySide6 import QtWidgets
 from PySide6.QtCore import *
@@ -294,6 +294,8 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
             return
         id = data['id']
         cif = Db_bindings.getCif(id)
+        if not os.path.exists('temp/'):
+            os.mkdir('temp')
         filename = f'temp/{id}.cif'
         out = open(filename, 'wb')
         out.write(cif)
