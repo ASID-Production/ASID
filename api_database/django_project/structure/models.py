@@ -280,6 +280,7 @@ class StructureCode(models.Model):
 
     class Meta:
         ordering = ['refcode']
+
     def __str__(self):
         return self.refcode
 
@@ -907,7 +908,7 @@ class Journal(models.Model):
     )
     name = models.CharField(max_length=500, verbose_name='Journal')
     discontinued = models.BooleanField(verbose_name='Discontinued', blank=True, null=True,)
-    fullname = models.CharField(max_length=1000, verbose_name='Journal')
+    fullname = models.CharField(max_length=1000, verbose_name='Journal', blank=True, null=True)
     translated_name = models.CharField(max_length=500, blank=True, null=True, verbose_name='Journal')
     abbreviated_translated_name = models.CharField(
         max_length=500,
@@ -920,7 +921,7 @@ class Journal(models.Model):
         return self.name
 
     class Meta:
-        unique_together = (('name', 'fullname'),)
+        unique_together = (('international_coden', 'name', 'fullname'),)
 
 
 class Publication(models.Model):
