@@ -139,7 +139,7 @@ class PublicationsAdmin(admin.ModelAdmin):
 
 @admin.register(RefcodePublicationConnection)
 class RefcodePublicationConnectionAdmin(admin.ModelAdmin):
-    list_display = ('id', 'refcode', 'publication')
+    list_display = ('id', 'refcode')
     search_fields = ('publication__doi',)
     empty_value_display = '-empty-'
 
