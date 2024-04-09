@@ -27,7 +27,6 @@
 # *****************************************************************************************
 
 from math import cos, sqrt, radians
-from structure.models import CoordinatesBlock
 
 CIF_HEAD = '''
 #######################################################################
@@ -168,5 +167,5 @@ def create_cif_text(structure: classmethod) -> str:
             text += 'loop_\n_atom_site_label\n_atom_site_type_symbol\n_atom_site_fract_x\n_atom_site_fract_y\n_atom_site_fract_z\n'
             text += structure.coordinates.coordinates
 
-    text += '#END\n'
+    text += '\n#END\n'
     return text
