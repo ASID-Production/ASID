@@ -93,5 +93,5 @@ def qc_get_cif_content(qc_structure: classmethod) -> str:
         text += 'loop_\n_atom_site_label\n_atom_site_type_symbol\n_atom_site_fract_x\n_atom_site_fract_y\n_atom_site_fract_z\n'
         text += qc_structure.qc_coordinates.coordinates
 
-    text += '#END\n'
+    text += '\n#END\n'
     return text
