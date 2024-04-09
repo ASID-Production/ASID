@@ -61,6 +61,8 @@ def create_cif_text(structure: classmethod) -> str:
             return f"{cif_parameter} '{value}'\n"
         elif value and not in_commas:
             return f"{cif_parameter} {value}\n"
+        elif cif_parameter == '_journal_name_full' and structure.publication.publication.journal.name:
+            return f"'_journal_name_full' {structure.publication.publication.journal.name}\n"
         else:
             return f"{cif_parameter} ?\n"
 
@@ -85,7 +87,10 @@ def create_cif_text(structure: classmethod) -> str:
         text += check_value_exist('_journal_volume', structure.publication.publication.volume, False)
         text += check_value_exist('_journal_year', structure.publication.publication.year, False)
         text += check_value_exist('_journal_page_first', structure.publication.publication.page, False)
-        text += check_value_exist('_journal_name_full', structure.publication.publication.journal.fullname, True)
+        if structure.publication.publication.journal:
+            text += check_value_exist('_journal_name_full', structure.publication.publication.journal.fullname, True)
+        else:
+            text += f"_journal_name_full ?\n"
         text += check_value_exist('_journal_DOI', structure.publication.publication.doi, True)
 
     if structure.authors.count() > 0:
@@ -164,7 +169,13 @@ def create_cif_text(structure: classmethod) -> str:
 
     if hasattr(structure, "coordinates"):
         if structure.characteristics.has_3d_structure and structure.coordinates.coordinates:
+            # TODO: after dump loading leave only 5 values in coordinates strings!!!
+            parms_num = len(structure.coordinates.coordinates.split('\n')[0].split())
             text += 'loop_\n_atom_site_label\n_atom_site_type_symbol\n_atom_site_fract_x\n_atom_site_fract_y\n_atom_site_fract_z\n'
+            if parms_num >= 6:
+                text += '_atom_site_occupancy\n'
+            if parms_num >= 7:
+                text += '_atom_site_B_iso_or_equiv\n'
             text += structure.coordinates.coordinates
 
     text += '\n#END\n'
