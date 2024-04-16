@@ -252,7 +252,7 @@ class StructureFilter(FilterSet):
                 reduced_cells__be__range=(params[4] - params[4] * abc_diviation, params[4] + params[4] * angle_diviation),
                 reduced_cells__ga__range=(params[5] - params[5] * abc_diviation, params[5] + params[5] * angle_diviation),
                 cell__centring__exact=centrings[params[6].upper()]
-            )
+            ).distinct()
             return queryset
         return queryset
 
