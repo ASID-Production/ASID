@@ -43,6 +43,7 @@ class FileParser:
 
     def parsFile(self, file_path, bond=True, root=None):
         _, ext = os.path.splitext(file_path)
+        ext = ext.lower()
         if ext not in self.SUPPORTED_FORMATS:
             print('File is not supported')
             return None, None
@@ -279,12 +280,12 @@ class FileParser:
         mol_sys.name = os.path.basename(file_path).split('.')[0]
         mol = MoleculeClass.Molecule(parent=mol_sys)
 
-        sym_codes = block.find(['_symmetry_equiv_pos_site_id', '_symmetry_equiv_pos_as_xyz'])
+        sym_codes = block.find(['_symmetry_equiv_pos_as_xyz'])
         if not sym_codes:
             sym_codes = block.find(['_space_group_symop_operation_xyz'])
             sym_codes = [[i, x[0][1:-1]] for i, x in enumerate(sym_codes)]
         else:
-            sym_codes = [[int(x[i]) if i < 1 else x[i] for i in range(len(x))] for x in sym_codes]
+            sym_codes = [[i, x[0]] for i, x in enumerate(sym_codes)]
         num = sym_codes[-1][0] + 1
         added = [
                  [num, 'x+1,y,z'],
