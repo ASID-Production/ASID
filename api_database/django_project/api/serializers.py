@@ -33,7 +33,7 @@ from structure.models import (StructureCode, Author, Spacegroup, Cell,
                               RefcodePublicationConnection, ExperimentalInfo,
                               ReducedCell, ExperimentalInfo, RefinementInfo,
                               CoordinatesBlock, CrystalAndStructureInfo,
-                              CifFile)
+                              CifFile, Journal)
 from qc_structure.models import (QCStructureCode, QCCell, QCCompoundName, QCFormula,
                                  QCReducedCell, QCCoordinatesBlock, QCProgram,
                                  QCProperties, VaspFile)
@@ -96,7 +96,19 @@ class FormulaSerializer(serializers.ModelSerializer):
         fields = ('id', 'formula_moiety', 'formula_sum')
 
 
+class JournalSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Journal
+        fields = (
+            'id', 'name', 'international_coden', 'fullname',
+            'translated_name', 'abbreviated_translated_name',
+            'discontinued'
+        )
+
+
 class PublicationSerializer(serializers.ModelSerializer):
+    journal = JournalSerializer(read_only=True)
+
     class Meta:
         model = Publication
         fields = ('id', 'journal', 'page', 'volume', 'year', 'doi')
