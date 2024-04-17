@@ -64,8 +64,14 @@ public:
 	inline bool operator<(const XAtom& other) const noexcept {
 		return simple_representation < other.simple_representation;
 	}
+	inline bool operator<=(const XAtom& other) const noexcept {
+		return simple_representation <= other.simple_representation;
+	}
 	inline bool operator>(const XAtom& other) const noexcept {
 		return simple_representation > other.simple_representation;
+	}
+	inline bool operator>=(const XAtom& other) const noexcept {
+		return simple_representation >= other.simple_representation;
 	}
 	inline bool operator==(const XAtom& other) const noexcept {
 		return simple_representation == other.simple_representation;
@@ -73,6 +79,7 @@ public:
 	inline bool operator!=(const XAtom& other) const noexcept {
 		return simple_representation != other.simple_representation;
 	}
+	inline explicit operator char() const { return simple_representation; }
 };
 
 template<class A, class H>
@@ -166,8 +173,7 @@ public:
 	bool operator<=(const Node& other) const noexcept {
 		return this->operator==(other) || this->operator<(other);
 	}
-	template<class X>
-	bool notExactCompare(const Node<X,H,AI>& other) const noexcept {
+	template<class X> bool notExactCompare(const Node<X,H,AI>& other) const noexcept {
 		return ((const base&)(*this)).type == ((const struct Node<X, H, AI>::base&)other).type &&
 			((const base&)(*this)).hAtoms <= ((const struct Node<X, H, AI>::base&)other).hAtoms &&
 			(neighbours_.size() <= other.neighbours_.size());

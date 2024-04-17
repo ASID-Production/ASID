@@ -343,23 +343,26 @@ private:
 template<class A, class H, class AI, class T>
 class FindMolecules {
 public:
+	using FAMSType = typename FAM_Struct<A, AI, T>;
 	using AtomTypeConteinerType = std::vector<A>;
-	using PointConteinerType = std::vector<geometry::Point<T>>;
+	using PointType = typename FAMSType::PointType;
+	using PointConteinerType = std::vector<PointType>;
 	using size_type = AI;
 	using BondType = Bond<AI>;
 	using DistancesType = Distances<A, T, size_type>;
 	using NodeType = Node<A, H, AI>;
 	using HashType = Hash<A, H, AI>;
-	using FAMSType = FAM_Struct<A, AI, T>;
 private:
 	FAMSType fs_;
 
 public:
 	constexpr FindMolecules() noexcept = delete;
 	explicit constexpr FindMolecules(FAMSType && fs) : fs_(std::move(fs)) {}
-	std::string findMolecules(const DistancesType& distances, std::vector<BondType>& bonds, const std::vector<AI>& invalids,std::string & errorMsg) {
+	std::pair<std::string, std::vector<std::vector<std::pair<PointType, typename NodeType::base>>>> findMolecules(const DistancesType& distances, std::vector<BondType>& bonds, const std::vector<AI>& invalids,std::string & errorMsg) {
 		std::vector<NodeType> net;
 		net.reserve(fs_.sizePoints);
+		std::vector<char> minusHydrogen(fs_.sizePoints, 0);
+
 
 		// 1. Create Nodes in net
 		for (size_type i = 0; i < fs_.sizePoints; i++) {
@@ -377,11 +380,28 @@ public:
 			if (net[i].getType() != A(1)) {
 				continue;
 			}
+			//find shortest
+			T shortestLen = INFINITY;
+			AI shortestAtom = -1;
+
 			auto sizeNei = net[i].neighboursSize();
 			for (decltype(sizeNei) j = 0; j < sizeNei; j++) {
-				auto p = net[i].getNeighbour(0);
-				net[i].deleteBond(*p);
-				p->setHAtoms(p->getHAtoms() + 1);
+				auto &p = *(net[i].getNeighbour(0));
+				const auto idNei = p.getID();
+				const auto r = PointType::distance(fs_.points[idNei], fs_.points[i]);
+				if (r < shortestLen) {
+					if (shortestAtom != -1) {
+						minusHydrogen[shortestAtom]++;
+					}
+					shortestLen = r;
+					shortestAtom = idNei;
+				}
+				else {
+					minusHydrogen[idNei]++;
+				}
+
+				net[i].deleteBond(p);
+				p.setHAtoms(p.getHAtoms() + 1);
 			}
 		}
 
@@ -394,12 +414,12 @@ public:
 		for (size_type i = 0; i < fs_.sizePoints; i++) {
 			auto contacts = net[i].neighboursSize() + net[i].getHAtoms();
 			A type = net[i].getType();
-			if ((type <= 10 && contacts > 8) ||
-				(type > 10 && contacts > 14)) {
+			if ((type <= A(10) && contacts > 8) ||
+				(type > A(10) && contacts > 14)) {
 				negative_atoms[i] = true;
 				if (errorMsg.empty()) {
 					errorMsg = "Atom ";
-					errorMsg += mend[type];
+					errorMsg += mend[static_cast<char>(type)];
 					errorMsg += std::to_string(i);
 					errorMsg += " has too many bonds (";
 					errorMsg += std::to_string(contacts);
@@ -445,11 +465,21 @@ public:
 				hashs.emplace_back(hash);
 			}
 		}
+		auto molecules_size = molecules.size();
+		std::vector<std::vector<std::pair<PointType, NodeType::base>>> right(molecules_size);
+		for (size_t i = 0; i < molecules_size; i++)
+		{
+			const auto mis = molecules[i].size();
+			for (size_t j = 0; j < mis; j++)
+			{
+				right[i].emplace_back(fs_.points[molecules[i][j]], NodeType::base::BaseNode(net[molecules[i][j]].getType(), net[molecules[i][j]].getHAtoms()));
+			}
+		}
 		auto res = output(molecules, net);
 		if (errorMsg.empty())
-			return output(molecules, net);
+			return std::make_pair(output(molecules, net),std::move(right));
 		else
-			return output(molecules, net) + ";" + errorMsg;
+			return std::make_pair(output(molecules, net) + ";" + errorMsg, std::move(right));
 	}
 private:
 	constexpr std::string output(const std::vector<std::vector<AI>>& molecules, const std::vector<NodeType>& net) const {
@@ -464,7 +494,7 @@ private:
 			for (size_type j = 0; j < m2s; j++) {
 				revers[molecules[i][j]] = n;
 				n++;
-				res += std::to_string(net[molecules[i][j]].getType());
+				res += std::to_string(static_cast<int>(static_cast<char>(net[molecules[i][j]].getType())));
 				res += " ";
 				res += std::to_string(net[molecules[i][j]].getHAtoms());
 				res += " ";

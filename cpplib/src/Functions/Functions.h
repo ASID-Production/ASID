@@ -1,6 +1,7 @@
 #pragma once
 #include <vector>
 #include <string>
+#include "AllInOneAndCurrent.h"
 
 bool CompareGraph(const char* search1, 
 				  const char* search2, 
@@ -11,7 +12,7 @@ std::vector<int> SearchMain(const char* search,
 							const int np, 
 							const bool exact);
 
-std::string FindMoleculesInCell(const std::array<float, 6>& unit_cell, 
+std::pair<std::string, std::vector<std::vector<std::pair<CurrentPoint, CurrentNode::base>>>>  FindMoleculesInCell(const std::array<float, 6>& unit_cell,
 								std::vector<const char*>& symm, 
 								std::vector<int>& types, 
 								std::vector<float>& xyz);

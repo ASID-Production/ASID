@@ -210,8 +210,22 @@ extern "C" {
 		std::vector<float> xyz; pyListToVectorFloat(oxyz, &xyz);
 
 		auto ret = FindMoleculesInCell(cell, symm, types, xyz);
-
-		return PyUnicode_FromString(ret.c_str());
+		PyObject* o_Mol_res = PyList_New(0);
+		for (auto & mol : ret.second)
+		{
+			PyObject* o_molecule = PyList_New(0);
+			for (auto& atom : mol) {
+				PyObject* o_atom = Py_BuildValue("fffii",
+											 float(atom.first.get(0)),
+											 float(atom.first.get(0)),
+											 float(atom.first.get(0)),
+											 atom.second.type,
+											 atom.second.hAtoms);
+				PyList_Append(o_molecule, o_atom);
+			}
+			PyList_Append(o_Mol_res, o_molecule);
+		}
+		return Py_BuildValue("sO", ret.first.c_str(), o_Mol_res);
 	}
 
 	static PyObject* cpplib_FindMoleculesWithoutCell(PyObject* self, PyObject* args) {

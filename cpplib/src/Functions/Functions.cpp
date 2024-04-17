@@ -71,11 +71,11 @@ std::vector<int> SearchMain(const char* search, std::vector<const char*>&& data,
 	return databuf.getAllResults();
 }
 
-std::string FindMoleculesInCell(const std::array<float, 6>& unit_cell, std::vector<const char*>& symm, std::vector<int>& types, std::vector<float>& xyz) {
+std::pair<std::string, std::vector<std::vector<std::pair<CurrentPoint, CurrentNode::base>>>> FindMoleculesInCell(const std::array<float, 6>& unit_cell, std::vector<const char*>& symm, std::vector<int>& types, std::vector<float>& xyz) {
 
 	auto& distances = *(p_distances);
 	if (p_distances->isReady() == false) {
-		return std::string(";Error! Could not open BondLength.ini");
+		return std::make_pair(std::string(";Error! Could not open BondLength.ini"), std::vector<std::vector<std::pair<CurrentPoint, CurrentNode::base>>>());
 	}
 	FAM_Struct<AtomType, AtomicIDType, FloatingPointType> fs;
 	FAM_Cell<FloatingPointType> fc(CurrentCell(unit_cell, true));
@@ -88,7 +88,7 @@ std::string FindMoleculesInCell(const std::array<float, 6>& unit_cell, std::vect
 
 	CurrentFindMolecules fm(std::move(fs));
 
-	return fm.findMolecules(distances, res.first, res.second, errorMsg);;
+	return fm.findMolecules(distances, res.first, res.second, errorMsg);
 }
 std::string FindMoleculesWithoutCell(const std::vector<int>& types, std::vector<float>& xyz) {
 	std::string ret;
@@ -105,7 +105,7 @@ std::string FindMoleculesWithoutCell(const std::vector<int>& types, std::vector<
 
 	CurrentFindMolecules fm(std::move(fs));
 
-	ret = fm.findMolecules(distances, res.first, res.second, errorMsg);
+	ret = fm.findMolecules(distances, res.first, res.second, errorMsg).first;
 
 	return ret.c_str();
 }
