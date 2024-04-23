@@ -1,2 +1,2 @@
 source VisApp/bin/activate
-python Start.py
+python3 Start.py

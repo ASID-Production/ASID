@@ -30,6 +30,7 @@
 from OpenGL.GL import *
 import numpy as np
 from typing import Tuple, Dict, List
+import logging
 
 
 class VAOCreator:
@@ -79,6 +80,9 @@ class ShaderData:
 
         self._VBOSize = {}
         self.VBOs = []
+
+        self.logger = logging.getLogger(__name__)
+
         for i,attr in enumerate(self.shape):
             id = glGenBuffers(1)
             self._VBOSize[id] = 0
@@ -218,6 +222,11 @@ class ShaderData:
         self._validateData(VBO, data)
         self._validateVBORange(VBO, data, offset)
         glNamedBufferSubData(VBO['id'], offset, data.nbytes, data)
+
+        self.logger.info(f'Data replace VBO ID: {VBO["id"]}')
+        self.logger.info(f'Offset: {offset}')
+        self.logger.info(f'Data: {data}')
+
         VBO['data'][int(offset/VBO['dtype_bytes']):int(offset/VBO['dtype_bytes']+len(data))] = data
 
 
