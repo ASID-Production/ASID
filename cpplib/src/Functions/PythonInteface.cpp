@@ -214,13 +214,14 @@ extern "C" {
 		for (auto & mol : ret.second)
 		{
 			PyObject* o_molecule = PyList_New(0);
-			for (auto& atom : mol) {
+			PyList_Append(o_molecule, PyLong_FromLong(long(mol.second)));
+			for (auto& atom : mol.first) {
 				PyObject* o_atom = Py_BuildValue("fffii",
-											 float(atom.first.get(0)),
-											 float(atom.first.get(0)),
-											 float(atom.first.get(0)),
-											 atom.second.type,
-											 atom.second.hAtoms);
+												 float(std::get<0>(atom).get(0)),
+												 float(std::get<0>(atom).get(1)),
+												 float(std::get<0>(atom).get(2)),
+												 int(std::get<1>(atom)),
+												 int(std::get<2>(atom)));
 				PyList_Append(o_molecule, o_atom);
 			}
 			PyList_Append(o_Mol_res, o_molecule);

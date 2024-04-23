@@ -340,8 +340,7 @@ private:
 	}
 };
 
-template<class A, class H, class AI, class T>
-class FindMolecules {
+template<class A, class H, class AI, class T> class FindMolecules {
 public:
 	using FAMSType = typename FAM_Struct<A, AI, T>;
 	using AtomTypeConteinerType = std::vector<A>;
@@ -358,7 +357,7 @@ private:
 public:
 	constexpr FindMolecules() noexcept = delete;
 	explicit constexpr FindMolecules(FAMSType && fs) : fs_(std::move(fs)) {}
-	std::pair<std::string, std::vector<std::vector<std::pair<PointType, typename NodeType::base>>>> findMolecules(const DistancesType& distances, std::vector<BondType>& bonds, const std::vector<AI>& invalids,std::string & errorMsg) {
+	std::pair<std::string, std::vector<std::pair<std::vector<std::tuple<PointType, AI, H>>, int>>> findMolecules(const DistancesType& distances, std::vector<BondType>& bonds, const std::vector<AI>& invalids,std::string & errorMsg) {
 		std::vector<NodeType> net;
 		net.reserve(fs_.sizePoints);
 		std::vector<char> minusHydrogen(fs_.sizePoints, 0);
@@ -431,7 +430,7 @@ public:
 		// 5. Find molecules
 
 		std::vector<bool> seen(fs_.sizeUnique, false); // seen unique atoms
-		std::vector<std::vector<AI>> molecules;
+		std::vector<std::pair<std::vector<AI>, int>> molecules;
 		std::vector<HashType> hashs;
 		for (AI i = 0; i < fs_.sizeUnique; i++) {
 			if (net[i].getType() == A(1) || seen[i] == true)
@@ -457,23 +456,27 @@ public:
 			for (size_type j = 0; j < molecules_size; j++) {
 				if (hash == hashs[j]) {
 					exist = true;
+					molecules[j].second++;
 					break;
 				}
 			}
 			if (!exist) {
-				molecules.emplace_back(singleTable);
+				molecules.emplace_back(std::move(singleTable), 1);
 				hashs.emplace_back(hash);
 			}
 		}
 		auto molecules_size = molecules.size();
-		std::vector<std::vector<std::pair<PointType, NodeType::base>>> right(molecules_size);
+		std::vector<std::pair<std::vector<std::tuple<PointType, AI, H>>, int>> right(molecules_size);
 		for (size_t i = 0; i < molecules_size; i++)
 		{
-			const auto mis = molecules[i].size();
+			const auto mis = molecules[i].first.size();
+			std::vector<std::tuple<PointType, AI, H>> oneMol;
 			for (size_t j = 0; j < mis; j++)
 			{
-				right[i].emplace_back(fs_.points[molecules[i][j]], NodeType::base::BaseNode(net[molecules[i][j]].getType(), net[molecules[i][j]].getHAtoms()));
+				auto realID = molecules[i].first[j];
+				oneMol.emplace_back(fs_.points[molecules[i].first[j]], fs_.parseIndex[realID], net[molecules[i].first[j]].getHAtoms()-minusHydrogen[realID]);
 			}
+			right.emplace_back(std::move(oneMol),molecules[i].second);
 		}
 		auto res = output(molecules, net);
 		if (errorMsg.empty())
@@ -482,7 +485,7 @@ public:
 			return std::make_pair(output(molecules, net) + ";" + errorMsg, std::move(right));
 	}
 private:
-	constexpr std::string output(const std::vector<std::vector<AI>>& molecules, const std::vector<NodeType>& net) const {
+	std::string output(const std::vector<std::pair<std::vector<AI>, int>>& molecules, const std::vector<NodeType>& net) const {
 		size_type n = 1;
 		size_type b = 0;
 		std::string res;
@@ -490,13 +493,13 @@ private:
 		std::vector<AI> revers(s_net, 0);
 		size_type m1s = molecules.size();
 		for (size_type i = 0; i < m1s; i++) {
-			size_type m2s = molecules[i].size();
+			size_type m2s = molecules[i].first.size();
 			for (size_type j = 0; j < m2s; j++) {
-				revers[molecules[i][j]] = n;
+				revers[molecules[i].first[j]] = n;
 				n++;
-				res += std::to_string(static_cast<int>(static_cast<char>(net[molecules[i][j]].getType())));
+				res += std::to_string(static_cast<int>(static_cast<char>(net[molecules[i].first[j]].getType())));
 				res += " ";
-				res += std::to_string(net[molecules[i][j]].getHAtoms());
+				res += std::to_string(net[molecules[i].first[j]].getHAtoms());
 				res += " ";
 			}
 		}
