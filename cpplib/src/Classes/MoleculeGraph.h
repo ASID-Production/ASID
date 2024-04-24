@@ -240,7 +240,7 @@ private:
 			}
 			for (AI i = 1; i < sn; i++)
 			{
-				if (this->operator[](i).getType() == static_cast<char>(xty)) {
+				if (this->operator[](i).getType().include(static_cast<char>(xty))) {
 					this->operator[](i).setType(real);
 				}
 			}

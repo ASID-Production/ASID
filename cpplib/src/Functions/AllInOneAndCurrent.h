@@ -32,10 +32,10 @@
 #include "../Classes/Distances.h"
 #include "../Classes/FindGeometry.h"
 
-using AtomType = char;
+using AtomType = int8_t;
 using HType = int8_t;
-using AtomicIDType = uint32_t;
-using MolecularIDType = uint32_t;
+using AtomicIDType = int32_t;
+using MolecularIDType = int32_t;
 
 using size_type = uint32_t;
 using FloatingPointType = float;

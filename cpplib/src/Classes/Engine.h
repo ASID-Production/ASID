@@ -52,32 +52,44 @@ public:
 	inline void AddType(const char t) {
 		types.set(t);
 	}
-
+	inline bool include(const char t) const {
+		return types.test(t);
+	}
+	inline bool include(const XAtom& t) const {
+		return !((types ^ t.types) & t.types).any();
+	}
 
 	// operators
 	inline bool operator==(const char other) const noexcept {
-		return types[other];
+		return include(other);
 	}
 	inline bool operator!=(const char other) const noexcept {
-		return !types[other];
+		return !include(other);
 	}
+
+	// operator for sorting
 	inline bool operator<(const XAtom& other) const noexcept {
 		return simple_representation < other.simple_representation;
 	}
+	// operator for sorting
 	inline bool operator<=(const XAtom& other) const noexcept {
 		return simple_representation <= other.simple_representation;
 	}
+	// operator for sorting
 	inline bool operator>(const XAtom& other) const noexcept {
 		return simple_representation > other.simple_representation;
 	}
+	// operator for sorting
 	inline bool operator>=(const XAtom& other) const noexcept {
 		return simple_representation >= other.simple_representation;
 	}
+	// operator for sorting
 	inline bool operator==(const XAtom& other) const noexcept {
-		return simple_representation == other.simple_representation;
+		return include(other);
 	}
+	// operator for sorting
 	inline bool operator!=(const XAtom& other) const noexcept {
-		return simple_representation != other.simple_representation;
+		return !include(other);
 	}
 	inline explicit operator char() const { return simple_representation; }
 };
