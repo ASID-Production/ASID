@@ -58,6 +58,9 @@ public:
 	inline bool include(const XAtom& t) const {
 		return !((types ^ t.types) & t.types).any();
 	}
+	inline bool simple_eq(const char other) const {
+		return simple_representation == other;
+	}
 
 	// operators
 	inline bool operator==(const char other) const noexcept {
@@ -85,11 +88,11 @@ public:
 	}
 	// operator for sorting
 	inline bool operator==(const XAtom& other) const noexcept {
-		return include(other);
+		return simple_representation == other.simple_representation;
 	}
 	// operator for sorting
 	inline bool operator!=(const XAtom& other) const noexcept {
-		return !include(other);
+		return simple_representation != other.simple_representation;
 	}
 	inline explicit operator char() const { return simple_representation; }
 };

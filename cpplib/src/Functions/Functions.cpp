@@ -107,7 +107,7 @@ std::string FindMoleculesWithoutCell(const std::vector<int>& types, std::vector<
 	FAM_Struct<AtomType, AtomicIDType, FloatingPointType> fs;
 	ParseData(fs, types, xyz);
 	std::string errorMsg;
-	auto res = fs.findBonds(distances, errorMsg, [](const CurrentPoint& p1, const CurrentPoint& p2) {return (p1 - p2).r(); });
+	auto res = fs.findBonds(distances, errorMsg, CurrentPoint::distance);
 
 	CurrentFindMolecules fm(std::move(fs));
 
