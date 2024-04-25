@@ -474,7 +474,7 @@ public:
 			for (size_t j = 0; j < mis; j++)
 			{
 				auto realID = molecules[i].first[j];
-				oneMol.emplace_back(fs_.points[molecules[i].first[j]], fs_.parseIndex[realID], net[molecules[i].first[j]].getHAtoms()-minusHydrogen[realID]);
+				oneMol.emplace_back( fs_.points[molecules[i].first[j]], fs_.parseIndex[realID], net[molecules[i].first[j]].getHAtoms()-minusHydrogen[realID]);
 			}
 			right.emplace_back(std::move(oneMol),molecules[i].second);
 		}

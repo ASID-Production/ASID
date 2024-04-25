@@ -87,6 +87,11 @@ std::pair<std::string, std::vector<std::pair<std::vector<std::tuple<CurrentPoint
 	std::string errorMsg;
 	auto res = fs.findBonds(distances, errorMsg, [fc](const CurrentPoint& p1, const CurrentPoint& p2) {return fc.distanceInCell(p1, p2); });
 
+	for (size_t i = 0; i < fs.sizePoints; i++)
+	{
+		fs.points[i] = fc.fracToCart() * fs.points[i];
+	}
+
 	CurrentFindMolecules fm(std::move(fs));
 
 	return fm.findMolecules(distances, res.first, res.second, errorMsg);
