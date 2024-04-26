@@ -342,9 +342,9 @@ private:
 
 template<class A, class H, class AI, class T> class FindMolecules {
 public:
-	using FAMSType = typename FAM_Struct<A, AI, T>;
+	using FAMSType = FAM_Struct<A, AI, T>;
 	using AtomTypeConteinerType = std::vector<A>;
-	using PointType = typename FAMSType::PointType;
+	using PointType = geometry::Point<T>;
 	using PointConteinerType = std::vector<PointType>;
 	using size_type = AI;
 	using BondType = Bond<AI>;
