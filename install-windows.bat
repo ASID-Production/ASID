@@ -12,6 +12,7 @@ cd api_database
 call python -m venv venv
 call venv\Scripts\activate.bat
 pip install -r requirements.txt
+pip install psycopg2
 cd django_project
 call python manage.py makemigrations
 call python manage.py migrate

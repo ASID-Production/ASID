@@ -111,8 +111,9 @@ def get_data(cif_block, symops_db):
 
 
 def make_graph_c(params, coords, types, refcode, add_graphs_logger, symops):
-    mols = cpplib.FindMoleculesInCell(params, symops, types, coords)
-    parse_mols = mols.split(';')
+    mols_str_graph, xyz_mols = cpplib.FindMoleculesInCell(params, symops, types, coords)
+    # TODO: gen 2d graphs
+    parse_mols = mols_str_graph.split(';')
     if len(parse_mols) == 1:
         graph_str, = parse_mols
     elif len(parse_mols) == 2:

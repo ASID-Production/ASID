@@ -19,3 +19,4 @@
 /api_database/django_project/data/
 /api_database/django_project/media/
 /api_database/django_project/static/
+migrations/
