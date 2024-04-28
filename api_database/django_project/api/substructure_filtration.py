@@ -68,13 +68,19 @@ def set_elements(analyse_mol):
 def set_filter(analyse_mol):
     result = dict()  # {attr_name: [1, obj_name]}
 
-    for attr_name, data in TEMPLATES.items():
-        template_graph, obj_name = data
-        output = set_substructure(template_graph, analyse_mol)
-        if output:
-            result[attr_name] = [True, obj_name]
-        else:
-            result[attr_name] = [False, obj_name]
+    # check analyse_mol has multitypes
+    # TODO: добавить подструктурную фильтрацию (мультитипы преобразовать!!!)
+    multitypes = False
+    if '-' in analyse_mol:
+        multitypes = True
+    if not multitypes:
+        for attr_name, data in TEMPLATES.items():
+            template_graph, obj_name = data
+            output = set_substructure(template_graph, analyse_mol)
+            if output:
+                result[attr_name] = [True, obj_name]
+            else:
+                result[attr_name] = [False, obj_name]
 
     elem_found = set_elements(analyse_mol)
     # only if no multitypes

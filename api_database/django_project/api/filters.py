@@ -355,20 +355,20 @@ class QCStructureFilter(FilterSet):
             params = list(map(float, raw_params[:6]))
             params = get_reduced_cell(params, raw_params[6].upper())
             params.extend(raw_params[6:])
-            abc_diviation = 0.015
-            angle_diviation = 0.02
+            abc_deviation = 0.015
+            angle_deviation = 0.02
             centrings = dict((v, k) for k, v in CENTRINGS)
             if params[7] != 'none':
-                abc_diviation = float(params[7])
+                abc_deviation = float(params[7])
             if params[8] != 'none':
-                angle_diviation = float(params[8])
+                angle_deviation = float(params[8])
             queryset = queryset.filter(
-                qc_reduced_cells__a__range=(params[0] - params[0] * abc_diviation, params[0] + params[0] * angle_diviation),
-                qc_reduced_cells__b__range=(params[1] - params[1] * abc_diviation, params[1] + params[1] * angle_diviation),
-                qc_reduced_cells__c__range=(params[2] - params[2] * abc_diviation, params[2] + params[2] * angle_diviation),
-                qc_reduced_cells__al__range=(params[3] - params[3] * abc_diviation, params[3] + params[3] * angle_diviation),
-                qc_reduced_cells__be__range=(params[4] - params[4] * abc_diviation, params[4] + params[4] * angle_diviation),
-                qc_reduced_cells__ga__range=(params[5] - params[5] * abc_diviation, params[5] + params[5] * angle_diviation),
+                qc_reduced_cells__a__range=(params[0] - params[0] * abc_deviation, params[0] + params[0] * angle_deviation),
+                qc_reduced_cells__b__range=(params[1] - params[1] * abc_deviation, params[1] + params[1] * angle_deviation),
+                qc_reduced_cells__c__range=(params[2] - params[2] * abc_deviation, params[2] + params[2] * angle_deviation),
+                qc_reduced_cells__al__range=(params[3] - params[3] * abc_deviation, params[3] + params[3] * angle_deviation),
+                qc_reduced_cells__be__range=(params[4] - params[4] * abc_deviation, params[4] + params[4] * angle_deviation),
+                qc_reduced_cells__ga__range=(params[5] - params[5] * abc_deviation, params[5] + params[5] * angle_deviation),
                 qc_cell__centring__exact=centrings[params[6].upper()]
             )
             return queryset

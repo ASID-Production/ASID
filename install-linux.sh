@@ -16,7 +16,8 @@ cd ..
 cd api_database 
 python3 -m venv venv 
 source venv/bin/activate
-pip install -r requirements.txt 
+pip install -r requirements.txt
+pip install psycopg2-binary
 cd ./django_project
 python manage.py makemigrations
 python manage.py migrate
