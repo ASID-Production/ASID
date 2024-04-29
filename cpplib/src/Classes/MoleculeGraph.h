@@ -37,7 +37,7 @@ public:
 	// Declarations
 	using base = std::vector<Node<A, H, AI> >;
 	using NodeType = Node<A, H, AI>;
-	using BondType = Bond<A>;
+	using BondType = Bond<AI>;
 
 private:
 	// Data
