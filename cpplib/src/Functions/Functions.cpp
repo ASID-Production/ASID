@@ -42,27 +42,28 @@ bool CompareGraph(const char* search1, const char* search2, const bool exact) {
 	CurrentSearchGraph graph;
 
 	deb_write("CompareGraph CurrentSearchGraph start ReadInput");
-	graph.setupInput(CurrentRequestGraph::ReadInput(search1));
+	auto&& inputpair = CurrentRequestGraph::ReadInput(search1);
+	graph.setupInput(std::move(inputpair.first));
 	deb_write("CompareGraph CurrentSearchGraph start ReadData");
-	graph.setupData(CurrentDatabaseGraph::ReadData(search2));
+	graph.setupData(CurrentDatabaseGraph::ReadData(search2, inputpair.second));
 	deb_write("CompareGraph CurrentSearchGraph start prepareSearch");
 	graph.prepareToSearch();
 	deb_write("CompareGraph CurrentSearchGraph start FullSearch");
 	return graph.startFullSearch(exact);
 }
 std::vector<int> SearchMain(const char* search, std::vector<const char*>&& data, const int np, const bool exact) {
-	CurrentRequestGraph input = CurrentRequestGraph::ReadInput(search);
-	SearchDataInterface<MolecularIDType, size_type> databuf(std::move(data));
+	auto&& inputpair = CurrentRequestGraph::ReadInput(search);
+	SearchDataInterface<MolecularIDType, size_type> databuf(std::move(data), std::move(inputpair.second));
 	std::vector<std::thread> threads;
 	const size_t nThreads = std::min(std::min(static_cast<unsigned int>(np), std::thread::hardware_concurrency()), 
 											  static_cast<unsigned int>(databuf.size())) - 1;
 	threads.reserve(nThreads);
-	auto ma = input.findStart();
+	auto ma = inputpair.first.findStart();
 
 	for (size_t i = 0; i < nThreads; i++) {
-		threads.emplace_back(ChildThreadFunc, std::cref(input), ma, std::ref(databuf), exact);
+		threads.emplace_back(ChildThreadFunc, std::cref(inputpair.first), ma, std::ref(databuf), exact);
 	}
-	ChildThreadFunc(input, ma, databuf, exact);
+	ChildThreadFunc(inputpair.first, ma, databuf, exact);
 
 	for (size_t i = 0; i < nThreads; i++) {
 		threads[i].join();
@@ -329,7 +330,7 @@ static void ChildThreadFunc(const CurrentRequestGraph& input, const AtomicIDType
 			return;
 		}
 		graph.setupInput(input.makeCopy());
-		CurrentDatabaseGraph molData = CurrentDatabaseGraph::ReadData(next);
+		CurrentDatabaseGraph molData = CurrentDatabaseGraph::ReadData(next, dataInterface.getMulty());
 		auto id = molData.getID();
 		graph.setupData(move(molData));
 		graph.prepareToSearch();

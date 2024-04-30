@@ -337,7 +337,7 @@ TEST(GenSymmTest, E28) {
 	EXPECT_TRUE(true);
 }
 
-TEST(SearchMainTest, multytype) {
+TEST(SearchMainTest, multytype1) {
 	const char search[] {"1 7 7 6 0 6 0 6 0 6 0 6 0 6 0 -1 0 1 2 1 6 1 7 2 3 3 4 4 5 5 6 -1 6 7 8 0"};
 	std::vector<const char*> dat ={ "1 7 7 6 0 6 0 6 0 6 0 6 0 6 0 6 0 1 2 1 6 1 7 2 3 3 4 4 5 5 6"
 								 , "2 7 7 6 0 6 0 6 0 6 0 6 0 6 0 7 0 1 2 1 6 1 7 2 3 3 4 4 5 5 6"
@@ -347,4 +347,14 @@ TEST(SearchMainTest, multytype) {
 	std::vector<int> res;
 	res = SearchMain(search, std::move(dat), 1, false);
 	EXPECT_EQ(res.size(), 2);
+}
+TEST(SearchMainTest, multytype2) {
+	const char search[]{ "1 3 2 6 3 6 2 -1 0 1 2 2 3 -1 1 9 0" };
+	std::vector<const char*> dat = { "1 2 1 6 3 6 3 1 2",
+									 "2 3 2 6 3 6 2 1 0 1 2 2 3",
+									 "3 3 2 9 0 6 2 6 3 1 2 2 3" };
+
+	std::vector<int> res;
+	res = SearchMain(search, std::move(dat), 1, false);
+	EXPECT_EQ(res.size(), 3);
 }
