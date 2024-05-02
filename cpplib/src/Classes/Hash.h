@@ -59,7 +59,7 @@ public:
 	explicit constexpr Hash(const std::vector<NodeType>& nodes) {
 		AI s = nodes.size();
 		hash.resize(s, 0);
-		const std::vector<hash_single> monohash = createMonohash(nodes, s);
+		const std::vector<hash_single> monohash = createMonohash(nodes);
 		// Second-Fourth levels
 		for (AI i = 0; i < s; i++) {
 			const auto& t = i;
@@ -77,8 +77,7 @@ public:
 		}
 		std::sort(hash.begin(), hash.end());
 	}
-
-	bool operator==(const Hash<A, H, AI>& other) {
+	bool operator==(const Hash& other) const {
 		size_type s = hash.size();
 		for (size_type i = 0; i < s; i++) {
 			if (hash[i] != other.hash[i])
