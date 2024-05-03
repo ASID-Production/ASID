@@ -358,6 +358,16 @@ TEST(SearchMainTest, multytype2) {
 	res = SearchMain(search, std::move(dat), 1, false);
 	EXPECT_EQ(res.size(), 3);
 }
+TEST(SearchMainTest, multytype3) {
+	const char search[] {"1 9 9 6 0 6 0 6 0 6 0 6 0 6 0 -1 0 6 0 6 3 1 2 1 6 1 7 2 3 3 4 4 5 5 6 7 8 8 9 -1 8 16 32 0"};
+	std::vector<const char*> dat = {"1 9 9 6 0 6 0 6 0 6 0 6 0 6 0 8 0 6 0 6 3 1 2 1 6 1 7 2 3 3 4 4 5 5 6 7 8 8 9",
+							        "2 9 9 6 0 6 0 6 0 6 0 6 0 6 0 16 0 6 0 6 3 1 2 1 6 1 7 2 3 3 4 4 5 5 6 7 8 8 9"};
+
+	std::vector<int> res;
+	res = SearchMain(search, std::move(dat), 1, false);
+	EXPECT_EQ(res.size(), 2);
+}
+
 
 TEST(databaseSearch10k, d10k) {
 	const char search1[]{ "1 5 4 6 2 6 2 6 0 6 2 6 2 1 2 2 3 3 4 4 5" };
