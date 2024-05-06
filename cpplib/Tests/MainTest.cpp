@@ -358,3 +358,87 @@ TEST(SearchMainTest, multytype2) {
 	res = SearchMain(search, std::move(dat), 1, false);
 	EXPECT_EQ(res.size(), 3);
 }
+
+TEST(databaseSearch10k, d10k) {
+	const char search1[]{ "1 5 4 6 2 6 2 6 0 6 2 6 2 1 2 2 3 3 4 4 5" };
+	const char search2[]{ "1 5 4 6 2 6 2 7 0 6 2 6 2 1 2 2 3 3 4 4 5" };
+	const char search3[]{ "1 5 4 6 2 6 2 8 0 6 2 6 2 1 2 2 3 3 4 4 5" };
+	const char search4[]{ "1 5 4 6 2 6 2 -1 0 6 2 6 2 1 2 2 3 3 4 4 5 -1 6 7 8 0" };
+	std::ifstream db("../../../../../cpplib/Tests/d10k.datt");
+	int s;
+	db >> s;
+	std::vector<std::string> datstr(s);
+	std::vector<const char*> dat(s);
+	std::vector<const char*> temp;
+	std::getline(db, datstr[0]);
+	for (size_t i = 0; i < s; i++)
+	{
+		std::getline(db, datstr[i]);
+		dat[i] = datstr[i].c_str();
+	}
+
+	temp = dat;
+	std::vector<int> res1 = SearchMain(search1, std::move(temp), 4, false);
+	cout << "res1 = " << res1.size() << std::endl;
+	temp = dat;
+	std::vector<int> res2 = SearchMain(search2, std::move(temp), 4, false);
+	cout << "res2 = " << res2.size() << std::endl;
+	temp = dat;
+	std::vector<int> res3 = SearchMain(search3, std::move(temp), 4, false);
+	cout << "res3 = " << res3.size() << std::endl;
+	temp = dat;
+	std::vector<int> res4 = SearchMain(search4, std::move(temp), 4, false);
+	cout << "res4 = " << res4.size() << std::endl;
+	EXPECT_GE(res1.size() + res2.size() + res3.size(), res4.size());
+
+	std::sort(res1.begin(), res1.end());
+	std::sort(res2.begin(), res2.end());
+	std::sort(res3.begin(), res3.end());
+	std::sort(res4.begin(), res4.end());
+
+	size_t i1 = 0;
+	size_t i2 = 0;
+	size_t i3 = 0;
+
+	for (size_t i = 0; i < res4.size(); i++)
+	{
+		bool flag = false;
+		for (; i1 < res1.size(); i1++)
+		{
+			if (res1[i1] == res4[i]) {
+				flag = true;
+				i1++;
+				break;
+			}
+			if (res1[i1] > res4[i]) {
+				break;
+			}
+		}
+		for (; i2 < res2.size(); i2++)
+		{
+			if (res2[i2] == res4[i]) {
+				flag = true;
+				i2++;
+				break;
+			}
+			if (res2[i2] > res4[i]) {
+				break;
+			}
+		}
+		for (; i3 < res3.size(); i3++)
+		{
+			if (res3[i3] == res4[i]) {
+				flag = true;
+				i3++;
+				break;
+			}
+			if (res3[i3] > res4[i]) {
+				break;
+			}
+		}
+		EXPECT_TRUE(flag) << res4[i] << std::endl;
+	}
+	EXPECT_TRUE(res1.size() == i1);
+	EXPECT_TRUE(res2.size() == i2);
+	EXPECT_TRUE(res3.size() == i3);
+}

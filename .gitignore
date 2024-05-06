@@ -4,6 +4,7 @@
 /cpplib/.vs
 /cpplib/Tests/.vs
 /module/test.py
+*.datt
 
 # api_database ignores
 /api_database/__pycache__
