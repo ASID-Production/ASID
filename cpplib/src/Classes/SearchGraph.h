@@ -113,6 +113,8 @@ private:
 
 		AI j = 0;
 		for (AI i = 0; i < si; ++i) {
+			if (static_cast<char>(inputNode.getNeighbour(i)->getType()) < 0) 
+				continue;
 			bool condition = false;
 			for (; j < sn; ++j) {
 				condition = compareLow(*(inputNode.getNeighbour(i)), *(dataNode.getNeighbour(j)), exact);

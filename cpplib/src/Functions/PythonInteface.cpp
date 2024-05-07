@@ -210,23 +210,36 @@ extern "C" {
 		std::vector<float> xyz; pyListToVectorFloat(oxyz, &xyz);
 
 		auto ret = FindMoleculesInCell(cell, symm, types, xyz);
-		PyObject* o_Mol_res = PyList_New(0);
+		PyObject* o_xyz_block = PyList_New(0);
+
+		PyObject* o_ret = PyDict_New();
+
+		PyDict_SetItemString(o_ret, "graph_str", PyUnicode_FromString(ret.first.c_str()));
+
 		for (auto & mol : ret.second)
 		{
 			PyObject* o_molecule = PyList_New(0);
-			PyList_Append(o_molecule, PyLong_FromLong(long(mol.second)));
 			for (auto& atom : mol.first) {
-				PyObject* o_atom = Py_BuildValue("fffii",
-												 float(std::get<0>(atom).get(0)),
-												 float(std::get<0>(atom).get(1)),
-												 float(std::get<0>(atom).get(2)),
-												 int(std::get<1>(atom)),
-												 int(std::get<2>(atom)));
+				PyObject* o_atom = Py_BuildValue("{s:f,s:f,s:f,s:l}",
+												 "x", float(std::get<0>(atom).get(0)),
+												 "y", float(std::get<0>(atom).get(1)),
+												 "z", float(std::get<0>(atom).get(2)),
+												 "init_idx", long(std::get<1>(atom)));
 				PyList_Append(o_molecule, o_atom);
 			}
-			PyList_Append(o_Mol_res, o_molecule);
+
+
+			PyList_Append(o_xyz_block, Py_BuildValue("{s:l,s:O}",
+													 "count", long(mol.second),
+													 "atoms", o_molecule));
+
+
+
 		}
-		return Py_BuildValue("sO", ret.first.c_str(), o_Mol_res);
+
+		return Py_BuildValue("{s:s,s:O}", 
+							 "graph_str", ret.first.c_str(),
+							 "xyz_block", o_xyz_block);
 	}
 
 	static PyObject* cpplib_FindMoleculesWithoutCell(PyObject* self, PyObject* args) {

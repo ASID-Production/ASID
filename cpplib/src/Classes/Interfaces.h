@@ -28,6 +28,7 @@
 #pragma once
 #include <mutex>
 #include <vector>
+#include <bitset>
 #include "../Classes/Geometry.h"
 #include "../Classes/FindMolecules.h"
 #include "../Functions/AllInOneAndCurrent.h"
@@ -40,6 +41,7 @@ class SearchDataInterface {
 	size_type iterator_ = 0;
 	const size_type size_;
 	const std::vector<const char*> rawdata_;
+	const std::bitset<mend_size> multiflag_;
 
 	std::mutex mutexIN_;
 	std::mutex mutexOUT_;
@@ -48,8 +50,8 @@ class SearchDataInterface {
 
 public:
 	SearchDataInterface() = delete;
-	explicit SearchDataInterface(std::vector<const char*>&& rawdata) noexcept
-		: rawdata_(rawdata), size_(rawdata.size()) {
+	explicit SearchDataInterface(std::vector<const char*>&& rawdata, std::bitset<mend_size> && multiflag) noexcept
+		: rawdata_(rawdata), size_(rawdata.size()), multiflag_(multiflag) {
 		if (size_ >= 1024)
 			ret_.reserve(1024);
 		else
@@ -66,6 +68,9 @@ public:
 		catch (ErrorStates) {
 			return nullptr;
 		}
+	}
+	inline const std::bitset<mend_size>& getMulty() const noexcept {
+		return multiflag_;
 	}
 	void push_result(const MI molecularID) {
 		std::lock_guard<std::mutex> lock(mutexOUT_);
@@ -118,7 +123,6 @@ struct ParseData {
 	ParseData(FAM_Struct<A, AI, T>& fs, FAM_Cell<T>& fc, const std::vector<const char*>& symm, const std::vector<int>& types, const std::vector<float>& xyz) 
 		: ParseData(fs,types, xyz)
 	{
-
 		const auto symm_s = symm.size();
 		std::vector<geometry::Symm<FloatingPointType>> symmv;
 		symmv.reserve(symm_s - 1);

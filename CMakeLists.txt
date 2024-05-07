@@ -35,9 +35,6 @@ if (POLICY CMP0141)
     set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<IF:$<AND:$<C_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:MSVC>>,$<$<CONFIG:Debug,RelWithDebInfo>:EditAndContinue>,$<$<CONFIG:Debug,RelWithDebInfo>:ProgramDatabase>>")
 endif()
 
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
 project(cpplibLib)
     if (UNIX)
         find_package(Python COMPONENTS Interpreter Development)
@@ -62,6 +59,7 @@ project(cpplibLib)
                            "cpplib/src/Functions/Functions.h"
                            "cpplib/src/Functions/AllInOneAndCurrent.h" 
                            "cpplib/src/Classes/FindGeometry.h" "cpplib/src/Functions/PythonInteface.cpp")
+    target_compile_features(cpplibLib PUBLIC cxx_std_14)
     target_link_libraries(cpplibLib ${PYTHON_LIBRARIES} Python::Python)
 
     target_include_directories(cpplibLib PUBLIC 
@@ -90,6 +88,7 @@ project(cpplib)
     #Generate the shared library from the library sources
     if(CMAKE_BUILD_TYPE MATCHES Release)
         add_library(cpplib SHARED "cpplib/src/Functions/Functions.cpp" "cpplib/src/Functions/PythonInteface.cpp")
+        target_compile_features(cpplib PUBLIC cxx_std_14)
         target_link_libraries(cpplib ${PYTHON_LIBRARIES} Python::Python)
         set_target_properties(cpplib PROPERTIES
             PREFIX ""

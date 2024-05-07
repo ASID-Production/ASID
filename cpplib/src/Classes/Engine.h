@@ -33,13 +33,12 @@
 
 #include <bitset> // for std::array in XAtom
 
-class XAtom {
-public:
+#include "../BaseHeaders/Support.h"
 
-	static constexpr char size = 118;
+class XAtom {
 private:
 	char simple_representation = 0;
-	std::bitset<size+1> types = {0};
+	std::bitset<mend_size> types = {0};
 public:
 	// Constructors
 	constexpr XAtom() = default;
@@ -60,6 +59,9 @@ public:
 	}
 	inline bool simple_eq(const char other) const {
 		return simple_representation == other;
+	}
+	inline const std::bitset<mend_size>& get_bitset() const {
+		return types;
 	}
 
 	// operators
@@ -216,6 +218,10 @@ public:
 	constexpr const AI& getID() const noexcept {
 		return id_;
 	}
+	// Interface Non-const ID(ref)
+	constexpr void setID(const AI& id) noexcept {
+		id_ = id;
+	}
 	// Interface Const type(ref)
 	constexpr const A& getType() const noexcept {
 		return this->base::type;
@@ -223,7 +229,7 @@ public:
 	// Interface Non-const type(ref)
 	constexpr void setType(const A& type) noexcept {
 		this->base::type = type;
-	}
+	}	
 	// Interface Const hAtoms(ref)
 	constexpr const H& getHAtoms() const noexcept {
 		return this->base::hAtoms;
