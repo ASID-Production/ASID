@@ -220,11 +220,10 @@ extern "C" {
 		{
 			PyObject* o_molecule = PyList_New(0);
 			for (auto& atom : mol.first) {
-				PyObject* o_atom = Py_BuildValue("{s:f,s:f,s:f,s:l,s:l}",
+				PyObject* o_atom = Py_BuildValue("{s:f,s:f,s:f,s:l}",
 												 "x", float(std::get<0>(atom).get(0)),
 												 "y", float(std::get<0>(atom).get(1)),
 												 "z", float(std::get<0>(atom).get(2)),
-												 "Hnum", long(std::get<2>(atom)),
 												 "init_idx", long(std::get<1>(atom)));
 				PyList_Append(o_molecule, o_atom);
 			}

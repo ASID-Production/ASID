@@ -12,7 +12,7 @@ std::vector<int> SearchMain(const char* search,
 							const int np, 
 							const bool exact);
 
-std::pair<std::string, std::vector<std::pair<std::vector<std::tuple<CurrentPoint, AtomicIDType, HType>>, int>>>  FindMoleculesInCell(const std::array<float, 6>& unit_cell,
+std::pair<std::string, std::vector<std::pair<std::vector<std::tuple<CurrentPoint, AtomicIDType>>, int>>>  FindMoleculesInCell(const std::array<float, 6>& unit_cell,
 								std::vector<const char*>& symm, 
 								std::vector<int>& types, 
 								std::vector<float>& xyz);

@@ -197,19 +197,9 @@ public:
 		return id_;
 	}
 private: 
-	inline AI parseMainstring(std::stringstream& ss) {
-		MI id {};
-		ss >> id_;
-		AI sn {};
-		ss >> sn;
-		AI sb {};
-		ss >> sb;
-		sn++;
+	inline void parseAtomsData(std::stringstream& ss, const AI sn) {
 		base::reserve(sn);
 		base::emplace_back(A(0), H(0), AI(0));
-
-
-		// Atomic loop
 		for (AI i = 1; i < sn; i++) {
 			int a;
 			ss >> a;
@@ -217,6 +207,23 @@ private:
 			ss >> b;
 			base::emplace_back(A(a), H(b), AI(i));
 		}
+	}
+	inline std::pair<AI, AI> parseInit(std::stringstream& ss) {
+		ss >> id_;
+		std::pair<AI,AI> r;
+		ss >> r.first;
+		ss >> r.second;
+		r.first++;
+		return r;
+	}
+	inline AI parseMainstring(std::stringstream& ss) {
+		std::pair<AI, AI>&& sn_sb = parseInit(ss);
+		AI& sn = sn_sb.first;
+		AI& sb = sn_sb.second;
+
+		// Atomic loop
+		parseAtomsData(ss, sn);
+
 		// Bond loop
 		for (AI i = 0; i < sb; i++) {
 			int a;
