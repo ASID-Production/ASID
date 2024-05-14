@@ -33,6 +33,7 @@ from ..ChemPack import PALETTE, MOLECULE_SYSTEMS
 import os
 from . import MoleculeClass
 
+import debug
 
 class FileParser:
 

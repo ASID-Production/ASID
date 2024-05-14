@@ -35,6 +35,8 @@ from . import Observers
 import typing
 import numpy as np
 
+import debug
+
 SINGLE_OBSERVER = None
 
 

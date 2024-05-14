@@ -32,6 +32,8 @@ import numpy as np
 from .ChemPackSource import AtomsPalette
 import os
 
+import debug
+
 PALETTE = AtomsPalette.Palette()
 
 MOLECULE_SYSTEMS = {}

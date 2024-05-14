@@ -32,6 +32,7 @@ import numpy as np
 from typing import Tuple, Dict, List
 import logging
 
+import debug
 
 class VAOCreator:
     types = {np.byte: GL_BYTE,

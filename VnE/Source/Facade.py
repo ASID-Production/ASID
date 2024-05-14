@@ -29,6 +29,7 @@
 
 from . import ShaderPipelines
 from . import ShaderDataObjects
+import debug
 
 
 class RenderFacade:
@@ -46,7 +47,7 @@ class RenderFacade:
 
     def makeCurrent(self):
         if self.context is None:
-            raise Error
+            raise Exception
         self.context.makeCurrent()
         ShaderPipelines.setCreator(self.context)
         ShaderDataObjects.setCreator(self.context)
@@ -95,7 +96,7 @@ class RenderFacade:
             self.ids[id(uniform_buffer_inst)] = uniform_buffer_inst
             return id(uniform_buffer_inst)
         elif uniform_buffer_cls:
-            uniform_buffer_inst = uniform_buffer_cls()
+            uniform_buffer_inst = uniform_buffer_cls(self.makeCurrent)
             scene.addUniformBuffer(uniform_buffer_inst=uniform_buffer_inst)
             self.uniform_buffers[id(uniform_buffer_inst)] = uniform_buffer_inst
             self.ids[id(uniform_buffer_inst)] = uniform_buffer_inst

@@ -1,3 +1,5 @@
+import debug
+
 DIALOG = None
 
 def execute():

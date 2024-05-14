@@ -28,6 +28,8 @@
 
 from PySide6 import QtWidgets
 
+import debug
+
 DIALOG = None
 
 

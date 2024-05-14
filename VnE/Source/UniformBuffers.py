@@ -32,6 +32,8 @@ import numpy as np
 from typing import List
 from OpenGL.GL import *
 
+import debug
+
 
 class aUniformBuffer(ABC):
 
@@ -42,7 +44,8 @@ class aUniformBuffer(ABC):
              np.float32: GL_FLOAT}
 
     @abstractmethod
-    def __init__(self):
+    def __init__(self, makeCurrent):
+        self.makeCurrent = makeCurrent
         self.id: int
         self.size: int
         pass
@@ -67,6 +70,7 @@ class aUniformBuffer(ABC):
         :param offset: offset in bytes
         :return:
         """
+        self.makeCurrent()
         self._validateVBORange(data, offset)
         glNamedBufferSubData(self.id, offset, data.nbytes, data)
 
@@ -85,7 +89,8 @@ class aUniformBuffer(ABC):
 
 class SceneUniformBuffer(aUniformBuffer):
 
-    def __init__(self):
+    def __init__(self, makeCurrent):
+        aUniformBuffer.__init__(self, makeCurrent)
         self.properties = {'scale': 0,
                            'translation': 64,
                            'rotation': 128,

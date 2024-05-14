@@ -31,6 +31,8 @@ import requests
 import json
 from PySide6.QtWidgets import QDialog, QLabel, QVBoxLayout
 
+import debug
+
 search_types = ['refcode', 'name', 'elements', 'doi', 'authors', 'cell']
 
 SETUP = False

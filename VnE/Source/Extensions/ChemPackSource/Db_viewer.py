@@ -38,6 +38,7 @@ from . import MoleculeClass
 
 DB_VIEWER = None
 
+import debug
 
 class StructuresListModel(QAbstractListModel):
 

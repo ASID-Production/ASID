@@ -45,6 +45,8 @@ from PySide6.QtCore import *
 from . import QtModels
 from .QtModels import ListView, UniformListModel, TreeView, QtPointsTreeModel, SelectionModel, QtPointsPropertyModel
 
+import debug
+
 
 class OpenGlWidget(QOpenGLWidget):
 
