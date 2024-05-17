@@ -32,6 +32,8 @@
 #include "../Classes/Interfaces.h"
 #include "../BaseHeaders/DebugMes.h"
 
+using namespace cpplib::currents;
+
 // Utilities section
 
 extern "C" {
@@ -43,8 +45,8 @@ extern "C" {
 			ret[i] = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(plist, i)));
 		}
 	}
-	inline static void pyListToVectorCurPoint(PyObject* plist, std::vector<CurrentPoint>* retp) {
-		std::vector<CurrentPoint>& ret = *retp;
+	inline static void pyListToVectorCurPoint(PyObject* plist, std::vector<PointType>* retp) {
+		std::vector<PointType>& ret = *retp;
 		const Py_ssize_t s = PyList_Size(plist);
 		ret.reserve(s);
 		for (Py_ssize_t i = 0; i < s; i += 3) {
@@ -83,7 +85,7 @@ extern "C" {
 		std::string full(PyUnicode_AsUTF8(PyObject_GetAttrString(self, "__file__")));
 		auto found = full.find_last_of("\\/");
 		auto bond_filename = full.substr(0, found + 1) + "BondLength.ini";
-		static CurrentDistances dist(bond_filename);
+		static DistancesType dist(bond_filename);
 		p_distances = &dist;
 	}
 	// Python section
@@ -91,21 +93,21 @@ extern "C" {
 		useDistances(self);
 		auto& distances = *(p_distances);
 		const Py_ssize_t s = PyList_Size(arg);
-		std::vector<AtomType> types;
+		std::vector<AtomTypeData> types;
 		types.reserve(s);
-		std::vector<CurrentPoint> points;
+		std::vector<PointType> points;
 		points.reserve(s);
 
 		for (Py_ssize_t i = 0; i < s; i++) {
 			PyObject* tp = PyList_GetItem(arg, i);
-			types.emplace_back(static_cast<AtomType>(PyLong_AsLong(PyList_GetItem(tp, 0))));
+			types.emplace_back(static_cast<AtomTypeData>(PyLong_AsLong(PyList_GetItem(tp, 0))));
 			points.emplace_back(static_cast<FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(tp, 1))),
 								static_cast<FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(tp, 2))),
 								static_cast<FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(tp, 3))));
 		}
-		FAM_Struct<AtomType, AtomicIDType, FloatingPointType> famstr(std::move(types), std::move(points));
+		FAMStructType famstr(std::move(types), std::move(points));
 		std::string errM;
-		auto&& bonds = famstr.findBonds(distances, errM, [](const CurrentPoint& p1, const CurrentPoint& p2) {return (p1 - p2).r(); }).first;
+		auto&& bonds = famstr.findBonds(distances, errM, [](const PointType& p1, const PointType& p2) {return (p1 - p2).r(); }).first;
 
 		std::string line;
 		for (size_t i = 0; i < bonds.size(); i++)
@@ -118,21 +120,21 @@ extern "C" {
 		useDistances(self);
 		auto& distances = *(p_distances);
 		const Py_ssize_t s = PyList_Size(arg);
-		std::vector<AtomType> types;
+		std::vector<AtomTypeData> types;
 		types.reserve(s);
-		std::vector<CurrentPoint> points;
+		std::vector<PointType> points;
 		points.reserve(s);
 
 		for (Py_ssize_t i = 0; i < s; i++) {
 			PyObject* tp = PyList_GetItem(arg, i);
-			types.emplace_back(static_cast<AtomType>(PyLong_AsLong(PyList_GetItem(tp, 0))));
+			types.emplace_back(static_cast<AtomTypeData>(PyLong_AsLong(PyList_GetItem(tp, 0))));
 			points.emplace_back(static_cast<FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(tp, 1))),
 								static_cast<FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(tp, 2))),
 								static_cast<FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(tp, 3))));
 		}
-		FAM_Struct<AtomType, AtomicIDType, FloatingPointType> famstr(std::move(types), std::move(points));
+		FAMStructType famstr(std::move(types), std::move(points));
 		std::string errM;
-		auto&& bonds = famstr.findBondsEx(distances, errM, [](const CurrentPoint& p1, const CurrentPoint& p2) {return (p1 - p2).r(); }).first;
+		auto&& bonds = famstr.findBondsEx(distances, errM, [](const PointType& p1, const PointType& p2) {return (p1 - p2).r(); }).first;
 
 		std::string line;
 		for (size_t i = 0; i < bonds.size(); i++)
@@ -283,9 +285,9 @@ extern "C" {
 
 		const Py_ssize_t s_points = PyList_Size(arg);
 		deb_write("arg size = ", s_points);
-		std::vector<AtomType> types;
+		std::vector<AtomTypeData> types;
 		types.reserve(s_points);
-		std::vector<CurrentPoint> points;
+		std::vector<PointType> points;
 		points.reserve(s_points);
 
 		deb_write("Parsing: atom parsing started");
@@ -298,7 +300,7 @@ extern "C" {
 		std::vector<const char*> nsymm; pyListToVectorCharP(osymm, &nsymm);
 
 		deb_write("Parsing: symm parsing started");
-		std::vector<geometry::Symm<FloatingPointType>> symm;
+		std::vector<SymmType> symm;
 		const size_t ss = nsymm.size();
 		for (size_t i = 0; i < ss; i++)
 		{
@@ -307,20 +309,20 @@ extern "C" {
 		deb_write("Parsing ended");
 		if (movemasstocell) {
 			deb_write("Move center of mass started");
-			CurrentPoint centerofmass(0, 0, 0);
+			PointType centerofmass(0, 0, 0);
 			for (size_t i = 0; i < s_points; i++)
 			{
 				centerofmass += points[i];
 			}
 			centerofmass /= s_points;
-			CurrentPoint ceilmass(std::ceil(centerofmass.get(0)), 
+			PointType ceilmass(std::ceil(centerofmass.get(0)), 
 							   std::ceil(centerofmass.get(1)), 
 							   std::ceil(centerofmass.get(2)));
 
 			for (size_t i = 0; i < ss; i++)
 			{
-				CurrentPoint movedcenter = symm[i].GenSymm(centerofmass);
-				CurrentPoint ceilmoved(std::ceil(movedcenter.get(0)), 
+				PointType movedcenter = symm[i].GenSymm(centerofmass);
+				PointType ceilmoved(std::ceil(movedcenter.get(0)), 
 										std::ceil(movedcenter.get(1)), 
 										std::ceil(movedcenter.get(2)));
 				symm[i].point += ceilmass - ceilmoved;
@@ -329,8 +331,8 @@ extern "C" {
 			deb_write("Move center of mass ended");
 		}
 
-		FAM_Struct<AtomType, AtomicIDType, FloatingPointType> famstr(std::move(types), std::move(points));
-		FAM_Cell<FloatingPointType> fcell(CurrentCell(32, 32, 32, 90, 90, 90, true));
+		FAMStructType famstr(std::move(types), std::move(points));
+		FAMCellType fcell(FAMCellType::base(32, 32, 32, 90, 90, 90, true));
 		fcell.GenerateSymm(famstr, symm, movetocell);
 
 		deb_write("famstr.types.size() = ", famstr.types.size());

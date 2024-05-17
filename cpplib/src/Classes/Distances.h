@@ -29,70 +29,79 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include "../BaseHeaders/Currents.h"
 
-template <class A, class T, class size_type>
-class Distances : private std::vector<T> {
-	// Order of values
-	// 1/1,1/2,1/3,1/4,1/5, 5/5, 2/2,2/3,2/4,2/5, 4/4,4/5, 3/3,3/4,3/5
-public:
-	using base = std::vector<T>;
-private:
-	bool isReady_ = false;
-	size_type maxType_ = 0;
-public:
-	Distances() = delete;
-	Distances(Distances&&) = delete;
-	Distances(const Distances&) = delete;
+namespace cpplib {
+	class Distances : private ::std::vector<currents::FloatingPointType> {
+		// Order of values
+		// 1/1,1/2,1/3,1/4,1/5, 5/5, 2/2,2/3,2/4,2/5, 4/4,4/5, 3/3,3/4,3/5
+	public:
+		using FloatingPointType = currents::FloatingPointType;
+		using base = ::std::vector<FloatingPointType>;
+		using size_type = currents::DistancesIndexType;
+		using AtomType = currents::AtomTypeData;
+	private:
+		using internal_size_type = int_fast16_t;
+		static_assert (sizeof(size_type) * 2 <= sizeof(internal_size_type), "Internal_size_type should be at least 2 times bigger than size_type");
 
-	explicit constexpr Distances(const std::string& filename) {
-		std::ifstream in(filename);
+		bool isReady_ = false;
+		size_type maxType_ = 0;
+	public:
+		Distances() = delete;
+		Distances(Distances&&) = delete;
+		Distances(const Distances&) = delete;
 
-		if (!(in >> maxType_))
-			return;
-		base::assign(maxType_ * (maxType_ + 1), 0.0f);
-		size_type i = 0;
-		size_type j = 0;
-		T lmin = 0.0f;
-		T lmax = 0.0f;
-		while (in >> i) {
-			if ((((i == 0) || !(in >> j)) || !(in >> lmin)) || !(in >> lmax))
+		explicit Distances(const ::std::string& filename) {
+			::std::ifstream in(filename);
+
+			if (!(in >> maxType_))
 				return;
-			if (i > j) std::swap(i, j);
-			auto t = indexBond(i, j);
-			base::operator[](t) = lmin;
-			base::operator[](t + 1) = lmax;
+			base::assign(maxType_ * (maxType_ + 1), 0.0f);
+			size_type i = 0;
+			size_type j = 0;
+			FloatingPointType lmin = 0.0f;
+			FloatingPointType lmax = 0.0f;
+			while (in >> i) {
+				if ((((i == 0) || !(in >> j)) || !(in >> lmin)) || !(in >> lmax))
+					return;
+				if (i > j) ::std::swap(i, j);
+				auto t = indexBond(i, j);
+				base::operator[](t) = lmin;
+				base::operator[](t + 1) = lmax;
+			}
+			isReady_ = true;
 		}
-		isReady_ = true;
-	}
-	inline bool isReady() const {
-		return isReady_;
-	}
+		inline bool isReady() const {
+			return isReady_;
+		}
 
-	constexpr char isBond(A i, A j, const T length) const noexcept {
-		if (i > j) std::swap(i, j);
-		size_type n = indexBond(i, j);
-		if (length < base::operator[](n + 1)) {
-			if (base::operator[](n) < length) return 1; // Usual bond
-			else return -1; // Invalid bond
+		inline char isBond(AtomType i, AtomType j, const FloatingPointType length) const noexcept {
+			if (i > j) 
+				::std::swap(i, j);
+			size_type n = indexBond(i, j);
+			if (length < base::operator[](n + 1)) {
+				if (base::operator[](n) < length) return 1; // Usual bond
+				else return -1; // Invalid bond
+			}
+			else return 0; // Not a bond
 		}
-		else return 0; // Not a bond
-	}
-	constexpr T minDistance(A a1, A a2) const noexcept {
-		if (a1 <= a2) return base::operator[](indexBond(a1, a2));
-		else return base::operator[](indexBond(a2, a1));
-	}
-	constexpr T maxDistance(A a1, A a2) const noexcept {
-		if (a1 <= a2) return base::operator[](indexBond(a1, a2) + 1);
-		else return base::operator[](indexBond(a2, a1) + 1);
-	}
-private:
-	constexpr size_type indexBond(size_type i, size_type j) const {
-		auto a1 = std::min(i - 1, maxType_ - i);
-		if (i - a1 == 1) {
-			return (a1 * (maxType_ + 1) + j - i) << 1;
+		constexpr FloatingPointType minDistance(AtomType a1, AtomType a2) const noexcept {
+			if (a1 <= a2) return base::operator[](indexBond(a1, a2));
+			else return base::operator[](indexBond(a2, a1));
 		}
-		else {
-			return ((a1 + 1) * (maxType_ + 1) - 1 - j + i) << 1;
+		constexpr FloatingPointType maxDistance(AtomType a1, AtomType a2) const noexcept {
+			if (a1 <= a2) return base::operator[](indexBond(a1, a2) + 1);
+			else return base::operator[](indexBond(a2, a1) + 1);
 		}
-	}
-};
+	private:
+		constexpr size_type indexBond(size_type i, size_type j) const {
+			auto a1 = ::std::min(i - 1, maxType_ - i);
+			if (i - a1 == 1) {
+				return (a1 * (maxType_ + 1) + j - i) << 1;
+			}
+			else {
+				return ((a1 + 1) * (maxType_ + 1) - 1 - j + i) << 1;
+			}
+		}
+	};
+}

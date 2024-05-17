@@ -58,7 +58,7 @@ project(cpplibLib)
                            "cpplib/src/Classes/SearchGraph.h"
                            "cpplib/src/Functions/Functions.h"
                            "cpplib/src/Functions/AllInOneAndCurrent.h" 
-                           "cpplib/src/Classes/FindGeometry.h" "cpplib/src/Functions/PythonInteface.cpp")
+                           "cpplib/src/Classes/FindGeometry.h" "cpplib/src/Functions/PythonInteface.cpp" "cpplib/src/BaseHeaders/Currents.h")
     target_compile_features(cpplibLib PUBLIC cxx_std_14)
     target_link_libraries(cpplibLib ${PYTHON_LIBRARIES} Python::Python)
 
@@ -87,7 +87,7 @@ project(cpplib)
 
     #Generate the shared library from the library sources
     if(CMAKE_BUILD_TYPE MATCHES Release)
-        add_library(cpplib SHARED "cpplib/src/Functions/Functions.cpp" "cpplib/src/Functions/PythonInteface.cpp")
+        add_library(cpplib SHARED "cpplib/src/Functions/Functions.cpp" "cpplib/src/Functions/PythonInteface.cpp" "cpplib/src/BaseHeaders/Currents.h")
         target_compile_features(cpplib PUBLIC cxx_std_14)
         target_link_libraries(cpplib ${PYTHON_LIBRARIES} Python::Python)
         set_target_properties(cpplib PROPERTIES
