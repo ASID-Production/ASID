@@ -336,6 +336,6 @@ private:
 			ex[i].exchangeNeighbour(ex[i].getNeighbour(0), &(ex[ex[i].getNeighbour(0)->getID()]));
 			iter++;
 		}
-		swap(ex);
+		std::swap(ex, *this);
 	}
 };
