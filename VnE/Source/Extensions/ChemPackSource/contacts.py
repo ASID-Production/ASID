@@ -31,6 +31,8 @@ from copy import copy
 import numpy as np
 from .MoleculeClass import Atom, Bond, Molecule, MoleculeSystem
 
+import debug
+
 
 class Pack:
     def __init__(self):

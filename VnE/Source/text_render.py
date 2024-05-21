@@ -31,6 +31,8 @@ from OpenGL.GL import *
 import freetype
 import numpy as np
 
+import debug
+
 openGL_context = None
 
 

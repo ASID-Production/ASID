@@ -35,6 +35,8 @@ import ctypes
 
 from .ShaderDataObjects import ShaderData, ShaderDataCreator, ShaderDataText
 
+import debug
+
 
 class Uniform(ABC):
 

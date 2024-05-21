@@ -34,6 +34,7 @@ import numpy as np
 from .ShaderPipelines import *
 from .UniformBuffers import SceneUniformBuffer
 
+import debug
 
 class aScene(ABC):
     def __init__(self, context):

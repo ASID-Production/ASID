@@ -33,6 +33,7 @@ from ..ChemPack import PALETTE, MOLECULE_SYSTEMS
 import os
 from . import MoleculeClass
 
+import debug
 
 class FileParser:
 
@@ -49,7 +50,7 @@ class FileParser:
             return None, None
         return self.SUPPORTED_FORMATS[ext](file_path, bond, root)
 
-    def parsXyz(self, file_path, bond, root, *args, **kwargs):
+    def parsXyz(self, file_path, bond=True, root=None, *args, **kwargs):
         mol_list, atom_list, bonds_l = None, None, None
         file = open(file_path, 'r')
         mol_sys = MoleculeClass.MoleculeSystem()
@@ -67,7 +68,7 @@ class FileParser:
                 atom = MoleculeClass.Atom(coord.copy(), PALETTE.getName(line_p[0]), parent=mol, name=f'{line_p[0]}{i}')
         return self.parsMolSys(mol_sys, bond, root)
 
-    def parsPdb(self, file_path, bond, root, *args, **kwargs):
+    def parsPdb(self, file_path, bond=True, root=None, *args, **kwargs):
         mol_list, atom_list, bonds_l = None, None, None
         file = open(file_path, 'r')
         mol_sys = MoleculeClass.MoleculeSystem()
@@ -121,7 +122,7 @@ class FileParser:
                 mol.addChild(atom)
         return self.parsMolSys(mol_sys, bond, root, pointCreation)
 
-    def parsCpProp(self, file_path, bond, root, *args, **kwargs):
+    def parsCpProp(self, file_path, bond=False, root=None, *args, **kwargs):
         mol_list, atom_list, bonds_l = None, None, None
         file = open(file_path, 'r')
         mol_sys = MoleculeClass.MoleculeSystem()
@@ -252,7 +253,7 @@ class FileParser:
                 parsCp(file, num, type)
         return mol_sys, (mol_list, atom_list, bonds_l)
 
-    def parsCif(self, file_path, bond, root, *args, **kwargs):
+    def parsCif(self, file_path, bond=True, root=None, *args, **kwargs):
         from gemmi import cif
 
         def fracToDec(a, b, c, al, be, ga, coords):
@@ -320,7 +321,7 @@ class FileParser:
             atom = MoleculeClass.Atom(coord.copy(), PALETTE.getName(atom[1]), parent=mol, name=atom[0], **cif_data)
         return self.parsMolSys(mol_sys, bond, root)
 
-    def parsMolSys(self, mol_sys, bond, root, point_func=None, *args, **kwargs):
+    def parsMolSys(self, mol_sys, bond=True, root=None, point_func=None, *args, **kwargs):
         if point_func is None:
             point_func = self._pointCreation
         mol_list, atom_list, bonds_l = None, None, None

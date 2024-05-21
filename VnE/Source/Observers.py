@@ -32,6 +32,8 @@ import numpy as np
 from . import text_render
 from .point_class import Point, PointsList
 
+import debug
+
 
 class SingleObserver:
 

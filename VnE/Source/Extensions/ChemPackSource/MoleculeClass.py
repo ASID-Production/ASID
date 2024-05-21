@@ -32,6 +32,8 @@ import numpy as np
 from ctypes import *
 from ..ChemPack import PALETTE
 
+import debug
+
 
 class DefaultData:
 
@@ -181,6 +183,7 @@ class Atom(DefaultData):
 
     def point(self):
         return self._point
+
 
 class Molecule(aEntity):
     """Molecule class"""

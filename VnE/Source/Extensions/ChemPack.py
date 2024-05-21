@@ -32,6 +32,8 @@ import numpy as np
 from .ChemPackSource import AtomsPalette
 import os
 
+import debug
+
 PALETTE = AtomsPalette.Palette()
 
 MOLECULE_SYSTEMS = {}
@@ -135,6 +137,11 @@ def exportData():
     exportData.execute()
     return
 
+def attachCPprop():
+    from .ChemPackSource import attach_cpprop
+    attach_cpprop.execute()
+    return
+
 def execute(model, uniform_model=None):
     from PySide6.QtWidgets import QFileDialog
     global PARSER
@@ -213,5 +220,9 @@ def setup(menu, model, uniform_model=None, *args, **kwargs):
     action_export.triggered.connect(exportData)
     cmenu.addAction(action_export)
 
-    actions = [open_action, action_test, action_DB, save_action, action_sym_op, action_export]
+    action_attach = QAction('Attach CPprop')
+    action_attach.triggered.connect(attachCPprop)
+    cmenu.addAction(action_attach)
+
+    actions = [open_action, action_test, action_DB, save_action, action_sym_op, action_export, action_attach]
     return actions

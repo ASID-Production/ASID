@@ -1,3 +1,5 @@
+import debug
+
 def execute():
     from ..ChemPack import MOLECULE_SYSTEMS
     from PySide6.QtWidgets import QFileDialog

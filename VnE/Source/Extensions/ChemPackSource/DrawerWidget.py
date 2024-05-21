@@ -42,6 +42,8 @@ from ...Scenes import Scene
 from ...UniformBuffers import SceneUniformBuffer
 from ... import Observers
 
+import debug
+
 SINGLE_OBSERVER = None
 DRAW_WIDGET = None
 

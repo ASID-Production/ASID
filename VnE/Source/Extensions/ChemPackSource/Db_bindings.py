@@ -31,6 +31,8 @@ import requests
 import json
 from PySide6.QtWidgets import QDialog, QLabel, QVBoxLayout
 
+import debug
+
 search_types = ['refcode', 'name', 'elements', 'doi', 'authors', 'cell']
 
 SETUP = False
@@ -169,7 +171,7 @@ def structureSearch(struct):
         return edges
     body = {'search_type': 'substructure', 'nodes': None, 'edges': None}
     h_num = lambda atom: len([x for x in struct.connections[atom] if x.atom_type == 'H'])
-    nodes = [f"[{point.seq}, {{'type': '{point.atom_type}', 'Hnum': {h_num(point)}}}]" for point in struct.connections if point.atom_type != 'H']
+    nodes = [f"[{point.seq}, {{'type': '{' '.join(point.atom_type)}', 'Hnum': {h_num(point)}}}]" if type(point.atom_type) is list else f"[{point.seq}, {{'type': '{point.atom_type}', 'Hnum': {h_num(point)}}}]" for point in struct.connections if point.atom_type != 'H']
     edges = getEdges(struct)
     body['nodes'] = nodes
     body['edges'] = edges
