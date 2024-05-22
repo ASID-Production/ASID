@@ -33,7 +33,6 @@ namespace cpplib {
 	class SearchGraph {
 	public:
 		// Declarations
-		using BondType = currents::BondType;
 		using AtomIndex = currents::AtomIndex;
 		using MoleculeIndex = currents::MoleculeIndex;
 		using RequestGraphType = MoleculeGraph<currents::AtomTypeRequest>;
@@ -58,11 +57,11 @@ namespace cpplib {
 
 	public:
 		SearchGraph() {}
-		constexpr void setupInput(RequestGraphType&& molGraph) noexcept {
+		inline void setupInput(RequestGraphType&& molGraph) noexcept {
 			input_ = ::std::move(molGraph);
 			inputSize_ = input_.size();
 		}
-		constexpr void setupData(DatabaseGraphType&& molGraph) noexcept {
+		inline void setupData(DatabaseGraphType&& molGraph) noexcept {
 			data_ = ::std::move(molGraph);
 			dataSize_ = data_.size();
 		}
@@ -107,7 +106,7 @@ namespace cpplib {
 		}
 	private:
 		// Node comparision
-		constexpr bool compare(const RequestNodeType& inputNode, const DatabaseNodeType& dataNode, const bool exact) const noexcept {
+		bool compare(const RequestNodeType& inputNode, const DatabaseNodeType& dataNode, const bool exact) const noexcept {
 			if (compareLow(inputNode, dataNode, exact) == false)
 				return false;
 
@@ -129,7 +128,7 @@ namespace cpplib {
 			}
 			return true;
 		}
-		constexpr bool compareLow(const RequestNodeType& inputNode, const DatabaseNodeType& dataNode, const bool exact) const noexcept {
+		inline bool compareLow(const RequestNodeType& inputNode, const DatabaseNodeType& dataNode, const bool exact) const noexcept {
 			if (exact) {
 				return inputNode == dataNode;
 			}

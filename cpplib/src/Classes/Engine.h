@@ -127,7 +127,7 @@ namespace cpplib {
 	public:
 		// Declarations
 		using NeighbourValueType = Node*;
-		using NeighboursType = std::vector<typename NeighbourValueType>;
+		using NeighboursType = std::vector<NeighbourValueType>;
 		using HType = currents::HType;
 		using AtomIndex = currents::AtomIndex;
 
@@ -155,11 +155,12 @@ namespace cpplib {
 
 		// Operators
 		template <class X>
-		bool operator==(const Node<X>& other) const noexcept {
-			return (type_ == other.type_) &&
+		inline bool operator==(const Node<X>& other) const noexcept {
+			return (type_ == other.type_) && 
+				(hAtoms_ == other.hAtoms_) &&
 				(neighbours_.size() == other.neighbours_.size());
 		}
-		// Raw comparisiono
+		// Raw comparision
 		bool RawLess(const Node& other) const noexcept {
 			if (type_ != other.type_)
 				return type_ < other.type_;

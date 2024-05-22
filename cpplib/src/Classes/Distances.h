@@ -85,11 +85,11 @@ namespace cpplib {
 			}
 			else return 0; // Not a bond
 		}
-		constexpr FloatingPointType minDistance(AtomType a1, AtomType a2) const noexcept {
+		inline FloatingPointType minDistance(AtomType a1, AtomType a2) const noexcept {
 			if (a1 <= a2) return base::operator[](indexBond(a1, a2));
 			else return base::operator[](indexBond(a2, a1));
 		}
-		constexpr FloatingPointType maxDistance(AtomType a1, AtomType a2) const noexcept {
+		inline FloatingPointType maxDistance(AtomType a1, AtomType a2) const noexcept {
 			if (a1 <= a2) return base::operator[](indexBond(a1, a2) + 1);
 			else return base::operator[](indexBond(a2, a1) + 1);
 		}

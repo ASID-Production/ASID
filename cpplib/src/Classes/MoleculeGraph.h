@@ -37,10 +37,11 @@ namespace cpplib {
 	public:
 		// Declarations
 		using NodeType = Node<A>;
-		using base = ::std::vector<typename NodeType>;
+		using base = ::std::vector<NodeType>;
 		using BondType = currents::BondType;
 		using AtomIndex = currents::AtomIndex;
 		using MoleculeIndex = currents::MoleculeIndex;
+		using HType = typename NodeType::HType;
 
 	private:
 		// Data
@@ -52,6 +53,7 @@ namespace cpplib {
 		constexpr MoleculeGraph(MoleculeGraph&&) noexcept = default;
 		explicit constexpr MoleculeGraph(base&& other) noexcept(::std::is_nothrow_move_constructible<base>::value)
 			: base(::std::move(other)) {}
+
 		static constexpr MoleculeGraph ReadData(const char* str, const ::std::bitset<mend_size>& multiAtomBits) {
 			MoleculeGraph mg;
 			::std::stringstream ss(str);
@@ -177,8 +179,8 @@ namespace cpplib {
 		constexpr NodeType& operator[](const AtomIndex s) noexcept {
 			return base::operator[](s);
 		}
-		constexpr MoleculeGraph& operator=(const MoleculeGraph& other) noexcept = delete;
-		constexpr MoleculeGraph& operator=(MoleculeGraph&& other) noexcept = default;
+		inline MoleculeGraph& operator=(const MoleculeGraph& other) noexcept = delete;
+		inline MoleculeGraph& operator=(MoleculeGraph&& other) noexcept = default;
 
 		// Iterators
 		constexpr auto begin() noexcept {
