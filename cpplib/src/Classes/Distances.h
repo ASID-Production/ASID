@@ -57,8 +57,8 @@ namespace cpplib {
 			if (!(in >> maxType_))
 				return;
 			base::assign(maxType_ * (maxType_ + 1), 0.0f);
-			size_type i = 0;
-			size_type j = 0;
+			int i = 0;
+			int j = 0;
 			FloatingPointType lmin = 0.0f;
 			FloatingPointType lmax = 0.0f;
 			while (in >> i) {
@@ -78,7 +78,7 @@ namespace cpplib {
 		inline char isBond(AtomType i, AtomType j, const FloatingPointType length) const noexcept {
 			if (i > j) 
 				::std::swap(i, j);
-			size_type n = indexBond(i, j);
+			internal_size_type n = indexBond(i, j);
 			if (length < base::operator[](n + 1)) {
 				if (base::operator[](n) < length) return 1; // Usual bond
 				else return -1; // Invalid bond
@@ -94,7 +94,7 @@ namespace cpplib {
 			else return base::operator[](indexBond(a2, a1) + 1);
 		}
 	private:
-		constexpr size_type indexBond(size_type i, size_type j) const {
+		constexpr internal_size_type indexBond(size_type i, size_type j) const {
 			auto a1 = ::std::min(i - 1, maxType_ - i);
 			if (i - a1 == 1) {
 				return (a1 * (maxType_ + 1) + j - i) << 1;
