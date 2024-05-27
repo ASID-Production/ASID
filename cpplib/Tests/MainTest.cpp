@@ -40,7 +40,7 @@
 
 using namespace cpplib::currents;
 
-DistancesType testdistances("../../../../../module/BondLength.ini");
+DistancesType testdistances("BondLength.ini");
 struct FMIC_TS {
 	std::array<float, 6> cell;
 	std::vector<const char*> symm;
@@ -375,6 +375,8 @@ TEST(databaseSearch10k, d10k) {
 	const char search3[]{ "1 5 4 6 2 6 2 8 0 6 2 6 2 1 2 2 3 3 4 4 5" };
 	const char search4[]{ "1 5 4 6 2 6 2 -1 0 6 2 6 2 1 2 2 3 3 4 4 5 -1 6 7 8 0" };
 	std::ifstream db("../../../../../cpplib/Tests/d10k.datt");
+	if (!db.is_open())
+		FAIL() << "File did not open";
 	int s;
 	db >> s;
 	std::vector<std::string> datstr(s);

@@ -331,7 +331,7 @@ static void ChildThreadFunc(const SearchGraphType::RequestGraphType& input, cons
 		graph.setupInput(input.makeCopy());
 		SearchGraphType::DatabaseGraphType molData = SearchGraphType::DatabaseGraphType::ReadData(next, dataInterface.getMulty());
 		auto id = molData.getID();
-		graph.setupData(move(molData));
+		graph.setupData(std::move(molData));
 		graph.prepareToSearch();
 		if (graph.startFullSearch(exact, MaxAtom)) {
 			dataInterface.push_result(id);

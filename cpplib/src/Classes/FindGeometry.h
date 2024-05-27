@@ -90,7 +90,7 @@ namespace cpplib {
 					if (std::get<0>(v1[i]) == std::get<1>(v2[j]))
 						continue;
 					auto rad = PointType::angleRad(fs.points[std::get<0>(v1[i])], fs.points[std::get<1>(v1[i])], fs.points[std::get<1>(v2[j])]);
-					if (inRange(A123, rad))
+					if (!inRange(A123, rad))
 						continue;
 					res.emplace_back(std::get<0>(v1[i]), std::get<1>(v1[i]), std::get<1>(v2[j]), rad);
 				}
@@ -103,7 +103,7 @@ namespace cpplib {
 						if (std::get<1>(v1[i]) == std::get<1>(v2[j]))
 							continue;
 						auto rad = PointType::angleRad(fs.points[std::get<1>(v1[i])], fs.points[std::get<0>(v1[i])], fs.points[std::get<1>(v2[j])]);
-						if (inRange(A123, rad))
+						if (!inRange(A123, rad))
 							continue;
 						res.emplace_back(std::get<1>(v1[i]), std::get<0>(v1[i]), std::get<1>(v2[j]), rad);
 					}
@@ -117,7 +117,7 @@ namespace cpplib {
 						if (std::get<0>(v1[i]) == std::get<0>(v2[j]))
 							continue;
 						auto rad = PointType::angleRad(fs.points[std::get<0>(v1[i])], fs.points[std::get<1>(v2[j])], fs.points[std::get<0>(v2[j])]);
-						if (inRange(A123, rad))
+						if (!inRange(A123, rad))
 							continue;
 						res.emplace_back(std::get<0>(v1[i]), std::get<1>(v2[i]), std::get<0>(v2[j]), rad);
 					}

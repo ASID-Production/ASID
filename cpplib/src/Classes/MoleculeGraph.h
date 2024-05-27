@@ -32,12 +32,14 @@
 #include <vector> // for using std::vector
 #include <list> // for using std::list
 #include <type_traits> // for std::fundamental
+#include <numeric> // for std::iota
+#include <algorithm> // for std::stable_sort
 namespace cpplib {
-	template<class A> class MoleculeGraph : private ::std::vector<Node<A> > {
+	template<class A> class MoleculeGraph  {
 	public:
 		// Declarations
 		using NodeType = Node<A>;
-		using base = ::std::vector<NodeType>;
+		using NodeContainer = ::std::vector<NodeType>;
 		using BondType = currents::BondType;
 		using AtomIndex = currents::AtomIndex;
 		using MoleculeIndex = currents::MoleculeIndex;
@@ -45,14 +47,15 @@ namespace cpplib {
 
 	private:
 		// Data
+		NodeContainer data_;
 		MoleculeIndex id_ = 0;
 
 	public:
 		constexpr MoleculeGraph() noexcept = default;
 		constexpr MoleculeGraph(const MoleculeGraph&) = delete;
 		constexpr MoleculeGraph(MoleculeGraph&&) noexcept = default;
-		explicit constexpr MoleculeGraph(base&& other) noexcept(::std::is_nothrow_move_constructible<base>::value)
-			: base(::std::move(other)) {}
+		explicit constexpr MoleculeGraph(NodeContainer&& other) noexcept(::std::is_nothrow_move_constructible<NodeContainer>::value)
+			: data_(::std::move(other)) {}
 
 		static constexpr MoleculeGraph ReadData(const char* str, const ::std::bitset<mend_size>& multiAtomBits) {
 			MoleculeGraph mg;
@@ -60,6 +63,7 @@ namespace cpplib {
 			const auto sn = mg.parseMainstring(ss);
 
 			mg.release_HAtoms_CharAtom(multiAtomBits, sn);
+			//mg.sortGraph();
 			return mg;
 		}
 		static constexpr ::std::pair<MoleculeGraph, ::std::bitset<mend_size>> ReadInput(const char* str) {
@@ -68,18 +72,19 @@ namespace cpplib {
 			const auto sn = mg.parseMainstring(ss);
 			auto multiAtomBits = mg.parseMultiatom(ss, sn);
 			mg.release_HAtoms_XAtom(multiAtomBits, sn);
+			//mg.sortGraph();
 			return ::std::make_pair(std::move(mg), ::std::move(multiAtomBits));
 		}
 
 		constexpr AtomIndex size() const noexcept {
-			return static_cast<AtomIndex>(base::size());
+			return static_cast<AtomIndex>(data_.size());
 		}
 
 		// Bond functions
 		constexpr ::std::vector<BondType> getBonds() const {
 			std::vector<BondType> ret;
 
-			AtomIndex s = base::size();
+			AtomIndex s = size();
 			for (AtomIndex i = 1; i < s; i++) {
 				const auto neigh_s = this->operator[](i).neighboursSize();
 				for (AtomIndex j = 0; j < neigh_s; j++) {
@@ -101,10 +106,10 @@ namespace cpplib {
 
 		// Add and delete bonds
 		constexpr void addBond(const AtomIndex a, const AtomIndex b) {
-			base::operator[](a).addBondWithSort(base::operator[](b));
+			data_[a].addBondWithSort(data_[b]);
 		}
 		constexpr void deleteBond(const AtomIndex a, const AtomIndex b) {
-			base::operator[](a).deleteBond(base::operator[](b));
+			data_[a].deleteBond(data_[b]);
 		}
 		constexpr void addBondsFromVector(const ::std::vector<BondType>& bond) {
 			auto bs = bond.size();
@@ -118,32 +123,32 @@ namespace cpplib {
 			const AtomIndex s = size();
 			AtomIndex m = 1;
 			for (AtomIndex i = 2; i < s; i++) {
-				if (base::operator[](i) > base::operator[](m))
+				if ((data_[i]).RawMore(data_[m]))
 					m = i;
 			}
 			return m;
 		}
 		constexpr AtomIndex getNeighbourId(AtomIndex cur, AtomIndex neighbourIt) const noexcept {
-			return base::operator[](cur).getNeighbour(neighbourIt)->getID();
+			return data_[cur].getNeighbour(neighbourIt)->getID();
 		}
 		constexpr const NodeType& getNeighbourReference(AtomIndex cur, AtomIndex neighbourIt) const noexcept {
-			return *(base::operator[](cur).getNeighbour(neighbourIt));
+			return *(data_[cur].getNeighbour(neighbourIt));
 		}
 		constexpr const NodeType* getNeighbourPointer(AtomIndex cur, AtomIndex neighbourIt) const noexcept {
-			return base::operator[](cur).getNeighbour(neighbourIt);
+			return data_[cur].getNeighbour(neighbourIt);
 		}
 		constexpr void exchange(AtomIndex a1, AtomIndex a2) {
-			const auto n1size = base::operator[](a1).neighboursSize();
-			const auto n2size = base::operator[](a2).neighboursSize();
-			auto a1p = &(base::operator[](a1));
-			auto a2p = &(base::operator[](a2));
+			const auto n1size = data_[a1].neighboursSize();
+			const auto n2size = data_[a2].neighboursSize();
+			auto a1p = &(data_[a1]);
+			auto a2p = &(data_[a2]);
 			for (AtomIndex i = 0; i < n1size; i++) {
-				base::operator[](getNeighbourId(a1, i)).exchangeNeighbour(a1p, a2p);
+				data_[getNeighbourId(a1, i)].exchangeNeighbour(a1p, a2p);
 			}
 			for (AtomIndex i = 0; i < n2size; i++) {
-				base::operator[](getNeighbourId(a2, i)).exchangeNeighbour(a2p, a1p);
+				data_[getNeighbourId(a2, i)].exchangeNeighbour(a2p, a1p);
 			}
-			base::operator[](a1).swap(base::operator[](a2));
+			data_[a1].swap(data_[a2]);
 		}
 
 		// Copy function
@@ -151,15 +156,15 @@ namespace cpplib {
 			// Copy
 			MoleculeGraph ret;
 			ret.id_ = id_;
-			AtomIndex s = base::size();
-			ret.reserve(s);
+			AtomIndex s = size();
+			ret.data_.reserve(s);
 			// Convertion to Correct Neighbours
 			for (AtomIndex i = 0; i < s; i++) {
-				auto& node = base::operator[](i);
-				ret.emplace_back(node.getType(), node.getHAtoms(), node.getID());
+				auto& node = data_[i];
+				ret.data_.emplace_back(node.getType(), node.getHAtoms(), node.getID());
 			}
 			for (AtomIndex i = 0; i < s; i++) {
-				auto& node = base::operator[](i);
+				auto& node = data_[i];
 
 				using NeighboursType = typename NodeType::NeighboursType;
 				NeighboursType ret_nei(0);
@@ -174,26 +179,26 @@ namespace cpplib {
 
 		// Operators
 		constexpr const NodeType& operator[](const AtomIndex s) const noexcept {
-			return base::operator[](s);
+			return data_[s];
 		}
 		constexpr NodeType& operator[](const AtomIndex s) noexcept {
-			return base::operator[](s);
+			return data_[s];
 		}
 		inline MoleculeGraph& operator=(const MoleculeGraph& other) noexcept = delete;
 		inline MoleculeGraph& operator=(MoleculeGraph&& other) noexcept = default;
 
 		// Iterators
 		constexpr auto begin() noexcept {
-			return base::begin();
+			return data_.begin();
 		}
 		constexpr auto end() noexcept {
-			return base::end();
+			return data_.end();
 		}
 		constexpr auto begin() const noexcept {
-			return base::begin();
+			return data_.begin();
 		}
 		constexpr auto end() const noexcept {
-			return base::end();
+			return data_.end();
 		}
 		// Interface Const ID(ref)
 		constexpr const auto& getID() const noexcept {
@@ -201,14 +206,14 @@ namespace cpplib {
 		}
 	private:
 		inline void parseAtomsData(::std::stringstream& ss, const AtomIndex sn) {
-			base::reserve(sn);
-			base::emplace_back(A(0), HType(0), AtomIndex(0));
+			data_.reserve(sn);
+			data_.emplace_back(A(0), HType(0), AtomIndex(0));
 			for (AtomIndex i = 1; i < sn; i++) {
 				int a;
 				ss >> a;
 				int b;
 				ss >> b;
-				base::emplace_back(A(a), HType(b), AtomIndex(i));
+				data_.emplace_back(A(a), HType(b), AtomIndex(i));
 			}
 		}
 		::std::pair<AtomIndex, AtomIndex> parseInit(std::stringstream& ss) {
@@ -233,7 +238,7 @@ namespace cpplib {
 				ss >> a;
 				int b;
 				ss >> b;
-				base::operator[](a).addBondWithSort(base::operator[](b));
+				data_[a].addBondWithSort(data_[b]);
 			}
 			return sn;
 		}
@@ -339,7 +344,32 @@ namespace cpplib {
 				ex[i].exchangeNeighbour(ex[i].getNeighbour(0), &(ex[ex[i].getNeighbour(0)->getID()]));
 				iter++;
 			}
-			std::swap(ex, *this);
+			std::swap(ex, data_);
+		}
+
+		void sortGraph() {
+			const auto s = this->size();
+			std::vector<AtomIndex> order(s);
+			std::iota(order.begin(), order.end(), 0);
+			auto MoreLambda = [this](AtomIndex a, AtomIndex b) {return this->operator[](a).RawMore(this->operator[](b)); };
+			std::stable_sort((++order.begin()), order.end(), MoreLambda);
+
+			std::vector<AtomIndex> reorder(s,0);
+			for (std::remove_const<decltype(s)>::type i = 0; i < s; i++)
+			{
+				reorder[order[i]] = i;
+			}
+
+			for (std::remove_const<decltype(s)>::type i = 1; i < s; i++)
+			{
+				if (reorder[i] == i)
+					continue;
+				decltype(i) other = order[i];
+				order[reorder[i]] = other;
+				
+				exchange(i, other);
+			}
+			return;
 		}
 	};
 }

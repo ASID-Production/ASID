@@ -53,9 +53,10 @@ namespace cpplib {
 
 		explicit Distances(const ::std::string& filename) {
 			::std::ifstream in(filename);
-
-			if (!(in >> maxType_))
+			int mt_temp;
+			if (!(in >> mt_temp))
 				return;
+			maxType_ = mt_temp;
 			base::assign(maxType_ * (maxType_ + 1), 0.0f);
 			int i = 0;
 			int j = 0;
