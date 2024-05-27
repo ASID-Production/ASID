@@ -4,3 +4,4 @@ requests~=2.31.0
 freetype-py~=2.4.0
 PyOpenGL~=3.1.7
 gemmi~=0.6.5
+rdkit~=2023.9.6
