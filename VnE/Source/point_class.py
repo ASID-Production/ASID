@@ -34,6 +34,7 @@ import numpy as np
 
 import debug
 
+
 class CopyPointObserver:
 
     def __init__(self, owner):
