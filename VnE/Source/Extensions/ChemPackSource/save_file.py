@@ -50,8 +50,10 @@ class SaveFile:
             mol = molecule.children[0]
 
         out = open(filename, 'w')
+        out.write(f'{len(mol.children)}\n')
+        out.write('\n')
         for atom in mol.children:
-            line = f'{atom.atom_type}{atom.coord[0]:> 19.9f}{atom.coord[1]:> 17.9f}{atom.coord[2]:> 17.9f}\n'
+            line = f'{PALETTE.getName(atom.atom_type)}{atom.coord[0]:> 19.9f}{atom.coord[1]:> 17.9f}{atom.coord[2]:> 17.9f}\n'
             out.write(line)
         out.close()
         return
