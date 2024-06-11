@@ -13,7 +13,6 @@
 *.sqlite3
 *.sqlite3-journal
 /api_database/env
-/api_database/venv
 .env
 .idea
 *.cif
@@ -21,3 +20,6 @@
 /api_database/django_project/media/
 /api_database/django_project/static/
 migrations/
+
+# general
+/venv

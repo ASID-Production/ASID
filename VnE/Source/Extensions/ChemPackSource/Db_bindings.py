@@ -82,11 +82,11 @@ class Session:
             import subprocess
             import os
             if os.name == 'nt':
-                proc_cmd1 = '../api_database/venv/Scripts/python.exe ../api_database/django_project/manage.py migrate'.split(' ')
-                proc_cmd2 = '../api_database/venv/Scripts/python.exe ../api_database/django_project/manage.py runserver'.split(' ')
+                proc_cmd1 = '../venv/Scripts/python.exe ../api_database/django_project/manage.py migrate'.split(' ')
+                proc_cmd2 = '../venv/Scripts/python.exe ../api_database/django_project/manage.py runserver'.split(' ')
             elif os.name == 'posix':
-                proc_cmd1 = '../api_database/venv/bin/python3 ../api_database/django_project/manage.py migrate'.split(' ')
-                proc_cmd2 = '../api_database/venv/bin/python3 ../api_database/django_project/manage.py runserver'.split(' ')
+                proc_cmd1 = '../venv/bin/python3 ../api_database/django_project/manage.py migrate'.split(' ')
+                proc_cmd2 = '../venv/bin/python3 ../api_database/django_project/manage.py runserver'.split(' ')
             proc = subprocess.Popen(proc_cmd1)
             while proc.poll() is None:
                 pass
