@@ -1,18 +1,12 @@
-
-rem prepare sca
-cd VnE
-call python -m venv VisApp
-call VisApp\Scripts\activate.bat
-pip install -r requirements.txt
-cd ..
-
-
-rem prepare rsd
-cd api_database
+rem venv
 call python -m venv venv
 call venv\Scripts\activate.bat
 pip install -r requirements.txt
 pip install psycopg2
+
+
+rem prepare rsd
+cd api_database
 cd django_project
 call python manage.py makemigrations
 call python manage.py migrate
