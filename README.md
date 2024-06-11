@@ -57,3 +57,4 @@ See [Manual](/docs/Manual.md).
 |       `PyOpenGL`        |  3.1.7   | [Custom License (based on BSD-3)](https://github.com/Distrotech/PyOpenGL/blob/master/license.txt) |
 |        `chardet`        |  5.2.0   | [GNU LGPL v2.1](https://github.com/chardet/chardet/blob/main/LICENSE) |
 |       `Pymatgen`        | 2024.2.8 | [MIT License](https://github.com/materialsproject/pymatgen/blob/master/LICENSE) |
+|       `rdkit`        | 2023.9.6 | [BSD 3-Clause License](https://github.com/rdkit/rdkit/blob/master/license.txt) |
