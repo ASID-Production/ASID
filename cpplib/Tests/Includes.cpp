@@ -29,7 +29,8 @@
 #include "../src/Classes/Geometry.h"
 
 using namespace std;
-using namespace geometry;
+using namespace cpplib;
+using namespace cpplib::geometry;
 constexpr Point<float> a(0.01423f, 0.27322f, 0.01346f);
 constexpr Matrix<float> m({ 10.4804f, -5.2402f, 0.f, 0.f, 9.076292642f, 0.f, 0.f, 0.f, 31.8116f });
 

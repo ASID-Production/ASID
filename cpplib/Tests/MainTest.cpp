@@ -38,9 +38,9 @@
 
 #pragma warning( disable : 4305 )
 
-using namespace std;
+using namespace cpplib::currents;
 
-CurrentDistances testdistances("../../../../../module/BondLength.ini");
+DistancesType testdistances("BondLength.ini");
 struct FMIC_TS {
 	std::array<float, 6> cell;
 	std::vector<const char*> symm;
@@ -271,7 +271,7 @@ TEST(FindAngleTest, C3H6O2) {
                         	0.438335628 ,    -0.294739868  ,    0.530163989 ,
                         	1.319085628 ,     0.965221387  ,   -0.354947074 ,
                            -0.442414372 ,     0.965221387  ,   -0.354947074 };
-	auto res = FindAngleWC(types, xyz, { 8,6,8 }, { make_pair(1.0f, 2.0f), make_pair(0.0f, 2.0f), }, make_pair(-180.f, 180.f));
+	auto res = FindAngleWC(types, xyz, { 8,6,8 }, { std::make_pair(1.0f, 2.0f), std::make_pair(0.0f, 2.0f), }, std::make_pair(-180.f, 180.f));
 	ASSERT_FALSE(res.empty());
 }
 
@@ -291,9 +291,9 @@ TEST(FindTorsionTest, C3H6O2) {
 							1.319085628 ,     0.965221387  ,   -0.354947074 ,
 						   -0.442414372 ,     0.965221387  ,   -0.354947074 };
 	auto res = FindTorsionWC(types, xyz, { 8,6,6,6 }, 
-							 { make_pair(1.0f, 2.0f), make_pair(0.0f, 2.0f), make_pair(0.0f, 2.0f) }, 
-							 { make_pair(0.f, 180.f), make_pair(0.f, 180.f) },
-							 make_pair(-180.f, 180.f));
+							 { std::make_pair(1.0f, 2.0f), std::make_pair(0.0f, 2.0f), std::make_pair(0.0f, 2.0f) }, 
+							 { std::make_pair(0.f, 180.f), std::make_pair(0.f, 180.f) },
+							 std::make_pair(-180.f, 180.f));
 	ASSERT_FALSE(res.empty());
 }
 TEST(FindDistanceTest, EKESIW) {
@@ -311,8 +311,8 @@ TEST(FindDistanceTest, EKESIW) {
 TEST(GenSymmTest, E28) {
 	p_distances = &testdistances;
 	std::vector<std::tuple<int,float,float,float>> arg = {{16, 0.55638, 0.01587, 0.36247}, {6, 0.3188, -0.0361, 0.9365}, {8, 0.482, 0.22765, 0.8132}, {7, 0.3478, 0.0758, 0.9261}, {8, 0.9234, 0.03692, 0.6186}, {6, 0.4816, 0.1263, 0.8315}, {7, 0.6105, 0.05617, 0.7551}, {6, 0.457, -0.1057, 0.8582}, {1, 0.4495, -0.1831, 0.8662}, {7, 0.1671, -0.074, 1.018}, {8, 0.9404, -0.1496, 0.2756}, {6, 0.8764, 0.0011, 0.448}, {1, 0.9622, 0.0507, 0.3884}, {6, 0.5993, -0.0573, 0.7721}, {1, 0.6937, -0.1024, 0.7223}, {6, 0.5781, 0.1417, 0.4813}, {1, 0.6446, 0.2021, 0.4287}, {1, 0.4209, 0.164, 0.4952}, {6, 0.7468, 0.1111, 0.6457}, {1, 0.8252, 0.1788, 0.6996}, {6, 0.9693, -0.1166, 0.4419}, {1, 1.1389, -0.1199, 0.4998}, {1, 0.8807, -0.1671, 0.4964}, {1, 0.092, -0.026, 1.064}, {1, 0.257, 0.119, 0.97}, {1, 0.773, -0.176, 0.22}, {1, 0.133, -0.153, 1.019}, {17, 0.02131, 0.18155, 0.12771}};
-	std::vector<CurrentPoint> points;
-	std::vector<AtomType> atoms;
+	std::vector<PointType> points;
+	std::vector<AtomTypeData> atoms;
 	for (size_t i = 0; i < arg.size(); i++)
 	{
 		atoms.emplace_back(std::get<0>(arg[i]));
@@ -321,12 +321,12 @@ TEST(GenSymmTest, E28) {
 	bool mvtc = false;
 
 	std::vector<const char*> symms {"x+1,y,z","x-1,y,z", "x,y+1,z" };
-	std::vector<geometry::Symm<FloatingPointType>> symm1; symm1.emplace_back(symms[0]);
-	std::vector<geometry::Symm<FloatingPointType>> symm2; symm2.emplace_back(symms[1]);
-	std::vector<geometry::Symm<FloatingPointType>> symm3; symm3.emplace_back(symms[2]);
+	std::vector<SymmType> symm1; symm1.emplace_back(symms[0]);
+	std::vector<SymmType> symm2; symm2.emplace_back(symms[1]);
+	std::vector<SymmType> symm3; symm3.emplace_back(symms[2]);
 
-	FAM_Struct<AtomType, AtomicIDType, FloatingPointType> famstr(std::move(atoms), std::move(points));
-	FAM_Cell<FloatingPointType> fcell(CurrentCell(10, 10, 10, 90, 90, 90, true));
+	FAMStructType famstr(std::move(atoms), std::move(points));
+	FAMCellType fcell(CellType(10, 10, 10, 90, 90, 90, true));
 	fcell.GenerateSymm(famstr, symm1, mvtc);
 	std::cout << "After x+1: " << famstr.sizePoints << std::endl;
 	fcell.GenerateSymm(famstr, symm2, mvtc);
@@ -375,6 +375,8 @@ TEST(databaseSearch10k, d10k) {
 	const char search3[]{ "1 5 4 6 2 6 2 8 0 6 2 6 2 1 2 2 3 3 4 4 5" };
 	const char search4[]{ "1 5 4 6 2 6 2 -1 0 6 2 6 2 1 2 2 3 3 4 4 5 -1 6 7 8 0" };
 	std::ifstream db("../../../../../cpplib/Tests/d10k.datt");
+	if (!db.is_open())
+		FAIL() << "File did not open";
 	int s;
 	db >> s;
 	std::vector<std::string> datstr(s);
@@ -389,16 +391,16 @@ TEST(databaseSearch10k, d10k) {
 
 	temp = dat;
 	std::vector<int> res1 = SearchMain(search1, std::move(temp), 4, false);
-	cout << "res1 = " << res1.size() << std::endl;
+	std::cout << "res1 = " << res1.size() << std::endl;
 	temp = dat;
 	std::vector<int> res2 = SearchMain(search2, std::move(temp), 4, false);
-	cout << "res2 = " << res2.size() << std::endl;
+	std::cout << "res2 = " << res2.size() << std::endl;
 	temp = dat;
 	std::vector<int> res3 = SearchMain(search3, std::move(temp), 4, false);
-	cout << "res3 = " << res3.size() << std::endl;
+	std::cout << "res3 = " << res3.size() << std::endl;
 	temp = dat;
 	std::vector<int> res4 = SearchMain(search4, std::move(temp), 4, false);
-	cout << "res4 = " << res4.size() << std::endl;
+	std::cout << "res4 = " << res4.size() << std::endl;
 	EXPECT_GE(res1.size() + res2.size() + res3.size(), res4.size());
 
 	std::sort(res1.begin(), res1.end());

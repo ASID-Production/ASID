@@ -32,310 +32,385 @@
 #include <vector> // for using std::vector
 #include <list> // for using std::list
 #include <type_traits> // for std::fundamental
+#include <numeric> // for std::iota
+#include <algorithm> // for std::stable_sort
+namespace cpplib {
+	template<class A> class MoleculeGraph  {
+	public:
+		// Declarations
+		using NodeType = Node<A>;
+		using NodeContainer = ::std::vector<NodeType>;
+		using BondType = currents::BondType;
+		using AtomIndex = currents::AtomIndex;
+		using MoleculeIndex = currents::MoleculeIndex;
+		using HType = typename NodeType::HType;
 
-template<class A, class H, class AI, class MI>
-class MoleculeGraph : private std::vector<Node<A, H, AI> > {
-public:
-	// Declarations
-	using base = std::vector<Node<A, H, AI> >;
-	using NodeType = Node<A, H, AI>;
-	using BondType = Bond<AI>;
+	private:
+		// Data
+		NodeContainer data_;
+		MoleculeIndex id_ = 0;
 
-private:
-	// Data
-	MI id_ = 0;
+	public:
+		constexpr MoleculeGraph() noexcept = default;
+		constexpr MoleculeGraph(const MoleculeGraph&) = delete;
+		constexpr MoleculeGraph(MoleculeGraph&&) noexcept = default;
+		explicit constexpr MoleculeGraph(NodeContainer&& other) noexcept(::std::is_nothrow_move_constructible<NodeContainer>::value)
+			: data_(::std::move(other)) {}
+		
+		static constexpr MoleculeGraph ReadData(const char* str, const ::std::bitset<mend_size>& multiAtomBits) {
+			MoleculeGraph mg;
+			::std::stringstream ss(str);
+			const auto sn = mg.parseMainstring<false>(ss);
 
-public:
-	constexpr MoleculeGraph() noexcept = default;
-	constexpr MoleculeGraph(const MoleculeGraph&) = delete;
-	constexpr MoleculeGraph(MoleculeGraph&&) noexcept = default;
-	explicit constexpr MoleculeGraph(base&& other, MI) noexcept(std::is_nothrow_move_constructible<base>::value)
-		: base(std::move(other)) {}
-	static constexpr MoleculeGraph<A, H, AI, MI> ReadData(const char* str, const std::bitset<mend_size>& multiAtomBits) {
-		MoleculeGraph mg;
-		std::stringstream ss(str);
-		const auto sn = mg.parseMainstring(ss);
-
-		mg.release_HAtoms_CharAtom(multiAtomBits, sn);
-		return mg;
-	}
-	static constexpr std::pair<MoleculeGraph<A, H, AI, MI>, std::bitset<mend_size>> ReadInput(const char* str) {
-		MoleculeGraph mg;
-		std::stringstream ss(str);
-		const auto sn = mg.parseMainstring(ss);
-		auto multiAtomBits = mg.parseMultiatom(ss, sn);
-		mg.release_HAtoms_XAtom(multiAtomBits, sn);
-		return std::make_pair(std::move(mg), std::move(multiAtomBits));
-	}
-
-	constexpr AI size() const noexcept {
-		return static_cast<AI>(base::size());
-	}
-
-	// Bond functions
-	constexpr std::vector<Bond<AI>> getBonds() const {
-		std::vector<Bond<AI>> ret;
-
-		AI s = base::size();
-		for (AI i = 1; i < s; i++) {
-			const auto neigh_s = this->operator[](i).neighboursSize();
-			for (AI j = 0; j < neigh_s; j++) {
-				if (j > i) {
-					ret.emplace_back(i, j);
-				}
-			}
+			mg.release_HAtoms_CharAtom(multiAtomBits, sn);
+			//mg.sortGraph();
+			return mg;
 		}
-		ret.shrink_to_fit();
-		return ret;
-	}
-	constexpr AI countBonds() const {
-		AI ret(0);
-		for (const auto& node : *this) {
-			ret += node.neighboursSize();
+
+		static constexpr ::std::pair<MoleculeGraph, ::std::bitset<mend_size>> ReadInput(const char* str) {
+			MoleculeGraph mg;
+			::std::string str1 = _ParseOldInputString(str);
+			::std::stringstream ss(str1.data());
+			const auto sn = mg.parseMainstring<true>(ss);
+			auto multiAtomBits = mg.parseMultiatom(ss, sn);
+			mg.release_HAtoms_XAtom(multiAtomBits, sn);
+			//mg.sortGraph();
+			return ::std::make_pair(std::move(mg), ::std::move(multiAtomBits));
 		}
-		return ret >> 1;
-	}
 
-	// Add and delete bonds
-	constexpr void addBond(const AI a, const AI b) {
-		base::operator[](a).addBondWithSort(base::operator[](b));
-	}
-	constexpr void deleteBond(const AI a, const AI b) {
-		base::operator[](a).deleteBond(base::operator[](b));
-	}
-	constexpr void addBondsFromVector(const std::vector<BondType>& bond) {
-		auto bs = bond.size();
-		for (decltype(bs) i = 0; i < bs; i++) {
-			addBond(bond[i].first, bond[i].second);
+
+		constexpr AtomIndex size() const noexcept {
+			return static_cast<AtomIndex>(data_.size());
 		}
-	}
 
-	// For Search
-	constexpr AI findStart() const {
-		const AI s = size();
-		AI m = 1;
-		for (AI i = 2; i < s; i++) {
-			if (base::operator[](i) > base::operator[](m))
-				m = i;
-		}
-		return m;
-	}
-	constexpr AI getNeighbourId(AI cur, AI neighbourIt) const noexcept {
-		return base::operator[](cur).getNeighbour(neighbourIt)->getID();
-	}
-	constexpr const NodeType& getNeighbourReference(AI cur, AI neighbourIt) const noexcept {
-		return *(base::operator[](cur).getNeighbour(neighbourIt));
-	}
-	constexpr const NodeType* getNeighbourPointer(AI cur, AI neighbourIt) const noexcept {
-		return base::operator[](cur).getNeighbour(neighbourIt);
-	}
-	constexpr void exchange(AI a1, AI a2) {
-		const auto n1size = base::operator[](a1).neighboursSize();
-		const auto n2size = base::operator[](a2).neighboursSize();
-		auto a1p = &(base::operator[](a1));
-		auto a2p = &(base::operator[](a2));
-		for (AI i = 0; i < n1size; i++) {
-			base::operator[](getNeighbourId(a1, i)).exchangeNeighbour(a1p, a2p);
-		}
-		for (AI i = 0; i < n2size; i++) {
-			base::operator[](getNeighbourId(a2, i)).exchangeNeighbour(a2p, a1p);
-		}
-		base::operator[](a1).swap(base::operator[](a2));
-	}
+		// Bond functions
+		constexpr ::std::vector<BondType> getBonds() const {
+			std::vector<BondType> ret;
 
-	// Copy function
-	[[nodiscard]] constexpr MoleculeGraph makeCopy() const noexcept(false) {
-		// Copy
-		MoleculeGraph ret;
-		ret.id_ = id_;
-		AI s = base::size();
-		ret.reserve(s);
-		// Convertion to Correct Neighbours
-		for (AI i = 0; i < s; i++) {
-			auto& node = base::operator[](i);
-			ret.emplace_back(node.getType(), node.getHAtoms(), node.getID());
-		}
-		for (AI i = 0; i < s; i++) {
-			auto& node = base::operator[](i);
-
-			using NeighboursType = typename NodeType::NeighboursType;
-			NeighboursType ret_nei(0);
-			const auto nodeSize = node.neighboursSize();
-			for (AI j = 0; j < nodeSize; j++) {
-				ret_nei.push_back(&(ret[node.getNeighbour(j)->getID()]));
-			}
-			ret[i].addNeighboursVector(std::move(ret_nei));
-		}
-		return ret;
-	}
-
-	// Operators
-	constexpr const NodeType& operator[](const AI s) const noexcept {
-		return base::operator[](s);
-	}
-	constexpr NodeType& operator[](const AI s) noexcept {
-		return base::operator[](s);
-	}
-	constexpr MoleculeGraph& operator=(const MoleculeGraph& other) noexcept = delete;
-	constexpr MoleculeGraph& operator=(MoleculeGraph&& other) noexcept = default;
-
-	// Iterators
-	constexpr auto begin() noexcept {
-		return base::begin();
-	}
-	constexpr auto end() noexcept {
-		return base::end();
-	}
-	constexpr auto begin() const noexcept {
-		return base::begin();
-	}
-	constexpr auto end() const noexcept {
-		return base::end();
-	}
-	// Interface Const ID(ref)
-	constexpr const auto& getID() const noexcept {
-		return id_;
-	}
-private: 
-	inline void parseAtomsData(std::stringstream& ss, const AI sn) {
-		base::reserve(sn);
-		base::emplace_back(A(0), H(0), AI(0));
-		for (AI i = 1; i < sn; i++) {
-			int a;
-			ss >> a;
-			int b;
-			ss >> b;
-			base::emplace_back(A(a), H(b), AI(i));
-		}
-	}
-	inline std::pair<AI, AI> parseInit(std::stringstream& ss) {
-		ss >> id_;
-		std::pair<AI,AI> r;
-		ss >> r.first;
-		ss >> r.second;
-		r.first++;
-		return r;
-	}
-	inline AI parseMainstring(std::stringstream& ss) {
-		std::pair<AI, AI>&& sn_sb = parseInit(ss);
-		AI& sn = sn_sb.first;
-		AI& sb = sn_sb.second;
-
-		// Atomic loop
-		parseAtomsData(ss, sn);
-
-		// Bond loop
-		for (AI i = 0; i < sb; i++) {
-			int a;
-			ss >> a;
-			int b;
-			ss >> b;
-			base::operator[](a).addBondWithSort(base::operator[](b));
-		}
-		return sn;
-	}
-	inline std::bitset<mend_size> parseMultiatom(std::stringstream & ss, const AI sn) {
-		int xty;
-		std::bitset<mend_size> multiAtomBits;
-
-		if (!(ss >> xty))
-			return multiAtomBits;
-		//-1 6 7 8 -2 8 16 -3 9 17 0
-		while (xty != 0) {
-			A real(static_cast<char>(xty));
-			int next_xty = 0;
-			for (char i = 0; i < mend_size; i++)
-			{
-				ss >> next_xty;
-				if (next_xty <= 0) break;
-				real.AddType(static_cast<char>(next_xty));
-			}
-			for (AI i = 1; i < sn; i++)
-			{
-				if (this->operator[](i).getType().simple_eq((static_cast<char>(xty)))) {
-					this->operator[](i).setType(real);
-					if (!real.include(1)) continue;
-
-					for (AI j = 0; j < this->operator[](i).neighboursSize(); j++)
-					{
-						multiAtomBits |= this->operator[](i).getNeighbour(j)->getType().get_bitset();
+			AtomIndex s = size();
+			for (AtomIndex i = 1; i < s; i++) {
+				const auto neigh_s = this->operator[](i).neighboursSize();
+				for (AtomIndex j = 0; j < neigh_s; j++) {
+					if (j > i) {
+						ret.emplace_back(i, j);
 					}
 				}
 			}
-			// Foolproof
-			while (next_xty > 0) {
-				ss >> next_xty;
+			ret.shrink_to_fit();
+			return ret;
+		}
+		constexpr AtomIndex countBonds() const {
+			AtomIndex ret(0);
+			for (const auto& node : *this) {
+				ret += node.neighboursSize();
 			}
-			xty = next_xty;
+			return ret >> 1;
 		}
 
-		return multiAtomBits;
-	}
-	void release_HAtoms_XAtom(const std::bitset<mend_size>& bits, const AI sn) {
-		if (bits.none()) return;
-		size_t hs = this->size();
-		std::list< NodeType> hydrogenAtoms;
+		// Add and delete bonds
+		constexpr void addBond(const AtomIndex a, const AtomIndex b) {
+			data_[a].addBondWithSort(data_[b]);
+		}
+		constexpr void deleteBond(const AtomIndex a, const AtomIndex b) {
+			data_[a].deleteBond(data_[b]);
+		}
+		constexpr void addBondsFromVector(const ::std::vector<BondType>& bond) {
+			auto bs = bond.size();
+			for (decltype(bs) i = 0; i < bs; i++) {
+				addBond(bond[i].first, bond[i].second);
+			}
+		}
 
-		for (AI i = 1; i < sn; i++)
-		{
-			if ((((XAtom)this->operator[](i).getType()).get_bitset() & bits).any()) {
+		// For Search
+		constexpr AtomIndex findStart() const {
+			const AtomIndex s = size();
+			AtomIndex m = 1;
+			for (AtomIndex i = 2; i < s; i++) {
+				if ((data_[i]).RawMore(data_[m]))
+					m = i;
+			}
+			return m;
+		}
+		constexpr AtomIndex getNeighbourId(AtomIndex cur, AtomIndex neighbourIt) const noexcept {
+			return data_[cur].getNeighbour(neighbourIt)->getID();
+		}
+		constexpr const NodeType& getNeighbourReference(AtomIndex cur, AtomIndex neighbourIt) const noexcept {
+			return *(data_[cur].getNeighbour(neighbourIt));
+		}
+		constexpr const NodeType* getNeighbourPointer(AtomIndex cur, AtomIndex neighbourIt) const noexcept {
+			return data_[cur].getNeighbour(neighbourIt);
+		}
+		constexpr void exchange(AtomIndex a1, AtomIndex a2) {
+			const auto n1size = data_[a1].neighboursSize();
+			const auto n2size = data_[a2].neighboursSize();
+			auto a1p = &(data_[a1]);
+			auto a2p = &(data_[a2]);
+			for (AtomIndex i = 0; i < n1size; i++) {
+				data_[getNeighbourId(a1, i)].exchangeNeighbour(a1p, a2p);
+			}
+			for (AtomIndex i = 0; i < n2size; i++) {
+				data_[getNeighbourId(a2, i)].exchangeNeighbour(a2p, a1p);
+			}
+			data_[a1].swap(data_[a2]);
+		}
 
-				auto hAtoms = this->operator[](i).getHAtoms();
-				for (H j = 0; j < hAtoms; j++)
-				{
-					hydrogenAtoms.emplace_back(XAtom(1), 0, hs);
-					this->operator[](i).addBondWithSort(hydrogenAtoms.back());
-					hs++;
+		// Copy function
+		[[nodiscard]] constexpr MoleculeGraph makeCopy() const noexcept(false) {
+			// Copy
+			MoleculeGraph ret;
+			ret.id_ = id_;
+			AtomIndex s = size();
+			ret.data_.reserve(s);
+			// Convertion to Correct Neighbours
+			for (AtomIndex i = 0; i < s; i++) {
+				const auto& node = data_[i];
+				ret.data_.emplace_back(node);
+			}
+			for (AtomIndex i = 0; i < s; i++) {
+				auto& node = data_[i];
+
+				using NeighboursType = typename NodeType::NeighboursType;
+				NeighboursType ret_nei(0);
+				const auto nodeSize = node.neighboursSize();
+				for (AtomIndex j = 0; j < nodeSize; j++) {
+					ret_nei.push_back(&(ret[node.getNeighbour(j)->getID()]));
 				}
-				this->operator[](i).setHAtoms(0);
+				ret[i].addNeighboursVector(::std::move(ret_nei));
 			}
+			return ret;
 		}
-		AddNewAtoms(std::move(hydrogenAtoms), hs);
 
-	}
-	void release_HAtoms_CharAtom(const std::bitset<mend_size>& bits, const AI sn) {
-		if (bits.none()) return;
-		size_t hs = this->size();
-		std::list< Node<A, H, AI>> hydrogenAtoms;
+		// Operators
+		constexpr const NodeType& operator[](const AtomIndex s) const noexcept {
+			return data_[s];
+		}
+		constexpr NodeType& operator[](const AtomIndex s) noexcept {
+			return data_[s];
+		}
+		inline MoleculeGraph& operator=(const MoleculeGraph& other) noexcept = delete;
+		inline MoleculeGraph& operator=(MoleculeGraph&& other) noexcept = default;
 
-		for (AI i = 1; i < sn; i++)
-		{
-			if (bits[(char)(this->operator[](i).getType())]) {
-				auto hAtoms = this->operator[](i).getHAtoms();
-				for (H j = 0; j < hAtoms; j++)
-				{
-					hydrogenAtoms.emplace_back(1, 0, hs);
-					this->operator[](i).addBondWithSort(hydrogenAtoms.back());
-					hs++;
+		// Iterators
+		constexpr auto begin() noexcept {
+			return data_.begin();
+		}
+		constexpr auto end() noexcept {
+			return data_.end();
+		}
+		constexpr auto begin() const noexcept {
+			return data_.begin();
+		}
+		constexpr auto end() const noexcept {
+			return data_.end();
+		}
+		// Interface Const ID(ref)
+		constexpr const auto& getID() const noexcept {
+			return id_;
+		}
+	private:
+		template<bool is_request> inline void parseAtomsBlock(::std::stringstream& ss, const AtomIndex sn) {
+			data_.reserve(sn);
+			data_.emplace_back(A(0), HType(0), AtomIndex(0));
+			for (AtomIndex i = 1; i < sn; i++) {
+				int a;
+				ss >> a;
+				int b;
+				ss >> b;
+				data_.emplace_back(A(a), HType(b), AtomIndex(i));
+				if (is_request) {
+					int first;
+					int second;
+					ss >> first;
+					ss >> second;
+					data_.back().setCoord(Coord(static_cast<Coord::argumentType>(first), static_cast<Coord::argumentType>(second)));
 				}
-				this->operator[](i).setHAtoms(0);
 			}
 		}
-		AddNewAtoms(std::move(hydrogenAtoms), hs);
-	}
-			
+		::std::pair<AtomIndex, AtomIndex> parseInit(std::stringstream& ss) {
+			ss >> id_;
+			::std::pair<AtomIndex, AtomIndex> r;
+			ss >> r.first;
+			ss >> r.second;
+			r.first++;
+			return r;
+		}
+		template <bool is_request> inline AtomIndex parseMainstring(::std::stringstream& ss) {
+			::std::pair<AtomIndex, AtomIndex>&& sn_sb = parseInit(ss);
+			AtomIndex& sn = sn_sb.first;
+			AtomIndex& sb = sn_sb.second;
 
-	void AddNewAtoms(std::list<NodeType>&& l, AI size_plus_l) {
-		std::vector<NodeType> ex(size_plus_l);
-		AI s = size();
-		for (AI i = 1; i < s; i++)
-		{
-			ex[i].swap(this->operator[](i));
-			ex[i].setID(i);
-			for (AI j = 0; j < ex[i].neighboursSize(); j++)
+			// Atomic loop
+			parseAtomsBlock<is_request>(ss, sn);
+
+			// Bond loop
+			for (AtomIndex i = 0; i < sb; i++) {
+				int a;
+				ss >> a;
+				int b;
+				ss >> b;
+				data_[a].addBondWithSort(data_[b]);
+			}
+			if (is_request == false) {
+				for (AtomIndex i = 1; i < sn; i++) {
+					Coord c = Coord(static_cast<Coord::argumentType>(data_[i].getHAtoms() + data_[i].neighboursSize()));
+					data_[i].setCoord(::std::move(c));
+				}
+			}
+			return sn;
+		}
+		::std::bitset<mend_size> parseMultiatom(::std::stringstream& ss, const AtomIndex sn) {
+			int xty;
+			::std::bitset<mend_size> multiAtomBits;
+
+			if (!(ss >> xty))
+				return multiAtomBits;
+			//-1 6 7 8 -2 8 16 -3 9 17 0
+			while (xty != 0) {
+				A real(static_cast<char>(xty));
+				int next_xty = 0;
+				for (char i = 0; i < mend_size; i++)
+				{
+					ss >> next_xty;
+					if (next_xty <= 0) break;
+					real.AddType(static_cast<char>(next_xty));
+				}
+				for (AtomIndex i = 1; i < sn; i++)
+				{
+					if (this->operator[](i).getType().simple_eq((static_cast<char>(xty)))) {
+						this->operator[](i).setType(real);
+						if (!real.include(1)) continue;
+
+						for (AtomIndex j = 0; j < this->operator[](i).neighboursSize(); j++)
+						{
+							multiAtomBits |= this->operator[](i).getNeighbour(j)->getType().get_bitset();
+						}
+					}
+				}
+				// Foolproof
+				while (next_xty > 0) {
+					ss >> next_xty;
+				}
+				xty = next_xty;
+			}
+
+			return multiAtomBits;
+		}
+		void release_HAtoms_XAtom(const ::std::bitset<mend_size>& bits, const AtomIndex sn) {
+			if (bits.none()) return;
+			size_t hs = this->size();
+			::std::list< NodeType> hydrogenAtoms;
+
+			for (AtomIndex i = 1; i < sn; i++)
 			{
-				ex[i].exchangeNeighbour(ex[i].getNeighbour(j), &(ex[ex[i].getNeighbour(j)->getID()]));
+				if ((((XAtom)this->operator[](i).getType()).get_bitset() & bits).any()) {
+
+					auto hAtoms = this->operator[](i).getHAtoms();
+					for (HType j = 0; j < hAtoms; j++)
+					{
+						hydrogenAtoms.emplace_back(XAtom(1), 0, hs);
+						this->operator[](i).addBondWithSort(hydrogenAtoms.back());
+						hs++;
+					}
+					this->operator[](i).setHAtoms(0);
+				}
 			}
+			AddNewAtoms(std::move(hydrogenAtoms), hs);
+
+		}
+		void release_HAtoms_CharAtom(const std::bitset<mend_size>& bits, const AtomIndex sn) {
+			if (bits.none()) return;
+			size_t hs = this->size();
+			std::list<NodeType> hydrogenAtoms;
+
+			for (AtomIndex i = 1; i < sn; i++)
+			{
+				if (bits[(char)(this->operator[](i).getType())]) {
+					auto hAtoms = this->operator[](i).getHAtoms();
+					for (HType j = 0; j < hAtoms; j++)
+					{
+						hydrogenAtoms.emplace_back(1, 0, hs);
+						this->operator[](i).addBondWithSort(hydrogenAtoms.back());
+						hs++;
+					}
+					this->operator[](i).setHAtoms(0);
+				}
+			}
+			AddNewAtoms(std::move(hydrogenAtoms), hs);
 		}
 
-		auto iter = l.begin();
-		for (AI i = s; i < size_plus_l; i++) {
 
-			ex[i].swap(*iter);
-			ex[i].setID(i);
-			ex[i].exchangeNeighbour(ex[i].getNeighbour(0), &(ex[ex[i].getNeighbour(0)->getID()]));
-			iter++;
+		void AddNewAtoms(std::list<NodeType>&& l, AtomIndex size_plus_l) {
+			std::vector<NodeType> ex(size_plus_l);
+			AtomIndex s = size();
+			for (AtomIndex i = 1; i < s; i++)
+			{
+				ex[i].swap(this->operator[](i));
+				ex[i].setID(i);
+				for (AtomIndex j = 0; j < ex[i].neighboursSize(); j++)
+				{
+					ex[i].exchangeNeighbour(ex[i].getNeighbour(j), &(ex[ex[i].getNeighbour(j)->getID()]));
+				}
+			}
+
+			auto iter = l.begin();
+			for (AtomIndex i = s; i < size_plus_l; i++) {
+
+				ex[i].swap(*iter);
+				ex[i].setID(i);
+				ex[i].exchangeNeighbour(ex[i].getNeighbour(0), &(ex[ex[i].getNeighbour(0)->getID()]));
+				iter++;
+			}
+			std::swap(ex, data_);
 		}
-		std::swap(ex, *this);
-	}
-};
+
+		void sortGraph() {
+			const auto s = this->size();
+			std::vector<AtomIndex> order(s);
+			std::iota(order.begin(), order.end(), 0);
+			auto MoreLambda = [this](AtomIndex a, AtomIndex b) {return this->operator[](a).RawMore(this->operator[](b)); };
+			std::stable_sort((++order.begin()), order.end(), MoreLambda);
+
+			std::vector<AtomIndex> reorder(s,0);
+			for (std::remove_const<decltype(s)>::type i = 0; i < s; i++)
+			{
+				reorder[order[i]] = i;
+			}
+
+			for (std::remove_const<decltype(s)>::type i = 1; i < s; i++)
+			{
+				if (reorder[i] == i)
+					continue;
+				decltype(i) other = order[i];
+				order[reorder[i]] = other;
+				
+				exchange(i, other);
+			}
+			return;
+		}
+
+		inline static ::std::string _ParseOldInputString(const char* str) {
+			::std::string ret(str);
+			int na;
+			int no;
+			{
+				::std::stringstream ss(ret);
+				ss >> no;
+				ss >> na;
+			}
+			auto pos = ret.find_first_of(' ', 0);
+			pos = ret.find_first_of(' ', pos + 1);
+			pos = ret.find_first_of(' ', pos + 1);
+			for (int i = 0; i < na; i++)
+			{
+				pos = ret.find_first_of(' ', pos + 1);
+				pos = ret.find_first_of(' ', pos + 1);
+				if (ret.length() > pos)
+					ret.insert(pos, " 0 14");
+				else
+					ret.append(" 0 14");
+				pos += 5;
+			}
+			return ret;
+		}
+	};
+}

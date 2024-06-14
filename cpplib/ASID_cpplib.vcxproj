@@ -151,7 +151,6 @@
     <ClInclude Include="src\classes\MoleculeGraph.h" />
     <ClInclude Include="src\classes\SearchGraph.h" />
     <ClInclude Include="src\functions\AllInOneAndCurrent.h" />
-    <ClInclude Include="src\platform\Definitions.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\module\BondLength.ini" />

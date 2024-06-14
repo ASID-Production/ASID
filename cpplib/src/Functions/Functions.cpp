@@ -33,30 +33,32 @@
 #include <thread>
 #include <vector>
 
-static void ChildThreadFunc(const CurrentRequestGraph& input, const AtomicIDType MaxAtom, SearchDataInterface<MolecularIDType, size_type>& dataInterface, const bool exact);
+using namespace cpplib::currents;
 
-const CurrentDistances* p_distances = nullptr;
+static void ChildThreadFunc(const SearchGraphType::RequestGraphType& input, const SearchGraphType::AtomIndex MaxAtom, SearchDataInterfaceType& dataInterface, const bool exact);
+
+const DistancesType* p_distances = nullptr;
 
 bool CompareGraph(const char* search1, const char* search2, const bool exact) {
 	deb_write("CompareGraph start");
-	CurrentSearchGraph graph;
+	SearchGraphType graph;
 
 	deb_write("CompareGraph CurrentSearchGraph start ReadInput");
-	auto&& inputpair = CurrentRequestGraph::ReadInput(search1);
+	auto&& inputpair = SearchGraphType::RequestGraphType::ReadInput(search1);
 	graph.setupInput(std::move(inputpair.first));
 	deb_write("CompareGraph CurrentSearchGraph start ReadData");
-	graph.setupData(CurrentDatabaseGraph::ReadData(search2, inputpair.second));
+	graph.setupData(SearchGraphType::DatabaseGraphType::ReadData(search2, inputpair.second));
 	deb_write("CompareGraph CurrentSearchGraph start prepareSearch");
 	graph.prepareToSearch();
 	deb_write("CompareGraph CurrentSearchGraph start FullSearch");
 	return graph.startFullSearch(exact);
 }
 std::vector<int> SearchMain(const char* search, std::vector<const char*>&& data, const int np, const bool exact) {
-	auto&& inputpair = CurrentRequestGraph::ReadInput(search);
-	SearchDataInterface<MolecularIDType, size_type> databuf(std::move(data), std::move(inputpair.second));
+	auto&& inputpair = SearchGraphType::RequestGraphType::ReadInput(search);
+	SearchDataInterfaceType databuf(std::move(data), std::move(inputpair.second));
 	std::vector<std::thread> threads;
-	const size_t nThreads = std::min(std::min(static_cast<unsigned int>(np), std::thread::hardware_concurrency()), 
-											  static_cast<unsigned int>(databuf.size())) - 1;
+	const size_t nThreads = std::min(std::min(static_cast<unsigned int>(np), std::thread::hardware_concurrency()),
+										static_cast<unsigned int>(databuf.size())) - 1;
 	threads.reserve(nThreads);
 	auto ma = inputpair.first.findStart();
 
@@ -72,28 +74,31 @@ std::vector<int> SearchMain(const char* search, std::vector<const char*>&& data,
 	return databuf.getAllResults();
 }
 
-std::pair<std::string, std::vector<std::pair<std::vector<std::tuple<CurrentPoint, AtomicIDType>>, int>>>  FindMoleculesInCell(const std::array<float, 6>& unit_cell, std::vector<const char*>& symm, std::vector<int>& types, std::vector<float>& xyz) {
+std::pair<std::string, std::vector<std::pair<std::vector<std::tuple<PointType, AtomIndex>>, int>>>
+	FindMoleculesInCell(const std::array<float, 6>& unit_cell, std::vector<const char*>& symm, std::vector<int>& types, std::vector<float>& xyz) {
+
+	using return_type = std::pair<std::string, std::vector<std::pair<std::vector<std::tuple<PointType, AtomIndex>>, int>>>;
 
 	auto& distances = *(p_distances);
 	if (p_distances->isReady() == false) {
-		return std::make_pair(std::string(";Error! Could not open BondLength.ini"), 
-							  std::vector<std::pair<std::vector<std::tuple<CurrentPoint, AtomicIDType>>, int>>());
+		return std::make_pair(std::string(";Error! Could not open BondLength.ini"),
+								return_type::second_type());
 	}
-	FAM_Struct<AtomType, AtomicIDType, FloatingPointType> fs;
-	FAM_Cell<FloatingPointType> fc(CurrentCell(unit_cell, true));
-	ParseData(fs, fc, symm, types, xyz);
+	FAMStructType fs;
+	FAMCellType fc(FAMCellType::base(unit_cell, true));
+	ParseDataType(fs, fc, symm, types, xyz);
 
 	fc.CreateSupercell(fs.points, fs.findCutoff(distances));
 
 	std::string errorMsg;
-	auto res = fs.findBonds(distances, errorMsg, [fc](const CurrentPoint& p1, const CurrentPoint& p2) {return fc.distanceInCell(p1, p2); });
+	auto res = fs.findBonds(distances, errorMsg, [fc](const PointType& p1, const PointType& p2) {return fc.distanceInCell(p1, p2); });
 
 	for (size_t i = 0; i < fs.sizePoints; i++)
 	{
 		fs.points[i] = fc.fracToCart() * fs.points[i];
 	}
 
-	CurrentFindMolecules fm(std::move(fs));
+	FindMoleculesType fm(std::move(fs));
 
 	return fm.findMolecules(distances, res.first, res.second, errorMsg);
 }
@@ -105,12 +110,12 @@ std::string FindMoleculesWithoutCell(const std::vector<int>& types, std::vector<
 		return std::string(";Error! Could not open BondLength.ini");
 	}
 
-	FAM_Struct<AtomType, AtomicIDType, FloatingPointType> fs;
-	ParseData(fs, types, xyz);
+	FAMStructType fs;
+	ParseDataType(fs, types, xyz);
 	std::string errorMsg;
-	auto res = fs.findBonds(distances, errorMsg, CurrentPoint::distance);
+	auto res = fs.findBonds(distances, errorMsg, PointType::distance);
 
-	CurrentFindMolecules fm(std::move(fs));
+	FindMoleculesType fm(std::move(fs));
 
 	ret = fm.findMolecules(distances, res.first, res.second, errorMsg).first;
 
@@ -118,16 +123,16 @@ std::string FindMoleculesWithoutCell(const std::vector<int>& types, std::vector<
 }
 
 std::string FindDistanceWC(std::vector<int>& types,
-						   std::vector<float>& xyz,
-						   const std::array<int, 2>& type,
-						   const std::pair<float, float>& value) 
+							std::vector<float>& xyz,
+							const std::array<int, 2>& type,
+							const std::pair<float, float>& value)
 {
-	FAM_Struct<AtomType, AtomicIDType, FloatingPointType> fs;
-	ParseData(fs, types, xyz);
-	CurrentFindGeometry fg(fs);
-	const auto raw = fg.findDistance(static_cast<AtomType>(type[0]),
-									 static_cast<AtomType>(type[1]),
-									 value);
+	FAMStructType fs;
+	ParseDataType(fs, types, xyz);
+	FindGeometryType fg(fs);
+	const auto raw = fg.findDistance(static_cast<FindGeometryType::AtomType>(type[0]),
+										static_cast<FindGeometryType::AtomType>(type[1]),
+										value);
 	const auto raws = raw.size();
 	std::string res;
 	for (size_t i = 0; i < raws; i++)
@@ -139,15 +144,15 @@ std::string FindDistanceWC(std::vector<int>& types,
 	return res;
 }
 
-std::string FindDistanceIC(const std::array<float, 6>& unit_cell, 
-						   std::vector<const char*>& symm, 
-						   std::vector<int>& types, 
-						   std::vector<float>& xyz,
-						   const std::array<int, 2>& type,
-						   const std::pair<float,float>& value) {
-	FAM_Struct<AtomType, AtomicIDType, FloatingPointType> fs;
-	FAM_Cell<FloatingPointType> fc(CurrentCell(unit_cell, true));
-	ParseData(fs, fc, symm, types, xyz);
+std::string FindDistanceIC(const std::array<float, 6>& unit_cell,
+							std::vector<const char*>& symm,
+							std::vector<int>& types,
+							std::vector<float>& xyz,
+							const std::array<int, 2>& type,
+							const std::pair<float, float>& value) {
+	FAMStructType fs;
+	FAMCellType fc(FAMCellType::base(unit_cell, true));
+	ParseDataType(fs, fc, symm, types, xyz);
 
 	fc.CreateSupercell(fs.points, static_cast<FloatingPointType>(8.5), 2);
 
@@ -156,10 +161,10 @@ std::string FindDistanceIC(const std::array<float, 6>& unit_cell,
 		fs.points[i] = fc.fracToCart() * fs.points[i];
 	}
 
-	CurrentFindGeometry fg(fs);
-	const auto raw = fg.findDistance(static_cast<AtomType>(std::get<0>(type)), 
-									 static_cast<AtomType>(std::get<1>(type)), 
-									 value);
+	FindGeometryType fg(fs);
+	const auto raw = fg.findDistance(static_cast<FindGeometryType::AtomType>(std::get<0>(type)),
+										static_cast<FindGeometryType::AtomType>(std::get<1>(type)),
+										value);
 	const auto raws = raw.size();
 	std::string res;
 	for (size_t i = 0; i < raws; i++)
@@ -177,16 +182,16 @@ std::string FindAngleWC(std::vector<int>& types,
 						const std::array<std::pair<float, float>, 2>& value_d,
 						const std::pair<float, float>& value_a)
 {
-	FAM_Struct<AtomType, AtomicIDType, FloatingPointType> fs;
-	ParseData(fs, types, xyz);
-	CurrentFindGeometry fg(fs);
-	const auto raw12 = fg.findDistance(static_cast<AtomType>(std::get<0>(type)),
-									   static_cast<AtomType>(std::get<1>(type)),
-									   value_d[0]);
-	const auto raw23 = fg.findDistance(static_cast<AtomType>(std::get<1>(type)),
-									   static_cast<AtomType>(std::get<2>(type)),
-									   value_d[1]);
-	const auto raw = fg.findAngle(raw12, raw23, geometry::GradtoRad(value_a.first), geometry::GradtoRad(value_a.second));
+	FAMStructType fs;
+	ParseDataType(fs, types, xyz);
+	FindGeometryType fg(fs);
+	const auto raw12 = fg.findDistance(static_cast<FindGeometryType::AtomType>(std::get<0>(type)),
+										static_cast<FindGeometryType::AtomType>(std::get<1>(type)),
+										value_d[0]);
+	const auto raw23 = fg.findDistance(static_cast<FindGeometryType::AtomType>(std::get<1>(type)),
+										static_cast<FindGeometryType::AtomType>(std::get<2>(type)),
+										value_d[1]);
+	const auto raw = fg.findAngle(raw12, raw23, std::make_pair(cpplib::geometry::GradtoRad(value_a.first), cpplib::geometry::GradtoRad(value_a.second)));
 	const auto raws = raw.size();
 	std::string res;
 	for (size_t i = 0; i < raws; i++)
@@ -194,7 +199,7 @@ std::string FindAngleWC(std::vector<int>& types,
 		res += std::to_string(std::get<0>(raw[i])) + ':';
 		res += std::to_string(std::get<1>(raw[i])) + ':';
 		res += std::to_string(std::get<2>(raw[i])) + ':';
-		res += (std::to_string(geometry::RadtoGrad(std::get<3>(raw[i]))) + ';') + '\n';
+		res += (std::to_string(cpplib::geometry::RadtoGrad(std::get<3>(raw[i]))) + ';') + '\n';
 	}
 	return res;
 }
@@ -205,11 +210,11 @@ std::string FindAngleIC(const std::array<float, 6>& unit_cell,
 						std::vector<float>& xyz,
 						const std::array<int, 3>& type,
 						const std::array<std::pair<float, float>, 2>& value_d,
-						const std::pair<float, float>& value_a) 
+						const std::pair<float, float>& value_a)
 {
-	FAM_Struct<AtomType, AtomicIDType, FloatingPointType> fs;
-	FAM_Cell<FloatingPointType> fc(CurrentCell(unit_cell, true));
-	ParseData(fs, fc, symm, types, xyz);
+	FAMStructType fs;
+	FAMCellType fc(FAMCellType::base(unit_cell, true));
+	ParseDataType(fs, fc, symm, types, xyz);
 
 	fc.CreateSupercell(fs.points, static_cast<FloatingPointType>(8.5), 2);
 
@@ -218,14 +223,14 @@ std::string FindAngleIC(const std::array<float, 6>& unit_cell,
 		fs.points[i] = fc.fracToCart() * fs.points[i];
 	}
 
-	CurrentFindGeometry fg(fs);
-	const auto raw12 = fg.findDistance(static_cast<AtomType>(std::get<0>(type)),
-									   static_cast<AtomType>(std::get<1>(type)),
-									   value_d[0]);
-	const auto raw23 = fg.findDistance(static_cast<AtomType>(std::get<1>(type)),
-									   static_cast<AtomType>(std::get<2>(type)),
-									   value_d[1]);
-	const auto raw = fg.findAngle(raw12, raw23, geometry::GradtoRad(value_a.first), geometry::GradtoRad(value_a.second));
+	FindGeometryType fg(fs);
+	const auto raw12 = fg.findDistance(static_cast<FindGeometryType::AtomType>(std::get<0>(type)),
+										static_cast<FindGeometryType::AtomType>(std::get<1>(type)),
+										value_d[0]);
+	const auto raw23 = fg.findDistance(static_cast<FindGeometryType::AtomType>(std::get<1>(type)),
+										static_cast<FindGeometryType::AtomType>(std::get<2>(type)),
+										value_d[1]);
+	const auto raw = fg.findAngle(raw12, raw23, std::make_pair(cpplib::geometry::GradtoRad(value_a.first), cpplib::geometry::GradtoRad(value_a.second)));
 	const auto raws = raw.size();
 	std::string res;
 	for (size_t i = 0; i < raws; i++)
@@ -233,34 +238,31 @@ std::string FindAngleIC(const std::array<float, 6>& unit_cell,
 		res += std::to_string(std::get<0>(raw[i])) + ':';
 		res += std::to_string(std::get<1>(raw[i])) + ':';
 		res += std::to_string(std::get<2>(raw[i])) + ':';
-		res += (std::to_string(geometry::RadtoGrad(std::get<3>(raw[i]))) + ';') + '\n';
+		res += (std::to_string(cpplib::geometry::RadtoGrad(std::get<3>(raw[i]))) + ';') + '\n';
 	}
 	return res;
 }
 
 std::string FindTorsionWC(std::vector<int>& types,
-						  std::vector<float>& xyz,
-						  const std::array<int, 4>& type,
-						  const std::array<std::pair<float, float>, 3>& value_d,
-						  const std::array<std::pair<float, float>, 2>& value_a,
-						  const std::pair<float, float>& value_t ) 
+							std::vector<float>& xyz,
+							const std::array<int, 4>& type,
+							const std::array<std::pair<float, float>, 3>& value_d,
+							const std::array<std::pair<float, float>, 2>& value_a,
+							const std::pair<float, float>& value_t)
 {
-	FAM_Struct<AtomType, AtomicIDType, FloatingPointType> fs;
-	ParseData(fs, types, xyz);
-	CurrentFindGeometry fg(fs);
+	FAMStructType fs;
+	ParseDataType(fs, types, xyz);
+	FindGeometryType fg(fs);
 
-	const auto raw12 = fg.findDistance(static_cast<AtomType>(type[0]), static_cast<AtomType>(type[1]), value_d[0]);
-	const auto raw23 = fg.findDistance(static_cast<AtomType>(type[1]), static_cast<AtomType>(type[2]), value_d[1]);
-	const auto raw34 = fg.findDistance(static_cast<AtomType>(type[2]), static_cast<AtomType>(type[3]), value_d[2]);
-	const auto raw123 = fg.findAngle(raw12, raw23, 
-									 geometry::GradtoRad(value_a[0].first), 
-									 geometry::GradtoRad(value_a[0].second));
+	const auto raw12 = fg.findDistance(static_cast<FindGeometryType::AtomType>(type[0]), static_cast<FindGeometryType::AtomType>(type[1]), value_d[0]);
+	const auto raw23 = fg.findDistance(static_cast<FindGeometryType::AtomType>(type[1]), static_cast<FindGeometryType::AtomType>(type[2]), value_d[1]);
+	const auto raw34 = fg.findDistance(static_cast<FindGeometryType::AtomType>(type[2]), static_cast<FindGeometryType::AtomType>(type[3]), value_d[2]);
+	const auto raw123 = fg.findAngle(raw12, raw23,
+									 std::make_pair(cpplib::geometry::GradtoRad(value_a[0].first), cpplib::geometry::GradtoRad(value_a[0].second)));
 	const auto raw234 = fg.findAngle(raw23, raw34,
-									 geometry::GradtoRad(value_a[1].first),
-									 geometry::GradtoRad(value_a[1].second));
+									 std::make_pair(cpplib::geometry::GradtoRad(value_a[1].first), cpplib::geometry::GradtoRad(value_a[1].second)));
 	const auto raw = fg.findTorsion(raw123, raw234,
-									geometry::GradtoRad(value_t.first),
-									geometry::GradtoRad(value_t.second));
+									std::make_pair(cpplib::geometry::GradtoRad(value_t.first), cpplib::geometry::GradtoRad(value_t.second)));
 
 	const auto raws = raw.size();
 	std::string res;
@@ -270,21 +272,21 @@ std::string FindTorsionWC(std::vector<int>& types,
 		res += std::to_string(std::get<1>(raw[i])) + ':';
 		res += std::to_string(std::get<2>(raw[i])) + ':';
 		res += std::to_string(std::get<3>(raw[i])) + ':';
-		res += std::to_string(geometry::RadtoGrad(std::get<4>(raw[i]))) + ";\n";
+		res += std::to_string(cpplib::geometry::RadtoGrad(std::get<4>(raw[i]))) + ";\n";
 	}
 	return res;
 }
 std::string FindTorsionIC(const std::array<float, 6>& unit_cell,
-						  std::vector<const char*>& symm,
-						  std::vector<int>& types,
-						  std::vector<float>& xyz,
-						  const std::array<int, 4>& type,
-						  const std::array<std::pair<float, float>, 3>& value_d,
-						  const std::array<std::pair<float, float>, 2>& value_a,
-						  const std::pair<float, float>& value_t) {
-	FAM_Struct<AtomType, AtomicIDType, FloatingPointType> fs;
-	FAM_Cell<FloatingPointType> fc(CurrentCell(unit_cell, true));
-	ParseData(fs, fc, symm, types, xyz);
+							std::vector<const char*>& symm,
+							std::vector<int>& types,
+							std::vector<float>& xyz,
+							const std::array<int, 4>& type,
+							const std::array<std::pair<float, float>, 3>& value_d,
+							const std::array<std::pair<float, float>, 2>& value_a,
+							const std::pair<float, float>& value_t) {
+	FAMStructType fs;
+	FAMCellType fc(FAMCellType::base(unit_cell, true));
+	ParseDataType(fs, fc, symm, types, xyz);
 
 	fc.CreateSupercell(fs.points, static_cast<FloatingPointType>(8.5), 2);
 
@@ -293,20 +295,17 @@ std::string FindTorsionIC(const std::array<float, 6>& unit_cell,
 		fs.points[i] = fc.fracToCart() * fs.points[i];
 	}
 
-	CurrentFindGeometry fg(fs);
+	FindGeometryType fg(fs);
 
-	const auto raw12 = fg.findDistance(static_cast<AtomType>(type[0]), static_cast<AtomType>(type[1]), value_d[0]);
-	const auto raw23 = fg.findDistance(static_cast<AtomType>(type[1]), static_cast<AtomType>(type[2]), value_d[1]);
-	const auto raw34 = fg.findDistance(static_cast<AtomType>(type[2]), static_cast<AtomType>(type[3]), value_d[2]);
+	const auto raw12 = fg.findDistance(static_cast<FindGeometryType::AtomType>(type[0]), static_cast<FindGeometryType::AtomType>(type[1]), value_d[0]);
+	const auto raw23 = fg.findDistance(static_cast<FindGeometryType::AtomType>(type[1]), static_cast<FindGeometryType::AtomType>(type[2]), value_d[1]);
+	const auto raw34 = fg.findDistance(static_cast<FindGeometryType::AtomType>(type[2]), static_cast<FindGeometryType::AtomType>(type[3]), value_d[2]);
 	const auto raw123 = fg.findAngle(raw12, raw23,
-									 geometry::GradtoRad(value_a[0].first),
-									 geometry::GradtoRad(value_a[0].second));
+									 std::make_pair(cpplib::geometry::GradtoRad(value_a[0].first), cpplib::geometry::GradtoRad(value_a[0].second)));
 	const auto raw234 = fg.findAngle(raw23, raw34,
-									 geometry::GradtoRad(value_a[1].first),
-									 geometry::GradtoRad(value_a[1].second));
+									 std::make_pair(cpplib::geometry::GradtoRad(value_a[1].first), cpplib::geometry::GradtoRad(value_a[1].second)));
 	const auto raw = fg.findTorsion(raw123, raw234,
-									geometry::GradtoRad(value_t.first),
-									geometry::GradtoRad(value_t.second));
+									std::make_pair(cpplib::geometry::GradtoRad(value_t.first), cpplib::geometry::GradtoRad(value_t.second)));
 
 	const auto raws = raw.size();
 	std::string res;
@@ -316,27 +315,26 @@ std::string FindTorsionIC(const std::array<float, 6>& unit_cell,
 		res += std::to_string(std::get<1>(raw[i])) + ':';
 		res += std::to_string(std::get<2>(raw[i])) + ':';
 		res += std::to_string(std::get<3>(raw[i])) + ':';
-		res += std::to_string(geometry::RadtoGrad(std::get<4>(raw[i]))) + ";\n";
+		res += std::to_string(cpplib::geometry::RadtoGrad(std::get<4>(raw[i]))) + ";\n";
 	}
 	return res;
 }
 
 // Single thread function
-static void ChildThreadFunc(const CurrentRequestGraph& input, const AtomicIDType MaxAtom, SearchDataInterface<MolecularIDType, size_type>& dataInterface, const bool exact) {
-	CurrentSearchGraph graph;
+static void ChildThreadFunc(const SearchGraphType::RequestGraphType& input, const SearchGraphType::AtomIndex MaxAtom, SearchDataInterfaceType& dataInterface, const bool exact) {
+	SearchGraphType graph;
 	while (true) {
 		auto next = dataInterface.getNext();
 		if (next == nullptr) {
 			return;
 		}
 		graph.setupInput(input.makeCopy());
-		CurrentDatabaseGraph molData = CurrentDatabaseGraph::ReadData(next, dataInterface.getMulty());
+		SearchGraphType::DatabaseGraphType molData = SearchGraphType::DatabaseGraphType::ReadData(next, dataInterface.getMulty());
 		auto id = molData.getID();
-		graph.setupData(move(molData));
+		graph.setupData(std::move(molData));
 		graph.prepareToSearch();
 		if (graph.startFullSearch(exact, MaxAtom)) {
 			dataInterface.push_result(id);
 		}
 	}
 }
-

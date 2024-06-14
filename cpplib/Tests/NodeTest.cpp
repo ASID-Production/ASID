@@ -29,19 +29,36 @@
 #include "../src/Functions/AllInOneAndCurrent.h"
 #include <vector>
 
-TEST(NodeTest, Constructors) {
-	EXPECT_NO_THROW({CurrentNode a1(1, 1, 1);});
-	CurrentNode a1(1, 1, 1);
-	CurrentNode::NeighboursType v1;
+using namespace cpplib::currents;
+using NodeData = cpplib::Node<AtomTypeData>;
+using NodeRequest = cpplib::Node<AtomTypeRequest>;
+
+TEST(NodeRequestTest, Constructors) {
+
+	EXPECT_NO_THROW({NodeRequest a1(1, 1, 1); });
+	NodeRequest a1(1, 1, 1);
+	NodeRequest::NeighboursType v1;
 	v1.push_back(&a1);
-	EXPECT_NO_THROW({CurrentNode a2(CurrentBaseNode(1, 1), 1);});
-	EXPECT_NO_THROW({CurrentNode a3;});
-	EXPECT_NO_THROW({CurrentNode a4(a1);});
-	EXPECT_NO_THROW({CurrentNode a5(std::move(a1));});
-	EXPECT_NO_THROW({CurrentNode a6(1,1,1,std::move(v1));});
+	EXPECT_NO_THROW({NodeRequest a2(1, 1, 1); });
+	EXPECT_NO_THROW({NodeRequest a3; });
+	EXPECT_NO_THROW({NodeRequest a4(a1); });
+	EXPECT_NO_THROW({NodeRequest a5(std::move(a1)); });
+	//EXPECT_NO_THROW({NodeRequest a6(1,1,1,std::move(v1)); });
 }
-TEST(NodeTest, EqualWithoutNeighbours) {
-	std::vector<CurrentNode> v1;
+TEST(NodeDataTest, Constructors) {
+
+	EXPECT_NO_THROW({NodeData a1(1, 1, 1); });
+	NodeData a1(1, 1, 1);
+	NodeData::NeighboursType v1;
+	v1.push_back(&a1);
+	EXPECT_NO_THROW({NodeData a2(1, 1, 1); });
+	EXPECT_NO_THROW({NodeData a3; });
+	EXPECT_NO_THROW({NodeData a4(a1); });
+	EXPECT_NO_THROW({NodeData a5(std::move(a1)); });
+	//EXPECT_NO_THROW({NodeData a6(1,1,1,std::move(v1)); });
+}
+TEST(NodeRequestTest, EqualWithoutNeighbours) {
+	std::vector<NodeRequest> v1;
 	v1.emplace_back(1, 0, 1);
 	v1.emplace_back(2, 0, 2);
 	v1.emplace_back(1, 1, 3);
@@ -54,12 +71,12 @@ TEST(NodeTest, EqualWithoutNeighbours) {
 	EXPECT_FALSE(v1[1] == v1[3]);
 	EXPECT_FALSE(v1[2] == v1[3]);
 }
-TEST(NodeTest, BaseNodeComparision) {
-	std::vector<CurrentBaseNode> v1;
-	v1.emplace_back(1, 0);
-	v1.emplace_back(2, 0);
-	v1.emplace_back(1, 1);
-	v1.emplace_back(1, 0);
+TEST(NodeDataTest, EqualWithoutNeighbours) {
+	std::vector<NodeData> v1;
+	v1.emplace_back(1, 0, 1);
+	v1.emplace_back(2, 0, 2);
+	v1.emplace_back(1, 1, 3);
+	v1.emplace_back(1, 0, 4);
 
 	EXPECT_FALSE(v1[0] == v1[1]);
 	EXPECT_FALSE(v1[0] == v1[2]);
@@ -67,16 +84,9 @@ TEST(NodeTest, BaseNodeComparision) {
 	EXPECT_FALSE(v1[1] == v1[2]);
 	EXPECT_FALSE(v1[1] == v1[3]);
 	EXPECT_FALSE(v1[2] == v1[3]);
-
-	EXPECT_TRUE(v1[0] < v1[1]);
-	EXPECT_TRUE(v1[0] < v1[2]);
-	EXPECT_FALSE(v1[0] < v1[3]);
-	EXPECT_FALSE(v1[1] < v1[2]);
-	EXPECT_FALSE(v1[1] < v1[3]);
-	EXPECT_FALSE(v1[2] < v1[3]);
 }
-TEST(NodeTest, NeighboursSorting) {
-	std::vector<CurrentNode> node;
+TEST(NodeDataTest, NeighboursSorting) {
+	std::vector<NodeData> node;
 	node.emplace_back(0, 0, 0);
 	node.emplace_back(17, 0, 1);
 	node.emplace_back(6, 0, 2);
@@ -126,7 +136,7 @@ TEST(NodeTest, NeighboursSorting) {
 	node[22].addNeighboursVector({&(node[21])});
 	node[23].addNeighboursVector({&(node[21])});
 
-	std::vector<CurrentNode> node2;
+	std::vector<NodeData> node2;
 	node2.emplace_back(0, 0, 0);
 	node2.emplace_back(17, 0, 1);
 	node2.emplace_back(6, 0, 2);
@@ -179,7 +189,7 @@ TEST(NodeTest, NeighboursSorting) {
 
 	for (size_t i = 0; i < 23; i++) {
 		ASSERT_EQ(node[i].neighboursSize(), node2[i].neighboursSize()) << "if i = " << i;
-		for (AtomicIDType j = 0; j < node[i].neighboursSize(); j++) {
+		for (AtomIndex j = 0; j < node[i].neighboursSize(); j++) {
 			const auto& nei1 = (*(node[i].getNeighbour(j)));
 			const auto& nei2 = (*(node2[i].getNeighbour(j)));
 			if (!(nei1 == nei2))
@@ -187,3 +197,4 @@ TEST(NodeTest, NeighboursSorting) {
 		}
 	}
 }
+
