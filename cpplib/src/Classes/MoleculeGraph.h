@@ -56,25 +56,28 @@ namespace cpplib {
 		constexpr MoleculeGraph(MoleculeGraph&&) noexcept = default;
 		explicit constexpr MoleculeGraph(NodeContainer&& other) noexcept(::std::is_nothrow_move_constructible<NodeContainer>::value)
 			: data_(::std::move(other)) {}
-
+		
 		static constexpr MoleculeGraph ReadData(const char* str, const ::std::bitset<mend_size>& multiAtomBits) {
 			MoleculeGraph mg;
 			::std::stringstream ss(str);
-			const auto sn = mg.parseMainstring(ss);
+			const auto sn = mg.parseMainstring<false>(ss);
 
 			mg.release_HAtoms_CharAtom(multiAtomBits, sn);
 			//mg.sortGraph();
 			return mg;
 		}
+
 		static constexpr ::std::pair<MoleculeGraph, ::std::bitset<mend_size>> ReadInput(const char* str) {
 			MoleculeGraph mg;
-			::std::stringstream ss(str);
-			const auto sn = mg.parseMainstring(ss);
+			::std::string str1 = _ParseOldInputString(str);
+			::std::stringstream ss(str1.data());
+			const auto sn = mg.parseMainstring<true>(ss);
 			auto multiAtomBits = mg.parseMultiatom(ss, sn);
 			mg.release_HAtoms_XAtom(multiAtomBits, sn);
 			//mg.sortGraph();
 			return ::std::make_pair(std::move(mg), ::std::move(multiAtomBits));
 		}
+
 
 		constexpr AtomIndex size() const noexcept {
 			return static_cast<AtomIndex>(data_.size());
@@ -160,8 +163,8 @@ namespace cpplib {
 			ret.data_.reserve(s);
 			// Convertion to Correct Neighbours
 			for (AtomIndex i = 0; i < s; i++) {
-				auto& node = data_[i];
-				ret.data_.emplace_back(node.getType(), node.getHAtoms(), node.getID());
+				const auto& node = data_[i];
+				ret.data_.emplace_back(node);
 			}
 			for (AtomIndex i = 0; i < s; i++) {
 				auto& node = data_[i];
@@ -205,7 +208,7 @@ namespace cpplib {
 			return id_;
 		}
 	private:
-		inline void parseAtomsData(::std::stringstream& ss, const AtomIndex sn) {
+		template<bool is_request> inline void parseAtomsBlock(::std::stringstream& ss, const AtomIndex sn) {
 			data_.reserve(sn);
 			data_.emplace_back(A(0), HType(0), AtomIndex(0));
 			for (AtomIndex i = 1; i < sn; i++) {
@@ -214,6 +217,13 @@ namespace cpplib {
 				int b;
 				ss >> b;
 				data_.emplace_back(A(a), HType(b), AtomIndex(i));
+				if (is_request) {
+					int first;
+					int second;
+					ss >> first;
+					ss >> second;
+					data_.back().setCoord(Coord(static_cast<Coord::argumentType>(first), static_cast<Coord::argumentType>(second)));
+				}
 			}
 		}
 		::std::pair<AtomIndex, AtomIndex> parseInit(std::stringstream& ss) {
@@ -224,13 +234,13 @@ namespace cpplib {
 			r.first++;
 			return r;
 		}
-		inline AtomIndex parseMainstring(::std::stringstream& ss) {
+		template <bool is_request> inline AtomIndex parseMainstring(::std::stringstream& ss) {
 			::std::pair<AtomIndex, AtomIndex>&& sn_sb = parseInit(ss);
 			AtomIndex& sn = sn_sb.first;
 			AtomIndex& sb = sn_sb.second;
 
 			// Atomic loop
-			parseAtomsData(ss, sn);
+			parseAtomsBlock<is_request>(ss, sn);
 
 			// Bond loop
 			for (AtomIndex i = 0; i < sb; i++) {
@@ -239,6 +249,12 @@ namespace cpplib {
 				int b;
 				ss >> b;
 				data_[a].addBondWithSort(data_[b]);
+			}
+			if (is_request == false) {
+				for (AtomIndex i = 1; i < sn; i++) {
+					Coord c = Coord(static_cast<Coord::argumentType>(data_[i].getHAtoms() + data_[i].neighboursSize()));
+					data_[i].setCoord(::std::move(c));
+				}
 			}
 			return sn;
 		}
@@ -370,6 +386,31 @@ namespace cpplib {
 				exchange(i, other);
 			}
 			return;
+		}
+
+		inline static ::std::string _ParseOldInputString(const char* str) {
+			::std::string ret(str);
+			int na;
+			int no;
+			{
+				::std::stringstream ss(ret);
+				ss >> no;
+				ss >> na;
+			}
+			auto pos = ret.find_first_of(' ', 0);
+			pos = ret.find_first_of(' ', pos + 1);
+			pos = ret.find_first_of(' ', pos + 1);
+			for (int i = 0; i < na; i++)
+			{
+				pos = ret.find_first_of(' ', pos + 1);
+				pos = ret.find_first_of(' ', pos + 1);
+				if (ret.length() > pos)
+					ret.insert(pos, " 0 14");
+				else
+					ret.append(" 0 14");
+				pos += 5;
+			}
+			return ret;
 		}
 	};
 }

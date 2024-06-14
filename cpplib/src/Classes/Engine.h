@@ -102,23 +102,28 @@ namespace cpplib {
 	};
 
 	class Coord {
-		unsigned char number_ = 0;
-		static constexpr unsigned char LOWMASK = 0b00001111;
-		static constexpr unsigned char HIGHMASK = 0b11110000;
+	public:
+		using argumentType = unsigned char;
+		using innerType = unsigned char;
+	private:
+		innerType number_ = 0;
+		static constexpr innerType LOWMASK = 0b00001111;
+		static constexpr innerType HIGHMASK = 0b11110000;
 		// mono <= 14
 		// mono == 15 for internal use
 	public:
+
 		constexpr inline Coord() noexcept {};
-		constexpr inline Coord(unsigned char mono) noexcept : number_(mono) {};
-		constexpr inline Coord(unsigned char first, unsigned char second) noexcept : number_(first& (second << 4)) {};
+		constexpr inline Coord(argumentType mono) noexcept : number_(mono) {};
+		constexpr inline Coord(argumentType first, argumentType second) noexcept : number_((first) | (second << 4)) {};
 		bool right_in_left(const Coord duo) const {
 			return duo.number_ >= first() && duo.number_ <= second();
 		}
 	private:
-		inline unsigned char first() const {
+		inline argumentType first() const {
 			return number_ & LOWMASK;
 		}
-		inline unsigned char second() const {
+		inline argumentType second() const {
 			return (number_ & HIGHMASK) >> 4;
 		}
 	};
@@ -150,24 +155,24 @@ namespace cpplib {
 			: type_(t1), hAtoms_(h1), id_(id) {
 			initializeNeighbours();
 		}
-		constexpr Node(const A& t1, const HType& h1, const AtomIndex& id, NeighboursType&& neighbours)
-			: type_(t1), hAtoms_(h1), neighbours_(std::move(neighbours)), id_(id) {}
+		//constexpr Node(const A& t1, const HType& h1, const AtomIndex& id, NeighboursType&& neighbours)
+		//	: type_(t1), hAtoms_(h1), neighbours_(std::move(neighbours)), id_(id) {}
 
 		// Operators
-		template <class X>
-		inline bool operator==(const Node<X>& other) const noexcept {
+		template <class X> inline bool operator==(const Node<X>& other) const noexcept {
 			return (type_ == other.type_) && 
 				(hAtoms_ == other.hAtoms_) &&
-				(neighbours_.size() == other.neighbours_.size());
+				(neighbours_.size() == other.neighbours_.size()) &&
+				(coord_.right_in_left(other.coord_));
 		}
 		// Raw comparision
 		bool RawLess(const Node& other) const noexcept {
 			if (type_ != other.type_)
 				return type_ < other.type_;
-			if (neighbours_.size() != other.neighbours_.size())
-				return neighbours_.size() < other.neighbours_.size();
 			if (hAtoms_ != other.hAtoms_)
 				return hAtoms_ < other.hAtoms_;
+			if (neighbours_.size() != other.neighbours_.size())
+				return neighbours_.size() < other.neighbours_.size();
 			return id_ > other.id_;
 		}
 		// simple sorting
@@ -178,20 +183,17 @@ namespace cpplib {
 		bool RawMore(const Node& other) const noexcept {
 			if (type_ != other.type_)
 				return type_ > other.type_;
-			if (neighbours_.size() != other.neighbours_.size())
-				return neighbours_.size() > other.neighbours_.size();
 			if (hAtoms_ != other.hAtoms_)
 				return hAtoms_ > other.hAtoms_;
+			if (neighbours_.size() != other.neighbours_.size())
+				return neighbours_.size() > other.neighbours_.size();
 			return id_ < other.id_;
 		}
 		inline bool operator>(const Node& other) const noexcept {
 			//return id_ < other.id_;
 			return RawMore(other);
 		}
-		//inline bool operator<=(const Node& other) const noexcept {
-		//	return this->operator==(other) || this->operator<(other);
-		//}
-		template<class X> inline bool notExactCompare(const Node<X>& other) const noexcept {
+		inline bool notExactCompare(const Node<currents::AtomTypeData>& other) const noexcept {
 			return type_ == other.type_ &&
 				hAtoms_ <= other.hAtoms_ &&
 				neighbours_.size() <= other.neighbours_.size() &&
@@ -216,27 +218,30 @@ namespace cpplib {
 			return neighbours_[neighbour_iterator];
 		}
 
-		constexpr const AtomIndex& getID() const noexcept {
+		inline const AtomIndex& getID() const noexcept {
 			return id_;
 		}
-		constexpr void setID(const AtomIndex& id) noexcept {
+		inline void setID(const AtomIndex& id) noexcept {
 			id_ = id;
 		}
-		constexpr const A& getType() const noexcept {
+		inline const A& getType() const noexcept {
 			return this->type_;
 		}
-		constexpr void setType(const A& type) noexcept {
+		inline void setType(const A& type) noexcept {
 			this->type_ = type;
 		}
-		constexpr const HType& getHAtoms() const noexcept {
+		inline const HType& getHAtoms() const noexcept {
 			return this->hAtoms_;
 		}
-		constexpr void setHAtoms(const HType& hAtoms) noexcept {
+		inline void setHAtoms(const HType& hAtoms) noexcept {
 			this->hAtoms_ = hAtoms;
+		}
+		inline void setCoord(Coord&& c) {
+			coord_ = c;
 		}
 
 		// Algorithms
-		constexpr void sortNeighbours() {
+		inline void sortNeighbours() {
 			std::sort(neighbours_.begin(), neighbours_.end(),
 					  [](const Node* a1, const Node* a2) {
 				return (*a1) > (*a2);
@@ -302,11 +307,14 @@ namespace cpplib {
 		constexpr void initializeNeighbours() {
 			neighbours_.reserve(4);
 		}
-		constexpr void deleteNeighbour(const Node& node) noexcept {
+		inline void deleteNeighbour(const Node& node) noexcept {
+			return deleteNeighbour(&node);
+		}
+		constexpr void deleteNeighbour(const Node* pnode) noexcept {
 			size_t s = neighbours_.size();
 			size_t i = 0;
 			for (; i < s; i++) {
-				if (neighbours_[i] == (&node)) break;
+				if (neighbours_[i] == (pnode)) break;
 			}
 			s--;
 			for (; i < s; i++) {
