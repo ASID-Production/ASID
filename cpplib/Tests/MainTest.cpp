@@ -63,7 +63,7 @@ TEST(SearchMainTest, 107403t) {
 	std::vector<const char*> dat(1,"107403 18 20 17 0 6 0 6 1 6 1 6 0 6 1 7 0 6 0 6 0 6 0 6 0 6 1 17 0 6 1 6 1 6 0 8 0 6 3 1 2 2 3 2 4 3 5 4 6 5 7 5 8 6 8 7 9 8 10 9 11 9 12 10 13 10 11 11 14 12 15 14 16 15 16 16 17 17 18");
 
 	std::vector<int> res;
-	ASSERT_NO_THROW({ res = SearchMain(search, std::move(dat), 1, false); });
+	ASSERT_NO_THROW({res = SearchMain(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search).data(), std::move(dat), 1, false);});
 	EXPECT_EQ(res.size(), 1);
 }
 TEST(SearchMainTest, Tricycle92807t) {
@@ -71,7 +71,7 @@ TEST(SearchMainTest, Tricycle92807t) {
 	std::vector<const char*> dat(1, "92807 35 63 6 1 6 0 17 0 6 0 6 0 17 1 17 1 6 1 17 0 6 0 17 0 6 1 7 2 6 3 17 0 7 1 6 0 6 2 6 1 15 0 6 2 6 0 8 0 6 2 6 1 6 1 6 1 8 0 6 2 7 1 6 0 6 1 6 0 6 1 6 1 1 21 1 31 1 2 1 6 1 17 1 34 2 31 2 29 2 6 2 8 2 34 2 17 3 10 4 23 4 30 4 10 5 33 5 11 5 12 6 34 7 25 7 32 7 22 8 29 8 18 8 34 8 26 9 10 10 15 12 19 13 20 13 14 13 21 14 21 14 31 14 32 14 17 16 20 16 24 17 21 17 31 17 32 17 22 18 29 18 22 18 25 18 26 19 27 20 28 20 30 21 31 22 31 22 25 22 32 22 26 24 33 25 32 25 26 26 29 27 35 29 34 31 32 33 35");
 	
 	std::vector<int> res;
-	ASSERT_NO_THROW({ res = SearchMain(search, std::move(dat), 1, false); });
+	ASSERT_NO_THROW({res = SearchMain(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search).data(), std::move(dat), 1, false);});
 	EXPECT_EQ(res.size(), 1);
 }
 TEST(SearchMainTest, Tricycle52403f) {
@@ -79,7 +79,7 @@ TEST(SearchMainTest, Tricycle52403f) {
 	std::vector<const char*> dat(1,"52403 95 107 6 1 15 0 6 0 6 0 6 1 6 1 6 0 6 3 6 0 6 0 6 1 6 0 6 3 6 0 6 0 6 1 6 0 6 1 6 0 6 3 6 3 6 2 6 0 6 0 6 1 6 0 6 1 6 1 6 0 6 3 6 0 6 2 6 1 6 0 6 3 6 1 6 0 6 1 6 3 6 0 6 1 6 1 6 0 6 1 6 1 6 1 6 1 6 1 6 0 6 0 9 0 9 0 9 0 9 0 5 0 6 0 6 0 6 0 9 0 6 0 6 0 9 0 9 0 6 0 6 0 9 0 9 0 6 0 6 0 9 0 6 0 9 0 6 0 9 0 6 0 6 0 6 0 6 0 6 0 9 0 9 0 6 0 6 0 9 0 6 0 9 0 6 0 6 0 9 0 6 0 9 0 9 0 9 0 6 0 6 0 1 19 1 48 2 14 2 24 3 49 3 23 3 25 4 26 4 14 4 23 5 37 5 31 6 48 6 45 7 42 7 49 7 43 8 12 9 15 9 14 9 50 10 15 10 17 10 27 11 29 11 37 12 26 12 32 12 13 15 22 15 40 16 38 16 43 17 19 17 28 18 49 18 36 19 40 20 31 21 29 22 34 23 32 23 43 24 29 24 31 25 41 26 33 27 46 28 47 30 34 33 50 34 50 34 39 35 37 36 41 38 44 40 45 42 44 46 47 51 57 52 78 53 60 54 90 55 61 55 77 55 65 55 64 56 84 56 85 56 64 57 71 57 95 58 80 58 90 58 75 59 68 60 79 60 76 61 90 61 78 62 75 63 85 64 88 65 79 65 82 66 76 67 94 68 78 68 75 69 81 69 88 69 83 70 83 71 72 71 94 73 86 73 77 73 95 74 87 76 87 77 94 79 91 82 89 82 87 83 85 88 93 92 95");
 
 	std::vector<int> res;
-	ASSERT_NO_THROW({ res = SearchMain(search, std::move(dat), 1, false); });
+	ASSERT_NO_THROW({res = SearchMain(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search).data(), std::move(dat), 1, false);});
 	EXPECT_EQ(res.size(), 0);
 }
 TEST(SearchMainTest, 85443t) {
@@ -87,7 +87,7 @@ TEST(SearchMainTest, 85443t) {
 	std::vector<const char*> dat(1, "85443 19 21 17 0 6 0 6 0 6 0 6 0 6 1 6 0 6 1 7 0 6 1 6 2 6 3 6 1 6 1 6 1 6 2 6 1 6 3 6 3 1 2 2 3 2 4 3 5 3 6 4 7 4 8 5 9 5 10 6 11 6 12 7 9 7 13 8 14 10 15 10 16 11 16 13 17 14 17 15 18 15 19");
 
 	std::vector<int> res;
-	ASSERT_NO_THROW({ res = SearchMain(search, std::move(dat), 1, false); });
+	ASSERT_NO_THROW({res = SearchMain(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search).data(), std::move(dat), 1, false);});
 	EXPECT_EQ(res.size(), 1);
 }
 TEST(SearchMainTest, Tricycle52245t) {
@@ -95,7 +95,7 @@ TEST(SearchMainTest, Tricycle52245t) {
 	std::vector<const char*> dat(1, "52245 24 27 8 1 6 1 6 2 6 1 6 2 6 0 6 0 6 2 6 1 6 3 6 2 6 1 6 2 6 1 6 2 6 0 6 2 6 1 6 3 6 2 6 1 6 3 6 2 8 1 1 2 2 3 2 4 3 5 4 6 5 7 6 8 6 7 7 9 7 10 8 11 9 12 9 13 11 12 12 14 13 15 14 16 14 17 15 16 16 18 16 19 17 20 18 20 18 21 21 22 21 23 23 24");
 
 	std::vector<int> res;
-	ASSERT_NO_THROW({ res = SearchMain(search, std::move(dat), 1, false); });
+	ASSERT_NO_THROW({res = SearchMain(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search).data(), std::move(dat), 1, false);});
 	EXPECT_EQ(res.size(), 1);
 }
 TEST(SearchMainTest, Tricycle897641f) {
@@ -103,7 +103,7 @@ TEST(SearchMainTest, Tricycle897641f) {
 	std::vector<const char*> dat(1, "897641 157 186 48 0 16 0 16 0 16 0 16 0 48 0 48 0 48 0 48 0 6 0 48 0 6 0 48 0 6 0 16 0 16 0 16 0 16 0 16 0 16 0 16 0 16 0 16 0 16 0 6 1 6 1 16 0 6 1 6 1 16 0 6 1 6 1 6 0 6 0 48 0 6 0 6 0 6 0 6 0 6 0 6 0 6 0 6 0 6 1 6 1 6 0 6 1 6 1 6 0 6 1 6 1 6 1 6 1 6 1 6 1 17 0 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 1 16 0 8 0 6 1 16 0 8 0 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 3 6 3 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 1 44 0 7 0 7 0 7 0 7 0 7 0 7 0 6 0 6 1 6 0 6 1 6 0 6 1 6 0 6 1 6 0 6 1 6 0 6 1 6 0 6 1 6 0 6 1 6 0 6 1 6 0 6 1 6 0 6 1 6 0 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 1 8 0 8 0 6 0 1 2 1 3 1 4 1 5 13 15 13 5 13 22 13 30 8 2 8 21 8 22 8 23 11 16 11 19 11 4 11 27 7 2 7 18 7 19 7 20 35 56 35 17 35 18 35 23 9 3 9 21 9 20 9 24 6 2 6 15 6 16 6 17 23 42 22 41 20 39 5 14 21 40 4 12 19 38 3 10 18 37 17 36 16 34 34 54 34 55 54 82 82 103 103 83 83 55 15 33 27 46 74 46 30 49 77 49 78 101 78 49 75 100 75 46 10 25 10 26 25 44 44 73 73 45 45 26 14 31 14 32 31 50 50 79 79 51 51 32 12 28 12 29 28 47 47 76 76 48 48 29 39 63 39 64 63 90 90 107 107 91 91 64 37 59 37 60 59 86 86 105 105 87 87 60 41 67 41 68 67 94 94 109 109 95 95 68 38 61 38 62 61 88 88 106 106 89 89 62 40 65 40 66 65 92 92 108 108 93 93 66 42 69 42 70 69 96 96 110 110 97 97 70 36 57 36 58 57 84 84 104 104 85 85 58 33 52 33 53 52 80 80 102 102 81 81 53 24 43 43 71 43 72 71 98 98 111 111 99 99 72 112 113 112 114 112 115 112 116 112 117 112 118 130 118 130 142 142 153 153 141 141 129 141 154 129 118 129 127 154 151 151 139 139 127 139 152 127 117 152 140 140 128 128 117 126 116 126 138 138 149 149 137 137 125 137 150 125 116 125 123 150 147 147 135 135 123 135 148 123 115 148 136 136 124 124 115 122 114 122 134 134 145 145 133 133 121 133 146 121 114 121 119 146 143 143 131 131 119 131 144 119 113 144 132 132 120 120 113 156 157");
 
 	std::vector<int> res;
-	ASSERT_NO_THROW({ res = SearchMain(search, std::move(dat), 1, false); });
+	ASSERT_NO_THROW({res = SearchMain(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search).data(), std::move(dat), 1, false);});
 	EXPECT_EQ(res.size(), 0);
 }
 TEST(SearchMainTest, NoBonds) {
@@ -111,7 +111,7 @@ TEST(SearchMainTest, NoBonds) {
 	std::vector<const char*> dat(1, "1 1 0 6 0");
 
 	std::vector<int> res;
-	ASSERT_NO_THROW({ res = SearchMain(search, std::move(dat), 1, false); });
+	ASSERT_NO_THROW({res = SearchMain(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search).data(), std::move(dat), 1, false);});
 	EXPECT_EQ(res.size(), 1);
 }
 TEST(SearchMainTest, Tricycle484021t) {
@@ -119,21 +119,21 @@ TEST(SearchMainTest, Tricycle484021t) {
 	std::vector<const char*> dat(1, "484021 42 47 8 0 6 0 7 0 6 3 7 0 6 1 6 0 6 2 6 0 6 0 6 0 6 1 6 1 6 1 6 0 6 1 6 1 6 1 6 1 6 0 6 0 6 1 6 1 6 0 6 0 6 1 6 1 6 1 6 1 6 1 6 0 6 0 6 0 9 0 6 0 9 0 6 0 9 0 6 0 9 0 53 0 53 0 1 2 2 3 2 4 3 5 3 6 5 7 6 8 6 9 7 8 7 10 9 11 9 12 10 13 10 14 11 15 11 16 12 17 13 18 14 19 15 20 15 21 16 22 17 21 18 23 19 23 20 24 20 25 21 26 22 24 24 27 25 28 25 29 26 28 27 30 29 30 32 31 32 33 32 34 33 35 33 36 34 37 34 38 36 39 36 40 38 41 38 40 40 42");
 
 	std::vector<int> res;
-	ASSERT_NO_THROW({ res = SearchMain(search, std::move(dat), 1, false); });
+	ASSERT_NO_THROW({res = SearchMain(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search).data(), std::move(dat), 1, false);});
 	EXPECT_EQ(res.size(), 1);
 }
 TEST(CompareGraphTest, Tricycle484021t) {
 	const char search[] {"1 14 16 6 0 6 0 6 0 6 0 6 0 6 0 6 0 6 0 6 0 6 0 6 0 6 0 6 0 6 0 1 2 1 6 2 3 3 4 3 7 4 5 4 8 5 6 7 10 7 11 8 9 9 10 10 14 11 12 12 13 13 14"};
 	const char data[] {"484021 42 47 8 0 6 0 7 0 6 3 7 0 6 1 6 0 6 2 6 0 6 0 6 0 6 1 6 1 6 1 6 0 6 1 6 1 6 1 6 1 6 0 6 0 6 1 6 1 6 0 6 0 6 1 6 1 6 1 6 1 6 1 6 0 6 0 6 0 9 0 6 0 9 0 6 0 9 0 6 0 9 0 53 0 53 0 1 2 2 3 2 4 3 5 3 6 5 7 6 8 6 9 7 8 7 10 9 11 9 12 10 13 10 14 11 15 11 16 12 17 13 18 14 19 15 20 15 21 16 22 17 21 18 23 19 23 20 24 20 25 21 26 22 24 24 27 25 28 25 29 26 28 27 30 29 30 32 31 32 33 32 34 33 35 33 36 34 37 34 38 36 39 36 40 38 41 38 40 40 42"};
 	bool res = false;
-	ASSERT_NO_THROW({res = CompareGraph(search, data, false);});
+	ASSERT_NO_THROW({res = CompareGraph(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search).data(), data, false); });
 	EXPECT_TRUE(res);
 }
 TEST(CompareGraphTest, s161834) {
 	const char search[] {"1 36 38 6 1 6 1 6 1 6 1 6 1 6 0 8 0 15 0 8 0 8 0 7 1 6 0 6 0 6 0 8 0 6 0 6 0 6 0 6 0 6 0 6 0 8 0 6 0 6 0 9 0 6 0 8 1 7 0 6 1 6 0 7 1 6 1 6 0 8 0 8 0 8 0 1 2 1 3 2 6 3 4 4 5 5 6 6 7 7 8 8 9 8 10 8 11 10 19 11 12 12 13 12 14 14 15 14 36 15 16 16 17 16 18 19 20 20 21 20 22 21 24 21 27 22 23 23 24 23 28 24 25 24 26 28 29 28 30 29 32 30 31 30 34 31 33 32 33 33 35"};
 	const char data[] {"161834 36 38 15 0 8 0 8 0 8 0 7 1 6 2 6 0 6 1 6 1 6 1 6 1 6 3 6 0 8 0 6 1 6 1 6 1 8 0 8 0 6 1 8 1 6 0 6 1 6 1 7 0 9 0 6 3 6 3 6 3 6 0 6 1 8 0 7 1 6 1 6 0 8 0 1 2 1 3 1 4 1 5 3 7 7 10 7 11 10 16 16 23 23 17 17 11 2 6 6 9 9 14 9 15 14 20 20 25 20 22 25 30 25 31 30 32 30 33 33 35 35 36 35 34 34 31 22 26 22 27 22 15 15 21 5 8 8 12 8 13 13 18 13 19 18 24 24 28 24 29"};
 	bool res = false;
-	ASSERT_NO_THROW({res = CompareGraph(search, data, false);});
+	ASSERT_NO_THROW({res = CompareGraph(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search).data(), data, false); });
 	EXPECT_TRUE(res);
 }
 TEST(FindMoleculesInCellTest, AADRIB) {
@@ -234,7 +234,6 @@ TEST(FindMoleculesWithoutCellTest, MonoO) {
 	std::vector<float>  xyz{ 0.438335628 , -0.587240971, -3.993208195 };
 	auto res = FindMoleculesWithoutCell(types, xyz);
 	ASSERT_FALSE(res.empty());
-
 }
 
 TEST(FindDistanceTest, C3H6O2) {
@@ -345,7 +344,7 @@ TEST(SearchMainTest, multytype1) {
 };
 
 	std::vector<int> res;
-	res = SearchMain(search, std::move(dat), 1, false);
+	res = SearchMain(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search).data(), std::move(dat), 1, false);
 	EXPECT_EQ(res.size(), 2);
 }
 TEST(SearchMainTest, multytype2) {
@@ -355,7 +354,7 @@ TEST(SearchMainTest, multytype2) {
 									 "3 3 2 9 0 6 2 6 3 1 2 2 3" };
 
 	std::vector<int> res;
-	res = SearchMain(search, std::move(dat), 1, false);
+	res = SearchMain(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search).data(), std::move(dat), 1, false);
 	EXPECT_EQ(res.size(), 3);
 }
 TEST(SearchMainTest, multytype3) {
@@ -364,7 +363,7 @@ TEST(SearchMainTest, multytype3) {
 							        "2 9 9 6 0 6 0 6 0 6 0 6 0 6 0 16 0 6 0 6 3 1 2 1 6 1 7 2 3 3 4 4 5 5 6 7 8 8 9"};
 
 	std::vector<int> res;
-	res = SearchMain(search, std::move(dat), 1, false);
+	res = SearchMain(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search).data(), std::move(dat), 1, false);
 	EXPECT_EQ(res.size(), 2);
 }
 
@@ -376,7 +375,7 @@ TEST(databaseSearch10k, d10k) {
 	const char search4[]{ "1 5 4 6 2 6 2 -1 0 6 2 6 2 1 2 2 3 3 4 4 5 -1 6 7 8 0" };
 	std::ifstream db("../../../../../cpplib/Tests/d10k.datt");
 	if (!db.is_open())
-		FAIL() << "File did not open";
+		FAIL() << "Could not open the dataset";
 	int s;
 	db >> s;
 	std::vector<std::string> datstr(s);

@@ -69,8 +69,7 @@ namespace cpplib {
 
 		static constexpr ::std::pair<MoleculeGraph, ::std::bitset<mend_size>> ReadInput(const char* str) {
 			MoleculeGraph mg;
-			::std::string str1 = _ParseOldInputString(str);
-			::std::stringstream ss(str1.data());
+			::std::stringstream ss(str);
 			const auto sn = mg.parseMainstring<true>(ss);
 			auto multiAtomBits = mg.parseMultiatom(ss, sn);
 			mg.release_HAtoms_XAtom(multiAtomBits, sn);
@@ -207,6 +206,34 @@ namespace cpplib {
 		constexpr const auto& getID() const noexcept {
 			return id_;
 		}
+
+		// static section for old tests
+
+		static ::std::string _ParseOldInputString(const char* str)  {
+			::std::string ret(str);
+			int na;
+			int no;
+			{
+				::std::stringstream ss(ret);
+				ss >> no;
+				ss >> na;
+			}
+			auto pos = ret.find_first_of(' ', 0);
+			pos = ret.find_first_of(' ', pos + 1);
+			pos = ret.find_first_of(' ', pos + 1);
+			for (int i = 0; i < na; i++)
+			{
+				pos = ret.find_first_of(' ', pos + 1);
+				pos = ret.find_first_of(' ', pos + 1);
+				if (ret.length() > pos)
+					ret.insert(pos, " 0 14");
+				else
+					ret.append(" 0 14");
+				pos += 5;
+			}
+			return ret;
+		}
+
 	private:
 		template<bool is_request> inline void parseAtomsBlock(::std::stringstream& ss, const AtomIndex sn) {
 			data_.reserve(sn);
@@ -328,7 +355,7 @@ namespace cpplib {
 					auto hAtoms = this->operator[](i).getHAtoms();
 					for (HType j = 0; j < hAtoms; j++)
 					{
-						hydrogenAtoms.emplace_back(1, 0, hs);
+						hydrogenAtoms.emplace_back(1, 0, static_cast<AtomIndex>(hs));
 						this->operator[](i).addBondWithSort(hydrogenAtoms.back());
 						hs++;
 					}
@@ -386,31 +413,6 @@ namespace cpplib {
 				exchange(i, other);
 			}
 			return;
-		}
-
-		inline static ::std::string _ParseOldInputString(const char* str) {
-			::std::string ret(str);
-			int na;
-			int no;
-			{
-				::std::stringstream ss(ret);
-				ss >> no;
-				ss >> na;
-			}
-			auto pos = ret.find_first_of(' ', 0);
-			pos = ret.find_first_of(' ', pos + 1);
-			pos = ret.find_first_of(' ', pos + 1);
-			for (int i = 0; i < na; i++)
-			{
-				pos = ret.find_first_of(' ', pos + 1);
-				pos = ret.find_first_of(' ', pos + 1);
-				if (ret.length() > pos)
-					ret.insert(pos, " 0 14");
-				else
-					ret.append(" 0 14");
-				pos += 5;
-			}
-			return ret;
 		}
 	};
 }

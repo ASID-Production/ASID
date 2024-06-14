@@ -115,7 +115,7 @@ project(cpplib)
                     ${CMAKE_SOURCE_DIR}/module/cpplib.pyd)
         endif (WIN32)
     endif(CMAKE_BUILD_TYPE MATCHES Release)
-
-if(EXISTS "cpplib/Tests")
+    
+if(IS_DIRECTORY ${CMAKE_SOURCE_DIR}/cpplib/Tests)
     add_subdirectory ("cpplib/Tests")
-endif(EXISTS "cpplib/Tests")
+endif(IS_DIRECTORY ${CMAKE_SOURCE_DIR}/cpplib/Tests)
