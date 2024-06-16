@@ -397,16 +397,16 @@ TEST(databaseSearch10k, d10k) {
 	}
 
 	temp = dat;
-	std::vector<int> res1 = SearchMain(search1, std::move(temp), 4, false);
+	std::vector<int> res1 = SearchMain(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search1).data(), std::move(temp), 4, false);
 	std::cout << "res1 = " << res1.size() << std::endl;
 	temp = dat;
-	std::vector<int> res2 = SearchMain(search2, std::move(temp), 4, false);
+	std::vector<int> res2 = SearchMain(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search2).data(), std::move(temp), 4, false);
 	std::cout << "res2 = " << res2.size() << std::endl;
 	temp = dat;
-	std::vector<int> res3 = SearchMain(search3, std::move(temp), 4, false);
+	std::vector<int> res3 = SearchMain(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search3).data(), std::move(temp), 4, false);
 	std::cout << "res3 = " << res3.size() << std::endl;
 	temp = dat;
-	std::vector<int> res4 = SearchMain(search4, std::move(temp), 4, false);
+	std::vector<int> res4 = SearchMain(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search4).data(), std::move(temp), 4, false);
 	std::cout << "res4 = " << res4.size() << std::endl;
 	EXPECT_GE(res1.size() + res2.size() + res3.size(), res4.size());
 
