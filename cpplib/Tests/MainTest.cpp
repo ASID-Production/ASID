@@ -335,13 +335,34 @@ TEST(GenSymmTest, E28) {
 	FAMStructType famstr(std::move(atoms), std::move(points));
 	FAMCellType fcell(CellType(10, 10, 10, 90, 90, 90, true));
 	fcell.GenerateSymm(famstr, symm1, mvtc);
-	std::cout << "After x+1: " << famstr.sizePoints << std::endl;
+	EXPECT_EQ(famstr.sizePoints, 56);
 	fcell.GenerateSymm(famstr, symm2, mvtc);
-	std::cout << "After x-1: " << famstr.sizePoints << std::endl;
+	EXPECT_EQ(famstr.sizePoints, 84);
 	fcell.GenerateSymm(famstr, symm3, mvtc);
-	std::cout << "After y+1: " << famstr.sizePoints << std::endl;
+	EXPECT_EQ(famstr.sizePoints, 168);
 
 	EXPECT_TRUE(true);
+}
+
+TEST(GenSymmTest, xyz) {
+	p_distances = &testdistances;
+	std::vector<std::tuple<int, float, float, float>> arg = {{16, 0.55638, 0.01587, 0.36247}};
+	std::vector<PointType> points;
+	std::vector<AtomTypeData> atoms;
+	for (size_t i = 0; i < arg.size(); i++)
+	{
+		atoms.emplace_back(std::get<0>(arg[i]));
+		points.emplace_back(std::get<1>(arg[i]), std::get<2>(arg[i]), std::get<3>(arg[i]));
+	}
+	bool mvtc = false;
+
+	std::vector<const char*> symms {"'x,y,z'"};
+	std::vector<SymmType> symm1; symm1.emplace_back(symms[0]);
+
+	FAMStructType famstr(std::move(atoms), std::move(points));
+	FAMCellType fcell(CellType(10, 10, 10, 60, 70, 80, true));
+	fcell.GenerateSymm(famstr, symm1, mvtc);
+	EXPECT_EQ(famstr.sizePoints, 1);
 }
 
 TEST(SearchMainTest, multytype1) {

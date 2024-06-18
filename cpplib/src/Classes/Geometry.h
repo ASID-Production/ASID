@@ -576,6 +576,8 @@ namespace cpplib {
 						minus = false;
 						break;
 					case ' ': // [[fallthrough]];
+					case '\'': // [[fallthrough]];
+					case '\"': // [[fallthrough]];
 					case '+':
 						break;
 					case '-':
@@ -616,7 +618,7 @@ namespace cpplib {
 							lower = (str[iter] - '0');
 							break;
 						default:
-							//error
+							// unexpected symbol
 							break;
 						}
 					else {
