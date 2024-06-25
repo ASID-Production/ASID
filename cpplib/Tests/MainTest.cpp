@@ -58,6 +58,14 @@ struct FMIC_TS {
 	}
 };
 
+TEST(SearchMainTest, Coordf) {
+	const char search[] {"1 2 0 6 0 2 4 6 0 2 4 "};
+	std::vector<const char*> dat(1, "1 2 1 6 0 6 1 1 2");
+
+	std::vector<int> res;
+	ASSERT_NO_THROW({res = SearchMain(search, std::move(dat), 1, false);});
+	EXPECT_EQ(res.size(), 0);
+}
 TEST(SearchMainTest, 107403t) {
 	const char search[]{ "1 11 11 17 0 6 0 6 0 6 0 6 0 6 0 7 0 6 0 6 0 6 0 6 0 1 2 2 3 2 10 3 4 3 5 5 6 5 7 7 8 8 9 8 10 10 11" };
 	std::vector<const char*> dat(1,"107403 18 20 17 0 6 0 6 1 6 1 6 0 6 1 7 0 6 0 6 0 6 0 6 0 6 1 17 0 6 1 6 1 6 0 8 0 6 3 1 2 2 3 2 4 3 5 4 6 5 7 5 8 6 8 7 9 8 10 9 11 9 12 10 13 10 11 11 14 12 15 14 16 15 16 16 17 17 18");
@@ -119,7 +127,7 @@ TEST(SearchMainTest, Tricycle484021t) {
 	std::vector<const char*> dat(1, "484021 42 47 8 0 6 0 7 0 6 3 7 0 6 1 6 0 6 2 6 0 6 0 6 0 6 1 6 1 6 1 6 0 6 1 6 1 6 1 6 1 6 0 6 0 6 1 6 1 6 0 6 0 6 1 6 1 6 1 6 1 6 1 6 0 6 0 6 0 9 0 6 0 9 0 6 0 9 0 6 0 9 0 53 0 53 0 1 2 2 3 2 4 3 5 3 6 5 7 6 8 6 9 7 8 7 10 9 11 9 12 10 13 10 14 11 15 11 16 12 17 13 18 14 19 15 20 15 21 16 22 17 21 18 23 19 23 20 24 20 25 21 26 22 24 24 27 25 28 25 29 26 28 27 30 29 30 32 31 32 33 32 34 33 35 33 36 34 37 34 38 36 39 36 40 38 41 38 40 40 42");
 
 	std::vector<int> res;
-	ASSERT_NO_THROW({res = SearchMain(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search).data(), std::move(dat), 1, false);});
+	ASSERT_NO_THROW({res = SearchMain(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search).data(), std::move(dat), 1, false); });
 	EXPECT_EQ(res.size(), 1);
 }
 TEST(CompareGraphTest, Tricycle484021t) {

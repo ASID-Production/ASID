@@ -196,7 +196,7 @@ namespace cpplib {
 			std::vector<bool> isDataAtomWasCompared(dataSize_, false);
 			for (AtomIndex i = 1; i < inputSize_; ++i) {
 				if (comp_[i] != 0)
-					isDataAtomWasCompared[i] = true;
+					isDataAtomWasCompared[comp_[i]] = true;
 			}
 			AtomIndex j = 1;
 			for (AtomIndex i = 1; i < inputSize_; ++i) {
@@ -215,7 +215,6 @@ namespace cpplib {
 				}
 				if (condition == false) return false;
 			}
-
 			return true;
 		}
 		void recursiveSearchNoNeighbours(const bool exact) {
