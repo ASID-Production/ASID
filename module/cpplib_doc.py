@@ -40,7 +40,7 @@ def compare_graph(graph_1: str,
 def find_molecules_in_cell(cell_params: List[float], 
 						   symops: List[str], 
 						   atom_types: List[int], 
-						   xyz: List[float]) -> str:
+						   xyz: List[float]) -> dict:
     """
     Find all different graphs of molecules in a crystal.
     Variables:
