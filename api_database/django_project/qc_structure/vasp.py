@@ -100,8 +100,14 @@ def get_or_create_space_group(vasp_structure):
     spgran = SpacegroupAnalyzer(vasp_structure)
     symmetry_info = spgran.get_symmetry_dataset()
     hall = symmetry_info['hall']
-    if Spacegroup.objects.filter(hall_name=hall).exists():
-        space_group = Spacegroup.objects.get(hall_name=hall)
+    sg = Spacegroup.objects.filter(hall_name=hall)
+    if sg.exists():
+        if sg.count() == 1:
+            space_group = Spacegroup.objects.get(hall_name=hall)
+        elif sg.filter(symops__isnull=False).exists():
+            space_group = sg.filter(symops__isnull=False).first()
+        else:
+            space_group = sg.first()
     else:
         space_group_name = symmetry_info['international'].replace('_', '')
         system = spgran.get_crystal_system()
