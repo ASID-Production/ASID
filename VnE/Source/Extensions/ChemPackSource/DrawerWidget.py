@@ -275,6 +275,14 @@ class Drawing:
                 self.connections[point2].pop(point1)
         self.point_node[point1].removeConnect(self.point_node[point2])
 
+    def show_cn(self):
+        for point in self.point_node.keys():
+            point.label = point.cn_label
+
+    def show_at(self):
+        for point in self.point_node.keys():
+            point.label = point.at_label
+
 
 class SolutionOrganizer:
 
@@ -587,10 +595,13 @@ class CreateAtomCommand(Command):
                                        coord=kwargs['coord'],
                                        rad=self.point_list,
                                        label=kwargs['label'] + str(id),
+                                       at_label=kwargs['label'] + str(id),
+                                       cn_label='0-14',
                                        id=id,
                                        atom_type=kwargs['atom_type'],
                                        color=kwargs['color'],
-                                       create_command=kwargs['create_command'])
+                                       create_command=kwargs['create_command'],
+                                       cn=[0, 14])
         self.drawing.add_point(self.point)
         kwargs['create_command'].point = self.point
         return self.point
@@ -961,6 +972,33 @@ class DeleteMaxMeanPlaneCommand(ConditionCommand):
     def removePayload(self, *args, **kwargs):
         if self.applied:
             MaxMeanPlaneDiffCommand(self.widget).apply(*self.__cc_points)
+
+
+class ChangeCNCommand(Command):
+    def __init__(self, drawing):
+        Command.__init__(self)
+        self.old_cn = None
+        self.old_cn_label = None
+        self.cc_point = None
+        self.drawing = drawing
+
+    def payload(self, cc_point, cn, label, color, *args, **kwargs):
+        cc_point.point.cn_label = label
+        cc_point.point.cn = cn
+        self.drawing.changeAtomType(cc_point.point)
+
+    def apply(self, cc_point, atom_type, label, color, *args, **kwargs):
+        Command.apply(self)
+        self.cc_point = cc_point
+        self.old_type = cc_point.point.atom_type
+        self.old_label = cc_point.point.label
+        self.old_color = cc_point.point.color
+        self.apply = lambda *args, **kwargs: self.payload(self.cc_point, atom_type, label, color)
+        self.apply()
+
+    def undo(self):
+        if self.applied:
+            self.payload(self.cc_point, self.old_type, self.old_label, self.old_color)
 
 
 class aEvent(ABC):
@@ -1703,6 +1741,13 @@ class DrawWidget(Drawer_model_ui.Ui_Dialog, QtWidgets.QDialog):
         maxMeanPlaneDiff_event = MaxMeanPlaneDiff(exclusive=True, exclusive_group=1)
 
         self.pushButton_7.pressed.connect(self.exportTable)
+
+        self.pushButton_15.pressed.connect(self.openGl_drawer.drawing.show_cn)
+        self.pushButton_15.pressed.connect(self.openGl_drawer.update)
+        self.pushButton_16.pressed.connect(self.openGl_drawer.drawing.show_at)
+        self.pushButton_16.pressed.connect(self.openGl_drawer.update)
+
+        self.pushButton_16.pressed.connect(self.exportTable)
         self.pushButton_10.pressed.connect(lambda: drag_event.attach(self.openGl_drawer))
         self.pushButton_14.pressed.connect(lambda: clear_event.attach(self.openGl_drawer))
         self.pushButton.pressed.connect(self.openGl_drawer.clearDraw)
@@ -1730,10 +1775,11 @@ class DrawWidget(Drawer_model_ui.Ui_Dialog, QtWidgets.QDialog):
         self.gridLayout.addWidget(self.pushButton_14, 2, 0, 1, 2)
         self.gridLayout.addWidget(self.pushButton, 3, 0, 1, 2)
         self.gridLayout.addWidget(self.pushButton_11, 7, 0, 1, 2)
-        self.gridLayout.addWidget(self.pushButton_9, 8, 0, 1, 2)
-        self.gridLayout.addWidget(self.pushButton_8, 9, 0, 1, 2)
-        self.gridLayout.addWidget(self.pushButton_12, 10, 0, 1, 2)
-        self.gridLayout.addWidget(self.pushButton_13, 11, 0, 1, 2)
+        self.gridLayout.addWidget(self.pushButton_17, 8, 0, 1, 2)
+        self.gridLayout.addWidget(self.pushButton_9, 9, 0, 1, 2)
+        self.gridLayout.addWidget(self.pushButton_8, 10, 0, 1, 2)
+        self.gridLayout.addWidget(self.pushButton_12, 11, 0, 1, 2)
+        self.gridLayout.addWidget(self.pushButton_13, 12, 0, 1, 2)
 
         #self.tableWidget_2.itemChanged.connect(lambda x: self.asd(x, tab=1))
         #self.tableWidget_3.itemChanged.connect(lambda x: self.asd(x, tab=2))

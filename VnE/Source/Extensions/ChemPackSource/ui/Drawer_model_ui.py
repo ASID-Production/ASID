@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'Drawer_model_ui.ui'
+## Form generated from reading UI file 'Drawer_model_uiLyjyII.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.6.1
+## Created by: Qt User Interface Compiler version 6.6.3
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -19,7 +19,6 @@ from PySide6.QtWidgets import (QApplication, QDialog, QFrame, QGridLayout,
     QHBoxLayout, QHeaderView, QPushButton, QSizePolicy,
     QTabWidget, QTableView, QVBoxLayout, QWidget)
 
-
 class Ui_Dialog(object):
     def setupUi(self, Dialog):
         if not Dialog.objectName():
@@ -31,7 +30,7 @@ class Ui_Dialog(object):
         self.verticalLayout.setContentsMargins(0, 0, 0, 0)
         self.frame = QFrame(Dialog)
         self.frame.setObjectName(u"frame")
-        sizePolicy = QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Fixed)
+        sizePolicy = QSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.frame.sizePolicy().hasHeightForWidth())
@@ -39,14 +38,65 @@ class Ui_Dialog(object):
         self.frame.setMinimumSize(QSize(40, 40))
         self.frame.setFrameShape(QFrame.StyledPanel)
         self.frame.setFrameShadow(QFrame.Raised)
-        self.pushButton_7 = QPushButton(self.frame)
+        self.horizontalLayout_4 = QHBoxLayout(self.frame)
+        self.horizontalLayout_4.setObjectName(u"horizontalLayout_4")
+        self.horizontalLayout_4.setContentsMargins(2, 0, -1, 0)
+        self.frame_13 = QFrame(self.frame)
+        self.frame_13.setObjectName(u"frame_13")
+        sizePolicy1 = QSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Preferred)
+        sizePolicy1.setHorizontalStretch(0)
+        sizePolicy1.setVerticalStretch(0)
+        sizePolicy1.setHeightForWidth(self.frame_13.sizePolicy().hasHeightForWidth())
+        self.frame_13.setSizePolicy(sizePolicy1)
+        self.frame_13.setFrameShape(QFrame.StyledPanel)
+        self.frame_13.setFrameShadow(QFrame.Raised)
+        self.horizontalLayout_3 = QHBoxLayout(self.frame_13)
+        self.horizontalLayout_3.setSpacing(0)
+        self.horizontalLayout_3.setObjectName(u"horizontalLayout_3")
+        self.horizontalLayout_3.setContentsMargins(0, 0, 0, 0)
+        self.pushButton_7 = QPushButton(self.frame_13)
         self.pushButton_7.setObjectName(u"pushButton_7")
-        self.pushButton_7.setGeometry(QRect(10, 10, 81, 23))
+        sizePolicy2 = QSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+        sizePolicy2.setHorizontalStretch(0)
+        sizePolicy2.setVerticalStretch(0)
+        sizePolicy2.setHeightForWidth(self.pushButton_7.sizePolicy().hasHeightForWidth())
+        self.pushButton_7.setSizePolicy(sizePolicy2)
         self.pushButton_7.setAutoDefault(False)
-        self.dbSearchButton = QPushButton(self.frame)
+
+        self.horizontalLayout_3.addWidget(self.pushButton_7)
+
+        self.dbSearchButton = QPushButton(self.frame_13)
         self.dbSearchButton.setObjectName(u"dbSearchButton")
-        self.dbSearchButton.setGeometry(QRect(110, 10, 75, 23))
+        sizePolicy2.setHeightForWidth(self.dbSearchButton.sizePolicy().hasHeightForWidth())
+        self.dbSearchButton.setSizePolicy(sizePolicy2)
         self.dbSearchButton.setAutoDefault(False)
+
+        self.horizontalLayout_3.addWidget(self.dbSearchButton)
+
+        self.pushButton_15 = QPushButton(self.frame_13)
+        self.pushButton_15.setObjectName(u"pushButton_15")
+        sizePolicy2.setHeightForWidth(self.pushButton_15.sizePolicy().hasHeightForWidth())
+        self.pushButton_15.setSizePolicy(sizePolicy2)
+
+        self.horizontalLayout_3.addWidget(self.pushButton_15)
+
+        self.pushButton_16 = QPushButton(self.frame_13)
+        self.pushButton_16.setObjectName(u"pushButton_16")
+        sizePolicy2.setHeightForWidth(self.pushButton_16.sizePolicy().hasHeightForWidth())
+        self.pushButton_16.setSizePolicy(sizePolicy2)
+
+        self.horizontalLayout_3.addWidget(self.pushButton_16)
+
+
+        self.horizontalLayout_4.addWidget(self.frame_13)
+
+        self.frame_14 = QFrame(self.frame)
+        self.frame_14.setObjectName(u"frame_14")
+        self.frame_14.setFrameShape(QFrame.StyledPanel)
+        self.frame_14.setFrameShadow(QFrame.Raised)
+
+        self.horizontalLayout_4.addWidget(self.frame_14)
+
 
         self.verticalLayout.addWidget(self.frame)
 
@@ -60,11 +110,11 @@ class Ui_Dialog(object):
         self.horizontalLayout.setContentsMargins(0, 0, 0, 0)
         self.frame_3 = QFrame(self.frame_2)
         self.frame_3.setObjectName(u"frame_3")
-        sizePolicy1 = QSizePolicy(QSizePolicy.Maximum, QSizePolicy.Expanding)
-        sizePolicy1.setHorizontalStretch(0)
-        sizePolicy1.setVerticalStretch(0)
-        sizePolicy1.setHeightForWidth(self.frame_3.sizePolicy().hasHeightForWidth())
-        self.frame_3.setSizePolicy(sizePolicy1)
+        sizePolicy3 = QSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Expanding)
+        sizePolicy3.setHorizontalStretch(0)
+        sizePolicy3.setVerticalStretch(0)
+        sizePolicy3.setHeightForWidth(self.frame_3.sizePolicy().hasHeightForWidth())
+        self.frame_3.setSizePolicy(sizePolicy3)
         self.frame_3.setFrameShape(QFrame.StyledPanel)
         self.frame_3.setFrameShadow(QFrame.Raised)
         self.verticalLayout_2 = QVBoxLayout(self.frame_3)
@@ -73,17 +123,40 @@ class Ui_Dialog(object):
         self.verticalLayout_2.setContentsMargins(0, 0, 0, 0)
         self.frame_5 = QFrame(self.frame_3)
         self.frame_5.setObjectName(u"frame_5")
-        sizePolicy2 = QSizePolicy(QSizePolicy.Maximum, QSizePolicy.Maximum)
-        sizePolicy2.setHorizontalStretch(0)
-        sizePolicy2.setVerticalStretch(0)
-        sizePolicy2.setHeightForWidth(self.frame_5.sizePolicy().hasHeightForWidth())
-        self.frame_5.setSizePolicy(sizePolicy2)
+        sizePolicy4 = QSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
+        sizePolicy4.setHorizontalStretch(0)
+        sizePolicy4.setVerticalStretch(0)
+        sizePolicy4.setHeightForWidth(self.frame_5.sizePolicy().hasHeightForWidth())
+        self.frame_5.setSizePolicy(sizePolicy4)
         self.frame_5.setFrameShape(QFrame.StyledPanel)
         self.frame_5.setFrameShadow(QFrame.Raised)
         self.gridLayout = QGridLayout(self.frame_5)
         self.gridLayout.setSpacing(0)
         self.gridLayout.setObjectName(u"gridLayout")
         self.gridLayout.setContentsMargins(0, 0, 0, 0)
+        self.pushButton_6 = QPushButton(self.frame_5)
+        self.pushButton_6.setObjectName(u"pushButton_6")
+        self.pushButton_6.setMinimumSize(QSize(50, 25))
+        self.pushButton_6.setAutoDefault(False)
+
+        self.gridLayout.addWidget(self.pushButton_6, 0, 0, 1, 1)
+
+        self.pushButton_11 = QPushButton(self.frame_5)
+        self.pushButton_11.setObjectName(u"pushButton_11")
+        self.pushButton_11.setCheckable(True)
+        self.pushButton_11.setAutoExclusive(True)
+        self.pushButton_11.setAutoDefault(False)
+
+        self.gridLayout.addWidget(self.pushButton_11, 8, 0, 1, 1)
+
+        self.pushButton_12 = QPushButton(self.frame_5)
+        self.pushButton_12.setObjectName(u"pushButton_12")
+        self.pushButton_12.setCheckable(True)
+        self.pushButton_12.setAutoExclusive(True)
+        self.pushButton_12.setAutoDefault(False)
+
+        self.gridLayout.addWidget(self.pushButton_12, 12, 0, 1, 1)
+
         self.pushButton_10 = QPushButton(self.frame_5)
         self.pushButton_10.setObjectName(u"pushButton_10")
         self.pushButton_10.setMinimumSize(QSize(50, 25))
@@ -94,81 +167,21 @@ class Ui_Dialog(object):
 
         self.gridLayout.addWidget(self.pushButton_10, 1, 0, 1, 1)
 
-        self.pushButton_11 = QPushButton(self.frame_5)
-        self.pushButton_11.setObjectName(u"pushButton_11")
-        self.pushButton_11.setCheckable(True)
-        self.pushButton_11.setAutoExclusive(True)
-        self.pushButton_11.setAutoDefault(False)
-
-        self.gridLayout.addWidget(self.pushButton_11, 7, 0, 1, 1)
-
         self.pushButton_13 = QPushButton(self.frame_5)
         self.pushButton_13.setObjectName(u"pushButton_13")
         self.pushButton_13.setCheckable(True)
         self.pushButton_13.setAutoExclusive(True)
         self.pushButton_13.setAutoDefault(False)
 
-        self.gridLayout.addWidget(self.pushButton_13, 11, 0, 1, 1)
-
-        self.pushButton_12 = QPushButton(self.frame_5)
-        self.pushButton_12.setObjectName(u"pushButton_12")
-        self.pushButton_12.setCheckable(True)
-        self.pushButton_12.setAutoExclusive(True)
-        self.pushButton_12.setAutoDefault(False)
-
-        self.gridLayout.addWidget(self.pushButton_12, 10, 0, 1, 1)
-
-        self.pushButton_6 = QPushButton(self.frame_5)
-        self.pushButton_6.setObjectName(u"pushButton_6")
-        self.pushButton_6.setMinimumSize(QSize(50, 25))
-        self.pushButton_6.setAutoDefault(False)
-
-        self.gridLayout.addWidget(self.pushButton_6, 0, 0, 1, 1)
-
-        self.pushButton_2 = QPushButton(self.frame_5)
-        self.pushButton_2.setObjectName(u"pushButton_2")
-        sizePolicy3 = QSizePolicy(QSizePolicy.Minimum, QSizePolicy.Fixed)
-        sizePolicy3.setHorizontalStretch(0)
-        sizePolicy3.setVerticalStretch(0)
-        sizePolicy3.setHeightForWidth(self.pushButton_2.sizePolicy().hasHeightForWidth())
-        self.pushButton_2.setSizePolicy(sizePolicy3)
-        self.pushButton_2.setMinimumSize(QSize(25, 25))
-        self.pushButton_2.setMaximumSize(QSize(250, 25))
-        self.pushButton_2.setCheckable(True)
-        self.pushButton_2.setAutoExclusive(True)
-        self.pushButton_2.setAutoDefault(False)
-        self.pushButton_2.setFlat(False)
-
-        self.gridLayout.addWidget(self.pushButton_2, 6, 1, 1, 1)
-
-        self.pushButton_9 = QPushButton(self.frame_5)
-        self.pushButton_9.setObjectName(u"pushButton_9")
-        sizePolicy3.setHeightForWidth(self.pushButton_9.sizePolicy().hasHeightForWidth())
-        self.pushButton_9.setSizePolicy(sizePolicy3)
-        self.pushButton_9.setMinimumSize(QSize(100, 25))
-        self.pushButton_9.setCheckable(True)
-        self.pushButton_9.setAutoExclusive(True)
-        self.pushButton_9.setAutoDefault(False)
-
-        self.gridLayout.addWidget(self.pushButton_9, 8, 0, 1, 1)
-
-        self.pushButton = QPushButton(self.frame_5)
-        self.pushButton.setObjectName(u"pushButton")
-        sizePolicy3.setHeightForWidth(self.pushButton.sizePolicy().hasHeightForWidth())
-        self.pushButton.setSizePolicy(sizePolicy3)
-        self.pushButton.setMinimumSize(QSize(50, 25))
-        self.pushButton.setMaximumSize(QSize(16777215, 16777215))
-        self.pushButton.setCheckable(False)
-        self.pushButton.setAutoExclusive(False)
-        self.pushButton.setAutoDefault(False)
-        self.pushButton.setFlat(False)
-
-        self.gridLayout.addWidget(self.pushButton, 3, 0, 1, 1)
+        self.gridLayout.addWidget(self.pushButton_13, 13, 0, 1, 1)
 
         self.pushButton_4 = QPushButton(self.frame_5)
         self.pushButton_4.setObjectName(u"pushButton_4")
-        sizePolicy3.setHeightForWidth(self.pushButton_4.sizePolicy().hasHeightForWidth())
-        self.pushButton_4.setSizePolicy(sizePolicy3)
+        sizePolicy5 = QSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Fixed)
+        sizePolicy5.setHorizontalStretch(0)
+        sizePolicy5.setVerticalStretch(0)
+        sizePolicy5.setHeightForWidth(self.pushButton_4.sizePolicy().hasHeightForWidth())
+        self.pushButton_4.setSizePolicy(sizePolicy5)
         self.pushButton_4.setMinimumSize(QSize(25, 25))
         self.pushButton_4.setMaximumSize(QSize(250, 25))
         self.pushButton_4.setCheckable(True)
@@ -178,19 +191,55 @@ class Ui_Dialog(object):
 
         self.gridLayout.addWidget(self.pushButton_4, 5, 1, 1, 1)
 
-        self.pushButton_8 = QPushButton(self.frame_5)
-        self.pushButton_8.setObjectName(u"pushButton_8")
-        self.pushButton_8.setMinimumSize(QSize(50, 25))
-        self.pushButton_8.setCheckable(True)
-        self.pushButton_8.setAutoExclusive(True)
-        self.pushButton_8.setAutoDefault(False)
+        self.pushButton_9 = QPushButton(self.frame_5)
+        self.pushButton_9.setObjectName(u"pushButton_9")
+        sizePolicy5.setHeightForWidth(self.pushButton_9.sizePolicy().hasHeightForWidth())
+        self.pushButton_9.setSizePolicy(sizePolicy5)
+        self.pushButton_9.setMinimumSize(QSize(100, 25))
+        self.pushButton_9.setCheckable(True)
+        self.pushButton_9.setAutoExclusive(True)
+        self.pushButton_9.setAutoDefault(False)
 
-        self.gridLayout.addWidget(self.pushButton_8, 9, 0, 1, 1)
+        self.gridLayout.addWidget(self.pushButton_9, 10, 0, 1, 1)
+
+        self.pushButton = QPushButton(self.frame_5)
+        self.pushButton.setObjectName(u"pushButton")
+        sizePolicy5.setHeightForWidth(self.pushButton.sizePolicy().hasHeightForWidth())
+        self.pushButton.setSizePolicy(sizePolicy5)
+        self.pushButton.setMinimumSize(QSize(50, 25))
+        self.pushButton.setMaximumSize(QSize(16777215, 16777215))
+        self.pushButton.setCheckable(False)
+        self.pushButton.setAutoExclusive(False)
+        self.pushButton.setAutoDefault(False)
+        self.pushButton.setFlat(False)
+
+        self.gridLayout.addWidget(self.pushButton, 3, 0, 1, 1)
+
+        self.pushButton_2 = QPushButton(self.frame_5)
+        self.pushButton_2.setObjectName(u"pushButton_2")
+        sizePolicy5.setHeightForWidth(self.pushButton_2.sizePolicy().hasHeightForWidth())
+        self.pushButton_2.setSizePolicy(sizePolicy5)
+        self.pushButton_2.setMinimumSize(QSize(25, 25))
+        self.pushButton_2.setMaximumSize(QSize(250, 25))
+        self.pushButton_2.setCheckable(True)
+        self.pushButton_2.setAutoExclusive(True)
+        self.pushButton_2.setAutoDefault(False)
+        self.pushButton_2.setFlat(False)
+
+        self.gridLayout.addWidget(self.pushButton_2, 6, 1, 1, 1)
+
+        self.pushButton_14 = QPushButton(self.frame_5)
+        self.pushButton_14.setObjectName(u"pushButton_14")
+        self.pushButton_14.setCheckable(True)
+        self.pushButton_14.setAutoExclusive(True)
+        self.pushButton_14.setAutoDefault(False)
+
+        self.gridLayout.addWidget(self.pushButton_14, 2, 0, 1, 1)
 
         self.pushButton_3 = QPushButton(self.frame_5)
         self.pushButton_3.setObjectName(u"pushButton_3")
-        sizePolicy3.setHeightForWidth(self.pushButton_3.sizePolicy().hasHeightForWidth())
-        self.pushButton_3.setSizePolicy(sizePolicy3)
+        sizePolicy5.setHeightForWidth(self.pushButton_3.sizePolicy().hasHeightForWidth())
+        self.pushButton_3.setSizePolicy(sizePolicy5)
         self.pushButton_3.setMinimumSize(QSize(25, 25))
         self.pushButton_3.setMaximumSize(QSize(250, 25))
         self.pushButton_3.setCheckable(True)
@@ -210,13 +259,19 @@ class Ui_Dialog(object):
 
         self.gridLayout.addWidget(self.pushButton_5, 5, 0, 1, 1)
 
-        self.pushButton_14 = QPushButton(self.frame_5)
-        self.pushButton_14.setObjectName(u"pushButton_14")
-        self.pushButton_14.setCheckable(True)
-        self.pushButton_14.setAutoExclusive(True)
-        self.pushButton_14.setAutoDefault(False)
+        self.pushButton_8 = QPushButton(self.frame_5)
+        self.pushButton_8.setObjectName(u"pushButton_8")
+        self.pushButton_8.setMinimumSize(QSize(50, 25))
+        self.pushButton_8.setCheckable(True)
+        self.pushButton_8.setAutoExclusive(True)
+        self.pushButton_8.setAutoDefault(False)
 
-        self.gridLayout.addWidget(self.pushButton_14, 2, 0, 1, 1)
+        self.gridLayout.addWidget(self.pushButton_8, 11, 0, 1, 1)
+
+        self.pushButton_17 = QPushButton(self.frame_5)
+        self.pushButton_17.setObjectName(u"pushButton_17")
+
+        self.gridLayout.addWidget(self.pushButton_17, 9, 0, 1, 1)
 
         self.gridLayout.setRowStretch(0, 2)
 
@@ -224,11 +279,11 @@ class Ui_Dialog(object):
 
         self.frame_6 = QFrame(self.frame_3)
         self.frame_6.setObjectName(u"frame_6")
-        sizePolicy4 = QSizePolicy(QSizePolicy.Fixed, QSizePolicy.Preferred)
-        sizePolicy4.setHorizontalStretch(0)
-        sizePolicy4.setVerticalStretch(0)
-        sizePolicy4.setHeightForWidth(self.frame_6.sizePolicy().hasHeightForWidth())
-        self.frame_6.setSizePolicy(sizePolicy4)
+        sizePolicy6 = QSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
+        sizePolicy6.setHorizontalStretch(0)
+        sizePolicy6.setVerticalStretch(0)
+        sizePolicy6.setHeightForWidth(self.frame_6.sizePolicy().hasHeightForWidth())
+        self.frame_6.setSizePolicy(sizePolicy6)
         self.frame_6.setMinimumSize(QSize(50, 0))
         self.frame_6.setFrameShape(QFrame.StyledPanel)
         self.frame_6.setFrameShadow(QFrame.Raised)
@@ -257,8 +312,8 @@ class Ui_Dialog(object):
 
         self.tabWidget = QTabWidget(self.frame_4)
         self.tabWidget.setObjectName(u"tabWidget")
-        sizePolicy1.setHeightForWidth(self.tabWidget.sizePolicy().hasHeightForWidth())
-        self.tabWidget.setSizePolicy(sizePolicy1)
+        sizePolicy3.setHeightForWidth(self.tabWidget.sizePolicy().hasHeightForWidth())
+        self.tabWidget.setSizePolicy(sizePolicy3)
         self.tab_3 = QWidget()
         self.tab_3.setObjectName(u"tab_3")
         self.verticalLayout_4 = QVBoxLayout(self.tab_3)
@@ -376,19 +431,22 @@ class Ui_Dialog(object):
         Dialog.setWindowTitle(QCoreApplication.translate("Dialog", u"Dialog", None))
         self.pushButton_7.setText(QCoreApplication.translate("Dialog", u"Export search", None))
         self.dbSearchButton.setText(QCoreApplication.translate("Dialog", u"DB Search", None))
-        self.pushButton_10.setText(QCoreApplication.translate("Dialog", u"Drag", None))
-        self.pushButton_11.setText(QCoreApplication.translate("Dialog", u"Custom Type", None))
-        self.pushButton_13.setText(QCoreApplication.translate("Dialog", u"MaxMeanPlaneDiff", None))
-        self.pushButton_12.setText(QCoreApplication.translate("Dialog", u"AvgDiff", None))
+        self.pushButton_15.setText(QCoreApplication.translate("Dialog", u"C.N.", None))
+        self.pushButton_16.setText(QCoreApplication.translate("Dialog", u"A.T.", None))
         self.pushButton_6.setText(QCoreApplication.translate("Dialog", u"Find", None))
-        self.pushButton_2.setText(QCoreApplication.translate("Dialog", u"O", None))
+        self.pushButton_11.setText(QCoreApplication.translate("Dialog", u"Custom Type", None))
+        self.pushButton_12.setText(QCoreApplication.translate("Dialog", u"AvgDiff", None))
+        self.pushButton_10.setText(QCoreApplication.translate("Dialog", u"Drag", None))
+        self.pushButton_13.setText(QCoreApplication.translate("Dialog", u"MaxMeanPlaneDiff", None))
+        self.pushButton_4.setText(QCoreApplication.translate("Dialog", u"H", None))
         self.pushButton_9.setText(QCoreApplication.translate("Dialog", u"Contacts", None))
         self.pushButton.setText(QCoreApplication.translate("Dialog", u"Clear all", None))
-        self.pushButton_4.setText(QCoreApplication.translate("Dialog", u"H", None))
-        self.pushButton_8.setText(QCoreApplication.translate("Dialog", u"Angle", None))
+        self.pushButton_2.setText(QCoreApplication.translate("Dialog", u"O", None))
+        self.pushButton_14.setText(QCoreApplication.translate("Dialog", u"Delete", None))
         self.pushButton_3.setText(QCoreApplication.translate("Dialog", u"N", None))
         self.pushButton_5.setText(QCoreApplication.translate("Dialog", u"C", None))
-        self.pushButton_14.setText(QCoreApplication.translate("Dialog", u"Delete", None))
+        self.pushButton_8.setText(QCoreApplication.translate("Dialog", u"Angle", None))
+        self.pushButton_17.setText(QCoreApplication.translate("Dialog", u"Change C.N.", None))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_3), QCoreApplication.translate("Dialog", u"Atoms", None))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_4), QCoreApplication.translate("Dialog", u"Contacts", None))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_5), QCoreApplication.translate("Dialog", u"Angle", None))

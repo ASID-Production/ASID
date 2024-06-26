@@ -40,7 +40,7 @@ class Font:
     """Fonts class"""
 
     # line simbols
-    line = 'qwertyuiop[]asdfghjkl;zxcvbnm,./"QWERTYUIOP{}ASDFGHJKL:ZXCVBNM<>?1234567890*-+!@#$%^&()_ \'\"'
+    line = ' qwertyuiop[]asdfg*hjkl;zxcvbnm,./"QWERTYUIOP{}ASDFGHJKL:ZXCVBNM<>?1234567890-+!@#$%^&()_\'\\'
 
     def __init__(self):
         self.char_map = {}
@@ -52,11 +52,12 @@ class Font:
         Creates chars textures and assign texture options
         :return:
         """
-
+        size = 12
+        face = freetype.Face(f'./Source/fonts/arial.ttf')
         for chr in self.line:
-            face = freetype.Face(f'./Source/fonts/arial.ttf')
-            face.set_char_size(width=0, height=int((bin(32)+'0'*6), 2), hres=576, vres=0)
             face.load_char(chr)
+            face.set_char_size(width=size << 6, height=0, hres=576, vres=0)
+            #face.set_char_size(width=0, height=0, hres=72, vres=72)
             bitmap = face.glyph.bitmap
             char = CharTex(
                 buffer=bitmap.buffer,
@@ -123,22 +124,22 @@ class Word:
         self._letters = []
         x,y,z = xyz
         x_shift = 0
-        w_s,h_s = wh
+        vpx, vpy = glGetIntegerv(GL_VIEWPORT)[2:]
         for chr in word:
             xpos = x
             ypos = y
-            y_shift = -(font.char_map[chr].height - font.char_map[chr].bearingY)
+            y_shift = -(font.char_map[chr].height - font.char_map[chr].bearingY)/vpy
 
-            w = font.char_map[chr].width/w_s
-            h = font.char_map[chr].height/h_s
-            x_shift_p_bearing = x_shift + font.char_map[chr].bearingX/w_s
+            w = font.char_map[chr].width/vpx
+            h = font.char_map[chr].height/vpy
+            x_shift_p_bearing = x_shift + font.char_map[chr].bearingX/vpx
             text_vert = np.array([[xpos, ypos, z, 0.0, 1.0, 0.0, 0.0, x_shift_p_bearing, y_shift],
                                   [xpos, ypos, z, 0.0, 0.0, 0.0, h, x_shift_p_bearing, y_shift],
                                   [xpos, ypos, z, 1.0, 1.0, w, 0.0, x_shift_p_bearing, y_shift],
                                   [xpos, ypos, z, 0.0, 0.0, 0.0, h, x_shift_p_bearing, y_shift],
                                   [xpos, ypos, z, 1.0, 0.0, w, h, x_shift_p_bearing, y_shift],
                                   [xpos, ypos, z, 1.0, 1.0, w, 0.0, x_shift_p_bearing, y_shift]], dtype=np.float32)
-            x_shift += int(bin(font.char_map[chr].advance)[:-6], 2)/w_s
+            x_shift += int(bin(font.char_map[chr].advance)[:-6], 2)/vpx
             self._letters.append(Letter(chr, text_vert, font))
         self.gen_buffer()
 
