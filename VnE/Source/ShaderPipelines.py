@@ -73,9 +73,9 @@ class ShaderProgramsCreator:
             raise TypeError
         program = self.programs_list.get(source, None)
         if program:
-            return program
+            return (program, shader)
         else:
-            source_line_p = ctypes.c_char_p(source)
+            '''source_line_p = ctypes.c_char_p(source)
             source_line_p_p = ctypes.cast(ctypes.addressof(source_line_p), ctypes.POINTER((ctypes.POINTER(ctypes.c_char))))
             try:
                 program = glCreateShaderProgramv(shader, 1, source_line_p_p)
@@ -89,7 +89,30 @@ class ShaderProgramsCreator:
                 print('{:-^30}'.format('END'))
                 raise SystemExit()
             self.programs_list[source] = (program, shader)
-            return (program, shader)
+            return (program, shader)'''
+            shader_id = glCreateShader(shader)
+            if shader_id:
+                glShaderSource(shader_id, source)
+                glCompileShader(shader_id)
+                program = glCreateProgram()
+                if program:
+                    compiled = glGetShaderiv(shader_id, GL_COMPILE_STATUS)
+                    glProgramParameteri(program, GL_PROGRAM_SEPARABLE, GL_TRUE)
+                    if compiled:
+                        glAttachShader(program, shader_id)
+                        glLinkProgram(program)
+                        glDetachShader(program, shader_id)
+                    else:
+                        log = glGetShaderInfoLog(shader_id)
+                        glDeleteShader(shader_id)
+                        print(log)
+                        raise SystemExit('Failed to compile shader')
+                else:
+                    raise SystemExit('Failed to create program')
+                glDeleteShader(shader_id)
+                return (program, shader)
+            else:
+                raise SystemExit('Failed to create shader')
 
     def getProgramById(self, id):
         prog_list = self.programs_list.values()
