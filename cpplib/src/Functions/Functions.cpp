@@ -36,7 +36,7 @@
 using namespace cpplib::currents;
 
 static void ChildThreadFunc(const SearchGraphType::RequestGraphType& input, const SearchGraphType::AtomIndex MaxAtom, SearchDataInterfaceType& dataInterface, const bool exact); 
-static cpplib::DATTuple& ConvertDATTuple(cpplib::DATTuple& dat, const cpplib::currents::FAMStructType& fs);
+static cpplib::DATTuple& ConvertDATTuple(cpplib::DATTuple&& dat, const cpplib::currents::FAMStructType& fs);
 
 
 const DistancesType* p_distances = nullptr;
@@ -396,7 +396,7 @@ static void reorder(cpplib::FindGeometry::tupleTorsion& d, const cpplib::current
 		std::swap(std::get<1>(d), std::get<2>(d));
 	}
 }
-static cpplib::DATTuple& ConvertDATTuple(cpplib::DATTuple& dat, const cpplib::currents::FAMStructType& fs) {
+static cpplib::DATTuple& ConvertDATTuple(cpplib::DATTuple&& dat, const cpplib::currents::FAMStructType& fs) {
 	auto& dists = std::get<0>(dat);
 	auto s_dists = dists.size();
 	auto& angles = std::get<1>(dat);
@@ -417,7 +417,7 @@ static cpplib::DATTuple& ConvertDATTuple(cpplib::DATTuple& dat, const cpplib::cu
 		reorder(tors[i], fs);
 	}
 	// erase dublicates
-	sort(dists.begin(), dists.end());
+	std::sort(dists.begin(), dists.end());
 	
 	for (auto it2 = (++dists.begin()), it = dists.begin(); it2 != dists.end(); it++, it2++)
 	{
@@ -427,7 +427,7 @@ static cpplib::DATTuple& ConvertDATTuple(cpplib::DATTuple& dat, const cpplib::cu
 			it2++;
 		}
 	}
-	sort(angles.begin(), angles.end());
+	std::sort(angles.begin(), angles.end());
 	for (auto it2 = (++angles.begin()), it = angles.begin(); it2 != angles.end(); it++, it2++)
 	{
 		if ((std::get<0>(*it) == std::get<0>(*it2)) && (std::get<1>(*it) == std::get<1>(*it2)) && (std::get<2>(*it) == std::get<2>(*it2)) && (::std::abs(std::get<3>(*it) - std::get<3>(*it2)) < 0.0001)) {
@@ -436,7 +436,7 @@ static cpplib::DATTuple& ConvertDATTuple(cpplib::DATTuple& dat, const cpplib::cu
 			it2++;
 		}
 	}
-	sort(tors.begin(), tors.end());
+	std::sort(tors.begin(), tors.end());
 	for (auto it2 = (++tors.begin()), it = tors.begin(); it2 != tors.end();)
 	{
 		if ((std::get<0>(*it) == std::get<0>(*it2)) && (std::get<1>(*it) == std::get<1>(*it2)) &&

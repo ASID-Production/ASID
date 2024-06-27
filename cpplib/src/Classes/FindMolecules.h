@@ -49,7 +49,7 @@ namespace cpplib {
 		using NodeType = Node<AtomType>;
 		using DistancesType = Distances;
 		using BondType = Bond;
-		static_assert(std::is_same_v<Bond::AtomIndex, NodeType::AtomIndex>, "Bond::AtomIndex and NodeType::AtomIndex should be the same");
+		static_assert(::std::is_same<typename Bond::AtomIndex, typename NodeType::AtomIndex>::value, "Bond::AtomIndex and NodeType::AtomIndex should be the same");
 		using BondExType = BondEx;
 		using AtomIndex = NodeType::AtomIndex;
 		using AtomContainerType = ::std::vector<AtomType>;

@@ -50,7 +50,7 @@ namespace cpplib {
 		using tupleTorsion = ::std::tuple<AtomIndex, AtomIndex, AtomIndex, AtomIndex, FloatingPointType>;
 		using MinMaxType = ::std::pair<FloatingPointType, FloatingPointType>; 
 
-		static_assert(::std::is_same_v<DistancesType::AtomType, AtomType>, "AtomTypes of FAM_Struct and Distances should be the same");
+		static_assert(::std::is_same<typename DistancesType::AtomType, AtomType>::value, "AtomTypes of FAM_Struct and Distances should be the same");
 	private:
 		// Data
 		const FAMStructType& fs;
