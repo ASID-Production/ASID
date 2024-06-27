@@ -28,6 +28,7 @@
 #pragma once
 #include "Geometry.h"
 #include "FindMolecules.h"
+#include "Distances.h"
 #include <vector>
 #include <tuple>
 
@@ -35,36 +36,39 @@ namespace cpplib {
 	class FindGeometry {
 	public:
 		// Definitions
-		using AtomType = currents::AtomTypeData;
-		using FloatingPointType = currents::FloatingPointType;
-		using AtomIndex = currents::AtomIndex;
+		using FAMStructType = currents::FAMStructType;
+		
+		using AtomType = FAMStructType::AtomType;
+		using FloatingPointType = FAMStructType::FloatingPointType;
+		using AtomIndex = FAMStructType::AtomIndex;
+		using size_type = FAMStructType::size_type;
+		using PointType = FAMStructType::PointType;
+		using DistancesType = FAMStructType::DistancesType;
 
-		using size_type = FAM_Struct::size_type;
 		using tupleDistance = ::std::tuple<AtomIndex, AtomIndex, FloatingPointType>;
 		using tupleAngle = ::std::tuple<AtomIndex, AtomIndex, AtomIndex, FloatingPointType>;
 		using tupleTorsion = ::std::tuple<AtomIndex, AtomIndex, AtomIndex, AtomIndex, FloatingPointType>;
-		using PointType = geometry::Point<FloatingPointType>;
 		using MinMaxType = ::std::pair<FloatingPointType, FloatingPointType>; 
 
-
+		static_assert(::std::is_same_v<DistancesType::AtomType, AtomType>, "AtomTypes of FAM_Struct and Distances should be the same");
 	private:
 		// Data
-		const FAM_Struct& fs;
+		const FAMStructType& fs;
 
 	public:
 		FindGeometry() = delete;
-		constexpr explicit FindGeometry(const FAM_Struct& famstr) noexcept : fs(famstr) {};
+		constexpr explicit FindGeometry(const FAMStructType& famstr) noexcept : fs(famstr) {};
 		auto findDistance(AtomType t1, AtomType t2, MinMaxType d12) const {
 			std::vector<tupleDistance> res;
 			const bool mirror = (t1 == t2);
 			for (size_type i = 0; i < fs.sizePoints; i++)
 			{
-				if (fs.types[i] != t1) continue;
+				if (t1 != fs.types[i]) continue;
 				const size_type start = mirror ? i + 1 : 0;
 				for (size_type j = start; j < fs.sizePoints; j++)
 				{
 					if (i == j) continue;
-					if (fs.types[j] != t2) continue;
+					if (t2 != fs.types[j]) continue;
 					auto R = (fs.points[i] - fs.points[j]).r();
 					if (inRange(d12, R))
 						res.emplace_back(i, j, R);
@@ -145,8 +149,98 @@ namespace cpplib {
 			}
 			return res;
 		}
+
+		auto findMolD(const DistancesType& dist) const {
+			std::vector<tupleDistance> res;
+			for (size_type i = 0; i < fs.sizePoints; i++)
+			{
+				for (size_type j = i + 1; j < fs.sizePoints; j++)
+				{
+					auto R = (fs.points[i] - fs.points[j]).r();
+					if (R < dist.maxDistance(fs.types[fs.parseIndex[i]], fs.types[fs.parseIndex[j]]))
+						res.emplace_back(i, j, R);
+				}
+			}
+			return res;
+		}
+		auto findMolDA_Rad(const DistancesType& dist) const {
+			std::vector<tupleAngle> res;
+			std::vector<tupleDistance> alldist = findMolD(dist);
+			const size_type s = static_cast<size_type>(alldist.size());
+			for (size_type i = 0; i < s; i++)
+			{
+				size_type j = i + 1;
+				const auto indexA = ::std::get<0>(alldist[i]);
+				const auto indexB = ::std::get<1>(alldist[i]);
+				for (; (j < s) && indexA == ::std::get<0>(alldist[j]); j++) //a-b,a-c
+				{
+					const auto indexC = ::std::get<1>(alldist[j]);
+					const auto rad = PointType::angleRad(fs.points[indexB], fs.points[indexA], fs.points[indexC]);
+					res.emplace_back(indexB, indexA, indexC, rad);
+				}
+				for (; j < s; j++) //a-b,b-c and a-b,c-b
+				{
+					std::remove_const_t<decltype(indexA)> indexC;
+					if (indexB == ::std::get<0>(alldist[j])) {
+						indexC = ::std::get<1>(alldist[j]);
+					}
+					else if (indexB == ::std::get<1>(alldist[j])) {
+						indexC = ::std::get<0>(alldist[j]);
+					}
+					else continue;
+
+					const auto rad = PointType::angleRad(fs.points[indexA], fs.points[indexB], fs.points[indexC]);
+					res.emplace_back(indexA, indexB, indexC, rad);
+				}
+			}
+			return ::std::make_tuple(::std::move(alldist), ::std::move(res));
+		}
+		auto findMolDAT_Rad(const DistancesType& dist) const {
+			std::vector<tupleTorsion> res;
+			auto allAngAndDist = findMolDA_Rad(dist);
+			auto& alldist = ::std::get<0>(allAngAndDist);
+			auto& allang = ::std::get<1>(allAngAndDist);
+
+			const size_type sd = static_cast<size_type>(alldist.size());
+			const size_type sa = static_cast<size_type>(allang.size());
+			for (size_type i = 0; i < sa; i++)
+			{
+				const auto indexA = ::std::get<0>(allang[i]);
+				const auto indexB = ::std::get<1>(allang[i]);
+				const auto indexC = ::std::get<2>(allang[i]);
+				for (size_type j = 0; j < sd; j++) //a-b-c-d and d-a-b-c
+				{
+					const auto indexD0 = ::std::get<0>(alldist[j]);
+					const auto indexD1 = ::std::get<1>(alldist[j]);
+					AtomIndex indexD = 0;
+					if (indexD0 == indexB || indexD1 == indexB)
+						continue;
+					if (indexD0 == indexA) {
+						auto tor = PointType::torsionRad(fs.points[indexD1], fs.points[indexA], fs.points[indexB], fs.points[indexC]);
+						res.emplace_back(indexD1, indexA, indexB, indexC, tor);
+						continue;
+					}
+					if (indexD1 == indexA) {
+						auto tor = PointType::torsionRad(fs.points[indexD0], fs.points[indexA], fs.points[indexB], fs.points[indexC]);
+						res.emplace_back(indexD0, indexA, indexB, indexC, tor);
+						continue;
+					}
+					if (indexD0 == indexC) {
+						auto tor = PointType::torsionRad(fs.points[indexA], fs.points[indexB], fs.points[indexC], fs.points[indexD1]);
+						res.emplace_back(indexA, indexB, indexC, indexD1, tor);
+						continue;
+					}
+					if (indexD1 == indexC) {
+						auto tor = PointType::torsionRad(fs.points[indexA], fs.points[indexB], fs.points[indexC], fs.points[indexD0]);
+						res.emplace_back(indexA, indexB, indexC, indexD0, tor);
+						continue;
+					}
+				}
+			}
+			return ::std::make_tuple(::std::move(alldist), ::std::move(allang), ::std::move(res));
+		}
 	private:
-		inline bool inRange(const ::std::pair<FloatingPointType, FloatingPointType> pa, const FloatingPointType f) const noexcept {
+		inline bool inRange(const MinMaxType pa, const FloatingPointType f) const noexcept {
 			return ((f > pa.first) && (f < pa.second));
 		}
 	};

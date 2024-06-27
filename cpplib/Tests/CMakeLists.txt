@@ -31,7 +31,10 @@ project(MyTests)
 cmake_minimum_required(VERSION 3.14)
 
 # GoogleTest requires at least C++14
-set(CMAKE_CXX_STANDARD 14)
+
+if(COMPILER_SUPPORTS_CXX14)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
+endif(COMPILER_SUPPORTS_CXX14)
 
 if (POLICY CMP0135)
 cmake_policy(SET CMP0135 OLD) 
@@ -58,6 +61,7 @@ target_link_libraries(
     GTest::gtest_main
     cpplibLib
 )
+set_property(TARGET MyTests PROPERTY CXX_STANDARD 14)
 
 add_custom_command(
         TARGET MyTests POST_BUILD

@@ -54,8 +54,16 @@ TEST(PointTest, CreationNothrow) {
 }
 TEST(PointTest, MemberFunction_r) {
 	Point<float>::value_type res;
-	ASSERT_NO_THROW({ res = a.r(); });
+	ASSERT_NO_THROW({res = a.r();});
 	EXPECT_NEAR(res, 0.273921, 0.00001);
+}
+TEST(PointTest, reverseTorsion) {
+	Point<float> a1(0.865301423f, 0.21727322f, 0.032461346f);
+	Point<float> a2(0.65630135423f, 0.23467322f, 0.835801346f);
+	Point<float> a3(0.35601423f, 0.346346227322f, 0.601346f);
+	Point<float> a4(0.65301423f, 0.2373334622f, 0.568501346f);
+	EXPECT_NEAR(cpplib::geometry::Point<float>::torsionRad(a1, a2, a3, a4), cpplib::geometry::Point<float>::torsionRad(a4, a3, a2, a1), 0.00001);
+	EXPECT_NEAR(cpplib::geometry::Point<float>::torsionRad(a2, a1, a3, a4), cpplib::geometry::Point<float>::torsionRad(a4, a3, a1, a2), 0.00001);
 }
 
 

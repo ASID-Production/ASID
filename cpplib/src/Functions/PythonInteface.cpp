@@ -617,7 +617,108 @@ extern "C" {
 		return PyUnicode_FromString(ret.c_str());
 	}
 
+	static PyObject* cpplib_FindDAT_IC(PyObject* self, PyObject* args) {
+
+		PyObject* ocell = NULL;
+		PyObject* osymm = NULL;
+		PyObject* otypes = NULL;
+		PyObject* oxyz = NULL;
+		PyArg_ParseTuple(args, "OOOO", &ocell, &osymm, &otypes, &oxyz);
+
+		std::array<float, 6> cell;
+		for (Py_ssize_t i = 0; i < 6; i++) {
+			cell[i] = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(ocell, i)));
+		}
+
+		std::vector<const char*> symm; pyListToVectorCharP(osymm, &symm);
+		std::vector<int> types; pyListToVectorInt(otypes, &types);
+		std::vector<float> xyz; pyListToVectorFloat(oxyz, &xyz);
+
+		auto dat = FindDAT_IC(cell, symm, types, xyz);
+		auto& datdist = std::get<0>(dat);
+		auto& datang = std::get<1>(dat);
+		auto& dattor = std::get<2>(dat);
+		PyObject* ret = PyDict_New();
+
+		PyObject* list_d = PyList_New(0);
+		for (size_t i = 0; i < datdist.size(); i++) {
+			PyList_Append(list_d, Py_BuildValue("(IIf)", static_cast<unsigned int>(std::get<0>(datdist[i])),
+												static_cast<unsigned int>(std::get<1>(datdist[i])),
+												static_cast<float>(std::get<2>(datdist[i]))));
+		}
+		PyDict_SetItemString(ret, "bonds", list_d);
+
+		PyObject* list_a = PyList_New(0);
+		for (size_t i = 0; i < datang.size(); i++) {
+			PyList_Append(list_a, Py_BuildValue("(IIIf)", static_cast<unsigned int>(std::get<0>(datang[i])),
+												static_cast<unsigned int>(std::get<1>(datang[i])),
+												static_cast<unsigned int>(std::get<2>(datang[i])),
+												static_cast<float>(std::get<3>(datang[i]))));
+		}
+		PyDict_SetItemString(ret, "angles", list_a);
+
+		PyObject* list_t = PyList_New(0);
+		for (size_t i = 0; i < dattor.size(); i++) {
+			PyList_Append(list_t, Py_BuildValue("(IIIIf)", static_cast<unsigned int>(std::get<0>(dattor[i])),
+												static_cast<unsigned int>(std::get<1>(dattor[i])),
+												static_cast<unsigned int>(std::get<2>(dattor[i])),
+												static_cast<unsigned int>(std::get<3>(dattor[i])),
+												static_cast<float>(std::get<4>(dattor[i]))));
+		}
+		PyDict_SetItemString(ret, "angles", list_t);
+
+		return ret;
+	}
+	static PyObject* cpplib_FindDAT_WC(PyObject* self, PyObject* args) {
+
+		PyObject* ocell = NULL;
+		PyObject* osymm = NULL;
+		PyObject* otypes = NULL;
+		PyObject* oxyz = NULL;
+		PyArg_ParseTuple(args, "OO", &otypes, &oxyz);
+
+		std::vector<int> types; pyListToVectorInt(otypes, &types);
+		std::vector<float> xyz; pyListToVectorFloat(oxyz, &xyz);
+
+		auto dat = FindDAT_WC(types, xyz);
+		auto& datdist = std::get<0>(dat);
+		auto& datang = std::get<1>(dat);
+		auto& dattor = std::get<2>(dat);
+		PyObject* ret = PyDict_New();
+
+		PyObject* list_d = PyList_New(0);
+		for (size_t i = 0; i < datdist.size(); i++) {
+			PyList_Append(list_d, Py_BuildValue("(IIf)", static_cast<unsigned int>(std::get<0>(datdist[i])),
+												static_cast<unsigned int>(std::get<1>(datdist[i])),
+												static_cast<float>(std::get<2>(datdist[i]))));
+		}
+		PyDict_SetItemString(ret, "bonds", list_d);
+
+		PyObject* list_a = PyList_New(0);
+		for (size_t i = 0; i < datang.size(); i++) {
+			PyList_Append(list_a, Py_BuildValue("(IIIf)", static_cast<unsigned int>(std::get<0>(datang[i])),
+												static_cast<unsigned int>(std::get<1>(datang[i])),
+												static_cast<unsigned int>(std::get<2>(datang[i])),
+												static_cast<float>(std::get<3>(datang[i]))));
+		}
+		PyDict_SetItemString(ret, "angles", list_a);
+
+		PyObject* list_t = PyList_New(0);
+		for (size_t i = 0; i < dattor.size(); i++) {
+			PyList_Append(list_t, Py_BuildValue("(IIIIf)", static_cast<unsigned int>(std::get<0>(dattor[i])),
+												static_cast<unsigned int>(std::get<1>(dattor[i])),
+												static_cast<unsigned int>(std::get<2>(dattor[i])),
+												static_cast<unsigned int>(std::get<3>(dattor[i])),
+												static_cast<float>(std::get<4>(dattor[i]))));
+		}
+		PyDict_SetItemString(ret, "angles", list_t);
+
+		return ret;
+	}
+
 }
+
+// PyDict_SetItemString
 
 
 static struct PyMethodDef methods[] = {
@@ -634,6 +735,8 @@ static struct PyMethodDef methods[] = {
 	{ "FindAngleWC", cpplib_FindAngleWC, METH_VARARGS, "Find angles with current parameters in xyz"},
 	{ "FindTorsionIC", cpplib_FindTorsionIC, METH_VARARGS, "Find torsions with current parameters in cell"},
 	{ "FindTorsionWC", cpplib_FindTorsionWC, METH_VARARGS, "Find torsions with current parameters in xyz"},
+	{ "FindDAT_IC", cpplib_FindDAT_IC, METH_VARARGS, "Create dictionary with distances, angles and torsions in cell"},
+	{ "FindDAT_WC", cpplib_FindDAT_WC, METH_VARARGS, "Create dictionary with distances, angles and torsions in xyz"},
 
 	{ NULL, NULL, 0, NULL }
 };

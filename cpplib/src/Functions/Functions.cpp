@@ -35,7 +35,9 @@
 
 using namespace cpplib::currents;
 
-static void ChildThreadFunc(const SearchGraphType::RequestGraphType& input, const SearchGraphType::AtomIndex MaxAtom, SearchDataInterfaceType& dataInterface, const bool exact);
+static void ChildThreadFunc(const SearchGraphType::RequestGraphType& input, const SearchGraphType::AtomIndex MaxAtom, SearchDataInterfaceType& dataInterface, const bool exact); 
+static cpplib::DATTuple& ConvertDATTuple(cpplib::DATTuple& dat, const cpplib::currents::FAMStructType& fs);
+
 
 const DistancesType* p_distances = nullptr;
 
@@ -320,6 +322,35 @@ std::string FindTorsionIC(const std::array<float, 6>& unit_cell,
 	return res;
 }
 
+cpplib::DATTuple FindDAT_IC(const std::array<float, 6>& unit_cell,
+							std::vector<const char*>& symm,
+							std::vector<int>& types,
+							std::vector<float>& xyz) {
+	FAMStructType fs;
+	FAMCellType fc(FAMCellType::base(unit_cell, true));
+	ParseDataType(fs, fc, symm, types, xyz);
+
+
+	fc.CreateSupercell(fs.points, static_cast<FloatingPointType>(8.5), 2);
+
+	for (size_t i = 0; i < fs.sizePoints; i++)
+	{
+		fs.points[i] = fc.fracToCart() * fs.points[i];
+	}
+
+	FindGeometryType fg(fs);
+
+	return ConvertDATTuple(fg.findMolDAT_Rad(*p_distances), fs);
+}
+
+cpplib::DATTuple FindDAT_WC(std::vector<int>& types,
+							std::vector<float>& xyz) {
+	FAMStructType fs;
+	ParseDataType(fs, types, xyz);
+	FindGeometryType fg(fs);
+	return ConvertDATTuple(fg.findMolDAT_Rad(*p_distances), fs);
+}
+
 // Single thread function
 static void ChildThreadFunc(const SearchGraphType::RequestGraphType& input, const SearchGraphType::AtomIndex MaxAtom, SearchDataInterfaceType& dataInterface, const bool exact) {
 	SearchGraphType graph;
@@ -337,4 +368,86 @@ static void ChildThreadFunc(const SearchGraphType::RequestGraphType& input, cons
 			dataInterface.push_result(id);
 		}
 	}
+}
+
+static void reorder(cpplib::FindGeometry::tupleDistance& d, const cpplib::currents::FAMStructType& fs) {
+	std::get<0>(d) = fs.parseIndex[std::get<0>(d)];
+	std::get<1>(d) = fs.parseIndex[std::get<1>(d)];
+
+	if (std::get<0>(d) > std::get<1>(d))
+		std::swap(std::get<0>(d), std::get<1>(d));
+}
+static void reorder(cpplib::FindGeometry::tupleAngle& d, const cpplib::currents::FAMStructType& fs) {
+	std::get<0>(d) = fs.parseIndex[std::get<0>(d)];
+	std::get<1>(d) = fs.parseIndex[std::get<1>(d)];
+	std::get<2>(d) = fs.parseIndex[std::get<2>(d)];
+
+	if (std::get<0>(d) > std::get<2>(d))
+		std::swap(std::get<0>(d), std::get<2>(d));
+}
+static void reorder(cpplib::FindGeometry::tupleTorsion& d, const cpplib::currents::FAMStructType& fs) {
+	std::get<0>(d) = fs.parseIndex[std::get<0>(d)];
+	std::get<1>(d) = fs.parseIndex[std::get<1>(d)];
+	std::get<2>(d) = fs.parseIndex[std::get<2>(d)];
+	std::get<3>(d) = fs.parseIndex[std::get<3>(d)];
+
+	if ((std::get<0>(d) > std::get<3>(d)) || (std::get<0>(d) == std::get<3>(d) && std::get<1>(d) > std::get<2>(d))) {
+		std::swap(std::get<0>(d), std::get<3>(d));
+		std::swap(std::get<1>(d), std::get<2>(d));
+	}
+}
+static cpplib::DATTuple& ConvertDATTuple(cpplib::DATTuple& dat, const cpplib::currents::FAMStructType& fs) {
+	auto& dists = std::get<0>(dat);
+	auto s_dists = dists.size();
+	auto& angles = std::get<1>(dat);
+	auto s_angles = angles.size();
+	auto& tors = std::get<2>(dat);
+	auto s_tors = tors.size();
+
+	for (size_t i = 0; i < s_dists; i++)
+	{
+		reorder(dists[i], fs);
+	}
+	for (size_t i = 0; i < s_angles; i++)
+	{
+		reorder(angles[i], fs);
+	}
+	for (size_t i = 0; i < s_tors; i++)
+	{
+		reorder(tors[i], fs);
+	}
+	// erase dublicates
+	sort(dists.begin(), dists.end());
+	
+	for (auto it2 = (++dists.begin()), it = dists.begin(); it2 != dists.end(); it++, it2++)
+	{
+		if ((std::get<0>(*it) == std::get<0>(*it2)) && (std::get<1>(*it) == std::get<1>(*it2)) && (::std::abs(std::get<2>(*it) - std::get<2>(*it2)) < 0.0001)) {
+			dists.erase(it2);
+			it2 = it;
+			it2++;
+		}
+	}
+	sort(angles.begin(), angles.end());
+	for (auto it2 = (++angles.begin()), it = angles.begin(); it2 != angles.end(); it++, it2++)
+	{
+		if ((std::get<0>(*it) == std::get<0>(*it2)) && (std::get<1>(*it) == std::get<1>(*it2)) && (std::get<2>(*it) == std::get<2>(*it2)) && (::std::abs(std::get<3>(*it) - std::get<3>(*it2)) < 0.0001)) {
+			angles.erase(it2);
+			it2 = it;
+			it2++;
+		}
+	}
+	sort(tors.begin(), tors.end());
+	for (auto it2 = (++tors.begin()), it = tors.begin(); it2 != tors.end();)
+	{
+		if ((std::get<0>(*it) == std::get<0>(*it2)) && (std::get<1>(*it) == std::get<1>(*it2)) &&
+			(std::get<2>(*it) == std::get<2>(*it2)) && (std::get<3>(*it) == std::get<3>(*it2)) && (::std::abs(std::get<4>(*it) - std::get<4>(*it2)) < 0.0001)) {
+			tors.erase(it2);
+			it2 = it;
+		}
+		else
+			it++;
+		it2++;
+	}
+
+	return dat;
 }

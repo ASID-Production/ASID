@@ -284,9 +284,9 @@ TEST(FindAngleTest, C3H6O2) {
 
 TEST(FindTorsionTest, C3H6O2) {
 	p_distances = &testdistances;
-	std::vector<int>types{ 1,8,8,6,6,1,1,6,1,1,1 };
+	std::vector<int>types {1,8,8,6,6,1,1,6,1,1,1};
 
-	std::vector<float> xyz{ 0.438335628 ,     0.000000000  ,   -4.767885621 ,
+	std::vector<float> xyz {0.438335628 ,     0.000000000  ,   -4.767885621 ,
 							0.438335628 ,    -0.587240971  ,   -3.993208195 ,
 							0.438335628 ,     1.434717404  ,   -3.001401644 ,
 							0.438335628 ,     0.227304724  ,   -2.907173504 ,
@@ -296,12 +296,45 @@ TEST(FindTorsionTest, C3H6O2) {
 							0.438335628 ,     0.318369069  ,   -0.375358357 ,
 							0.438335628 ,    -0.294739868  ,    0.530163989 ,
 							1.319085628 ,     0.965221387  ,   -0.354947074 ,
-						   -0.442414372 ,     0.965221387  ,   -0.354947074 };
-	auto res = FindTorsionWC(types, xyz, { 8,6,6,6 }, 
-							 { std::make_pair(1.0f, 2.0f), std::make_pair(0.0f, 2.0f), std::make_pair(0.0f, 2.0f) }, 
-							 { std::make_pair(0.f, 180.f), std::make_pair(0.f, 180.f) },
+						   -0.442414372 ,     0.965221387  ,   -0.354947074};
+	auto res = FindTorsionWC(types, xyz, {8,6,6,6},
+							 {std::make_pair(1.0f, 2.0f), std::make_pair(0.0f, 2.0f), std::make_pair(0.0f, 2.0f)},
+							 {std::make_pair(0.f, 180.f), std::make_pair(0.f, 180.f)},
 							 std::make_pair(-180.f, 180.f));
 	ASSERT_FALSE(res.empty());
+}
+
+TEST(FindDATTest, wcC3H6O2) {
+	p_distances = &testdistances;
+	std::vector<int>types {1,8,8,6,6,1,1,6,1,1,1};
+
+	std::vector<float> xyz {0.438335628 ,     0.000000000  ,   -4.767885621 ,
+							0.438335628 ,    -0.587240971  ,   -3.993208195 ,
+							0.438335628 ,     1.434717404  ,   -3.001401644 ,
+							0.438335628 ,     0.227304724  ,   -2.907173504 ,
+							0.438335628 ,    -0.566448428  ,   -1.619029840 ,
+							1.310639628 ,    -1.231202352  ,   -1.642431518 ,
+						   -0.433968372 ,    -1.231202352  ,   -1.642431518 ,
+							0.438335628 ,     0.318369069  ,   -0.375358357 ,
+							0.438335628 ,    -0.294739868  ,    0.530163989 ,
+							1.319085628 ,     0.965221387  ,   -0.354947074 ,
+						   -0.442414372 ,     0.965221387  ,   -0.354947074};
+	auto res = FindDAT_WC(types, xyz);
+	EXPECT_EQ(std::get<0>(res).size(), 10);
+	EXPECT_EQ(std::get<1>(res).size(), 16);
+	EXPECT_EQ(std::get<2>(res).size(), 17);
+}
+TEST(FindDATTest, icEKESIW) {
+	p_distances = &testdistances;	
+	std::array<float, 6> cell{ 6.83, 11.339, 14.627, 94.58, 95.92, 102.54 };
+	std::vector<const char*> symm{ "x,y,z", "-x,-y,-z" };
+	std::vector<int>  types{ 29, 19, 19, 7, 6, 6, 7, 6, 1, 6, 1, 6, 6, 8, 8, 8, 8, 7, 6, 6, 7, 6, 1, 6, 1, 6, 6, 8, 8, 8, 8, 8, 1, 1, 8, 1, 1, 8, 1, 1, 8, 1, 1, 8, 1, 1, 8, 1, 1, 8, 1, 1, 8, 8, 8, 8, 8, 8, 8, 19, 19, 19, 19, 19, 19, 1, 1, 1, 1 };
+	std::vector<float> xyz{ -0.27059, -0.2371, 0.00097, -0.28596, -0.08164, 0.57449, -0.21667, -0.40913, 0.42584, -0.2366, -0.1124, 0.10899, -0.2214, -0.1596, 0.1874, -0.2208, -0.0927, 0.2724, -0.2343, 0.0234, 0.27433, -0.2488, 0.0702, 0.1945, -0.257, 0.151, 0.195, -0.2521, 0.0034, 0.111, -0.265, 0.039, 0.056, -0.2054, -0.2902, 0.1788, -0.2086, -0.1443, 0.3643, -0.2252, -0.3425, 0.0965, -0.1747, -0.3422, 0.24852, -0.3715, -0.1982, 0.38902, -0.0396, -0.1253, 0.40944, -0.2779, -0.3595, -0.10539, -0.2755, -0.3134, -0.1851, -0.2845, -0.385, -0.2682, -0.2959, -0.5048, -0.26812, -0.2984, -0.5502, -0.1871, -0.307, -0.633, -0.186, -0.2887, -0.4787, -0.1045, -0.29, -0.513, -0.049, -0.2628, -0.1791, -0.1773, -0.2863, -0.3395, -0.362, -0.2458, -0.1264, -0.09497, -0.2757, -0.1259, -0.24745, -0.1217, -0.2947, -0.3886, -0.4548, -0.3553, -0.40796, -0.6, -0.262, -0.0011, -0.665, -0.217, 0.026, -0.682, -0.301, -0.047, -0.298, 0.12, 0.45529, -0.188, 0.161, 0.485, -0.28, 0.123, 0.399, -0.2812, 0.162, 0.6992, -0.259, 0.196, 0.754, -0.372, 0.193, 0.672, -0.1987, -0.6086, 0.5542, -0.214, -0.604, 0.611, -0.303, -0.659, 0.527, -0.2141, -0.6414, 0.3117, -0.12, -0.669, 0.339, -0.32, -0.671, 0.336, -0.7594, -0.1236, 0.1177, -0.736, -0.047, 0.13, -0.886, -0.145, 0.1, -0.1772, -0.5861, 0.1378, -0.181, -0.604, 0.193, -0.196, -0.514, 0.139, 0.0396, 0.1253, 0.59056, -0.2757, -0.1259, 0.75255, -0.1217, -0.2947, 0.6114, -0.4548, -0.3553, 0.59204, -0.702, -0.12, 0.54471, -0.5452, -0.6447, 0.40796, 0.1987, -0.3914, 0.4458, 0.28596, 0.08164, 0.42551, -0.28596, -0.08164, -0.42551, -0.21667, -0.40913, -0.57416, -0.78333, -0.59087, -0.42584, -0.71404, 0.08164, 0.42551, 0.21667, -0.59087, 0.57416, -0.812, -0.161, 0.515, -0.72, -0.123, 0.601, 0.214, -0.396, 0.389, 0.303, -0.341, 0.473 };
+
+	auto res = FindDAT_IC(cell, symm, types, xyz);
+	EXPECT_EQ(std::get<0>(res).size(), 52);
+	EXPECT_EQ(std::get<1>(res).size(), 69);
+	EXPECT_EQ(std::get<2>(res).size(), 130);
 }
 TEST(FindDistanceTest, EKESIW) {
 	p_distances = &testdistances;
@@ -356,7 +389,7 @@ TEST(GenSymmTest, xyz) {
 	}
 	bool mvtc = false;
 
-	std::vector<const char*> symms {"'x,y,z'"};
+	std::vector<const char*> symms {"\'x,y,z\'"};
 	std::vector<SymmType> symm1; symm1.emplace_back(symms[0]);
 
 	FAMStructType famstr(std::move(atoms), std::move(points));
@@ -419,16 +452,16 @@ TEST(databaseSearch10k, d10k) {
 
 	temp = dat;
 	std::vector<int> res1 = SearchMain(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search1).data(), std::move(temp), 4, false);
-	std::cout << "res1 = " << res1.size() << std::endl;
+	EXPECT_EQ(res1.size(), 451);
 	temp = dat;
 	std::vector<int> res2 = SearchMain(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search2).data(), std::move(temp), 4, false);
-	std::cout << "res2 = " << res2.size() << std::endl;
+	EXPECT_EQ(res2.size(), 582);
 	temp = dat;
 	std::vector<int> res3 = SearchMain(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search3).data(), std::move(temp), 4, false);
-	std::cout << "res3 = " << res3.size() << std::endl;
+	EXPECT_EQ(res3.size(), 389);
 	temp = dat;
 	std::vector<int> res4 = SearchMain(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search4).data(), std::move(temp), 4, false);
-	std::cout << "res4 = " << res4.size() << std::endl;
+	EXPECT_EQ(res4.size(), 1276);
 	EXPECT_GE(res1.size() + res2.size() + res3.size(), res4.size());
 
 	std::sort(res1.begin(), res1.end());
