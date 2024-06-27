@@ -35,6 +35,7 @@ import numpy as np
 from ... import point_class
 from ..ChemPack import PALETTE, MOLECULE_SYSTEMS, TREE_MODEL
 from . import MoleculeClass
+import os.path as opath
 
 DB_VIEWER = None
 
@@ -295,9 +296,7 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
             return
         id = data['id']
         cif = Db_bindings.getCif(id)
-        if not os.path.exists('temp/'):
-            os.mkdir('temp')
-        filename = f'temp/{id}.cif'
+        filename = opath.normpath(f'{opath.dirname(__file__)}/../../../temp/{id}.cif')
         out = open(filename, 'wb')
         out.write(cif)
         out.close()

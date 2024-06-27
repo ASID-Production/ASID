@@ -597,6 +597,7 @@ class CreateAtomCommand(Command):
                                        label=kwargs['label'] + str(id),
                                        at_label=kwargs['label'] + str(id),
                                        cn_label='0-14',
+                                       label_size=6,
                                        id=id,
                                        atom_type=kwargs['atom_type'],
                                        color=kwargs['color'],
@@ -982,23 +983,25 @@ class ChangeCNCommand(Command):
         self.cc_point = None
         self.drawing = drawing
 
-    def payload(self, cc_point, cn, label, color, *args, **kwargs):
-        cc_point.point.cn_label = label
+    def payload(self, cc_point, cn, cn_label, *args, **kwargs):
+        cc_point.point.cn_label = cn_label
+        cc_point.point.label = cn_label
         cc_point.point.cn = cn
         self.drawing.changeAtomType(cc_point.point)
 
-    def apply(self, cc_point, atom_type, label, color, *args, **kwargs):
+    def apply(self, cc_point, cn, cn_label, *args, **kwargs):
         Command.apply(self)
         self.cc_point = cc_point
-        self.old_type = cc_point.point.atom_type
-        self.old_label = cc_point.point.label
-        self.old_color = cc_point.point.color
-        self.apply = lambda *args, **kwargs: self.payload(self.cc_point, atom_type, label, color)
+
+        self.old_cn = cc_point.point.cn
+        self.old_cn_label = cc_point.point.cn_label
+
+        self.apply = lambda *args, **kwargs: self.payload(self.cc_point, cn, cn_label)
         self.apply()
 
     def undo(self):
         if self.applied:
-            self.payload(self.cc_point, self.old_type, self.old_label, self.old_color)
+            self.payload(self.cc_point, self.old_cn, self.old_cn_label)
 
 
 class aEvent(ABC):
@@ -1535,6 +1538,39 @@ class MaxMeanPlaneDiff(aDrawWidgetEvent):
         self.old_colors = []
 
 
+class ChangeCN(aDrawWidgetEvent):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.cn = [0, 14]
+        self.cn_label = '0-14'
+
+        self.change_cn_command = None
+
+        self.point = None
+
+    def assertEvent(self, event: QtCore.QEvent, widget):
+        if event.type() == QtCore.QEvent.MouseButtonPress and event.buttons() == QtCore.Qt.LeftButton:
+            self.timer.start()
+            self.point = self.widget.select(event.localPos())
+
+        if event.type() == QtCore.QEvent.MouseButtonRelease:
+            if self.timer.run():
+                self.timer.stop()
+            if self.timer.time() > self.tol:
+                point2 = self.widget.select(event.localPos())
+                if point2 is self.point and self.point is not None:
+                    self.change_cn_command = ChangeCNCommand(self.widget.drawing)
+                    self.change_cn_command.apply(self.point.create_command, self.cn, self.cn_label)
+                    self.change_cn_command.appendStack(self.change_cn_command)
+                self.point = None
+                self.change_cn_command = None
+
+    def setCN(self, cn):
+        cn = [int(x) for x in cn]
+        self.cn = cn
+        self.cn_label = f'{cn[0]}-{cn[1]}'
+
+
 class DrawerGL(QOpenGLWidget):
 
     newContact = Signal(name='newContact')
@@ -1734,6 +1770,7 @@ class DrawWidget(Drawer_model_ui.Ui_Dialog, QtWidgets.QDialog):
         drag_event = Drag(exclusive=True, exclusive_group=1)
         drag_event.attach(self.openGl_drawer)
         self.draw_event = Draw(exclusive=True, exclusive_group=1)
+        self.cn_event = ChangeCN(exclusive=True, exclusive_group=1)
         clear_event = Clear(exclusive=True, exclusive_group=1)
         contact_event = Contact(exclusive=True, exclusive_group=1)
         angle_event = Angle(exclusive=True, exclusive_group=1)
@@ -1763,6 +1800,7 @@ class DrawWidget(Drawer_model_ui.Ui_Dialog, QtWidgets.QDialog):
         self.pushButton_3.pressed.connect(lambda: self.changeDraw('N'))
         self.pushButton_2.pressed.connect(lambda: self.changeDraw('O'))
         self.pushButton_11.pressed.connect(self.setCustomAtomType)
+        self.pushButton_17.pressed.connect(self.setCN)
         #self.pushButton_9.pressed.connect(lambda: self.checked_func.change_attr(func=1))
         #self.pushButton_8.pressed.connect(lambda: self.checked_func.change_attr(func=2))
         #self.dbSearchButton.pressed.connect(lambda: self.db_search(self.openGl_drawer.drawing.struct))
@@ -1790,6 +1828,10 @@ class DrawWidget(Drawer_model_ui.Ui_Dialog, QtWidgets.QDialog):
         self.draw_event.setType(atom_type)
         self.draw_event.attach(self.openGl_drawer)
 
+    def changeCN(self, cn):
+        self.cn_event.setCN(cn)
+        self.cn_event.attach(self.openGl_drawer)
+
     def setCustomAtomType(self):
         dialog = QtWidgets.QDialog(parent=self)
         dialog.setWindowTitle('Custom atom type')
@@ -1801,12 +1843,36 @@ class DrawWidget(Drawer_model_ui.Ui_Dialog, QtWidgets.QDialog):
         dialog.accepted.connect(func)
         dialog.show()
 
+    def setCN(self):
+        dialog = QtWidgets.QDialog(parent=self)
+        dialog.setWindowTitle('C.N.')
+        lineEd = QtWidgets.QLineEdit(parent=dialog)
+        dialog.setLayout(QtWidgets.QVBoxLayout())
+        dialog.layout().addWidget(lineEd)
+        lineEd.returnPressed.connect(dialog.accept)
+        func = lambda: self.getCN(lineEd)
+        dialog.accepted.connect(func)
+        dialog.show()
+
     def getCustomAtomType(self, lineEd: QtWidgets.QLineEdit):
         text = lineEd.text()
         if text == '':
             self.changeDraw('H')
         types = text.split(',')
         self.changeDraw(types)
+
+    def getCN(self, lineEd: QtWidgets.QLineEdit):
+        text = lineEd.text()
+        if text == '':
+            self.changeCN([0, 14])
+            return
+        cns = text.split('-')
+        cn = [int(x) for x in cns]
+        if cn[0] < 0:
+            cn[0] = 0
+        if cn[1] > 14:
+            cn[1] = 14
+        self.changeCN(cn)
 
     def findSub(self, draw: Drawing):
         from ..ChemPack import MOLECULE_SYSTEMS, TREE_MODEL

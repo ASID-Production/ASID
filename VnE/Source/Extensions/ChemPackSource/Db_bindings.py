@@ -30,6 +30,7 @@
 import requests
 import json
 from PySide6.QtWidgets import QDialog, QLabel, QVBoxLayout
+import os.path as opath
 
 import debug
 
@@ -82,12 +83,16 @@ class Session:
             import subprocess
             import os
             if os.name == 'nt':
-                proc_cmd1 = '../venv/Scripts/python.exe ../api_database/django_project/manage.py migrate'.split(' ')
-                proc_cmd2 = '../venv/Scripts/python.exe ../api_database/django_project/manage.py runserver'.split(' ')
+                path = opath.normpath(f'{opath.dirname(__file__)}\\..\\..\\../api_database/django_project/manage.py')
+                print(path)
+                proc_cmd1 = f'..\\venv\\Scripts\\python.exe {path} migrate'.split(' ')
+                proc_cmd2 = f'..\\venv\\Scripts\\python.exe {path} runserver'.split(' ')
             elif os.name == 'posix':
-                proc_cmd1 = '../venv/bin/python3 ../api_database/django_project/manage.py migrate'.split(' ')
-                proc_cmd2 = '../venv/bin/python3 ../api_database/django_project/manage.py runserver'.split(' ')
+                proc_cmd1 = '../venv/bin/python3 ../api_database/django_project/manage.py migrate --noreload'.split(' ')
+                proc_cmd2 = '../venv/bin/python3 ../api_database/django_project/manage.py runserver --noreload'.split(' ')
+            print('Starting migrate')
             proc = subprocess.Popen(proc_cmd1)
+            print('Migrate done')
             while proc.poll() is None:
                 pass
             proc = subprocess.Popen(proc_cmd2)

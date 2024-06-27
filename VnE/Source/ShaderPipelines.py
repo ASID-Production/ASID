@@ -32,6 +32,7 @@ import numpy as np
 from abc import ABC, abstractmethod
 from typing import List
 import ctypes
+import os.path as opath
 
 from .ShaderDataObjects import ShaderData, ShaderDataCreator, ShaderDataText
 
@@ -173,10 +174,10 @@ class BallsShaderPipeline(aShaderPipeline):
     def __init__(self):
         self.shader_data = []
         self.VAOFormat = [(3, np.float32), (4, np.float32), (1, np.float32), (1, np.float32)]
-        self.programs = [[GL_VERTEX_SHADER, None, open('./Source/shaders/vert/base.vert', 'r').read()],
-                         [GL_TESS_CONTROL_SHADER, None, open('./Source/shaders/tesc/balls.tesc', 'r').read()],
-                         [GL_TESS_EVALUATION_SHADER, None, open('./Source/shaders/tese/balls.tese', 'r').read()],
-                         [GL_FRAGMENT_SHADER, None, open('./Source/shaders/frag/base.frag', 'r').read()]]
+        self.programs = [[GL_VERTEX_SHADER, None, open(f'{opath.dirname(__file__)}/shaders/vert/base.vert', 'r').read()],
+                         [GL_TESS_CONTROL_SHADER, None, open(f'{opath.dirname(__file__)}/shaders/tesc/balls.tesc', 'r').read()],
+                         [GL_TESS_EVALUATION_SHADER, None, open(f'{opath.dirname(__file__)}/shaders/tese/balls.tese', 'r').read()],
+                         [GL_FRAGMENT_SHADER, None, open(f'{opath.dirname(__file__)}/shaders/frag/base.frag', 'r').read()]]
 
         self.pipeline = glGenProgramPipelines(1)
         glBindProgramPipeline(self.pipeline)
@@ -207,10 +208,10 @@ class BondShaderPipeline(BallsShaderPipeline):
     def __init__(self):
         self.shader_data = []
         self.VAOFormat = [(3, np.float32), (4, np.float32), (1, np.float32), (1, np.float32)]
-        self.programs = [[GL_VERTEX_SHADER, None, open('./Source/shaders/vert/base.vert', 'r').read()],
-                         [GL_TESS_CONTROL_SHADER, None, open('./Source/shaders/tesc/bonds.tesc', 'r').read()],
-                         [GL_TESS_EVALUATION_SHADER, None, open('./Source/shaders/tese/bonds.tese', 'r').read()],
-                         [GL_FRAGMENT_SHADER, None, open('./Source/shaders/frag/base.frag', 'r').read()]]
+        self.programs = [[GL_VERTEX_SHADER, None, open(f'{opath.dirname(__file__)}/shaders/vert/base.vert', 'r').read()],
+                         [GL_TESS_CONTROL_SHADER, None, open(f'{opath.dirname(__file__)}/shaders/tesc/bonds.tesc', 'r').read()],
+                         [GL_TESS_EVALUATION_SHADER, None, open(f'{opath.dirname(__file__)}/shaders/tese/bonds.tese', 'r').read()],
+                         [GL_FRAGMENT_SHADER, None, open(f'{opath.dirname(__file__)}/shaders/frag/base.frag', 'r').read()]]
 
         self.pipeline = glGenProgramPipelines(1)
         glBindProgramPipeline(self.pipeline)
@@ -231,8 +232,8 @@ class TextShaderPipeline(aShaderPipeline):
     def __init__(self):
         self.shader_data = []
         self.VAOFormat = [(3, np.float32), (2, np.float32), (2, np.float32), (2, np.float32)]
-        self.programs = [[GL_VERTEX_SHADER, None, open('./Source/shaders/vert/text.vert', 'r').read()],
-                         [GL_FRAGMENT_SHADER, None, open('./Source/shaders/frag/text.frag', 'r').read()]]
+        self.programs = [[GL_VERTEX_SHADER, None, open(f'{opath.dirname(__file__)}/shaders/vert/text.vert', 'r').read()],
+                         [GL_FRAGMENT_SHADER, None, open(f'{opath.dirname(__file__)}/shaders/frag/text.frag', 'r').read()]]
         self.textures = []
 
         self.pipeline = glGenProgramPipelines(1)
@@ -268,8 +269,8 @@ class LinesShaderPipeline(aShaderPipeline):
     def __init__(self):
         self.shader_data = []
         self.VAOFormat = [(3, np.float32), (4, np.float32), (1, np.float32)]
-        self.programs = [[GL_VERTEX_SHADER, None, open('./Source/shaders/vert/lines.vert', 'r').read()],
-                         [GL_FRAGMENT_SHADER, None, open('./Source/shaders/frag/lines.frag', 'r').read()]]
+        self.programs = [[GL_VERTEX_SHADER, None, open(f'{opath.dirname(__file__)}/shaders/vert/lines.vert', 'r').read()],
+                         [GL_FRAGMENT_SHADER, None, open(f'{opath.dirname(__file__)}/shaders/frag/lines.frag', 'r').read()]]
 
         self.pipeline = glGenProgramPipelines(1)
         glBindProgramPipeline(self.pipeline)
@@ -303,8 +304,8 @@ class PlaneShaderPipeline(aShaderPipeline):
     def __init__(self):
         self.shader_data = []
         self.VAOFormat = [(3, np.float32), (4, np.float32)]
-        self.programs = [[GL_VERTEX_SHADER, None, open('./Source/shaders/vert/plane.vert', 'r').read()],
-                         [GL_FRAGMENT_SHADER, None, open('./Source/shaders/frag/base.frag', 'r').read()]]
+        self.programs = [[GL_VERTEX_SHADER, None, open(f'{opath.dirname(__file__)}/shaders/vert/plane.vert', 'r').read()],
+                         [GL_FRAGMENT_SHADER, None, open(f'{opath.dirname(__file__)}/shaders/frag/base.frag', 'r').read()]]
 
         self.pipeline = glGenProgramPipelines(1)
         glBindProgramPipeline(self.pipeline)
@@ -335,8 +336,8 @@ class TestShader(PlaneShaderPipeline):
         from OpenGL.GL.shaders import compileProgram, compileShader
         self.shader_data = []
         self.VAOFormat = [(3, np.float32), (4, np.float32)]
-        self.programs = [[GL_VERTEX_SHADER, None, open('./Source/shaders/vert/plane.vert', 'r').read()],
-                         [GL_FRAGMENT_SHADER, None, open('./Source/shaders/frag/base.frag', 'r').read()]]
+        self.programs = [[GL_VERTEX_SHADER, None, open(f'{opath.dirname(__file__)}/shaders/vert/plane.vert', 'r').read()],
+                         [GL_FRAGMENT_SHADER, None, open(f'{opath.dirname(__file__)}/shaders/frag/base.frag', 'r').read()]]
         try:
             vert = compileShader(self.programs[0][2], GL_VERTEX_SHADER)
             frag = compileShader(self.programs[1][2], GL_FRAGMENT_SHADER)

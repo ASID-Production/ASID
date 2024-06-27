@@ -30,6 +30,7 @@
 from OpenGL.GL import *
 import freetype
 import numpy as np
+import os.path as opath
 
 import debug
 
@@ -43,16 +44,16 @@ class Font:
     line = ' qwertyuiop[]asdfg*hjkl;zxcvbnm,./"QWERTYUIOP{}ASDFGHJKL:ZXCVBNM<>?1234567890-+!@#$%^&()_\'\\'
 
     def __init__(self):
+        self.size = 6
         self.char_map = {}
         self.create_chars()
         return
 
-    def create_chars(self):
+    def create_chars(self, size=6):
         """
         Creates chars textures and assign texture options
         :return:
         """
-        size = 12
         face = freetype.Face(f'./Source/fonts/arial.ttf')
         for chr in self.line:
             face.load_char(chr)
@@ -88,6 +89,11 @@ class Font:
                 char.buffer)
         return
 
+    def change_size(self, size):
+        if self.size != size:
+            self.size = size
+            self.create_chars(size)
+
 
 class CharTex:
     """Char texture class, just dict"""
@@ -111,16 +117,19 @@ class Letter:
 
 class Word:
 
-    def __init__(self, xyz, wh, font, word=None):
+    def __init__(self, xyz, wh, font, word=None, size=6):
         self._xyz = xyz
         self._word = word
         self._font = font
         self._buffer_data = np.array([], dtype=np.float32)
         self._wh = wh
+        self.size = size
         if word is not None:
             self.gen_letters(self._word, self._xyz, self._wh, self._font)
 
     def gen_letters(self, word, xyz, wh, font):
+        if self.size != font.size:
+            font.change_size(self.size)
         self._letters = []
         x,y,z = xyz
         x_shift = 0
