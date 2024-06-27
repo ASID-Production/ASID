@@ -28,6 +28,7 @@
 
 
 from .ChemPackSource.ui.select_mol_dialog import SelectMolDialog
+import os.path as opath
 
 TREE_MODEL = None
 DIALOG = None
@@ -59,7 +60,7 @@ def execute():
     def process(molsys):
         from .ChemPackSource.save_file import SAVE_FILE
         list_obj, molsys = molsys
-        name = f'temp/{id(molsys)}.xyz'
+        name = f'{opath.dirname(__file__)}/../../temp/{id(molsys)}.xyz'
         SAVE_FILE.save(molsys, name, 'xyz')
         rdkit_mol = rdkit.Chem.MolFromXYZFile(name)
         params = Descriptors3D.CalcMolDescriptors3D(rdkit_mol)

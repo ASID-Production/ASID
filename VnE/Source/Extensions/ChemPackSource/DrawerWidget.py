@@ -275,6 +275,14 @@ class Drawing:
                 self.connections[point2].pop(point1)
         self.point_node[point1].removeConnect(self.point_node[point2])
 
+    def show_cn(self):
+        for point in self.point_node.keys():
+            point.label = point.cn_label
+
+    def show_at(self):
+        for point in self.point_node.keys():
+            point.label = point.at_label
+
 
 class SolutionOrganizer:
 
@@ -587,10 +595,14 @@ class CreateAtomCommand(Command):
                                        coord=kwargs['coord'],
                                        rad=self.point_list,
                                        label=kwargs['label'] + str(id),
+                                       at_label=kwargs['label'] + str(id),
+                                       cn_label='0-14',
+                                       label_size=6,
                                        id=id,
                                        atom_type=kwargs['atom_type'],
                                        color=kwargs['color'],
-                                       create_command=kwargs['create_command'])
+                                       create_command=kwargs['create_command'],
+                                       cn=[0, 14])
         self.drawing.add_point(self.point)
         kwargs['create_command'].point = self.point
         return self.point
@@ -961,6 +973,35 @@ class DeleteMaxMeanPlaneCommand(ConditionCommand):
     def removePayload(self, *args, **kwargs):
         if self.applied:
             MaxMeanPlaneDiffCommand(self.widget).apply(*self.__cc_points)
+
+
+class ChangeCNCommand(Command):
+    def __init__(self, drawing):
+        Command.__init__(self)
+        self.old_cn = None
+        self.old_cn_label = None
+        self.cc_point = None
+        self.drawing = drawing
+
+    def payload(self, cc_point, cn, cn_label, *args, **kwargs):
+        cc_point.point.cn_label = cn_label
+        cc_point.point.label = cn_label
+        cc_point.point.cn = cn
+        self.drawing.changeAtomType(cc_point.point)
+
+    def apply(self, cc_point, cn, cn_label, *args, **kwargs):
+        Command.apply(self)
+        self.cc_point = cc_point
+
+        self.old_cn = cc_point.point.cn
+        self.old_cn_label = cc_point.point.cn_label
+
+        self.apply = lambda *args, **kwargs: self.payload(self.cc_point, cn, cn_label)
+        self.apply()
+
+    def undo(self):
+        if self.applied:
+            self.payload(self.cc_point, self.old_cn, self.old_cn_label)
 
 
 class aEvent(ABC):
@@ -1497,6 +1538,39 @@ class MaxMeanPlaneDiff(aDrawWidgetEvent):
         self.old_colors = []
 
 
+class ChangeCN(aDrawWidgetEvent):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.cn = [0, 14]
+        self.cn_label = '0-14'
+
+        self.change_cn_command = None
+
+        self.point = None
+
+    def assertEvent(self, event: QtCore.QEvent, widget):
+        if event.type() == QtCore.QEvent.MouseButtonPress and event.buttons() == QtCore.Qt.LeftButton:
+            self.timer.start()
+            self.point = self.widget.select(event.localPos())
+
+        if event.type() == QtCore.QEvent.MouseButtonRelease:
+            if self.timer.run():
+                self.timer.stop()
+            if self.timer.time() > self.tol:
+                point2 = self.widget.select(event.localPos())
+                if point2 is self.point and self.point is not None:
+                    self.change_cn_command = ChangeCNCommand(self.widget.drawing)
+                    self.change_cn_command.apply(self.point.create_command, self.cn, self.cn_label)
+                    self.change_cn_command.appendStack(self.change_cn_command)
+                self.point = None
+                self.change_cn_command = None
+
+    def setCN(self, cn):
+        cn = [int(x) for x in cn]
+        self.cn = cn
+        self.cn_label = f'{cn[0]}-{cn[1]}'
+
+
 class DrawerGL(QOpenGLWidget):
 
     newContact = Signal(name='newContact')
@@ -1696,6 +1770,7 @@ class DrawWidget(Drawer_model_ui.Ui_Dialog, QtWidgets.QDialog):
         drag_event = Drag(exclusive=True, exclusive_group=1)
         drag_event.attach(self.openGl_drawer)
         self.draw_event = Draw(exclusive=True, exclusive_group=1)
+        self.cn_event = ChangeCN(exclusive=True, exclusive_group=1)
         clear_event = Clear(exclusive=True, exclusive_group=1)
         contact_event = Contact(exclusive=True, exclusive_group=1)
         angle_event = Angle(exclusive=True, exclusive_group=1)
@@ -1703,6 +1778,13 @@ class DrawWidget(Drawer_model_ui.Ui_Dialog, QtWidgets.QDialog):
         maxMeanPlaneDiff_event = MaxMeanPlaneDiff(exclusive=True, exclusive_group=1)
 
         self.pushButton_7.pressed.connect(self.exportTable)
+
+        self.pushButton_15.pressed.connect(self.openGl_drawer.drawing.show_cn)
+        self.pushButton_15.pressed.connect(self.openGl_drawer.update)
+        self.pushButton_16.pressed.connect(self.openGl_drawer.drawing.show_at)
+        self.pushButton_16.pressed.connect(self.openGl_drawer.update)
+
+        self.pushButton_16.pressed.connect(self.exportTable)
         self.pushButton_10.pressed.connect(lambda: drag_event.attach(self.openGl_drawer))
         self.pushButton_14.pressed.connect(lambda: clear_event.attach(self.openGl_drawer))
         self.pushButton.pressed.connect(self.openGl_drawer.clearDraw)
@@ -1718,6 +1800,7 @@ class DrawWidget(Drawer_model_ui.Ui_Dialog, QtWidgets.QDialog):
         self.pushButton_3.pressed.connect(lambda: self.changeDraw('N'))
         self.pushButton_2.pressed.connect(lambda: self.changeDraw('O'))
         self.pushButton_11.pressed.connect(self.setCustomAtomType)
+        self.pushButton_17.pressed.connect(self.setCN)
         #self.pushButton_9.pressed.connect(lambda: self.checked_func.change_attr(func=1))
         #self.pushButton_8.pressed.connect(lambda: self.checked_func.change_attr(func=2))
         #self.dbSearchButton.pressed.connect(lambda: self.db_search(self.openGl_drawer.drawing.struct))
@@ -1730,10 +1813,11 @@ class DrawWidget(Drawer_model_ui.Ui_Dialog, QtWidgets.QDialog):
         self.gridLayout.addWidget(self.pushButton_14, 2, 0, 1, 2)
         self.gridLayout.addWidget(self.pushButton, 3, 0, 1, 2)
         self.gridLayout.addWidget(self.pushButton_11, 7, 0, 1, 2)
-        self.gridLayout.addWidget(self.pushButton_9, 8, 0, 1, 2)
-        self.gridLayout.addWidget(self.pushButton_8, 9, 0, 1, 2)
-        self.gridLayout.addWidget(self.pushButton_12, 10, 0, 1, 2)
-        self.gridLayout.addWidget(self.pushButton_13, 11, 0, 1, 2)
+        self.gridLayout.addWidget(self.pushButton_17, 8, 0, 1, 2)
+        self.gridLayout.addWidget(self.pushButton_9, 9, 0, 1, 2)
+        self.gridLayout.addWidget(self.pushButton_8, 10, 0, 1, 2)
+        self.gridLayout.addWidget(self.pushButton_12, 11, 0, 1, 2)
+        self.gridLayout.addWidget(self.pushButton_13, 12, 0, 1, 2)
 
         #self.tableWidget_2.itemChanged.connect(lambda x: self.asd(x, tab=1))
         #self.tableWidget_3.itemChanged.connect(lambda x: self.asd(x, tab=2))
@@ -1743,6 +1827,10 @@ class DrawWidget(Drawer_model_ui.Ui_Dialog, QtWidgets.QDialog):
             atom_type = atom_type[0]
         self.draw_event.setType(atom_type)
         self.draw_event.attach(self.openGl_drawer)
+
+    def changeCN(self, cn):
+        self.cn_event.setCN(cn)
+        self.cn_event.attach(self.openGl_drawer)
 
     def setCustomAtomType(self):
         dialog = QtWidgets.QDialog(parent=self)
@@ -1755,12 +1843,36 @@ class DrawWidget(Drawer_model_ui.Ui_Dialog, QtWidgets.QDialog):
         dialog.accepted.connect(func)
         dialog.show()
 
+    def setCN(self):
+        dialog = QtWidgets.QDialog(parent=self)
+        dialog.setWindowTitle('C.N.')
+        lineEd = QtWidgets.QLineEdit(parent=dialog)
+        dialog.setLayout(QtWidgets.QVBoxLayout())
+        dialog.layout().addWidget(lineEd)
+        lineEd.returnPressed.connect(dialog.accept)
+        func = lambda: self.getCN(lineEd)
+        dialog.accepted.connect(func)
+        dialog.show()
+
     def getCustomAtomType(self, lineEd: QtWidgets.QLineEdit):
         text = lineEd.text()
         if text == '':
             self.changeDraw('H')
         types = text.split(',')
         self.changeDraw(types)
+
+    def getCN(self, lineEd: QtWidgets.QLineEdit):
+        text = lineEd.text()
+        if text == '':
+            self.changeCN([0, 14])
+            return
+        cns = text.split('-')
+        cn = [int(x) for x in cns]
+        if cn[0] < 0:
+            cn[0] = 0
+        if cn[1] > 14:
+            cn[1] = 14
+        self.changeCN(cn)
 
     def findSub(self, draw: Drawing):
         from ..ChemPack import MOLECULE_SYSTEMS, TREE_MODEL
