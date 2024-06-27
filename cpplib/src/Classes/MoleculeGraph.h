@@ -398,12 +398,12 @@ namespace cpplib {
 			std::stable_sort((++order.begin()), order.end(), MoreLambda);
 
 			std::vector<AtomIndex> reorder(s,0);
-			for (std::remove_const<decltype(s)>::type i = 0; i < s; i++)
+			for (typename ::std::remove_const<decltype(s)>::type i = 0; i < s; i++)
 			{
 				reorder[order[i]] = i;
 			}
 
-			for (std::remove_const<decltype(s)>::type i = 1; i < s; i++)
+			for (typename ::std::remove_const<decltype(s)>::type i = 1; i < s; i++)
 			{
 				if (reorder[i] == i)
 					continue;
