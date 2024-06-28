@@ -303,6 +303,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.menu.addMenu(self.extension_menu)
         self.uniformAction.triggered.connect(self.uniformWid.show)
 
+        self.about = self.menu.addAction('About')
+
+        self.about_dialog = QtWidgets.QDialog(self)
+        self.about_dialog.setWindowTitle('About')
+        self.about_dialog.setLayout(QtWidgets.QVBoxLayout())
+        self.about_dialog.layout().addWidget(QtWidgets.QLabel("ASID\nconference demo version\nAuthors:\nAlexander A. Korlyukov (head),\nAlexander D. Volodin (author of cpplib),\nPetr A. Buikin (author of api_database),\nAlexander R. Romanenko (author of VnE)"))
+
+        self.about.triggered.connect(self.about_dialog.show)
+
         widget.setLayout(hlayout)
         self.resize(1280, 720)
 
