@@ -9,7 +9,7 @@ Django==3.2.24
 djangorestframework==3.14.0
 django-filter==22.1
 drf-yasg==1.21.4
-numpy==1.25.2
+numpy==1.26.0
 gemmi>=0.5.8
 djoser==2.1.0
 networkx>=2.8.8
