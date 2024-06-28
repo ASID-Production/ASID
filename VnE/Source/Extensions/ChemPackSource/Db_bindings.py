@@ -82,14 +82,15 @@ class Session:
         if SERVER_PROC is None:
             import subprocess
             import os
+            root = opath.normpath(f'{opath.dirname(__file__)}/../../../..')
+            path = opath.normpath(f'{root}/api_database/django_project/manage.py')
             if os.name == 'nt':
-                path = opath.normpath(f'{opath.dirname(__file__)}\\..\\..\\../api_database/django_project/manage.py')
                 print(path)
-                proc_cmd1 = f'..\\venv\\Scripts\\python.exe {path} migrate'.split(' ')
-                proc_cmd2 = f'..\\venv\\Scripts\\python.exe {path} runserver'.split(' ')
+                proc_cmd1 = f'{root}\\venv\\Scripts\\python.exe {path} migrate'.split(' ')
+                proc_cmd2 = f'{root}\\venv\\Scripts\\python.exe {path} runserver'.split(' ')
             elif os.name == 'posix':
-                proc_cmd1 = '../venv/bin/python3 ../api_database/django_project/manage.py migrate --noreload'.split(' ')
-                proc_cmd2 = '../venv/bin/python3 ../api_database/django_project/manage.py runserver --noreload'.split(' ')
+                proc_cmd1 = f'{root}/venv/bin/python3 {path} migrate --noreload'.split(' ')
+                proc_cmd2 = f'{root}/venv/bin/python3 {path} runserver --noreload'.split(' ')
             print('Starting migrate')
             proc = subprocess.Popen(proc_cmd1)
             print('Migrate done')
