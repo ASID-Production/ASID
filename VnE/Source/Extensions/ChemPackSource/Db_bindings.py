@@ -30,7 +30,9 @@
 import requests
 import json
 from PySide6.QtWidgets import QDialog, QLabel, QVBoxLayout
+from PySide6.QtCore import QProcess
 import os.path as opath
+import os
 
 import debug
 
@@ -39,6 +41,7 @@ search_types = ['refcode', 'name', 'elements', 'doi', 'authors', 'cell']
 SETUP = False
 SESSION = None
 SERVER_PROC = None
+
 
 class ErrorDialog(QDialog):
 
@@ -81,7 +84,6 @@ class Session:
         global SERVER_PROC
         if SERVER_PROC is None:
             import subprocess
-            import os
             root = opath.normpath(f'{opath.dirname(__file__)}/../../../..')
             path = opath.normpath(f'{root}/api_database/django_project/manage.py')
             if os.name == 'nt':
@@ -110,24 +112,24 @@ class Session:
 SESSION: Session
 
 
-def search(text, search_type):
+def search(text, search_type, process=None):
+    if process is None:
+        process = QProcess()
     if search_type == 'substructure':
-        data_out = structureSearch(text)
-        return data_out
-    if SESSION.user_token:
-        headers = {'Authorization': f'Token {SESSION.user_token}'}
-        data = requests.get(f'{SESSION.url_base}/api/v1/structures/?{search_type}={text}&limit=1000', headers=headers)
-    else:
-        data = requests.get(f'{SESSION.url_base}/api/v1/structures/?{search_type}={text}&limit=1000')
-    data = data.content.decode(data.apparent_encoding)
-    data = json.loads(data)
-    data_out = data['results']
-    while data['next'] is not None:
-        data = requests.get(data['next'])
-        data = data.content.decode(data.apparent_encoding)
-        data = json.loads(data)
-        data_out += data['results']
-    return data_out
+        process = structureSearch(text, process)
+        return process
+    token = SESSION.user_token
+    req = f'{SESSION.url_base}/api/v1/structures/?{search_type}={text}&limit=1000'
+
+    root = opath.normpath(f'{opath.dirname(__file__)}/../../../..')
+    path = opath.normpath(f'{root}/VnE/Source/Extensions/ChemPackSource/searchProcess.py')
+    if os.name == 'nt':
+        prog = opath.normpath(f'{root}\\venv\\Scripts\\python.exe')
+    elif os.name == 'posix':
+        prog = opath.normpath(f'{root}/venv/bin/python3')
+    process.startCommand(f'{prog} {path} -f search -r {req} -t {token}')
+    process.waitForStarted()
+    return process
 
 
 def get_full_info(id):
@@ -156,9 +158,11 @@ def uploadFile(file):
         a = 0
 
 
-def structureSearch(struct):
+def structureSearch(struct, process=None):
     from .DrawerWidget import Drawing
     struct: Drawing
+    if process is None:
+        process = QProcess()
 
     def getEdges(struct):
         edges = []
@@ -183,27 +187,19 @@ def structureSearch(struct):
     body['edges'] = edges
     body['chunk_size'] = 10000
     body['iter_num'] = 0
-    if SESSION.user_token is not None:
-        headers = {'Authorization': f'Token {SESSION.user_token}'}
-        req = lambda: requests.get(f'{SESSION.url_base}/api/v1/structures/search/?limit=10000', data=body, headers=headers)
-    else:
-        req = lambda: requests.get(f'{SESSION.url_base}/api/v1/structures/search/?limit=10000', data=body)
-    data = req()
-    data = data.content.decode(data.apparent_encoding)
-    data = json.loads(data)
-    data_out = data['results']
-    for iter in range(1, data['max_iter_num']+1):
-        body['iter_num'] = iter
-        data = req()
-        data = data.content.decode(data.apparent_encoding)
-        data = json.loads(data)
-        data_out += data['results']
-    '''while data['next'] is not None:
-        data = requests.get(data['next'], data=body)
-        data = data.content.decode(data.apparent_encoding)
-        data = json.loads(data)
-        data_out += data['results']'''
-    return data_out
+    token = SESSION.user_token
+    req = f'{SESSION.url_base}/api/v1/structures/search/?limit=10000'
+    root = opath.normpath(f'{opath.dirname(__file__)}/../../../..')
+    path = opath.normpath(f'{root}/VnE/Source/Extensions/ChemPackSource/searchProcess.py')
+    if os.name == 'nt':
+        prog = opath.normpath(f'{root}\\venv\\Scripts\\python.exe')
+    elif os.name == 'posix':
+        prog = opath.normpath(f'{root}/venv/bin/python3')
+    body = json.dumps(body)+'\n'
+    process.startCommand(f'{prog} {path} -f structureSearch -r {req} -t {token} -b True')
+    process.waitForStarted()
+    process.write(bytes(body, encoding='utf-8'))
+    return process
 
 
 def create_table(data):

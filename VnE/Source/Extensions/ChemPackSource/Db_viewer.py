@@ -36,10 +36,12 @@ from ... import point_class
 from ..ChemPack import PALETTE, MOLECULE_SYSTEMS, TREE_MODEL
 from . import MoleculeClass
 import os.path as opath
+import json
 
 DB_VIEWER = None
 
 import debug
+
 
 class StructuresListModel(QAbstractListModel):
 
@@ -50,13 +52,38 @@ class StructuresListModel(QAbstractListModel):
         self._data = []
         self._rows = 0
         self._display_tag = 'refcode'
+        self._search_proc = None
 
     def populate(self, request):
         request, search_type = request
-        self.beginResetModel()
-        self._data = Db_bindings.search(request, search_type)
-        self._rows = len(self._data)
-        self.endResetModel()
+        if self._search_proc is None:
+            self.beginResetModel()
+            self._data = []
+            self._rows = 0
+            self.endResetModel()
+            self._search_proc = QProcess(self)
+            self._search_proc.finished.connect(self.searchDone)
+            self._search_proc.readyReadStandardOutput.connect(self.appendRes)
+            self._search_proc = Db_bindings.search(request, search_type, process=self._search_proc)
+            a = 0
+        else:
+            return
+
+    def searchDone(self):
+        self._search_proc = None
+
+    def appendRes(self):
+        data = self._search_proc.readAllStandardOutput()
+        data = str(data, encoding='utf-8').split('\n')
+        for d in data:
+            if d:
+                d = json.loads(d)
+                d = d['results']
+                size = len(d)
+                self.beginInsertRows(QModelIndex(), self._rows, self._rows + size - 1)
+                self._data += d
+                self._rows += size
+                self.endInsertRows()
 
     def setDisplayTag(self, tag):
         if tag in self._display_tags:
@@ -302,6 +329,7 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
         out.close()
         pars(filename, True, TREE_MODEL.getRoot())
         return
+
 
 def show():
     global DB_VIEWER
