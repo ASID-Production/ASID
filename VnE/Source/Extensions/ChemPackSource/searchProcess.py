@@ -36,13 +36,13 @@ def search(req, token=None):
     data = data.content.decode(data.apparent_encoding)
     file.write(data + '\n')
     sys.stdout.write(data+'\n')
-    #data = json.loads(data)
+    data = json.loads(data)
     while data['next'] is not None:
         data = requests.get(data['next'])
         data = data.content.decode(data.apparent_encoding)
         file.write(data + '\n')
         sys.stdout.write(data+'\n')
-        #data = json.loads(data)
+        data = json.loads(data)
 
 
 FUNCTIONS = {'structureSearch': (structureSearch, ('request', 'body', 'token')),

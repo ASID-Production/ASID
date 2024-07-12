@@ -58,30 +58,41 @@ class Session:
     def __init__(self):
         self.url_base = None
         self.user_token = None
+        self.usr_login = None
+        self.usr_pass = None
+        self.ready = False
+        self.last_connect_start_op = lambda: True
 
     def connectServer(self, address, port):
+        self.last_connect_start_op = lambda: self.connectServer(address, port)
         url_base = f'http://{address}:{port}'
         if url_base != self.url_base:
             self.user_token = None
             self.url_base = url_base
+            self.ready = True
 
     def login(self, name, passwd):
-        if self.url_base is not None:
-            b = requests.post(f'{self.url_base}/api/auth/users/', data={
-                "email": "user@example.com",
-                "username": f"{name}",
-                "first_name": "none",
-                "last_name": "none",
-                "password": f"{passwd}"
-            })
-            token = requests.post(f'{self.url_base}/api/auth/token/login/', data={
-                "username": f"{name}",
-                "password": f"{passwd}"
-            })
-            self.user_token = json.loads(token.text)['auth_token']
+        if not self.ready:
+            return
+        if name and passwd:
+            if self.url_base is not None:
+                self.usr_login, self.usr_pass = name, passwd
+                b = requests.post(f'{self.url_base}/api/auth/users/', data={
+                    "email": "user@example.com",
+                    "username": f"{name}",
+                    "first_name": "none",
+                    "last_name": "none",
+                    "password": f"{passwd}"
+                })
+                token = requests.post(f'{self.url_base}/api/auth/token/login/', data={
+                    "username": f"{name}",
+                    "password": f"{passwd}"
+                })
+                self.user_token = json.loads(token.text)['auth_token']
 
     def startServer(self, port):
         global SERVER_PROC
+        self.last_connect_start_op = lambda: self.startServer(port)
         if SERVER_PROC is None:
             import subprocess
             root = opath.normpath(f'{opath.dirname(__file__)}/../../../..')
@@ -107,6 +118,15 @@ class Session:
                 pass
             self.url_base = f'http://localhost:{port}'
             self.user_token = None
+            self.ready = True
+        else:
+            SERVER_PROC.kill()
+            SERVER_PROC = None
+            self.startServer(port)
+            self.login(self.usr_login, self.usr_pass)
+
+    def triggerLastConnectOp(self):
+        self.last_connect_start_op()
 
 
 SESSION: Session
@@ -115,6 +135,9 @@ SESSION: Session
 def search(text, search_type, process=None):
     if process is None:
         process = QProcess()
+    if not SESSION.ready:
+        process.kill()
+        return
     if search_type == 'substructure':
         process = structureSearch(text, process)
         return process

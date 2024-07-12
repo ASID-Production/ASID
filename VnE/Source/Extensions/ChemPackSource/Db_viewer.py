@@ -49,6 +49,13 @@ class StructuresListModel(QAbstractListModel):
 
     def __init__(self, parent=None):
         super().__init__(parent=parent)
+        if parent:
+            try:
+                self.progress_bar = parent.progressBar
+                self.progress = 0
+            except AttributeError:
+                self.progress_bar = None
+                self.progress = None
         self._data = []
         self._rows = 0
         self._display_tag = 'refcode'
@@ -57,6 +64,9 @@ class StructuresListModel(QAbstractListModel):
     def populate(self, request):
         request, search_type = request
         if self._search_proc is None:
+            if self.progress_bar:
+                self.progress_bar.setValue(0)
+                self.progress = 0
             self.beginResetModel()
             self._data = []
             self._rows = 0
@@ -71,6 +81,9 @@ class StructuresListModel(QAbstractListModel):
 
     def searchDone(self):
         self._search_proc = None
+        if self.progress_bar:
+            self.progress_bar.setValue(100)
+            self.progress = 1
 
     def appendRes(self):
         data = self._search_proc.readAllStandardOutput()
@@ -78,12 +91,23 @@ class StructuresListModel(QAbstractListModel):
         for d in data:
             if d:
                 d = json.loads(d)
+                if self.progress_bar:
+                    if d.get('max_iter_num', None):
+                        self.progress = self.progress + 1 / d['max_iter_num']
+                    else:
+                        self.progress = self.progress + len(d['results'])/d['count']
+                    self.progress_bar.setValue(int(round(self.progress*100)))
                 d = d['results']
                 size = len(d)
                 self.beginInsertRows(QModelIndex(), self._rows, self._rows + size - 1)
                 self._data += d
                 self._rows += size
                 self.endInsertRows()
+
+    def stopSearch(self):
+        if self._search_proc:
+            self._search_proc.readyReadStandardOutput.disconnect(self.appendRes)
+            self._search_proc = None
 
     def setDisplayTag(self, tag):
         if tag in self._display_tags:
@@ -252,7 +276,7 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
 
         self.setWindowTitle('DB Search')
 
-        self.list_model = StructuresListModel()
+        self.list_model = StructuresListModel(self)
         self.listView: QtWidgets.QListView
         self.listView.setModel(self.list_model)
         self.listView.setSelectionModel(QItemSelectionModel())
@@ -280,6 +304,9 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
         self.pushButton_4.pressed.connect(self.uploadFile)
 
         self.pushButton_5.pressed.connect(self.db_settings.show)
+
+        self.pushButton_6.pressed.connect(self.list_model.stopSearch)
+        self.pushButton_6.pressed.connect(Db_bindings.SESSION.triggerLastConnectOp)
 
     def setSpan(self):
         for i in range(self.table_model.rowCount()):

@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'base_search_window.ui'
+## Form generated from reading UI file 'base_search_windowOcXJbD.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.6.1
+## Created by: Qt User Interface Compiler version 6.6.3
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -16,15 +16,15 @@ from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QCursor,
     QImage, QKeySequence, QLinearGradient, QPainter,
     QPalette, QPixmap, QRadialGradient, QTransform)
 from PySide6.QtWidgets import (QApplication, QDialog, QFrame, QHBoxLayout,
-    QHeaderView, QListView, QPushButton, QSizePolicy,
-    QTableView, QVBoxLayout, QWidget)
+    QHeaderView, QListView, QProgressBar, QPushButton,
+    QSizePolicy, QTableView, QVBoxLayout, QWidget)
 
 class Ui_Dialog(object):
     def setupUi(self, Dialog):
         if not Dialog.objectName():
             Dialog.setObjectName(u"Dialog")
         Dialog.resize(839, 451)
-        sizePolicy = QSizePolicy(QSizePolicy.Minimum, QSizePolicy.Preferred)
+        sizePolicy = QSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(Dialog.sizePolicy().hasHeightForWidth())
@@ -49,7 +49,7 @@ class Ui_Dialog(object):
         self.verticalLayout_2.setContentsMargins(0, 0, 0, 0)
         self.frame_2 = QFrame(self.frame)
         self.frame_2.setObjectName(u"frame_2")
-        sizePolicy1 = QSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+        sizePolicy1 = QSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Minimum)
         sizePolicy1.setHorizontalStretch(0)
         sizePolicy1.setVerticalStretch(0)
         sizePolicy1.setHeightForWidth(self.frame_2.sizePolicy().hasHeightForWidth())
@@ -63,7 +63,7 @@ class Ui_Dialog(object):
         self.horizontalLayout_2.setContentsMargins(6, 0, 6, 0)
         self.pushButton_2 = QPushButton(self.frame_2)
         self.pushButton_2.setObjectName(u"pushButton_2")
-        sizePolicy2 = QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Fixed)
+        sizePolicy2 = QSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Fixed)
         sizePolicy2.setHorizontalStretch(0)
         sizePolicy2.setVerticalStretch(0)
         sizePolicy2.setHeightForWidth(self.pushButton_2.sizePolicy().hasHeightForWidth())
@@ -94,7 +94,7 @@ class Ui_Dialog(object):
 
         self.pushButton = QPushButton(self.frame_2)
         self.pushButton.setObjectName(u"pushButton")
-        sizePolicy3 = QSizePolicy(QSizePolicy.MinimumExpanding, QSizePolicy.Preferred)
+        sizePolicy3 = QSizePolicy(QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Preferred)
         sizePolicy3.setHorizontalStretch(0)
         sizePolicy3.setVerticalStretch(0)
         sizePolicy3.setHeightForWidth(self.pushButton.sizePolicy().hasHeightForWidth())
@@ -112,6 +112,29 @@ class Ui_Dialog(object):
         self.listView.setObjectName(u"listView")
 
         self.verticalLayout_2.addWidget(self.listView)
+
+        self.frame_3 = QFrame(self.frame)
+        self.frame_3.setObjectName(u"frame_3")
+        self.frame_3.setFrameShape(QFrame.StyledPanel)
+        self.frame_3.setFrameShadow(QFrame.Raised)
+        self.horizontalLayout_3 = QHBoxLayout(self.frame_3)
+        self.horizontalLayout_3.setSpacing(0)
+        self.horizontalLayout_3.setObjectName(u"horizontalLayout_3")
+        self.horizontalLayout_3.setContentsMargins(0, 0, 0, 0)
+        self.pushButton_6 = QPushButton(self.frame_3)
+        self.pushButton_6.setObjectName(u"pushButton_6")
+
+        self.horizontalLayout_3.addWidget(self.pushButton_6)
+
+        self.progressBar = QProgressBar(self.frame_3)
+        self.progressBar.setObjectName(u"progressBar")
+        self.progressBar.setValue(0)
+        self.progressBar.setTextVisible(False)
+
+        self.horizontalLayout_3.addWidget(self.progressBar)
+
+
+        self.verticalLayout_2.addWidget(self.frame_3)
 
 
         self.horizontalLayout.addWidget(self.frame)
@@ -134,5 +157,6 @@ class Ui_Dialog(object):
         self.pushButton_4.setText(QCoreApplication.translate("Dialog", u"Upload", None))
         self.pushButton_5.setText(QCoreApplication.translate("Dialog", u"Settings", None))
         self.pushButton.setText(QCoreApplication.translate("Dialog", u"Search", None))
+        self.pushButton_6.setText(QCoreApplication.translate("Dialog", u"Stop", None))
     # retranslateUi
 
