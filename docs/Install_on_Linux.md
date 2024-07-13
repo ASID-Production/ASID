@@ -13,15 +13,11 @@ Example command line request (requares super user rights)
 
 ----
 ### Installation
-1. #### Download repository
-
-   Download source code of [latest stable version](https://github.com/ASID-Production/ASID/releases/latest).
+1. #### Download repository (choose one option)
+   a)  Download source code of [latest stable version](https://github.com/ASID-Production/ASID/releases/latest) and unpack it in any sutable directory.
    
-     or
-   
-   clone git repository using comand line (`git clone https://github.com/ASID-Production/ASID`).
-2. #### Unpack it in any sutable directory.
-3. #### Run `install-linux.sh` in the ASID directory.
+   b) Clone git repository using comand line (`git clone https://github.com/ASID-Production/ASID`).
+2. #### Run `install-linux.sh` in the ASID directory.
 
 ----
 [Back to main page](https://github.com/ASID-Production/ASID)
