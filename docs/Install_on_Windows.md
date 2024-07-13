@@ -2,7 +2,6 @@
 
 ### Requirements
 * Windows 10/11 (only x64 version). 
-* [Python](https://www.python.org/downloads/) (version 3.10 or newer)
 
 ----
 ### Installation
