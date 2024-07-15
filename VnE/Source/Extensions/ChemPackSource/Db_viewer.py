@@ -62,7 +62,7 @@ class StructuresListModel(QAbstractListModel):
         self._search_proc = None
 
     def populate(self, request):
-        request, search_type = request
+        request, search_type, db_type = request
         if self._search_proc is None:
             if self.progress_bar:
                 self.progress_bar.setValue(0)
@@ -74,7 +74,7 @@ class StructuresListModel(QAbstractListModel):
             self._search_proc = QProcess(self)
             self._search_proc.finished.connect(self.searchDone)
             self._search_proc.readyReadStandardOutput.connect(self.appendRes)
-            self._search_proc = Db_bindings.search(request, search_type, process=self._search_proc)
+            self._search_proc = Db_bindings.search(request, search_type, db_type, process=self._search_proc)
             a = 0
         else:
             return
@@ -95,8 +95,11 @@ class StructuresListModel(QAbstractListModel):
                     if d.get('max_iter_num', None):
                         self.progress = self.progress + 1 / d['max_iter_num']
                     else:
-                        self.progress = self.progress + len(d['results'])/d['count']
-                    self.progress_bar.setValue(int(round(self.progress*100)))
+                        if d['count'] != 0:
+                            self.progress = self.progress + len(d['results'])/d['count']
+                            self.progress_bar.setValue(int(round(self.progress*100)))
+                        else:
+                            return
                 d = d['results']
                 size = len(d)
                 self.beginInsertRows(QModelIndex(), self._rows, self._rows + size - 1)
@@ -208,6 +211,8 @@ from .ui import search_dialog
 class SearchDialog(search_dialog.Ui_Dialog, QtWidgets.QDialog):
 
     SEARCH_TYPES = Db_bindings.search_types
+    DB_TYPES = {0: 'cryst',
+                1: 'qm'}
 
     def __init__(self, parent=None):
         super().__init__()
@@ -231,6 +236,9 @@ class SearchDialog(search_dialog.Ui_Dialog, QtWidgets.QDialog):
 
     def getSearchType(self):
         return self.search_type
+
+    def getSearchDb(self):
+        return self.DB_TYPES.get(self.comboBox.currentIndex(), 'cryst')
 
 
 from .ui import Settings_dialog
@@ -296,7 +304,7 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
         self.tableView.horizontalHeader().setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
 
         self.pushButton.pressed.connect(self.search_dialog.show)
-        self.search_dialog.pushButton.pressed.connect(lambda: self.list_model.populate((self.search_dialog.getText(), self.search_dialog.getSearchType())))
+        self.search_dialog.pushButton.pressed.connect(lambda: self.list_model.populate((self.search_dialog.getText(), self.search_dialog.getSearchType(), self.search_dialog.getSearchDb())))
         self.pushButton_2.pressed.connect(self.loadStruct)
 
         self.pushButton_3.pressed.connect(self.saveCif)
@@ -327,7 +335,8 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
             return
         else:
             id = data['id']
-            cif = Db_bindings.getCif(id)
+            db_type = self.search_dialog.getSearchDb()
+            cif = Db_bindings.getCif(id, db_type)
             filename = QtWidgets.QFileDialog.getSaveFileName()[0]
             if filename:
                 out = open(filename, 'wb')
@@ -337,7 +346,8 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
     def uploadFile(self):
         filename = QtWidgets.QFileDialog.getOpenFileName(filter='*.cif *.xml')[0]
         if filename:
-            Db_bindings.uploadFile(filename)
+            _, ext = opath.splitext(filename)
+            Db_bindings.uploadFile(filename, ext)
 
     def loadStruct(self):
         from ..ChemPack import pars
@@ -349,7 +359,8 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
         if data is None:
             return
         id = data['id']
-        cif = Db_bindings.getCif(id)
+        db_type = self.search_dialog.getSearchDb()
+        cif = Db_bindings.getCif(id, db_type)
         filename = opath.normpath(f'{opath.dirname(__file__)}/../../../temp/{id}.cif')
         out = open(filename, 'wb')
         out.write(cif)

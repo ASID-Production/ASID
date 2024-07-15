@@ -132,17 +132,20 @@ class Session:
 SESSION: Session
 
 
-def search(text, search_type, process=None):
+def search(text, search_type, db_type='cryst', process=None):
+    url_mods = {'cryst': 'api/v1/structures',
+                'qm': 'api/v1/qc_structures'}
     if process is None:
         process = QProcess()
     if not SESSION.ready:
         process.kill()
         return
+    url_mod = url_mods.get(db_type, 'api/v1/structures')
     if search_type == 'substructure':
-        process = structureSearch(text, process)
+        process = structureSearch(text, url_mod, process)
         return process
     token = SESSION.user_token
-    req = f'{SESSION.url_base}/api/v1/structures/?{search_type}={text}&limit=1000'
+    req = f'{SESSION.url_base}/{url_mod}/?{search_type}={text}&limit=1000'
 
     root = opath.normpath(f'{opath.dirname(__file__)}/../../../..')
     path = opath.normpath(f'{root}/VnE/Source/Extensions/ChemPackSource/searchProcess.py')
@@ -155,33 +158,56 @@ def search(text, search_type, process=None):
     return process
 
 
-def get_full_info(id):
-    data = requests.get(f'{SESSION.url_base}/api/v1/structures/{id}')
+def get_full_info(id, db_type='cryst'):
+    url_mods = {'cryst': 'api/v1/structures',
+                'qm': 'api/v1/qc_structures'}
+    url_mod = url_mods.get(db_type, 'api/v1/structures')
+    data = requests.get(f'{SESSION.url_base}/{url_mod}/{id}')
     data = data.content.decode(data.apparent_encoding)
     data_out = json.loads(data)
     return data_out
 
 
-def getCif(id):
-    data = requests.get(f'{SESSION.url_base}/api/v1/structures/{id}/download/')
+def getCif(id, db_type='cryst'):
+    url_mods = {'cryst': 'api/v1/structures',
+                'qm': 'api/v1/qc_structures'}
+    url_mod = url_mods.get(db_type, 'api/v1/structures')
+    data = requests.get(f'{SESSION.url_base}/{url_mod}/{id}/download/')
     return data.content
 
 
-def uploadFile(file):
+def uploadFile(file, ext):
     import os
-    if SESSION.user_token is not None:
+
+    def uploadCif(files, headers):
         url = f'{SESSION.url_base}/api/v1/structures/upload/'
-        files = [('file', (os.path.basename(file), open(file, 'rb'), 'application/octet-stream'))]
-        headers = {'Authorization': f'Token {SESSION.user_token}'}
         resp = requests.request('POST', url, headers=headers, data={}, files=files)
-        if resp.status_code == 400:
-            error = json.loads(resp.text)
-            SESSION.error_dialog = ErrorDialog(error['errors'])
+        return resp
+
+    def uploadXml(files, headers):
+        url = f'{SESSION.url_base}/api/v1/qc_structures/upload/vasp'
+        resp = requests.request('POST', url, headers=headers, data={}, files=files)
+        return resp
+
+    ext_method = {'.cif': uploadCif,
+                  '.xml': uploadXml}
+
+    if SESSION.user_token is not None:
+        method = ext_method.get(ext, None)
+        if method:
+            files = [('file', (os.path.basename(file), open(file, 'rb'), 'application/octet-stream'))]
+            headers = {'Authorization': f'Token {SESSION.user_token}'}
+            resp = method(files, headers)
+            if resp.status_code == 400:
+                error = json.loads(resp.text)
+                SESSION.error_dialog = ErrorDialog(error['errors'])
+                SESSION.error_dialog.show()
+        else:
+            SESSION.error_dialog = ErrorDialog('Unsupported file format')
             SESSION.error_dialog.show()
-        a = 0
 
 
-def structureSearch(struct, process=None):
+def structureSearch(struct, url_mod, process=None):
     from .DrawerWidget import Drawing
     struct: Drawing
     if process is None:
@@ -211,7 +237,7 @@ def structureSearch(struct, process=None):
     body['chunk_size'] = 10000
     body['iter_num'] = 0
     token = SESSION.user_token
-    req = f'{SESSION.url_base}/api/v1/structures/search/?limit=10000'
+    req = f'{SESSION.url_base}/{url_mod}/search/?limit=10000'
     root = opath.normpath(f'{opath.dirname(__file__)}/../../../..')
     path = opath.normpath(f'{root}/VnE/Source/Extensions/ChemPackSource/searchProcess.py')
     if os.name == 'nt':
