@@ -42,6 +42,24 @@ class FileParser:
                                   '.pdb': self.parsPdb,
                                   '.cif': self.parsCif}
 
+    def fracToDec(a, b, c, al, be, ga, coords):
+        al = (al / 180) * np.pi
+        be = (be / 180) * np.pi
+        ga = (ga / 180) * np.pi
+
+        sin = np.sin
+        cos = np.cos
+        cot = lambda x: np.tan(x) ** -1
+        csc = lambda x: np.sin(x) ** -1
+
+        mat = np.array([[a * sin(be) * np.sqrt(1 - (cot(al) * cot(be) - csc(al) * csc(be) * cos(ga)) ** 2), 0, 0],
+                        [a * csc(al) * cos(ga) - a * cot(al) * cos(be), b * sin(al), 0],
+                        [a * cos(be), b * cos(al), c]])
+        mat = mat.transpose()
+        for i in range(len(coords)):
+            coords[i] = (coords[i] @ mat).astype(dtype=np.float32)
+        return coords
+
     def parsFile(self, file_path, bond=True, root=None):
         _, ext = os.path.splitext(file_path)
         ext = ext.lower()
@@ -256,24 +274,6 @@ class FileParser:
     def parsCif(self, file_path, bond=True, root=None, *args, **kwargs):
         from gemmi import cif
 
-        def fracToDec(a, b, c, al, be, ga, coords):
-            al = (al/180)*np.pi
-            be = (be/180)*np.pi
-            ga = (ga/180)*np.pi
-
-            sin = np.sin
-            cos = np.cos
-            cot = lambda x: np.tan(x)**-1
-            csc = lambda x: np.sin(x)**-1
-
-            mat = np.array([[a*sin(be)*np.sqrt(1-(cot(al)*cot(be) - csc(al)*csc(be)*cos(ga))**2), 0, 0],
-                            [a*csc(al)*cos(ga) - a*cot(al)*cos(be), b*sin(al), 0],
-                            [a*cos(be), b*cos(al), c]])
-            mat = mat.transpose()
-            for i in range(len(coords)):
-                coords[i] = (coords[i] @ mat).astype(dtype=np.float32)
-            return coords
-
         mol_list, atom_list, bonds_l = None, None, None
         block = cif.read_file(file_path).sole_block()
         mol_sys = MoleculeClass.MoleculeSystem()
@@ -307,7 +307,7 @@ class FileParser:
         args = []
         args += cell
         args.append(coords)
-        dec_coords = fracToDec(*args)
+        dec_coords = self.fracToDec(*args)
         for i, atom in enumerate(atoms):
             cif_data = {'cif_sym_codes': sym_codes,
                         'cif_cell_a': cell[0],
@@ -328,7 +328,7 @@ class FileParser:
                        [1, 0, 1],
                        [1, 1, 1]]
         args = [*cell, cell_coords]
-        cell_dec_coords = fracToDec(*args)
+        cell_dec_coords = self.fracToDec(*args)
 
         mol_sys, list_tuple = self.parsMolSys(mol_sys, bond, root)
         mol_list = list_tuple[0]
@@ -410,6 +410,111 @@ class FileParser:
                                                    parent=bond_l)
                             bonds.append(bond)
         return mol_sys, (mol_list, atom_list, bonds_l)
+
+    def parsWinxproOut(self, file_path, bond=True, root=None, *args, **kwarg):
+
+        def parseCell(line, file):
+            nonlocal flag
+            if 'alpha          beta           gamma' in line:
+                flag = True
+                return
+            if flag:
+                par = [float(x) for x in line[:-1].split(' ') if x]
+                flag = False
+                methods.pop(0)
+            return
+
+        def parseAtm(line, file):
+            nonlocal flag
+            if 'Symop  Z       xf      yf      zf         x      y      z' in line:
+                flag = True
+                return
+            if flag:
+                if line == ' \n':
+                    flag = False
+                    methods.pop(0)
+                    return
+                data = [x for x in line[:-1].split(' ') if x]
+                name = data[0]
+                atom_type = int(data[1])
+                coords = [float(x) for x in data[5:8]]
+                atom = MoleculeClass.Atom(coords, atom_type, None, name=name)
+                atoms.append(atom)
+
+        def parseCPs(line, file):
+            types = {'3,-3': 6,
+                     '3,-1': 7,
+                     '3,+1': 8,
+                     '3,+3': 9}
+            nonlocal flag
+            if ' Summary of CPs: ' in line:
+                flag = True
+                file.__next__()
+                file.__next__()
+                return
+            if flag:
+                def checkForEnd():
+                    nonlocal flag
+                    if line == '\n':
+                        flag = False
+                        methods.pop(0)
+                        return
+                def parseCP():
+                    nonlocal line
+                    data = [x for x in line[:-1].split(' ') if x]
+                    type = data[1][1:-1]
+                    coords =[float(x) for x in data[8:11]]
+                    cp = MoleculeClass.Atom(coords, types.get(type, 999))
+                    cps.append(cp)
+                    file.__next__()
+                    file.__next__()
+                    file.__next__()
+                    file.__next__()
+                    file.__next__()
+                    file.__next__()
+                    line = file.__next__()
+                    checkForEnd()
+                    return
+                checkForEnd()
+                while flag:
+                    parseCP()
+                return
+
+
+        mol_list, atom_list, bonds_l = None, None, None
+        mol_sys = MoleculeClass.MoleculeSystem()
+        mol_sys.file_name = file_path
+        mol_sys.name = os.path.basename(file_path).split('.')[0]
+        mol = MoleculeClass.Molecule(parent=mol_sys)
+
+        cps_sys = MoleculeClass.MoleculeSystem()
+        cps_sys.file_name = file_path
+        cps_sys.name = 'CPs'
+        cps = MoleculeClass.Molecule(parent=cps_sys)
+
+        flag = False
+        cell = None
+        atoms = []
+        cps = []
+        methods = [parseCell, parseAtm, parseCPs]
+
+        with open(file_path, 'r') as file:
+            for line in file:
+                if methods:
+                    methods[0](line, file)
+                else:
+                    break
+        mol: MoleculeClass.Molecule
+        mol = mol_sys.children[0]
+        for atom in atoms:
+            mol.addChild(atom)
+
+        mol = cps_sys.children[0]
+        for cp in cps:
+            mol.addChild(cp)
+
+        mol_sys, list_tuple = self.parsMolSys(mol_sys, bond, root)
+        return mol_sys, list_tuple
 
     @staticmethod
     def _pointCreation(atom_list, atom):

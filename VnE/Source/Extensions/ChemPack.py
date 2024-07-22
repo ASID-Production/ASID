@@ -137,10 +137,30 @@ def exportData():
     exportData.execute()
     return
 
+
 def attachCPprop():
     from .ChemPackSource import attach_cpprop
     attach_cpprop.execute()
     return
+
+
+def parseWinxpro():
+    from PySide6.QtWidgets import QFileDialog
+
+    global PARSER
+    global TREE_MODEL
+    if PARSER is None:
+        from .ChemPackSource.parsers import PARSER as parser
+        PARSER = parser
+    filename, _ = QFileDialog.getOpenFileName()
+    if TREE_MODEL is not None:
+        molsys, points_lists = PARSER.parsWinxproOut(filename, bond=True, root=TREE_MODEL.getRoot())
+        loadMolSys(molsys, points_lists)
+        return molsys, points_lists
+    else:
+        molsys, _ = PARSER.parsWinxproOut(filename)
+        return molsys, None
+
 
 def execute(model, uniform_model=None):
     from PySide6.QtWidgets import QFileDialog
@@ -224,5 +244,9 @@ def setup(menu, model, uniform_model=None, *args, **kwargs):
     action_attach.triggered.connect(attachCPprop)
     cmenu.addAction(action_attach)
 
-    actions = [open_action, action_test, action_DB, save_action, action_sym_op, action_export, action_attach]
+    action_winx = QAction('Parse Winxpro')
+    action_winx.triggered.connect(parseWinxpro)
+    cmenu.addAction(action_winx)
+
+    actions = [open_action, action_test, action_DB, save_action, action_sym_op, action_export, action_attach, action_winx]
     return actions
