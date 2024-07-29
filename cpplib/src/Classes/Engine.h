@@ -34,6 +34,7 @@
 #include <bitset> // for std::array in XAtom
 
 #include "../BaseHeaders/Support.h"
+#include "../BaseHeaders/DebugMes.h"
 #include "../BaseHeaders/Currents.h"
 namespace cpplib {
 	class XAtom {
@@ -127,39 +128,88 @@ namespace cpplib {
 			return (number_ & HIGHMASK) >> 4;
 		}
 	};
+	template<class A> class Node;
 
-	template<class A> class Node {
+	class NeighboursType {
+	public:
+		static constexpr int8_t maxNeighbours = 100;
+		using ShiftType = currents::AtomIndex;
+	private:
+		::std::array<ShiftType, maxNeighbours> data_{ 0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
+		int8_t size_ = 0;
+	public:
+		NeighboursType() noexcept : data_{0} { data_.fill(0); }
+		inline void push_back(const ShiftType obj) {
+			_ASSERT(size_ < maxNeighbours);
+			data_[size_] = obj;
+			size_++;
+		}
+		inline auto size() const {
+			return size_;
+		}
+		inline ShiftType operator[](int8_t i) const {
+			_ASSERT(i < size_);
+			return data_[i];
+		}
+		inline ShiftType& operator[](int8_t i) {
+			_ASSERT(i < size_);
+			return data_[i];
+		}
+		void erase(int8_t i) {
+			_ASSERT(i < size_);
+			size_--;
+			for (; i < size_; i++) {
+				data_[i] = data_[i + 1];
+			}
+		}
+		template <class T>
+		inline void sort() {
+			for (size_t j = 1; j < size_; j++)
+			{
+				auto& n = *(reinterpret_cast<Node<T>*const>(this) + data_[j]);
+				for (int8_t i = j - 1; i >= (int8_t)(0); i--)
+				{
+					if (n < (*(reinterpret_cast<Node<T>*const>(this) + data_[i]))) {
+						::std::swap(data_[i], data_[i + 1]);
+					}
+					else break;
+				}
+			}
+		}
+		void addShift(ShiftType add) {
+			for (char i = 0; i < size_; i++)
+			{
+				data_[i] += add;
+			}
+		}
+	};
+
+	template<class A>
+	class Node {
 	public:
 		// Declarations
 		using NeighbourValueType = Node*;
-		using NeighboursType = std::vector<NeighbourValueType>;
 		using HType = currents::HType;
 		using AtomIndex = currents::AtomIndex;
-
 
 		template <class X>
 		friend class Node;
 	private:
 		// Data
+		NeighboursType neighbours_; // should be first
 		A type_ = 0;
 		HType hAtoms_ = 0;
 		AtomIndex id_ = 0;
 		Coord coord_ = 0;
-		NeighboursType neighbours_;
 	public:
 		// Constructors
-		constexpr Node() {
-			initializeNeighbours();
-		}
+		constexpr Node(): neighbours_() {}
 		constexpr Node(const A& t1, const HType& h1, const AtomIndex& id)
-			: type_(t1), hAtoms_(h1), id_(id) {
-			initializeNeighbours();
-		}
-		//constexpr Node(const A& t1, const HType& h1, const AtomIndex& id, NeighboursType&& neighbours)
-		//	: type_(t1), hAtoms_(h1), neighbours_(std::move(neighbours)), id_(id) {}
+			: type_(t1), hAtoms_(h1), id_(id), coord_(h1), neighbours_() {}
 
 		// Operators
-		template <class X> inline bool operator==(const Node<X>& other) const noexcept {
+		template <class X> 
+		inline bool operator==(const Node<X>& other) const noexcept {
 			return (type_ == other.type_) && 
 				(hAtoms_ == other.hAtoms_) &&
 				(neighbours_.size() == other.neighbours_.size()) &&
@@ -204,18 +254,20 @@ namespace cpplib {
 		constexpr bool isNeighbour(const Node& node) const noexcept(noexcept(neighbours_.operator[](0)) && noexcept(neighbours_.size())) {
 			const auto s = neighbours_.size();
 			const auto node_id = node.getID();
+			using ShiftType = NeighboursType::ShiftType;
+			ShiftType shift = (&node) - this;
 			for (size_t i = 0; i < s; i++)
-				if (neighbours_[i] == &node) return true;
+				if (neighbours_[i] == shift) return true;
 			return false;
 		}
 		constexpr AtomIndex neighboursSize() const noexcept {
 			return static_cast<AtomIndex>(neighbours_.size());
 		}
 		constexpr bool hasNeighbours() const noexcept {
-			return !neighbours_.empty();
+			return neighbours_.size() != 0;
 		}
 		constexpr NeighbourValueType getNeighbour(AtomIndex neighbour_iterator) const {
-			return neighbours_[neighbour_iterator];
+			return const_cast<NeighbourValueType>(this + neighbours_[neighbour_iterator]);
 		}
 
 		inline const AtomIndex& getID() const noexcept {
@@ -242,37 +294,34 @@ namespace cpplib {
 
 		// Algorithms
 		inline void sortNeighbours() {
-			std::sort(neighbours_.begin(), neighbours_.end(),
-					  [](const Node* a1, const Node* a2) {
-				return (*a1) > (*a2);
-			});
+			neighbours_.sort<A>();
 		}
 		constexpr void addBondWithSort(Node& other) {
-			neighbours_.emplace_back(&other);
-			other.neighbours_.emplace_back(this);
+			neighbours_.push_back(&other - this);
+			other.neighbours_.push_back(this - &other);
 
 			const auto ns = neighboursSize();
 			for (AtomIndex i = 0; i < ns; i++) {
-				neighbours_[i]->sortNeighbours();
+				(this + neighbours_[i])->sortNeighbours();
 			}
 
 			const auto nso = other.neighboursSize();
 			for (AtomIndex i = 0; i < nso; i++) {
-				other.neighbours_[i]->sortNeighbours();
+				((&other) + other.neighbours_[i])->sortNeighbours();
 			}
 		}
 		constexpr void deleteBond(Node& other) {
 			deleteNeighbour(other);
-			other.deleteNeighbour(*this);
+			other.deleteNeighbour(this);
 
 			const auto ns = neighboursSize();
 			for (AtomIndex i = 0; i < ns; i++) {
-				neighbours_[i]->sortNeighbours();
+				(this + neighbours_[i])->sortNeighbours();
 			}
 
 			const auto nso = other.neighboursSize();
 			for (AtomIndex i = 0; i < nso; i++) {
-				other.neighbours_[i]->sortNeighbours();
+				((&other) + other.neighbours_[i])->sortNeighbours();
 			}
 		}
 		AtomIndex findNeighbour(NeighbourValueType other) const noexcept {
@@ -291,36 +340,26 @@ namespace cpplib {
 		constexpr void swap(Node& other) noexcept {
 			::std::swap(type_, other.type_);
 			::std::swap(hAtoms_, other.hAtoms_);
-			neighbours_.swap(other.neighbours_);
-
-			// Does not change id or neighbours of neighbours
-		}
-		constexpr void exchangeNeighbour(const NeighbourValueType oldNei, const NeighbourValueType newNei) {
-			*(::std::find(neighbours_.begin(), neighbours_.end(), oldNei)) = newNei;
-		}
-		constexpr NeighbourValueType core_neighbours_pop_back() noexcept {
-			NeighbourValueType res = std::move(neighbours_.back());
-			neighbours_.pop_back();
-			return res;
+			::std::swap(id_, other.id_);
+			::std::swap(coord_, other.coord_);
+			::std::swap(neighbours_, other.neighbours_);
+			NeighboursType::ShiftType shift = &other - this;
+			neighbours_.addShift(shift);
+			other.neighbours_.addShift(-shift);
 		}
 	private:
-		constexpr void initializeNeighbours() {
-			neighbours_.reserve(4);
-		}
 		inline void deleteNeighbour(const Node& node) noexcept {
 			return deleteNeighbour(&node);
 		}
 		constexpr void deleteNeighbour(const Node* pnode) noexcept {
-			size_t s = neighbours_.size();
-			size_t i = 0;
+			using ShiftType = NeighboursType::ShiftType;
+			auto s = neighbours_.size();
+			ShiftType shift = pnode - this;
+			decltype(s) i = 0;
 			for (; i < s; i++) {
-				if (neighbours_[i] == (pnode)) break;
+				if (neighbours_[i] == shift) break;
 			}
-			s--;
-			for (; i < s; i++) {
-				neighbours_[i] = neighbours_[i + 1];
-			}
-			neighbours_.pop_back();
+			neighbours_.erase(i);
 		}
 
 

@@ -85,12 +85,11 @@ namespace cpplib {
 			catch (bool) {
 				return true;
 			}
+			deleteComp(startI);
 			return false;
 		}
 		// destroys all data, need reinitialization!
 		bool startFullSearch(const bool exact, AtomIndex startAtom = 0) {
-			const auto inputBackup = input_.makeCopy();
-			const auto dataBackup = data_.makeCopy();
 			if (startAtom == 0) startAtom = input_.findStart();
 			for (AtomIndex i = 1; i < dataSize_; i++) {
 				if (compare(input_[startAtom], data_[i], exact) == false) {
@@ -98,9 +97,7 @@ namespace cpplib {
 				}
 				if (searchTry(startAtom, i, exact) == true)
 					return true;
-				input_ = inputBackup.makeCopy();
-				data_ = dataBackup.makeCopy();
-				prepareToSearch();
+				//prepareToSearch();
 			}
 			return false;
 		}

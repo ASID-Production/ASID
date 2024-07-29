@@ -15,3 +15,6 @@ template <class T>
 inline void deb_write(const char*, const T&) { /*empty debug function*/ }
 
 #endif // DEBUG_MESS_ON
+#ifndef WIN32
+#define _ASSERT(a) (0);
+#endif

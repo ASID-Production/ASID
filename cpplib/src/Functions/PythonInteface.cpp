@@ -230,13 +230,9 @@ extern "C" {
 				PyList_Append(o_molecule, o_atom);
 			}
 
-
 			PyList_Append(o_xyz_block, Py_BuildValue("{s:l,s:O}",
 													 "count", long(mol.second),
 													 "atoms", o_molecule));
-
-
-
 		}
 
 		return Py_BuildValue("{s:s,s:O}", 
@@ -642,7 +638,8 @@ extern "C" {
 
 		PyObject* list_d = PyList_New(0);
 		for (size_t i = 0; i < datdist.size(); i++) {
-			PyList_Append(list_d, Py_BuildValue("(IIf)", static_cast<unsigned int>(std::get<0>(datdist[i])),
+			PyList_Append(list_d, Py_BuildValue("(IIf)", 
+												static_cast<unsigned int>(std::get<0>(datdist[i])),
 												static_cast<unsigned int>(std::get<1>(datdist[i])),
 												static_cast<float>(std::get<2>(datdist[i]))));
 		}
@@ -650,7 +647,8 @@ extern "C" {
 
 		PyObject* list_a = PyList_New(0);
 		for (size_t i = 0; i < datang.size(); i++) {
-			PyList_Append(list_a, Py_BuildValue("(IIIf)", static_cast<unsigned int>(std::get<0>(datang[i])),
+			PyList_Append(list_a, Py_BuildValue("(IIIf)", 
+												static_cast<unsigned int>(std::get<0>(datang[i])),
 												static_cast<unsigned int>(std::get<1>(datang[i])),
 												static_cast<unsigned int>(std::get<2>(datang[i])),
 												static_cast<float>(std::get<3>(datang[i]))));
@@ -659,7 +657,8 @@ extern "C" {
 
 		PyObject* list_t = PyList_New(0);
 		for (size_t i = 0; i < dattor.size(); i++) {
-			PyList_Append(list_t, Py_BuildValue("(IIIIf)", static_cast<unsigned int>(std::get<0>(dattor[i])),
+			PyList_Append(list_t, Py_BuildValue("(IIIIf)", 
+												static_cast<unsigned int>(std::get<0>(dattor[i])),
 												static_cast<unsigned int>(std::get<1>(dattor[i])),
 												static_cast<unsigned int>(std::get<2>(dattor[i])),
 												static_cast<unsigned int>(std::get<3>(dattor[i])),
@@ -688,7 +687,8 @@ extern "C" {
 
 		PyObject* list_d = PyList_New(0);
 		for (size_t i = 0; i < datdist.size(); i++) {
-			PyList_Append(list_d, Py_BuildValue("(IIf)", static_cast<unsigned int>(std::get<0>(datdist[i])),
+			PyList_Append(list_d, Py_BuildValue("(IIf)", 
+												static_cast<unsigned int>(std::get<0>(datdist[i])),
 												static_cast<unsigned int>(std::get<1>(datdist[i])),
 												static_cast<float>(std::get<2>(datdist[i]))));
 		}
@@ -696,7 +696,8 @@ extern "C" {
 
 		PyObject* list_a = PyList_New(0);
 		for (size_t i = 0; i < datang.size(); i++) {
-			PyList_Append(list_a, Py_BuildValue("(IIIf)", static_cast<unsigned int>(std::get<0>(datang[i])),
+			PyList_Append(list_a, Py_BuildValue("(IIIf)", 
+												static_cast<unsigned int>(std::get<0>(datang[i])),
 												static_cast<unsigned int>(std::get<1>(datang[i])),
 												static_cast<unsigned int>(std::get<2>(datang[i])),
 												static_cast<float>(std::get<3>(datang[i]))));
@@ -705,7 +706,8 @@ extern "C" {
 
 		PyObject* list_t = PyList_New(0);
 		for (size_t i = 0; i < dattor.size(); i++) {
-			PyList_Append(list_t, Py_BuildValue("(IIIIf)", static_cast<unsigned int>(std::get<0>(dattor[i])),
+			PyList_Append(list_t, Py_BuildValue("(IIIIf)", 
+												static_cast<unsigned int>(std::get<0>(dattor[i])),
 												static_cast<unsigned int>(std::get<1>(dattor[i])),
 												static_cast<unsigned int>(std::get<2>(dattor[i])),
 												static_cast<unsigned int>(std::get<3>(dattor[i])),

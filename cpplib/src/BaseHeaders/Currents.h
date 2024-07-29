@@ -26,8 +26,8 @@ namespace cpplib {
 	}
 
 	namespace currents {
-		using AtomIndex = uint_fast32_t;
-		using MoleculeIndex = uint_fast32_t;
+		using AtomIndex = int_fast32_t;
+		using MoleculeIndex = int_fast32_t;
 		using DistancesIndexType = int_fast8_t;
 		using HType = int_fast8_t;
 		using AtomTypeRequest = XAtom;

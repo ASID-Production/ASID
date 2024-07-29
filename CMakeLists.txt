@@ -59,8 +59,6 @@ project(cpplibLib)
                            "cpplib/src/Functions/Functions.h"
                            "cpplib/src/Functions/AllInOneAndCurrent.h" 
                            "cpplib/src/Classes/FindGeometry.h" "cpplib/src/Functions/PythonInteface.cpp" "cpplib/src/BaseHeaders/Currents.h")
-    target_compile_features(cpplibLib PUBLIC cxx_std_14)
-    set_property(TARGET cpplibLib PROPERTY CXX_STANDARD 14)
     target_link_libraries(cpplibLib ${PYTHON_LIBRARIES} Python::Python)
 
     target_include_directories(cpplibLib PUBLIC 
@@ -89,8 +87,6 @@ project(cpplib)
     #Generate the shared library from the library sources
     if(CMAKE_BUILD_TYPE MATCHES Release)
         add_library(cpplib SHARED "cpplib/src/Functions/Functions.cpp" "cpplib/src/Functions/PythonInteface.cpp" "cpplib/src/BaseHeaders/Currents.h")
-        target_compile_features(cpplib PUBLIC cxx_std_14)
-        set_property(TARGET cpplib PROPERTY CXX_STANDARD 14)
         target_link_libraries(cpplib ${PYTHON_LIBRARIES} Python::Python)
         set_target_properties(cpplib PROPERTIES
             PREFIX ""

@@ -81,7 +81,7 @@ namespace cpplib {
 			return true;
 		}
 	private:
-		constexpr ::std::vector<hash_single> createMonohash(const ::std::vector<NodeType>& nodes) const {
+		::std::vector<hash_single> createMonohash(const ::std::vector<NodeType>& nodes) const {
 			auto size = nodes.size();
 			std::vector<hash_single> monohash(size);
 			for (size_type i = 0; i < size; i++) {
@@ -89,7 +89,7 @@ namespace cpplib {
 			}
 			return monohash;
 		}
-		constexpr std::vector<hash_single> createMonohash(const std::vector<AtomIndex>& ai, const std::vector<NodeType>& nodes) const {
+		std::vector<hash_single> createMonohash(const std::vector<AtomIndex>& ai, const std::vector<NodeType>& nodes) const {
 
 			auto size = nodes.size();
 			std::vector<hash_single> monohash(size);

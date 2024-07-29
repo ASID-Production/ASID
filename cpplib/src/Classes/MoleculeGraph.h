@@ -28,7 +28,6 @@
 #pragma once
 #include "Engine.h" // for Node and Bond
 #include "../BaseHeaders/Support.h" // for mend_size
-#include <sstream> // for explicit string constructor
 #include <vector> // for using std::vector
 #include <list> // for using std::list
 #include <type_traits> // for std::fundamental
@@ -57,22 +56,22 @@ namespace cpplib {
 		explicit constexpr MoleculeGraph(NodeContainer&& other) noexcept(::std::is_nothrow_move_constructible<NodeContainer>::value)
 			: data_(::std::move(other)) {}
 		
-		static constexpr MoleculeGraph ReadData(const char* str, const ::std::bitset<mend_size>& multiAtomBits) {
+		static MoleculeGraph ReadData(const char* str, const ::std::bitset<mend_size>& multiAtomBits) {
 			MoleculeGraph mg;
-			::std::stringstream ss(str);
-			const auto sn = mg.parseMainstring<false>(ss);
-
-			mg.release_HAtoms_CharAtom(multiAtomBits, sn);
+			//::std::stringstream ss(str);
+			const auto sn = mg.parseMainstring<false>(str);
+			
+			mg.release_HAtoms(multiAtomBits, sn);
 			//mg.sortGraph();
 			return mg;
 		}
 
-		static constexpr ::std::pair<MoleculeGraph, ::std::bitset<mend_size>> ReadInput(const char* str) {
+		static ::std::pair<MoleculeGraph, ::std::bitset<mend_size>> ReadInput(const char* str) {
 			MoleculeGraph mg;
-			::std::stringstream ss(str);
-			const auto sn = mg.parseMainstring<true>(ss);
-			auto multiAtomBits = mg.parseMultiatom(ss, sn);
-			mg.release_HAtoms_XAtom(multiAtomBits, sn);
+			const auto sn = mg.parseMainstring<true>(str);
+			//::std::stringstream ss(str);
+			auto multiAtomBits = mg.parseMultiatom(str, sn);
+			mg.release_HAtoms(multiAtomBits, sn);
 			//mg.sortGraph();
 			return ::std::make_pair(std::move(mg), ::std::move(multiAtomBits));
 		}
@@ -83,7 +82,7 @@ namespace cpplib {
 		}
 
 		// Bond functions
-		constexpr ::std::vector<BondType> getBonds() const {
+		::std::vector<BondType> getBonds() const {
 			std::vector<BondType> ret;
 
 			AtomIndex s = size();
@@ -165,17 +164,6 @@ namespace cpplib {
 				const auto& node = data_[i];
 				ret.data_.emplace_back(node);
 			}
-			for (AtomIndex i = 0; i < s; i++) {
-				auto& node = data_[i];
-
-				using NeighboursType = typename NodeType::NeighboursType;
-				NeighboursType ret_nei(0);
-				const auto nodeSize = node.neighboursSize();
-				for (AtomIndex j = 0; j < nodeSize; j++) {
-					ret_nei.push_back(&(ret[node.getNeighbour(j)->getID()]));
-				}
-				ret[i].addNeighboursVector(::std::move(ret_nei));
-			}
 			return ret;
 		}
 
@@ -208,7 +196,6 @@ namespace cpplib {
 		}
 
 		// static section for old tests
-
 		static ::std::string _ParseOldInputString(const char* str)  {
 			::std::string ret(str);
 			int na;
@@ -235,46 +222,67 @@ namespace cpplib {
 		}
 
 	private:
-		template<bool is_request> inline void parseAtomsBlock(::std::stringstream& ss, const AtomIndex sn) {
+		bool readToNext(const char*& str) {
+
+			while (*str != '-' && *str != '\0' && (*str > '9' || *str < '0')) {
+				str++;
+			}
+			return *str != '\0';
+		}
+		AtomIndex readSingleInt(const char*& str) {
+			readToNext(str);
+			bool minus = false;
+			if (*str == '-') {
+				minus = true;
+				str++;
+			}
+			AtomIndex res = (*str)-'0';
+			str++;
+			while ((*str)!=' ' && (*str)!='\0')
+			{
+				res *= 10;
+				res += (*str) - '0';
+				str++;
+			}
+			if (minus)
+				return -res;
+			else
+				return res;
+		}
+		template<bool is_request> inline void parseAtomsBlock(const char *& str, const AtomIndex sn) {
 			data_.reserve(sn);
 			data_.emplace_back(A(0), HType(0), AtomIndex(0));
 			for (AtomIndex i = 1; i < sn; i++) {
-				int a;
-				ss >> a;
-				int b;
-				ss >> b;
+				int a = readSingleInt(str);
+				int b = readSingleInt(str);
 				data_.emplace_back(A(a), HType(b), AtomIndex(i));
 				if (is_request) {
-					int first;
-					int second;
-					ss >> first;
-					ss >> second;
+					int first = readSingleInt(str);
+					int second = readSingleInt(str);
 					data_.back().setCoord(Coord(static_cast<Coord::argumentType>(first), static_cast<Coord::argumentType>(second)));
 				}
 			}
 		}
-		::std::pair<AtomIndex, AtomIndex> parseInit(std::stringstream& ss) {
-			ss >> id_;
+		::std::pair<AtomIndex, AtomIndex> parseInit(const char*& str) {
+			id_ = readSingleInt(str);
 			::std::pair<AtomIndex, AtomIndex> r;
-			ss >> r.first;
-			ss >> r.second;
+			r.first = readSingleInt(str);
+			r.second = readSingleInt(str);
 			r.first++;
 			return r;
 		}
-		template <bool is_request> inline AtomIndex parseMainstring(::std::stringstream& ss) {
-			::std::pair<AtomIndex, AtomIndex>&& sn_sb = parseInit(ss);
+		template <bool is_request> inline AtomIndex parseMainstring(const char*& str) {
+			::std::pair<AtomIndex, AtomIndex>&& sn_sb = parseInit(str);
 			AtomIndex& sn = sn_sb.first;
 			AtomIndex& sb = sn_sb.second;
 
 			// Atomic loop
-			parseAtomsBlock<is_request>(ss, sn);
+			parseAtomsBlock<is_request>(str, sn);
 
 			// Bond loop
 			for (AtomIndex i = 0; i < sb; i++) {
-				int a;
-				ss >> a;
-				int b;
-				ss >> b;
+				int a = readSingleInt(str);
+				int b = readSingleInt(str);
 				data_[a].addBondWithSort(data_[b]);
 			}
 			if (is_request == false) {
@@ -285,19 +293,21 @@ namespace cpplib {
 			}
 			return sn;
 		}
-		::std::bitset<mend_size> parseMultiatom(::std::stringstream& ss, const AtomIndex sn) {
-			int xty;
+		::std::bitset<mend_size> parseMultiatom(const char* str, const AtomIndex sn) {
+			AtomIndex xty;
 			::std::bitset<mend_size> multiAtomBits;
-
-			if (!(ss >> xty))
+			if(readToNext(str))
+				xty = readSingleInt(str);
+			else {
 				return multiAtomBits;
+			}
 			//-1 6 7 8 -2 8 16 -3 9 17 0
 			while (xty != 0) {
 				A real(static_cast<char>(xty));
 				int next_xty = 0;
 				for (char i = 0; i < mend_size; i++)
 				{
-					ss >> next_xty;
+					next_xty = readSingleInt(str);
 					if (next_xty <= 0) break;
 					real.AddType(static_cast<char>(next_xty));
 				}
@@ -315,79 +325,38 @@ namespace cpplib {
 				}
 				// Foolproof
 				while (next_xty > 0) {
-					ss >> next_xty;
+					next_xty = readSingleInt(str);
 				}
 				xty = next_xty;
 			}
 
 			return multiAtomBits;
 		}
-		void release_HAtoms_XAtom(const ::std::bitset<mend_size>& bits, const AtomIndex sn) {
+		void release_HAtoms(const ::std::bitset<mend_size>& bits, const AtomIndex sn) {
 			if (bits.none()) return;
 			size_t hs = this->size();
-			::std::list< NodeType> hydrogenAtoms;
+			//::std::list< NodeType> hydrogenAtoms;
 
 			for (AtomIndex i = 1; i < sn; i++)
 			{
-				if ((((XAtom)this->operator[](i).getType()).get_bitset() & bits).any()) {
-
+				bool check;
+				if (::std::is_same<A, XAtom>::value == true) {
+					check = ((static_cast<XAtom>(data_[i].getType())).get_bitset() & bits).any();
+				}
+				else {
+					check = bits[(char)(this->operator[](i).getType())];
+				}
+				if(check) {
 					auto hAtoms = this->operator[](i).getHAtoms();
 					for (HType j = 0; j < hAtoms; j++)
 					{
-						hydrogenAtoms.emplace_back(XAtom(1), 0, hs);
-						this->operator[](i).addBondWithSort(hydrogenAtoms.back());
+						data_.emplace_back(A(1), 0, hs);
+						data_[i].addBondWithSort(data_.back());
 						hs++;
 					}
-					this->operator[](i).setHAtoms(0);
+					data_[i].setHAtoms(0);
 				}
 			}
-			AddNewAtoms(std::move(hydrogenAtoms), hs);
-
-		}
-		void release_HAtoms_CharAtom(const std::bitset<mend_size>& bits, const AtomIndex sn) {
-			if (bits.none()) return;
-			size_t hs = this->size();
-			std::list<NodeType> hydrogenAtoms;
-
-			for (AtomIndex i = 1; i < sn; i++)
-			{
-				if (bits[(char)(this->operator[](i).getType())]) {
-					auto hAtoms = this->operator[](i).getHAtoms();
-					for (HType j = 0; j < hAtoms; j++)
-					{
-						hydrogenAtoms.emplace_back(1, 0, static_cast<AtomIndex>(hs));
-						this->operator[](i).addBondWithSort(hydrogenAtoms.back());
-						hs++;
-					}
-					this->operator[](i).setHAtoms(0);
-				}
-			}
-			AddNewAtoms(std::move(hydrogenAtoms), hs);
-		}
-
-
-		void AddNewAtoms(std::list<NodeType>&& l, AtomIndex size_plus_l) {
-			std::vector<NodeType> ex(size_plus_l);
-			AtomIndex s = size();
-			for (AtomIndex i = 1; i < s; i++)
-			{
-				ex[i].swap(this->operator[](i));
-				ex[i].setID(i);
-				for (AtomIndex j = 0; j < ex[i].neighboursSize(); j++)
-				{
-					ex[i].exchangeNeighbour(ex[i].getNeighbour(j), &(ex[ex[i].getNeighbour(j)->getID()]));
-				}
-			}
-
-			auto iter = l.begin();
-			for (AtomIndex i = s; i < size_plus_l; i++) {
-
-				ex[i].swap(*iter);
-				ex[i].setID(i);
-				ex[i].exchangeNeighbour(ex[i].getNeighbour(0), &(ex[ex[i].getNeighbour(0)->getID()]));
-				iter++;
-			}
-			std::swap(ex, data_);
 		}
 
 		void sortGraph() {
