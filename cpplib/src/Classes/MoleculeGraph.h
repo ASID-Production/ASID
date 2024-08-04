@@ -368,15 +368,13 @@ namespace cpplib {
 
 		void AddNewAtoms(std::list<NodeType>&& l, AtomIndex size_plus_l) {
 			std::vector<NodeType> ex(size_plus_l);
-			AtomIndex s = size();
+
+			const AtomIndex s = size();
+
 			for (AtomIndex i = 1; i < s; i++)
 			{
-				ex[i].swap(this->operator[](i));
+				ex[i].swap(data_[i]);
 				ex[i].setID(i);
-				for (AtomIndex j = 0; j < ex[i].neighboursSize(); j++)
-				{
-					ex[i].exchangeNeighbour(ex[i].getNeighbour(j), &(ex[ex[i].getNeighbour(j)->getID()]));
-				}
 			}
 
 			auto iter = l.begin();
@@ -384,7 +382,6 @@ namespace cpplib {
 
 				ex[i].swap(*iter);
 				ex[i].setID(i);
-				ex[i].exchangeNeighbour(ex[i].getNeighbour(0), &(ex[ex[i].getNeighbour(0)->getID()]));
 				iter++;
 			}
 			std::swap(ex, data_);

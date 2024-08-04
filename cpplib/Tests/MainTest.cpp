@@ -429,12 +429,16 @@ TEST(SearchMainTest, multytype3) {
 	EXPECT_EQ(res.size(), 2);
 }
 
-
+// Benchmark section
+#ifdef NDEBUG
 TEST(databaseSearch10k, d10k) {
 	const char search1[]{ "1 5 4 6 2 6 2 6 0 6 2 6 2 1 2 2 3 3 4 4 5" };
 	const char search2[]{ "1 5 4 6 2 6 2 7 0 6 2 6 2 1 2 2 3 3 4 4 5" };
 	const char search3[]{ "1 5 4 6 2 6 2 8 0 6 2 6 2 1 2 2 3 3 4 4 5" };
 	const char search4[]{ "1 5 4 6 2 6 2 -1 0 6 2 6 2 1 2 2 3 3 4 4 5 -1 6 7 8 0" };
+
+	constexpr int np = 2;
+
 	std::ifstream db("../../../../../cpplib/Tests/d10k.datt");
 	if (!db.is_open())
 		FAIL() << "Could not open the dataset";
@@ -451,16 +455,16 @@ TEST(databaseSearch10k, d10k) {
 	}
 
 	temp = dat;
-	std::vector<int> res1 = SearchMain(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search1).data(), std::move(temp), 4, false);
+	std::vector<int> res1 = SearchMain(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search1).data(), std::move(temp), np, false);
 	EXPECT_EQ(res1.size(), 451);
 	temp = dat;
-	std::vector<int> res2 = SearchMain(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search2).data(), std::move(temp), 4, false);
+	std::vector<int> res2 = SearchMain(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search2).data(), std::move(temp), np, false);
 	EXPECT_EQ(res2.size(), 582);
 	temp = dat;
-	std::vector<int> res3 = SearchMain(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search3).data(), std::move(temp), 4, false);
+	std::vector<int> res3 = SearchMain(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search3).data(), std::move(temp), np, false);
 	EXPECT_EQ(res3.size(), 389);
 	temp = dat;
-	std::vector<int> res4 = SearchMain(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search4).data(), std::move(temp), 4, false);
+	std::vector<int> res4 = SearchMain(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search4).data(), std::move(temp), np, false);
 	EXPECT_EQ(res4.size(), 1276);
 	EXPECT_GE(res1.size() + res2.size() + res3.size(), res4.size());
 
@@ -515,3 +519,72 @@ TEST(databaseSearch10k, d10k) {
 	EXPECT_TRUE(res2.size() == i2);
 	EXPECT_TRUE(res3.size() == i3);
 }
+TEST(Benchmark, HexaneHeptane) {
+	const char search1[]{ "1 6 6 6 2 4 4 6 2 4 4 6 2 4 4 6 2 4 4 6 2 4 4 6 2 4 4 1 2 2 3 3 4 4 5 5 6 1 6" };
+	const char data[]{ "1 7 7 6 2 6 2 6 2 6 2 6 2 6 2 6 2 1 2 2 3 3 4 4 5 5 6 6 7 1 7" };
+
+	constexpr size_t s = 1000;
+
+	std::vector<const char*> dat(s);
+	for (size_t i = 0; i < s; i++)
+	{
+		dat[i] = &(data[0]);
+	}
+
+	double oldres = INFINITY;
+	for (size_t j = 1; j < 16; j++)
+	{
+		auto temp = dat;
+		auto start = std::chrono::steady_clock::now();
+
+		std::vector<int> res1 = SearchMain(search1, std::move(temp), j, false);
+
+		auto end = std::chrono::steady_clock::now();
+		double elapsed = std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
+		if (oldres < elapsed) {
+			std::cout << "Optimal low np = " << j - 1 << '\t' << oldres << std::endl;
+			break;
+		}
+		oldres = elapsed;
+	}
+}
+TEST(Benchmark, d10k) {
+	const char search1[]{ "1 5 4 6 2 2 4 6 2 2 4 6 0 0 4 6 2 2 4 6 2 2 4 1 2 2 3 3 4 4 5" };
+
+	constexpr int np = 4;
+
+	std::ifstream db("../../../../../cpplib/Tests/d10k.datt");
+	if (!db.is_open())
+		FAIL() << "Could not open the dataset";
+	int s;
+	db >> s;
+	std::vector<std::string> datstr(s);
+	std::vector<const char*> dat(s);
+	std::vector<const char*> temp;
+	std::getline(db, datstr[0]);
+	for (size_t i = 0; i < s; i++)
+	{
+		std::getline(db, datstr[i]);
+		dat[i] = datstr[i].c_str();
+	}
+
+	double oldres = INFINITY;
+	for (size_t j = 1; j < 16; j++)
+	{
+		auto temp = dat;
+		auto start = std::chrono::steady_clock::now();
+
+		std::vector<int> res1 = SearchMain(search1, std::move(temp), j, false);
+
+		auto end = std::chrono::steady_clock::now();
+		double elapsed = std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
+		if (oldres < elapsed) {
+			std::cout << "Optimal low np = " << j - 1 << '\t' << oldres << std::endl;
+			break;
+		}
+		oldres = elapsed;
+	}
+
+}
+
+#endif

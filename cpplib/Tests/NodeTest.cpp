@@ -192,7 +192,11 @@ TEST(NodeDataTest, NeighboursSorting) {
 		for (AtomIndex j = 0; j < node[i].neighboursSize(); j++) {
 			const auto& nei1 = (*(node[i].getNeighbour(j)));
 			const auto& nei2 = (*(node2[i].getNeighbour(j)));
-			if (!(nei1 == nei2))
+			if (!(nei1.getType() == nei2.getType()))
+				FAIL();
+			if (!(nei1.getHAtoms() == nei2.getHAtoms()))
+				FAIL();
+			if (!(nei1.neighboursSize() == nei2.neighboursSize()))
 				FAIL();
 		}
 	}

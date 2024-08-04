@@ -128,14 +128,14 @@ namespace cpplib {
 		}
 	};
 
-	template<class A> class Node {
+	template<class A = char> 
+	class Node {
 	public:
 		// Declarations
 		using NeighbourValueType = Node*;
 		using NeighboursType = std::vector<NeighbourValueType>;
 		using HType = currents::HType;
 		using AtomIndex = currents::AtomIndex;
-
 
 		template <class X>
 		friend class Node;
@@ -152,14 +152,15 @@ namespace cpplib {
 			initializeNeighbours();
 		}
 		constexpr Node(const A& t1, const HType& h1, const AtomIndex& id)
-			: type_(t1), hAtoms_(h1), id_(id) {
+			: type_(t1), hAtoms_(h1), id_(id), coord_(h1) {
 			initializeNeighbours();
 		}
 		//constexpr Node(const A& t1, const HType& h1, const AtomIndex& id, NeighboursType&& neighbours)
 		//	: type_(t1), hAtoms_(h1), neighbours_(std::move(neighbours)), id_(id) {}
 
 		// Operators
-		template <class X> inline bool operator==(const Node<X>& other) const noexcept {
+		template <class X> 
+		inline bool operator==(const Node<X>& other) const noexcept {
 			return (type_ == other.type_) && 
 				(hAtoms_ == other.hAtoms_) &&
 				(neighbours_.size() == other.neighbours_.size()) &&
@@ -291,9 +292,14 @@ namespace cpplib {
 		constexpr void swap(Node& other) noexcept {
 			::std::swap(type_, other.type_);
 			::std::swap(hAtoms_, other.hAtoms_);
+			auto otheraddress = (&other);
+			for (auto& addr : neighbours_) {
+				addr->exchangeNeighbour(this, otheraddress);
+			}
+			for (auto& addr : other.neighbours_) {
+				addr->exchangeNeighbour(otheraddress, this);
+			}
 			neighbours_.swap(other.neighbours_);
-
-			// Does not change id or neighbours of neighbours
 		}
 		constexpr void exchangeNeighbour(const NeighbourValueType oldNei, const NeighbourValueType newNei) {
 			*(::std::find(neighbours_.begin(), neighbours_.end(), oldNei)) = newNei;
