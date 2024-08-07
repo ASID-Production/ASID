@@ -459,19 +459,35 @@ class FileParser:
                         flag = False
                         methods.pop(0)
                         return
+
                 def parseCP():
                     nonlocal line
                     data = [x for x in line[:-1].split(' ') if x]
                     type = data[1][1:-1]
                     coords =[float(x) for x in data[8:11]]
-                    cp = MoleculeClass.Atom(coords, types.get(type, 999))
+                    prop_d = {}
+                    line = file.__next__()
+                    data = [x for x in line[:-1].split(' ') if x]
+                    prop_d['rho'] = float(data[2])
+                    prop_d['lambda_1'] = float(data[6])
+                    line = file.__next__()
+                    data = [x for x in line[:-1].split(' ') if x]
+                    prop_d['d2rho'] = float(data[2])
+                    prop_d['lambda_2'] = float(data[6])
+                    line = file.__next__()
+                    data = [x for x in line[:-1].split(' ') if x]
+                    prop_d['g'] = float(data[2])
+                    prop_d['lambda_3'] = float(data[6])
+                    line = file.__next__()
+                    data = [x for x in line[:-1].split(' ') if x]
+                    prop_d['v'] = float(data[2])
+                    prop_d['ellipticity'] = float(data[6])
+                    line = file.__next__()
+                    data = [x for x in line[:-1].split(' ') if x]
+                    prop_d['h'] = float(data[2])
+                    cp = MoleculeClass.Atom(coords, types.get(type, 999), **prop_d)
                     cps.append(cp)
-                    file.__next__()
-                    file.__next__()
-                    file.__next__()
-                    file.__next__()
-                    file.__next__()
-                    file.__next__()
+                    line = file.__next__()
                     line = file.__next__()
                     checkForEnd()
                     return
@@ -514,7 +530,28 @@ class FileParser:
             mol.addChild(cp)
 
         mol_sys, list_tuple = self.parsMolSys(mol_sys, bond, root)
-        return mol_sys, list_tuple
+        yield mol_sys, list_tuple
+
+        def pointCreation(atom_list, atom):
+            coord = atom.coord.copy()
+            point = point_class.Point(parent=atom_list, coord=coord, rad=atom_list,
+                                      color=PALETTE.point_dict[PALETTE.getName(atom.atom_type)],
+                                      atom_type=atom.atom_type,
+                                      name=atom.name,
+                                      label=atom.name,
+                                      rho=atom.rho,
+                                      d2rho=atom.d2rho,
+                                      g=atom.g,
+                                      v=atom.v,
+                                      h=atom.h,
+                                      lambda_1=atom.lambda_1,
+                                      lambda_2=atom.lambda_2,
+                                      lambda_3=atom.lambda_3,
+                                      ellipticity=atom.ellipticity)
+            return point
+
+        cps_sys, list_tuple = self.parsMolSys(cps_sys, False, root, point_func=pointCreation)
+        yield cps_sys, list_tuple
 
     @staticmethod
     def _pointCreation(atom_list, atom):

@@ -154,8 +154,10 @@ def parseWinxpro():
         PARSER = parser
     filename, _ = QFileDialog.getOpenFileName()
     if TREE_MODEL is not None:
-        molsys, points_lists = PARSER.parsWinxproOut(filename, bond=True, root=TREE_MODEL.getRoot())
-        loadMolSys(molsys, points_lists)
+        gen = PARSER.parsWinxproOut(filename, bond=True, root=TREE_MODEL.getRoot())
+        molsys, points_lists = None, None
+        for molsys, points_lists in gen:
+            loadMolSys(molsys, points_lists)
         return molsys, points_lists
     else:
         molsys, _ = PARSER.parsWinxproOut(filename)
