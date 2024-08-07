@@ -42,6 +42,7 @@ class FileParser:
                                   '.pdb': self.parsPdb,
                                   '.cif': self.parsCif}
 
+    @staticmethod
     def fracToDec(a, b, c, al, be, ga, coords):
         al = (al / 180) * np.pi
         be = (be / 180) * np.pi

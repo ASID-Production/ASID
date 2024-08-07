@@ -135,6 +135,12 @@ class StructuresListModel(QAbstractListModel):
         if role == 99:
             return self._data[index.row()]
 
+    def exportRefs(self, indices):
+        ret = []
+        for ind in indices:
+            ret.append(self.data(ind, 99)['refcode'])
+        return ret
+
 
 class InfoTableModel(QAbstractTableModel):
 
@@ -281,11 +287,25 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
     def __init__(self, parent=None, ):
         super().__init__()
         self.setupUi(self)
+        self.toolBar = QtWidgets.QToolBar(self)
+
+        self.export_button = QtWidgets.QToolButton()
+        self.export_button.setText('Export')
+        self.export_button.setPopupMode(QtWidgets.QToolButton.InstantPopup)
+        self.export_button.setStyleSheet("::menu-indicator{ image: none; }")
+        self.export_menu = QtWidgets.QMenu()
+        self.export_refs_a = self.export_menu.addAction('export refs')
+        self.export_cif_a = self.export_menu.addAction('export cif')
+        self.export_button.setMenu(self.export_menu)
+        self.toolBar.addWidget(self.export_button)
+
+        self.verticalLayout.insertWidget(0, self.toolBar)
 
         self.setWindowTitle('DB Search')
 
         self.list_model = StructuresListModel(self)
         self.listView: QtWidgets.QListView
+        self.listView.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         self.listView.setModel(self.list_model)
         self.listView.setSelectionModel(QItemSelectionModel())
         self.listView.selectionModel().currentChanged.connect(self.newSelection)
@@ -308,6 +328,7 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
         self.pushButton_2.pressed.connect(self.loadStruct)
 
         self.pushButton_3.pressed.connect(self.saveCif)
+        self.export_cif_a.triggered.connect(self.saveCif)
 
         self.pushButton_4.pressed.connect(self.uploadFile)
 
@@ -315,6 +336,8 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
 
         self.pushButton_6.pressed.connect(self.list_model.stopSearch)
         self.pushButton_6.pressed.connect(Db_bindings.SESSION.triggerLastConnectOp)
+
+        self.export_refs_a.triggered.connect(self.exportRefs)
 
     def setSpan(self):
         for i in range(self.table_model.rowCount()):
@@ -367,6 +390,17 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
         out.close()
         pars(filename, True, TREE_MODEL.getRoot())
         return
+
+    def exportRefs(self):
+        selection = self.listView.selectionModel().selectedIndexes()
+        data = self.list_model.exportRefs(selection)
+        filename, _ = QtWidgets.QFileDialog.getSaveFileName(filter='*.txt')
+        if filename:
+            file = open(filename, 'w')
+            line = '\n'.join(data)
+            file.write(line + '\n')
+            file.close()
+        pass
 
 
 def show():
