@@ -333,7 +333,7 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
         self.export_cif_a = self.export_menu.addAction('export cif')
 
         self.import_menu = QtWidgets.QMenu()
-        self.import_refs_a = self.import_menu.addAction('import cifs')
+        self.import_refs_a = self.import_menu.addAction('import refs')
 
         self.export_button.setMenu(self.export_menu)
         self.import_button.setMenu(self.import_menu)
@@ -395,17 +395,23 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
             self.table_model.setSelected(None)
 
     def saveCif(self):
-        data = self.table_model.selected()
-        if data is None:
+        indices = self.listView.selectionModel().selectedIndexes()
+        if not indices:
             return
         else:
-            id = data['id']
-            db_type = self.search_dialog.getSearchDb()
-            cif = Db_bindings.getCif(id, db_type)
-            filename = QtWidgets.QFileDialog.getSaveFileName()[0]
+            filename, _ = QtWidgets.QFileDialog.getSaveFileName(filter='*.cif')
+            cifs = []
+            for ind in indices:
+                data = self.list_model.data(ind, 99)
+                id = data['id']
+                db_type = self.search_dialog.getSearchDb()
+                cifs.append(Db_bindings.getCif(id, db_type))
             if filename:
                 out = open(filename, 'wb')
-                out.write(cif)
+                data = b''
+                for cif in cifs:
+                    data += cif
+                out.write(data)
                 out.close()
 
     def uploadFile(self):
