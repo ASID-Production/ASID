@@ -60,6 +60,7 @@ class StructuresListModel(QAbstractListModel):
         self._rows = 0
         self._display_tag = 'refcode'
         self._search_proc = None
+        self._iter_search_procs = []
 
     def populate(self, request):
         request, search_type, db_type = request
@@ -75,18 +76,44 @@ class StructuresListModel(QAbstractListModel):
             self._search_proc.finished.connect(self.searchDone)
             self._search_proc.readyReadStandardOutput.connect(self.appendRes)
             self._search_proc = Db_bindings.search(request, search_type, db_type, process=self._search_proc)
-            a = 0
         else:
             return
 
-    def searchDone(self):
-        self._search_proc = None
+    def iterPopulate(self, requests):
+
+        def getCallBack(func, search_proc):
+            return lambda: func(search_proc=search_proc)
+
+        self.beginResetModel()
+        self._data = []
+        self._rows = 0
+        self.endResetModel()
+        for request in requests:
+            request, search_type, db_type = request
+            if self.progress_bar:
+                self.progress_bar.setValue(0)
+                self.progress = 0
+            search_proc = QProcess(self)
+            cb = getCallBack(self.searchDone, search_proc)
+            search_proc.finished.connect(cb)
+            cb = getCallBack(self.appendRes, search_proc)
+            search_proc.readyReadStandardOutput.connect(cb)
+            self._iter_search_procs.append(Db_bindings.search(request, search_type, db_type, process=search_proc))
+
+    def searchDone(self, *args, search_proc=None):
+        if search_proc is None:
+            self._search_proc = None
+        else:
+            self._iter_search_procs.remove(search_proc)
         if self.progress_bar:
             self.progress_bar.setValue(100)
             self.progress = 1
 
-    def appendRes(self):
-        data = self._search_proc.readAllStandardOutput()
+    def appendRes(self, *args, search_proc=None):
+        if search_proc is None:
+            data = self._search_proc.readAllStandardOutput()
+        else:
+            data = search_proc.readAllStandardOutput()
         data = str(data, encoding='utf-8').split('\n')
         for d in data:
             if d:
@@ -111,6 +138,9 @@ class StructuresListModel(QAbstractListModel):
         if self._search_proc:
             self._search_proc.readyReadStandardOutput.disconnect(self.appendRes)
             self._search_proc = None
+        for search_proc in self._iter_search_procs:
+            search_proc.readyReadStandardOutput.disconnect(self.appendRes)
+            self._iter_search_procs = []
 
     def setDisplayTag(self, tag):
         if tag in self._display_tags:
@@ -290,14 +320,25 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
         self.toolBar = QtWidgets.QToolBar(self)
 
         self.export_button = QtWidgets.QToolButton()
+        self.import_button = QtWidgets.QToolButton()
         self.export_button.setText('Export')
+        self.import_button.setText('Import')
         self.export_button.setPopupMode(QtWidgets.QToolButton.InstantPopup)
+        self.import_button.setPopupMode(QtWidgets.QToolButton.InstantPopup)
         self.export_button.setStyleSheet("::menu-indicator{ image: none; }")
+        self.import_button.setStyleSheet("::menu-indicator{ image: none; }")
+
         self.export_menu = QtWidgets.QMenu()
         self.export_refs_a = self.export_menu.addAction('export refs')
         self.export_cif_a = self.export_menu.addAction('export cif')
+
+        self.import_menu = QtWidgets.QMenu()
+        self.import_refs_a = self.import_menu.addAction('import cifs')
+
         self.export_button.setMenu(self.export_menu)
+        self.import_button.setMenu(self.import_menu)
         self.toolBar.addWidget(self.export_button)
+        self.toolBar.addWidget(self.import_button)
 
         self.verticalLayout.insertWidget(0, self.toolBar)
 
@@ -338,6 +379,7 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
         self.pushButton_6.pressed.connect(Db_bindings.SESSION.triggerLastConnectOp)
 
         self.export_refs_a.triggered.connect(self.exportRefs)
+        self.import_refs_a.triggered.connect(self.importRefs)
 
     def setSpan(self):
         for i in range(self.table_model.rowCount()):
@@ -400,6 +442,14 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
             line = '\n'.join(data)
             file.write(line + '\n')
             file.close()
+        pass
+
+    def importRefs(self):
+        filename, _ = QtWidgets.QFileDialog.getOpenFileName(filter='*.txt')
+        if filename:
+            file = open(filename, 'r')
+            data = [x for x in file.read().split('\n') if x]
+            self.list_model.iterPopulate(((x, 'refcode', 'cryst') for x in data))
         pass
 
 
