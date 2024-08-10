@@ -27,7 +27,7 @@
 # ******************************************************************************************
 
 
-from .ChemPackSource.ui.select_mol_dialog import SelectMolDialog
+from .ChemPack.ui.select_mol_dialog import SelectMolDialog
 import os.path as opath
 
 TREE_MODEL = None
@@ -58,7 +58,7 @@ def execute():
             self.setLayout(layout)
 
     def process(molsys):
-        from .ChemPackSource.save_file import SAVE_FILE
+        from .ChemPack.save_file import SAVE_FILE
         list_obj, molsys = molsys
         name = f'{opath.dirname(__file__)}/../../temp/{id(molsys)}.xyz'
         SAVE_FILE.save(molsys, name, 'xyz')

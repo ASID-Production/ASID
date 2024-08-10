@@ -27,10 +27,11 @@
 # ******************************************************************************************
 
 
-from .. import point_class
+from ... import point_class
 import numpy as np
-from .ChemPackSource import AtomsPalette
+from . import AtomsPalette
 import os
+import types
 
 import debug
 
@@ -43,6 +44,8 @@ PARSER = None
 TREE_MODEL = None
 
 UNIFORM_MODEL = None
+
+MAIN_WIDGET = None
 
 
 def loadMolSys(molsys, points_lists):
@@ -70,17 +73,25 @@ def pars(file, bond=True, root=None):
     global PARSER
     global TREE_MODEL
     if PARSER is None:
-        from .ChemPackSource.parsers import PARSER as parser
+        from .parsers import PARSER as parser
         PARSER = parser
     if TREE_MODEL is not None:
         if os.path.basename(file) == 'paths.pdb' or os.path.basename(file) == 'CPs.pdb':
             bond = False
-        molsys, points_lists = PARSER.parsFile(file, bond=bond, root=root)
-        loadMolSys(molsys, points_lists)
-        return molsys, points_lists
+        ret = PARSER.parsFile(file, bond=bond, root=root)
+        if isinstance(ret, types.GeneratorType):
+            for molsys, lists in ret:
+                loadMolSys(molsys, lists)
+            return molsys, lists
+        else:
+            loadMolSys(*ret)
+            return ret
     else:
-        molsys, _ = PARSER.parsFile(file)
-        return molsys, None
+        ret = PARSER.parsFile(file)
+        if isinstance(ret, types.GeneratorType):
+            return list(ret)
+        else:
+            return ret
 
 
 def createPalette():
@@ -104,7 +115,7 @@ def createPalette():
 
 
 def test_cont():
-    from .ChemPackSource import contacts
+    from . import contacts
 
     mol_sys = None
     for mol_l in MOLECULE_SYSTEMS:
@@ -115,31 +126,31 @@ def test_cont():
 
 
 def find_sub():
-    from .ChemPackSource import DrawerWidget
+    from . import DrawerWidget
     DrawerWidget.show()
     return
 
 
 def DbSearch():
-    from .ChemPackSource import Db_viewer
+    from . import Db_viewer
     Db_viewer.show()
     return
 
 
 def SymOp():
-    from .ChemPackSource import Sym_op
+    from . import Sym_op
     Sym_op.show()
     return
 
 
 def exportData():
-    from .ChemPackSource import exportData
+    from . import exportData
     exportData.execute()
     return
 
 
 def attachCPprop():
-    from .ChemPackSource import attach_cpprop
+    from . import attach_cpprop
     attach_cpprop.execute()
     return
 
@@ -150,7 +161,7 @@ def parseWinxpro():
     global PARSER
     global TREE_MODEL
     if PARSER is None:
-        from .ChemPackSource.parsers import PARSER as parser
+        from .parsers import PARSER as parser
         PARSER = parser
     filename, _ = QFileDialog.getOpenFileName()
     if TREE_MODEL is not None:
@@ -168,7 +179,7 @@ def execute(model, uniform_model=None):
     from PySide6.QtWidgets import QFileDialog
     global PARSER
     if PARSER is None:
-        from .ChemPackSource.parsers import PARSER as parser
+        from .parsers import PARSER as parser
         PARSER = parser
     filter = PARSER.SUPPORTED_FORMATS.keys()
     filter = ' '.join([f'*{x}' for x in filter])
@@ -182,7 +193,7 @@ def execute(model, uniform_model=None):
 
 
 def save():
-    from .ChemPackSource.save_file import SAVE_FILE
+    from .save_file import SAVE_FILE
     from PySide6.QtWidgets import QFileDialog
     import os
 
@@ -205,15 +216,19 @@ def save():
     return
 
 
-def setup(menu, model, uniform_model=None, *args, **kwargs):
+def setup(menu, model, uniform_model=None, *args, main_widget=None, **kwargs):
     from PySide6.QtGui import QAction
 
     global TREE_MODEL
     global UNIFORM_MODEL
+    global MAIN_WIDGET
     TREE_MODEL = model
     UNIFORM_MODEL = uniform_model
+    MAIN_WIDGET = main_widget
 
     createPalette()
+
+    from . import calcWidget
 
     cmenu = menu.addMenu('ChemPack')
 

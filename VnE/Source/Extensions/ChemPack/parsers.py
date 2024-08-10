@@ -276,104 +276,105 @@ class FileParser:
         from gemmi import cif
 
         mol_list, atom_list, bonds_l = None, None, None
-        block = cif.read_file(file_path).sole_block()
-        mol_sys = MoleculeClass.MoleculeSystem()
-        mol_sys.file_name = file_path
-        mol_sys.name = os.path.basename(file_path).split('.')[0]
-        mol = MoleculeClass.Molecule(parent=mol_sys)
+        blocks = cif.read_file(file_path)
+        for block in blocks:
+            mol_sys = MoleculeClass.MoleculeSystem()
+            mol_sys.file_name = file_path
+            mol_sys.name = os.path.basename(file_path).split('.')[0]
+            mol = MoleculeClass.Molecule(parent=mol_sys)
 
-        sym_codes = block.find(['_symmetry_equiv_pos_as_xyz'])
-        if not sym_codes:
-            sym_codes = block.find(['_space_group_symop_operation_xyz'])
-            sym_codes = [[i, x[0][1:-1]] for i, x in enumerate(sym_codes)]
-        else:
-            sym_codes = [[i, x[0]] for i, x in enumerate(sym_codes)]
-        num = sym_codes[-1][0] + 1
-        added = [
-                 [num, 'x+1,y,z'],
-                 [num+1, 'x-1,y,z'],
-                 [num+2, 'x,y+1,z'],
-                 [num+3, 'x,y-1,z'],
-                 [num+4, 'x,y,z+1'],
-                 [num+5, 'x,y,z-1'],
-                ]
-        sym_codes += added
+            sym_codes = block.find(['_symmetry_equiv_pos_as_xyz'])
+            if not sym_codes:
+                sym_codes = block.find(['_space_group_symop_operation_xyz'])
+                sym_codes = [[i, x[0][1:-1]] for i, x in enumerate(sym_codes)]
+            else:
+                sym_codes = [[i, x[0]] for i, x in enumerate(sym_codes)]
+            num = sym_codes[-1][0] + 1
+            added = [
+                     [num, 'x+1,y,z'],
+                     [num+1, 'x-1,y,z'],
+                     [num+2, 'x,y+1,z'],
+                     [num+3, 'x,y-1,z'],
+                     [num+4, 'x,y,z+1'],
+                     [num+5, 'x,y,z-1'],
+                    ]
+            sym_codes += added
 
-        cell = block.find(['_cell_length_a', '_cell_length_b', '_cell_length_c', '_cell_angle_alpha', '_cell_angle_beta', '_cell_angle_gamma'])[0]
-        cell = [float(cell[x][:cell[x].find('(')]) if cell[x].find('(') != -1 else float(cell[x]) for x in range(len(cell))]
+            cell = block.find(['_cell_length_a', '_cell_length_b', '_cell_length_c', '_cell_angle_alpha', '_cell_angle_beta', '_cell_angle_gamma'])[0]
+            cell = [float(cell[x][:cell[x].find('(')]) if cell[x].find('(') != -1 else float(cell[x]) for x in range(len(cell))]
 
-        atoms = block.find(['_atom_site_label', '_atom_site_type_symbol', '_atom_site_fract_x', '_atom_site_fract_y', '_atom_site_fract_z'])
-        atoms = [[x[i] if i < 2 else float(x[i]) if x[i].find('(') == -1 else float(x[i][:x[i].find('(')]) for i in range(len(x))] for x in atoms]
-        coords = [x[2:] for x in atoms]
-        args = []
-        args += cell
-        args.append(coords)
-        dec_coords = self.fracToDec(*args)
-        for i, atom in enumerate(atoms):
-            cif_data = {'cif_sym_codes': sym_codes,
-                        'cif_cell_a': cell[0],
-                        'cif_cell_b': cell[1],
-                        'cif_cell_c': cell[2],
-                        'cif_cell_al': cell[3],
-                        'cif_cell_be': cell[4],
-                        'cif_cell_ga': cell[5],
-                        'cif_frac_coords': np.array(atom[2:], dtype=np.float32)}
-            coord = np.array(dec_coords[i], dtype=np.float32)
-            atom = MoleculeClass.Atom(coord.copy(), PALETTE.getName(atom[1]), parent=mol, name=atom[0], **cif_data)
-        cell_coords = [[0, 0, 0],
-                       [1, 0, 0],
-                       [0, 1, 0],
-                       [0, 0, 1],
-                       [0, 1, 1],
-                       [1, 1, 0],
-                       [1, 0, 1],
-                       [1, 1, 1]]
-        args = [*cell, cell_coords]
-        cell_dec_coords = self.fracToDec(*args)
+            atoms = block.find(['_atom_site_label', '_atom_site_type_symbol', '_atom_site_fract_x', '_atom_site_fract_y', '_atom_site_fract_z'])
+            atoms = [[x[i] if i < 2 else float(x[i]) if x[i].find('(') == -1 else float(x[i][:x[i].find('(')]) for i in range(len(x))] for x in atoms]
+            coords = [x[2:] for x in atoms]
+            args = []
+            args += cell
+            args.append(coords)
+            dec_coords = self.fracToDec(*args)
+            for i, atom in enumerate(atoms):
+                cif_data = {'cif_sym_codes': sym_codes,
+                            'cif_cell_a': cell[0],
+                            'cif_cell_b': cell[1],
+                            'cif_cell_c': cell[2],
+                            'cif_cell_al': cell[3],
+                            'cif_cell_be': cell[4],
+                            'cif_cell_ga': cell[5],
+                            'cif_frac_coords': np.array(atom[2:], dtype=np.float32)}
+                coord = np.array(dec_coords[i], dtype=np.float32)
+                atom = MoleculeClass.Atom(coord.copy(), PALETTE.getName(atom[1]), parent=mol, name=atom[0], **cif_data)
+            cell_coords = [[0, 0, 0],
+                           [1, 0, 0],
+                           [0, 1, 0],
+                           [0, 0, 1],
+                           [0, 1, 1],
+                           [1, 1, 0],
+                           [1, 0, 1],
+                           [1, 1, 1]]
+            args = [*cell, cell_coords]
+            cell_dec_coords = self.fracToDec(*args)
 
-        mol_sys, list_tuple = self.parsMolSys(mol_sys, bond, root)
-        mol_list = list_tuple[0]
-        cell_list = point_class.PointsList(parent=mol_list, name='Cell', color=[0, 0, 0, 1])
-        o = point_class.Point(parent=cell_list, name='o', coord=cell_dec_coords[0], color=[0, 0, 0, 1])
-        a = point_class.Point(parent=cell_list, name='a', coord=cell_dec_coords[1], color=[1, 0, 0, 1])
-        b = point_class.Point(parent=cell_list, name='b', coord=cell_dec_coords[2], color=[0, 1, 0, 1])
-        c = point_class.Point(parent=cell_list, name='c', coord=cell_dec_coords[3], color=[0, 0, 1, 1])
-        cell_rend = point_class.PointsList(parent=cell_list, name='Cell render', color=cell_list)
+            mol_sys, list_tuple = self.parsMolSys(mol_sys, bond, root)
+            mol_list = list_tuple[0]
+            cell_list = point_class.PointsList(parent=mol_list, name='Cell', color=[0, 0, 0, 1])
+            o = point_class.Point(parent=cell_list, name='o', coord=cell_dec_coords[0], color=[0, 0, 0, 1])
+            a = point_class.Point(parent=cell_list, name='a', coord=cell_dec_coords[1], color=[1, 0, 0, 1])
+            b = point_class.Point(parent=cell_list, name='b', coord=cell_dec_coords[2], color=[0, 1, 0, 1])
+            c = point_class.Point(parent=cell_list, name='c', coord=cell_dec_coords[3], color=[0, 0, 1, 1])
+            cell_rend = point_class.PointsList(parent=cell_list, name='Cell render', color=cell_list)
 
-        oa = point_class.PointsList(parent=cell_rend, name='o-a', color=a)
-        point1, point2 = (point_class.Point(parent=oa, coord=o, color=oa), point_class.Point(parent=oa, coord=a, color=oa))
+            oa = point_class.PointsList(parent=cell_rend, name='o-a', color=a)
+            point1, point2 = (point_class.Point(parent=oa, coord=o, color=oa), point_class.Point(parent=oa, coord=a, color=oa))
 
-        ob = point_class.PointsList(parent=cell_rend, name='o-b', color=b)
-        point1, point2 = (point_class.Point(parent=ob, coord=o, color=ob), point_class.Point(parent=ob, coord=b, color=ob))
+            ob = point_class.PointsList(parent=cell_rend, name='o-b', color=b)
+            point1, point2 = (point_class.Point(parent=ob, coord=o, color=ob), point_class.Point(parent=ob, coord=b, color=ob))
 
-        oc = point_class.PointsList(parent=cell_rend, name='o-c', color=c)
-        point1, point2 = (point_class.Point(parent=oc, coord=o, color=oc), point_class.Point(parent=oc, coord=c, color=oc))
+            oc = point_class.PointsList(parent=cell_rend, name='o-c', color=c)
+            point1, point2 = (point_class.Point(parent=oc, coord=o, color=oc), point_class.Point(parent=oc, coord=c, color=oc))
 
-        ab = point_class.PointsList(parent=cell_rend, name='a-b', color=cell_rend)
-        point1, point2 = (point_class.Point(parent=ab, coord=a, color=ab), point_class.Point(parent=ab, coord=cell_dec_coords[5], color=ab))
-        ac = point_class.PointsList(parent=cell_rend, name='a-c', color=cell_rend)
-        point1, point2 = (point_class.Point(parent=ac, coord=a, color=ac), point_class.Point(parent=ac, coord=cell_dec_coords[6], color=ac))
+            ab = point_class.PointsList(parent=cell_rend, name='a-b', color=cell_rend)
+            point1, point2 = (point_class.Point(parent=ab, coord=a, color=ab), point_class.Point(parent=ab, coord=cell_dec_coords[5], color=ab))
+            ac = point_class.PointsList(parent=cell_rend, name='a-c', color=cell_rend)
+            point1, point2 = (point_class.Point(parent=ac, coord=a, color=ac), point_class.Point(parent=ac, coord=cell_dec_coords[6], color=ac))
 
-        bc = point_class.PointsList(parent=cell_rend, name='b-c', color=cell_rend)
-        point1, point2 = (point_class.Point(parent=bc, coord=b, color=bc), point_class.Point(parent=bc, coord=cell_dec_coords[4], color=bc))
-        ba = point_class.PointsList(parent=cell_rend, name='b-a', color=cell_rend)
-        point1, point2 = (point_class.Point(parent=ba, coord=b, color=ba), point_class.Point(parent=ba, coord=cell_dec_coords[5], color=ba))
+            bc = point_class.PointsList(parent=cell_rend, name='b-c', color=cell_rend)
+            point1, point2 = (point_class.Point(parent=bc, coord=b, color=bc), point_class.Point(parent=bc, coord=cell_dec_coords[4], color=bc))
+            ba = point_class.PointsList(parent=cell_rend, name='b-a', color=cell_rend)
+            point1, point2 = (point_class.Point(parent=ba, coord=b, color=ba), point_class.Point(parent=ba, coord=cell_dec_coords[5], color=ba))
 
-        cb = point_class.PointsList(parent=cell_rend, name='c-b', color=cell_rend)
-        point1, point2 = (point_class.Point(parent=cb, coord=c, color=cb), point_class.Point(parent=cb, coord=cell_dec_coords[4], color=cb))
-        ca = point_class.PointsList(parent=cell_rend, name='c-a', color=cell_rend)
-        point1, point2 = (point_class.Point(parent=ca, coord=c, color=ca), point_class.Point(parent=ca, coord=cell_dec_coords[6], color=ca))
+            cb = point_class.PointsList(parent=cell_rend, name='c-b', color=cell_rend)
+            point1, point2 = (point_class.Point(parent=cb, coord=c, color=cb), point_class.Point(parent=cb, coord=cell_dec_coords[4], color=cb))
+            ca = point_class.PointsList(parent=cell_rend, name='c-a', color=cell_rend)
+            point1, point2 = (point_class.Point(parent=ca, coord=c, color=ca), point_class.Point(parent=ca, coord=cell_dec_coords[6], color=ca))
 
-        abc = point_class.PointsList(parent=cell_rend, name='ab-c', color=cell_rend)
-        point1, point2 = (point_class.Point(parent=abc, coord=cell_dec_coords[7], color=abc), point_class.Point(parent=abc, coord=cell_dec_coords[5], color=abc))
-        acb = point_class.PointsList(parent=cell_rend, name='ac-b', color=cell_rend)
-        point1, point2 = (point_class.Point(parent=acb, coord=cell_dec_coords[7], color=acb),
-                          point_class.Point(parent=acb, coord=cell_dec_coords[6], color=acb))
-        bca = point_class.PointsList(parent=cell_rend, name='bc-a', color=cell_rend)
-        point1, point2 = (point_class.Point(parent=bca, coord=cell_dec_coords[7], color=bca),
-                          point_class.Point(parent=bca, coord=cell_dec_coords[4], color=bca))
+            abc = point_class.PointsList(parent=cell_rend, name='ab-c', color=cell_rend)
+            point1, point2 = (point_class.Point(parent=abc, coord=cell_dec_coords[7], color=abc), point_class.Point(parent=abc, coord=cell_dec_coords[5], color=abc))
+            acb = point_class.PointsList(parent=cell_rend, name='ac-b', color=cell_rend)
+            point1, point2 = (point_class.Point(parent=acb, coord=cell_dec_coords[7], color=acb),
+                              point_class.Point(parent=acb, coord=cell_dec_coords[6], color=acb))
+            bca = point_class.PointsList(parent=cell_rend, name='bc-a', color=cell_rend)
+            point1, point2 = (point_class.Point(parent=bca, coord=cell_dec_coords[7], color=bca),
+                              point_class.Point(parent=bca, coord=cell_dec_coords[4], color=bca))
 
-        return mol_sys, list_tuple
+            yield mol_sys, list_tuple
 
     def parsMolSys(self, mol_sys, bond=True, root=None, point_func=None, *args, **kwargs):
         if point_func is None:

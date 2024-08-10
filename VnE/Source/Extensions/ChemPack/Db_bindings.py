@@ -148,7 +148,7 @@ def search(text, search_type, db_type='cryst', process=None):
     req = f'{SESSION.url_base}/{url_mod}/?{search_type}={text}&limit=1000'
 
     root = opath.normpath(f'{opath.dirname(__file__)}/../../../..')
-    path = opath.normpath(f'{root}/VnE/Source/Extensions/ChemPackSource/searchProcess.py')
+    path = opath.normpath(f'{root}/VnE/Source/Extensions/ChemPack/searchProcess.py')
     if os.name == 'nt':
         prog = opath.normpath(f'{root}\\venv\\Scripts\\python.exe')
     elif os.name == 'posix':
@@ -239,7 +239,7 @@ def structureSearch(struct, url_mod, process=None):
     token = SESSION.user_token
     req = f'{SESSION.url_base}/{url_mod}/search/?limit=10000'
     root = opath.normpath(f'{opath.dirname(__file__)}/../../../..')
-    path = opath.normpath(f'{root}/VnE/Source/Extensions/ChemPackSource/searchProcess.py')
+    path = opath.normpath(f'{root}/VnE/Source/Extensions/ChemPack/searchProcess.py')
     if os.name == 'nt':
         prog = opath.normpath(f'{root}\\venv\\Scripts\\python.exe')
     elif os.name == 'posix':
