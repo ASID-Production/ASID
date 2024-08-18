@@ -89,6 +89,9 @@ namespace cpplib {
 		}
 		// destroys all data, need reinitialization!
 		bool startFullSearch(const bool exact, AtomIndex startAtom = 0) {
+			auto ullmann = createUllmannBitMartix(exact);
+			if (ullmann.empty()) 
+				return false;
 			const auto inputBackup = input_.makeCopy();
 			const auto dataBackup = data_.makeCopy();
 			if (startAtom == 0) startAtom = input_.findStart();
@@ -290,6 +293,169 @@ namespace cpplib {
 				reverseLogAndNodes(curI, nextI);
 				deleteComp(nextI);
 			}
+		}
+
+	private:
+		std::vector<std::vector<bool>> createUllmannBitMartix(const bool exact) const {
+			
+			// 1. Create Trees
+			std::vector<std::vector<std::vector<AtomIndex>>> ullmannTreeInput(inputSize_);
+			std::vector<std::vector<std::vector<AtomIndex>>> ullmannTreeData(dataSize_);
+			size_t diagonal = 1;
+
+			// 1.1 Input tree
+			for (AtomIndex i = 1; i < inputSize_; i++)
+			{
+				std::vector<bool> ullmannUsed(inputSize_, false);
+
+				ullmannUsed[i] = true;
+				ullmannTreeInput[i].push_back(std::vector<AtomIndex>(1, i));
+
+				size_t j = 1;
+				for (;; j++) // Level of Tree
+				{
+					std::vector<AtomIndex> lastRow;
+					for (auto nodeID : ullmannTreeInput[i].back())
+					{
+						AtomIndex ns = input_[nodeID].neighboursSize();
+						for (AtomIndex k = 0; k < ns; k++) //check neighbours
+						{
+							const auto curNei = input_[nodeID].getNeighbour(k);
+							const auto curNeiID = curNei->getID();
+							if (ullmannUsed[curNeiID] == false) {
+								ullmannUsed[curNeiID] = true;
+								lastRow.push_back(curNeiID);
+							}
+						}
+					}
+					// Check last row is empty
+					if (lastRow.empty())
+						break;
+					// if not empty - sort and add it to tree
+					std::sort(lastRow.begin(), lastRow.end());
+					ullmannTreeInput[i].push_back(std::move(lastRow));
+				}
+				if (diagonal < j) diagonal = j;
+			}
+
+			// 1.2 Data tree
+			for (AtomIndex i = 1; i < dataSize_; i++)
+			{
+				std::vector<bool> ullmannUsed(dataSize_, false);
+
+				ullmannUsed[i] = true;
+				ullmannTreeData[i].push_back(std::vector<AtomIndex>(1, i));
+
+
+				for (size_t j = 1; j < diagonal; j++) // Level of Tree
+				{
+					std::vector<AtomIndex> lastRow;
+					for (auto& nodeID : ullmannTreeData[i].back())
+					{
+						AtomIndex ns = data_[nodeID].neighboursSize();
+						for (AtomIndex k = 0; k < ns; k++) //check neighbours
+						{
+							const auto curNei = data_[nodeID].getNeighbour(k);
+							const auto curNeiID = curNei->getID();
+							if (ullmannUsed[curNeiID] == false) {
+								ullmannUsed[curNeiID] = true;
+								lastRow.push_back(curNeiID);
+							}
+						}
+					}
+					// Check last row is empty
+					if (lastRow.empty())
+						break;
+					// if not empty - sort and add it to tree
+					std::sort(lastRow.begin(), lastRow.end());
+					ullmannTreeData[i].push_back(std::move(lastRow));
+				}
+			}
+
+
+			std::vector<std::vector<bool>> ullmannBits(inputSize_, std::vector<bool>(dataSize_, false));
+			// 2. First decision, second order
+			for (AtomIndex i = 1; i < inputSize_; i++)
+			{
+				for (AtomIndex j = 1; j < dataSize_; j++)
+				{
+					auto is = ullmannTreeInput[i].size();
+					auto js = ullmannTreeData[j].size();
+					if (((!exact)&& (is < js)) || (is ==js))
+						ullmannBits[i][j] = compare(input_[i], data_[j], exact);
+				}
+			}
+
+			static std::vector<int> rd(30, 0);
+
+			// 3 Refinement
+			const int maxRefine = 10;
+			for (int i = 0; i < maxRefine; i++)
+			{
+				int changes = 0;
+				for (AtomIndex x = 1; x < inputSize_; x++)
+				{
+					AtomIndex is_active = 0;
+					for (AtomIndex y = 1; y < dataSize_; y++)
+					{
+						if (ullmannBits[x][y] == false)
+							continue;
+
+						const auto maxDepth = ullmannTreeInput[x].size()*0.6;
+						for (int depth = 0; depth < maxDepth; depth++) {
+							for (auto inputID : ullmannTreeInput[x][depth]) {
+								bool good = false;
+								for (auto dataID : ullmannTreeData[y][depth]) {
+									if (ullmannPartialComparision(ullmannBits, inputID, dataID)) {
+										good = true;
+										break;
+									}
+								}
+								if (good == false) {
+									rd[depth]++;
+									goto wrong;
+								}
+							}
+						}
+						is_active++;
+						continue;
+					wrong:
+						changes++;
+						ullmannBits[x][y] = false;
+					}
+					if (is_active == 0)
+						return std::vector<std::vector<bool>>();
+				}
+				if (changes == 0)
+					break;
+			}
+			return ullmannBits;
+		}
+	private:
+		bool ullmannPartialComparision(const std::vector<std::vector<bool>>& ullmannBits, AtomIndex inputID, AtomIndex dataID) const {
+			if ((ullmannBits[inputID][dataID] == false))
+				return false;
+
+			//const auto nsi = input_[inputID].neighboursSize();
+			//if (nsi == 0) return true;
+			//const auto nsj = data_[dataID].neighboursSize();
+			//if (nsj == 0) return false;
+			////AtomIndex i = 0;
+			//for (AtomIndex i = 0; i < nsi; i++) {
+			//	auto iNeiID = input_[inputID].getNeighbour(i)->getID();
+			//	bool good = false;
+			//	for (AtomIndex j = 0; j < nsj; j++)
+			//	{
+			//		auto neiID = data_[dataID].getNeighbour(j)->getID();
+			//		
+			//		if(ullmannBits[iNeiID][neiID]) {
+			//			good = true;
+			//			break;
+			//		}
+			//	}
+			//	if (good == false) return false;
+			//}
+			return true;
 		}
 	};
 }
