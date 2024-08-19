@@ -152,6 +152,8 @@ class Atom(DefaultData):
         if parent is not None:
             parent.addChild(self)
         self._point = None
+        if isinstance(coord, list) or isinstance(coord, tuple):
+            coord = np.array(coord, dtype=np.float32)
         self.coord = coord
         if type(atom_type) is list:
             self.atom_type = []

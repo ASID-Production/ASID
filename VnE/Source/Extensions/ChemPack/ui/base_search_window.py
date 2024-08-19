@@ -81,20 +81,6 @@ class Ui_Dialog(object):
 
         self.horizontalLayout_2.addWidget(self.pushButton_2)
 
-        self.pushButton_3 = QPushButton(self.frame_2)
-        self.pushButton_3.setObjectName(u"pushButton_3")
-        sizePolicy2.setHeightForWidth(self.pushButton_3.sizePolicy().hasHeightForWidth())
-        self.pushButton_3.setSizePolicy(sizePolicy2)
-        self.pushButton_3.setMinimumSize(QSize(30, 0))
-        self.pushButton_3.setMaximumSize(QSize(100, 16777215))
-
-        self.horizontalLayout_2.addWidget(self.pushButton_3)
-
-        self.pushButton_4 = QPushButton(self.frame_2)
-        self.pushButton_4.setObjectName(u"pushButton_4")
-
-        self.horizontalLayout_2.addWidget(self.pushButton_4)
-
         self.pushButton_5 = QPushButton(self.frame_2)
         self.pushButton_5.setObjectName(u"pushButton_5")
 
@@ -164,8 +150,6 @@ class Ui_Dialog(object):
     def retranslateUi(self, Dialog):
         Dialog.setWindowTitle(QCoreApplication.translate("Dialog", u"Dialog", None))
         self.pushButton_2.setText(QCoreApplication.translate("Dialog", u"Load", None))
-        self.pushButton_3.setText(QCoreApplication.translate("Dialog", u"Save", None))
-        self.pushButton_4.setText(QCoreApplication.translate("Dialog", u"Upload", None))
         self.pushButton_5.setText(QCoreApplication.translate("Dialog", u"Settings", None))
         self.pushButton.setText(QCoreApplication.translate("Dialog", u"Search", None))
         self.pushButton_6.setText(QCoreApplication.translate("Dialog", u"Stop", None))

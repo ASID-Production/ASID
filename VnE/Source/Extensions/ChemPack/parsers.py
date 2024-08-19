@@ -465,9 +465,13 @@ class FileParser:
                 def parseCP():
                     nonlocal line
                     data = [x for x in line[:-1].split(' ') if x]
+                    name = data[0]
                     type = data[1][1:-1]
                     coords =[float(x) for x in data[8:11]]
                     prop_d = {}
+                    prop_d['name'] = name
+                    conn = f'{data[2]}-{data[5]}'
+                    prop_d['conn'] = conn
                     line = file.__next__()
                     data = [x for x in line[:-1].split(' ') if x]
                     prop_d['rho'] = float(data[2])
@@ -540,6 +544,7 @@ class FileParser:
                                       color=PALETTE.point_dict[PALETTE.getName(atom.atom_type)],
                                       atom_type=atom.atom_type,
                                       name=atom.name,
+                                      connectivity=atom.conn,
                                       label=atom.name,
                                       rho=atom.rho,
                                       d2rho=atom.d2rho,

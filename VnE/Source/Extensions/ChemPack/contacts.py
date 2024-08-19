@@ -346,6 +346,8 @@ def avgDiff(atoms, split=1):
 
 
 def dist(atom1: Atom, atom2: Atom):
+
+
     return np.linalg.norm(atom1.coord-atom2.coord)
 
 

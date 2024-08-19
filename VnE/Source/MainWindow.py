@@ -323,7 +323,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.about.triggered.connect(self.about_dialog.show)
 
 
-
 def show():
     app = QtWidgets.QApplication(sys.argv)
 

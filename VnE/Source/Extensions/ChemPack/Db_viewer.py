@@ -334,6 +334,7 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
 
         self.import_menu = QtWidgets.QMenu()
         self.import_refs_a = self.import_menu.addAction('import refs')
+        self.import_file_a = self.import_menu.addAction('import file')
 
         self.export_button.setMenu(self.export_menu)
         self.import_button.setMenu(self.import_menu)
@@ -368,10 +369,9 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
         self.search_dialog.pushButton.pressed.connect(lambda: self.list_model.populate((self.search_dialog.getText(), self.search_dialog.getSearchType(), self.search_dialog.getSearchDb())))
         self.pushButton_2.pressed.connect(self.loadStruct)
 
-        self.pushButton_3.pressed.connect(self.saveCif)
         self.export_cif_a.triggered.connect(self.saveCif)
 
-        self.pushButton_4.pressed.connect(self.uploadFile)
+        self.import_file_a.triggered.connect(self.uploadFile)
 
         self.pushButton_5.pressed.connect(self.db_settings.show)
 
