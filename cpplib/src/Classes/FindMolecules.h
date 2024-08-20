@@ -27,6 +27,7 @@
 // ******************************************************************************************
 #pragma once
 #include "../BaseHeaders/Support.h"
+#include "../BaseHeaders/DebugMes.h"
 #include "Distances.h"
 #include "Hash.h"
 #include "Geometry.h"
@@ -114,6 +115,7 @@ namespace cpplib {
 					}
 				}
 			}
+			deb_write("findBonds return");
 			return std::make_pair(res, invalidAtoms);
 		}
 		auto findBondsEx(const DistancesType& distances, std::string& errorMSG, DistanceFunction distance_f) const {

@@ -27,6 +27,7 @@
 // ******************************************************************************************
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
+#include <iostream>
 #include "AllInOneAndCurrent.h"
 #include "Functions.h"
 #include "../Classes/Interfaces.h"
@@ -90,7 +91,13 @@ extern "C" {
 	}
 	// Python section
 	static PyObject* cpplib_GenBonds(PyObject* self, PyObject* arg) {
-		useDistances(self);
+		try {
+			useDistances(self);
+		}
+		catch (...) {
+			std::cerr << "Could not open BondLength.ini" << std::endl;
+		}
+		deb_write("UseDistances finished");
 		auto& distances = *(p_distances);
 		const Py_ssize_t s = PyList_Size(arg);
 		std::vector<AtomTypeData> types;
@@ -107,7 +114,10 @@ extern "C" {
 		}
 		FAMStructType famstr(std::move(types), std::move(points));
 		std::string errM;
+
+		deb_write("before famstr.findBonds");
 		auto&& bonds = famstr.findBonds(distances, errM, [](const PointType& p1, const PointType& p2) {return (p1 - p2).r(); }).first;
+		deb_write("after famstr.findBonds");
 
 		std::string line;
 		for (size_t i = 0; i < bonds.size(); i++)

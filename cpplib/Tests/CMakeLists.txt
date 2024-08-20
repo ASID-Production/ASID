@@ -51,6 +51,12 @@ FetchContent_MakeAvailable(gest)
 enable_testing()
 
 
+if (MSVC)
+    # warning level 4
+    add_compile_options(/favor:blend /O2 /Oi /Ob3 /EHsc /fp:fast /GF /GL /GR- /Gw /std:c++latest /Zl)
+    add_link_options(/LTCG)
+endif()
+
 add_executable(
     ${PROJECT_NAME} 
     MainTest.cpp
