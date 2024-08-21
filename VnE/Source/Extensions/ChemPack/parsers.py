@@ -35,6 +35,7 @@ from . import MoleculeClass
 
 import debug
 
+
 class FileParser:
 
     def __init__(self):
@@ -413,7 +414,7 @@ class FileParser:
                             bonds.append(bond)
         return mol_sys, (mol_list, atom_list, bonds_l)
 
-    def parsWinxproOut(self, file_path, bond=True, root=None, *args, **kwarg):
+    def parsWinxproOut(self, file_path, bond=True, root=None, *args, **kwargs):
 
         def parseCell(line, file):
             nonlocal flag
@@ -422,6 +423,12 @@ class FileParser:
                 return
             if flag:
                 par = [float(x) for x in line[:-1].split(' ') if x]
+                cif_dict['cif_cell_a'] = par[0]
+                cif_dict['cif_cell_b'] = par[1]
+                cif_dict['cif_cell_c'] = par[2]
+                cif_dict['cif_cell_al'] = par[3]
+                cif_dict['cif_cell_be'] = par[4]
+                cif_dict['cif_cell_ga'] = par[5]
                 flag = False
                 methods.pop(0)
             return
@@ -440,8 +447,48 @@ class FileParser:
                 name = data[0]
                 atom_type = int(data[1])
                 coords = [float(x) for x in data[5:8]]
-                atom = MoleculeClass.Atom(coords, atom_type, None, name=name)
+                frac_coords = np.array([float(x) for x in data[2:5]], dtype=np.float32)
+                atom = MoleculeClass.Atom(coords, atom_type, None, name=name, cif_frac_coords=frac_coords)
                 atoms.append(atom)
+
+        def parseSymm(line, file):
+            nonlocal flag
+            if 'CENTROSYMMETRIE =' in line:
+                flag = True
+                return
+            if flag:
+                if line == ' \n':
+                    flag = False
+                    methods.pop(0)
+                    return
+                data = [x for x in line[:-1].split(' ') if x]
+                if data[0] == 'New':
+                    return
+                else:
+                    i = 0
+                    symop = ['', 'x', '', 'y', '', 'z']
+                    if 'X' not in data[i]:
+                        symop[0] = data[i]
+                        i += 1
+                    op = data[i]
+                    symop[1] = op[:op.find('X')] + 'x' + op[op.find('X')+1:]
+                    i += 1
+
+                    if 'Y' not in data[i]:
+                        symop[2] = data[i]
+                        i += 1
+                    op = data[i]
+                    symop[3] = op[:op.find('Y')] + 'y' + op[op.find('Y') + 1:]
+                    i += 1
+
+                    if 'Z' not in data[i]:
+                        symop[4] = data[i]
+                        i += 1
+                    op = data[i]
+                    symop[5] = op[:op.find('Z')] + 'z' + op[op.find('Z') + 1:]
+                    i += 1
+                    code = f'{symop[0]}{symop[1]},{symop[2]}{symop[3]},{symop[4]}{symop[5]}'
+                    symmcodes.append(code)
 
         def parseCPs(line, file):
             types = {'3,-3': 6,
@@ -502,10 +549,10 @@ class FileParser:
                     parseCP()
                 return
 
-
         mol_list, atom_list, bonds_l = None, None, None
         mol_sys = MoleculeClass.MoleculeSystem()
         mol_sys.file_name = file_path
+        mol_sys.open_func = lambda: self.parsWinxproOut(file_path, bond=bond, root=root, *args, **kwargs)
         mol_sys.name = os.path.basename(file_path).split('.')[0]
         mol = MoleculeClass.Molecule(parent=mol_sys)
 
@@ -518,7 +565,16 @@ class FileParser:
         cell = None
         atoms = []
         cps = []
-        methods = [parseCell, parseAtm, parseCPs]
+        symmcodes = []
+        methods = [parseCell, parseAtm, parseSymm, parseCPs]
+
+        cif_dict = {'cif_sym_codes': [[0, 'x,y,z']],
+                    'cif_cell_a': 1,
+                    'cif_cell_b': 1,
+                    'cif_cell_c': 1,
+                    'cif_cell_al': 90,
+                    'cif_cell_be': 90,
+                    'cif_cell_ga': 90,}
 
         with open(file_path, 'r') as file:
             for line in file:
@@ -526,19 +582,33 @@ class FileParser:
                     methods[0](line, file)
                 else:
                     break
+
+        tr_codes = ['x+1,y,z', 'x-1,y,z', 'x,y+1,z', 'x,y-1,z', 'x,y,z+1', 'x,y,z-1']
+        symmcodes += tr_codes
+        codes = [[i, symmcodes[i]] for i in range(len(symmcodes))]
+        cif_dict['cif_sym_codes'] = codes
+
         mol: MoleculeClass.Molecule
         mol = mol_sys.children[0]
         for atom in atoms:
+            atom.updateProps(cif_dict)
             mol.addChild(atom)
 
         mol = cps_sys.children[0]
         for cp in cps:
             mol.addChild(cp)
 
-        mol_sys, list_tuple = self.parsMolSys(mol_sys, bond, root)
+        def apCreation(atom_list, atom):
+            point = self._pointCreation(atom_list, atom)
+            cif = {key: atom.__getattribute__(key) for key in cif_dict.keys()}
+            for key in cif:
+                point.__setattr__(key, cif[key])
+            return point
+
+        mol_sys, list_tuple = self.parsMolSys(mol_sys, bond, root, point_func=apCreation)
         yield mol_sys, list_tuple
 
-        def pointCreation(atom_list, atom):
+        def cppCreation(atom_list, atom):
             coord = atom.coord.copy()
             point = point_class.Point(parent=atom_list, coord=coord, rad=atom_list,
                                       color=PALETTE.point_dict[PALETTE.getName(atom.atom_type)],
@@ -557,8 +627,31 @@ class FileParser:
                                       ellipticity=atom.ellipticity)
             return point
 
-        cps_sys, list_tuple = self.parsMolSys(cps_sys, False, root, point_func=pointCreation)
+        cps_sys, list_tuple = self.parsMolSys(cps_sys, False, root, point_func=cppCreation)
+        if list_tuple[1]:
+            list_tuple[1].rad = 0.15
         yield cps_sys, list_tuple
+
+    def parsWinxproPaths(self, file_path, bond=False, root=None, *args, **kwargs):
+        mol_list, atom_list, bonds_l = None, None, None
+        mol_sys = MoleculeClass.MoleculeSystem()
+        mol_sys.file_name = file_path
+        mol_sys.name = os.path.basename(file_path).split('.')[0]
+        mol = MoleculeClass.Molecule(parent=mol_sys)
+
+        with open(file_path, 'r') as file:
+            for line in file:
+                data = [x for x in line[:-1].split() if x]
+                try:
+                    data[0], data[1] = float(data[0]), float(data[1])
+                    data[2] = float(data[2][:-1])
+                    atom = MoleculeClass.Atom(data[:3], 6, parent=mol)
+                except ValueError or IndexError:
+                    pass
+        mol_sys, list_tuple = self.parsMolSys(mol_sys, bond, root)
+        if list_tuple[1]:
+            list_tuple[1].rad = 0.02
+        yield mol_sys, list_tuple
 
     @staticmethod
     def _pointCreation(atom_list, atom):

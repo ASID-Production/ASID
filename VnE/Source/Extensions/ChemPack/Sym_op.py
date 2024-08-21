@@ -107,8 +107,10 @@ class SymOpDialog(QtWidgets.QDialog):
 
     def resetSystem(self):
         from ..ChemPack import TREE_MODEL, PARSER, loadMolSys
-        args = PARSER.parsFile(self.curr_sys[1].file_name, True, TREE_MODEL.getRoot())
-        loadMolSys(args[0], args[1])
+        open_func = self.curr_sys[1].open_func
+        gen = open_func()
+        for mol_sys, lists_tuple in gen:
+            loadMolSys(mol_sys, lists_tuple)
         index = TREE_MODEL.index(0, 0, by_point=self.curr_sys[0])
         TREE_MODEL.removeRow(index.row(), parent=index.parent())
         i = self.mols.index(self.curr_sys)

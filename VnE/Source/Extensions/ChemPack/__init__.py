@@ -163,16 +163,28 @@ def parseWinxpro():
     if PARSER is None:
         from .parsers import PARSER as parser
         PARSER = parser
-    filename, _ = QFileDialog.getOpenFileName()
+    filename, _ = QFileDialog.getOpenFileName(filter='*.out')
+    if not filename:
+        return None, None
+    molsys, points_lists = None, None
     if TREE_MODEL is not None:
         gen = PARSER.parsWinxproOut(filename, bond=True, root=TREE_MODEL.getRoot())
-        molsys, points_lists = None, None
         for molsys, points_lists in gen:
             loadMolSys(molsys, points_lists)
-        return molsys, points_lists
     else:
         molsys, _ = PARSER.parsWinxproOut(filename)
-        return molsys, None
+
+    filename, _ = QFileDialog.getOpenFileName(filter='*.bpc')
+    if not filename:
+        return None, None
+
+    if TREE_MODEL is not None:
+        gen = PARSER.parsWinxproPaths(filename, bond=False, root=TREE_MODEL.getRoot())
+        for molsys, points_lists in gen:
+            loadMolSys(molsys, points_lists)
+    else:
+        molsys, _ = PARSER.parsWinxproPaths(filename)
+    return molsys, points_lists
 
 
 def execute(model, uniform_model=None):

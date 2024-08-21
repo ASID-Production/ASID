@@ -128,6 +128,10 @@ class aEntity(ABC):
             res = child.findProp(prop, value, res=res)
         return res
 
+    def updateProps(self, props: dict):
+        for arg in props:
+            self.__setattr__(arg, props[arg])
+
 
 class Bond:
     def __init__(self, atom1, atom2):
@@ -207,6 +211,10 @@ class Atom(DefaultData):
         except AttributeError:
             pass
         return res
+
+    def updateProps(self, props: dict):
+        for arg in props:
+            self.__setattr__(arg, props[arg])
 
 
 class Molecule(aEntity):
