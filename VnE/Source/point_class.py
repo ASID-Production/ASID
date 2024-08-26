@@ -333,12 +333,31 @@ class Point(aPoint):
         for key in kwargs:
             self.__setattr__(key, kwargs[key])
 
-    def clone(self):
-        clone = type(self)(coord=self, color=self, rad=self, parent=None)
-        for observer in self.observers:
-            if observer is not self.dependency_observer:
-                clone.attach(observer)
+    def copy(self, obs_clone=True, linked_props=None, parent=None):
+        if linked_props is None:
+            linked_props = {}
+        props = {key: val for key, val in self.__dict__.items() if key[0] != '_' and key != 'parent'}
+        for key, val in props.items():
+            if issubclass(type(val), aPoint):
+                if linked_props.get(val, None) is None:
+                    linked_props[val] = {self: [key]}
+                else:
+                    if linked_props[val].get(self, None) is None:
+                        linked_props[val] = {self: [key]}
+                    else:
+                        if key not in linked_props[val][self]:
+                            linked_props[val][self].append(key)
+
+        clone = type(self)(parent=parent, **props)
+
+        if obs_clone:
+            for observer in self.observers:
+                if observer is not self.dependency_observer:
+                    clone.attach(observer)
         return clone
+
+    def linkCopy(self):
+        pass
 
     @property
     def coord(self):
@@ -405,6 +424,32 @@ class PointsList(aPoint):
             child_clone = child.clone()
             clone.addChild(child_clone)
         return clone
+
+    def copy(self, obs_clone=True, linked_props=None, parent=None):
+        if linked_props is None:
+            linked_props = {}
+        props = {key: val for key, val in self.__dict__.items() if key[0] != '_' and key != 'parent'}
+        for key, val in props.items():
+            if issubclass(type(val), aPoint):
+                if linked_props.get(val, None) is None:
+                    linked_props[val] = {self: [key]}
+                else:
+                    if linked_props[val].get(self, None) is None:
+                        linked_props[val] = {self: [key]}
+                    else:
+                        if key not in linked_props[val][self]:
+                            linked_props[val][self].append(key)
+
+        clone = type(self)(parent=parent, **props)
+
+        if obs_clone:
+            for observer in self.observers:
+                if observer is not self.dependency_observer:
+                    clone.attach(observer)
+        return clone
+
+    def linkCopy(self):
+        pass
 
     def changeOrder(self, object, index):
         if object not in self.children:
