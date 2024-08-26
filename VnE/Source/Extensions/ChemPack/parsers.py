@@ -336,10 +336,10 @@ class FileParser:
             mol_sys, list_tuple = self.parsMolSys(mol_sys, bond, root)
             mol_list = list_tuple[0]
             cell_list = point_class.PointsList(parent=mol_list, name='Cell', color=[0, 0, 0, 1])
-            o = point_class.Point(parent=cell_list, name='o', coord=cell_dec_coords[0], color=[0, 0, 0, 1])
-            a = point_class.Point(parent=cell_list, name='a', coord=cell_dec_coords[1], color=[1, 0, 0, 1])
-            b = point_class.Point(parent=cell_list, name='b', coord=cell_dec_coords[2], color=[0, 1, 0, 1])
-            c = point_class.Point(parent=cell_list, name='c', coord=cell_dec_coords[3], color=[0, 0, 1, 1])
+            o = point_class.Point(parent=cell_list, name='o', coord=cell_dec_coords[0], color=[0, 0, 0, 1], label='o')
+            a = point_class.Point(parent=cell_list, name='a', coord=cell_dec_coords[1], color=[1, 0, 0, 1], label='a')
+            b = point_class.Point(parent=cell_list, name='b', coord=cell_dec_coords[2], color=[0, 1, 0, 1], label='b')
+            c = point_class.Point(parent=cell_list, name='c', coord=cell_dec_coords[3], color=[0, 0, 1, 1], label='c')
             cell_rend = point_class.PointsList(parent=cell_list, name='Cell render', color=cell_list)
 
             oa = point_class.PointsList(parent=cell_rend, name='o-a', color=a)
