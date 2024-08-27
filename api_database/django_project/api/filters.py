@@ -101,13 +101,20 @@ class StructureFilter(FilterSet):
         fields = []
 
     def filter_refcode(self, queryset, name, value):
+        exact = self.request.GET.get('exact', False)
         if value:
             queryset_temp = 0
             for element in value.split():
-                if queryset_temp:
-                    queryset_temp = queryset_temp | queryset.filter(refcode__istartswith=element)
+                if exact == 'refcode':
+                    if queryset_temp:
+                        queryset_temp = queryset_temp | queryset.filter(refcode__iexact=element)
+                    else:
+                        queryset_temp = queryset.filter(refcode__iexact=element)
                 else:
-                    queryset_temp = queryset.filter(refcode__istartswith=element)
+                    if queryset_temp:
+                        queryset_temp = queryset_temp | queryset.filter(refcode__istartswith=element)
+                    else:
+                        queryset_temp = queryset.filter(refcode__istartswith=element)
             return queryset_temp
         return queryset
 
