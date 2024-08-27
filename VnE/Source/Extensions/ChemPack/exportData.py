@@ -51,9 +51,15 @@ def execute():
         args = [
             [x.atom_type for x in atoms],
             [list(x.coord) for x in atoms],
-            [0, 0, 0, 0.0, 0.0, 0.0, -180.0, 180]
+            [0, 0, 0, 0.0, 0.0, 0.0, 0.0, -180.0, 180]
+        ]
+        args_tors = [
+            [x.atom_type for x in atoms],
+            [list(x.coord) for x in atoms],
+            [0, 0, 0, 0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -180.0, 180, -180.0, 180, -180.0, 180]
         ]
         #angles = cpplib.FindAngleWC(*args)
+        #tors = cpplib.FindTorsionWC(*args)
         with open(filepath[0], 'w', newline='') as out:
             writer = csv.writer(out, delimiter=';')
             lines = []

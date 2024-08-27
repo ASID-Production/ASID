@@ -36,10 +36,12 @@ from ... import point_class
 from ..ChemPack import PALETTE, MOLECULE_SYSTEMS, TREE_MODEL
 from . import MoleculeClass
 import os.path as opath
+import json
 
 DB_VIEWER = None
 
 import debug
+
 
 class StructuresListModel(QAbstractListModel):
 
@@ -47,16 +49,98 @@ class StructuresListModel(QAbstractListModel):
 
     def __init__(self, parent=None):
         super().__init__(parent=parent)
+        if parent:
+            try:
+                self.progress_bar = parent.progressBar
+                self.progress = 0
+            except AttributeError:
+                self.progress_bar = None
+                self.progress = None
         self._data = []
         self._rows = 0
         self._display_tag = 'refcode'
+        self._search_proc = None
+        self._iter_search_procs = []
 
     def populate(self, request):
-        request, search_type = request
+        request, search_type, db_type = request
+        if self._search_proc is None:
+            if self.progress_bar:
+                self.progress_bar.setValue(0)
+                self.progress = 0
+            self.beginResetModel()
+            self._data = []
+            self._rows = 0
+            self.endResetModel()
+            self._search_proc = QProcess(self)
+            self._search_proc.finished.connect(self.searchDone)
+            self._search_proc.readyReadStandardOutput.connect(self.appendRes)
+            self._search_proc = Db_bindings.search(request, search_type, db_type, process=self._search_proc)
+        else:
+            return
+
+    def iterPopulate(self, requests):
+
+        def getCallBack(func, search_proc):
+            return lambda: func(search_proc=search_proc)
+
         self.beginResetModel()
-        self._data = Db_bindings.search(request, search_type)
-        self._rows = len(self._data)
+        self._data = []
+        self._rows = 0
         self.endResetModel()
+        for request in requests:
+            request, search_type, db_type = request
+            if self.progress_bar:
+                self.progress_bar.setValue(0)
+                self.progress = 0
+            search_proc = QProcess(self)
+            cb = getCallBack(self.searchDone, search_proc)
+            search_proc.finished.connect(cb)
+            cb = getCallBack(self.appendRes, search_proc)
+            search_proc.readyReadStandardOutput.connect(cb)
+            self._iter_search_procs.append(Db_bindings.search(request, search_type, db_type, process=search_proc))
+
+    def searchDone(self, *args, search_proc=None):
+        if search_proc is None:
+            self._search_proc = None
+        else:
+            self._iter_search_procs.remove(search_proc)
+        if self.progress_bar:
+            self.progress_bar.setValue(100)
+            self.progress = 1
+
+    def appendRes(self, *args, search_proc=None):
+        if search_proc is None:
+            data = self._search_proc.readAllStandardOutput()
+        else:
+            data = search_proc.readAllStandardOutput()
+        data = str(data, encoding='utf-8').split('\n')
+        for d in data:
+            if d:
+                d = json.loads(d)
+                if self.progress_bar:
+                    if d.get('max_iter_num', None):
+                        self.progress = self.progress + 1 / d['max_iter_num']
+                    else:
+                        if d['count'] != 0:
+                            self.progress = self.progress + len(d['results'])/d['count']
+                            self.progress_bar.setValue(int(round(self.progress*100)))
+                        else:
+                            return
+                d = d['results']
+                size = len(d)
+                self.beginInsertRows(QModelIndex(), self._rows, self._rows + size - 1)
+                self._data += d
+                self._rows += size
+                self.endInsertRows()
+
+    def stopSearch(self):
+        if self._search_proc:
+            self._search_proc.readyReadStandardOutput.disconnect(self.appendRes)
+            self._search_proc = None
+        for search_proc in self._iter_search_procs:
+            search_proc.readyReadStandardOutput.disconnect(self.appendRes)
+            self._iter_search_procs = []
 
     def setDisplayTag(self, tag):
         if tag in self._display_tags:
@@ -80,6 +164,12 @@ class StructuresListModel(QAbstractListModel):
             return self._data[index.row()][self._display_tag]
         if role == 99:
             return self._data[index.row()]
+
+    def exportRefs(self, indices):
+        ret = []
+        for ind in indices:
+            ret.append(self.data(ind, 99)['refcode'])
+        return ret
 
 
 class InfoTableModel(QAbstractTableModel):
@@ -157,6 +247,8 @@ from .ui import search_dialog
 class SearchDialog(search_dialog.Ui_Dialog, QtWidgets.QDialog):
 
     SEARCH_TYPES = Db_bindings.search_types
+    DB_TYPES = {0: 'cryst',
+                1: 'qm'}
 
     def __init__(self, parent=None):
         super().__init__()
@@ -180,6 +272,9 @@ class SearchDialog(search_dialog.Ui_Dialog, QtWidgets.QDialog):
 
     def getSearchType(self):
         return self.search_type
+
+    def getSearchDb(self):
+        return self.DB_TYPES.get(self.comboBox.currentIndex(), 'cryst')
 
 
 from .ui import Settings_dialog
@@ -222,11 +317,37 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
     def __init__(self, parent=None, ):
         super().__init__()
         self.setupUi(self)
+        self.toolBar = QtWidgets.QToolBar(self)
+
+        self.export_button = QtWidgets.QToolButton()
+        self.import_button = QtWidgets.QToolButton()
+        self.export_button.setText('Export')
+        self.import_button.setText('Import')
+        self.export_button.setPopupMode(QtWidgets.QToolButton.InstantPopup)
+        self.import_button.setPopupMode(QtWidgets.QToolButton.InstantPopup)
+        self.export_button.setStyleSheet("::menu-indicator{ image: none; }")
+        self.import_button.setStyleSheet("::menu-indicator{ image: none; }")
+
+        self.export_menu = QtWidgets.QMenu()
+        self.export_refs_a = self.export_menu.addAction('export refs')
+        self.export_cif_a = self.export_menu.addAction('export cif')
+
+        self.import_menu = QtWidgets.QMenu()
+        self.import_refs_a = self.import_menu.addAction('import refs')
+        self.import_file_a = self.import_menu.addAction('import file')
+
+        self.export_button.setMenu(self.export_menu)
+        self.import_button.setMenu(self.import_menu)
+        self.toolBar.addWidget(self.export_button)
+        self.toolBar.addWidget(self.import_button)
+
+        self.verticalLayout.insertWidget(0, self.toolBar)
 
         self.setWindowTitle('DB Search')
 
-        self.list_model = StructuresListModel()
+        self.list_model = StructuresListModel(self)
         self.listView: QtWidgets.QListView
+        self.listView.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         self.listView.setModel(self.list_model)
         self.listView.setSelectionModel(QItemSelectionModel())
         self.listView.selectionModel().currentChanged.connect(self.newSelection)
@@ -245,14 +366,20 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
         self.tableView.horizontalHeader().setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
 
         self.pushButton.pressed.connect(self.search_dialog.show)
-        self.search_dialog.pushButton.pressed.connect(lambda: self.list_model.populate((self.search_dialog.getText(), self.search_dialog.getSearchType())))
+        self.search_dialog.pushButton.pressed.connect(lambda: self.list_model.populate((self.search_dialog.getText(), self.search_dialog.getSearchType(), self.search_dialog.getSearchDb())))
         self.pushButton_2.pressed.connect(self.loadStruct)
 
-        self.pushButton_3.pressed.connect(self.saveCif)
+        self.export_cif_a.triggered.connect(self.saveCif)
 
-        self.pushButton_4.pressed.connect(self.uploadFile)
+        self.import_file_a.triggered.connect(self.uploadFile)
 
         self.pushButton_5.pressed.connect(self.db_settings.show)
+
+        self.pushButton_6.pressed.connect(self.list_model.stopSearch)
+        self.pushButton_6.pressed.connect(Db_bindings.SESSION.triggerLastConnectOp)
+
+        self.export_refs_a.triggered.connect(self.exportRefs)
+        self.import_refs_a.triggered.connect(self.importRefs)
 
     def setSpan(self):
         for i in range(self.table_model.rowCount()):
@@ -268,22 +395,30 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
             self.table_model.setSelected(None)
 
     def saveCif(self):
-        data = self.table_model.selected()
-        if data is None:
+        indices = self.listView.selectionModel().selectedIndexes()
+        if not indices:
             return
         else:
-            id = data['id']
-            cif = Db_bindings.getCif(id)
-            filename = QtWidgets.QFileDialog.getSaveFileName()[0]
+            filename, _ = QtWidgets.QFileDialog.getSaveFileName(filter='*.cif')
+            cifs = []
+            for ind in indices:
+                data = self.list_model.data(ind, 99)
+                id = data['id']
+                db_type = self.search_dialog.getSearchDb()
+                cifs.append(Db_bindings.getCif(id, db_type))
             if filename:
                 out = open(filename, 'wb')
-                out.write(cif)
+                data = b''
+                for cif in cifs:
+                    data += cif
+                out.write(data)
                 out.close()
 
     def uploadFile(self):
         filename = QtWidgets.QFileDialog.getOpenFileName(filter='*.cif *.xml')[0]
         if filename:
-            Db_bindings.uploadFile(filename)
+            _, ext = opath.splitext(filename)
+            Db_bindings.uploadFile(filename, ext)
 
     def loadStruct(self):
         from ..ChemPack import pars
@@ -295,13 +430,34 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
         if data is None:
             return
         id = data['id']
-        cif = Db_bindings.getCif(id)
+        db_type = self.search_dialog.getSearchDb()
+        cif = Db_bindings.getCif(id, db_type)
         filename = opath.normpath(f'{opath.dirname(__file__)}/../../../temp/{id}.cif')
         out = open(filename, 'wb')
         out.write(cif)
         out.close()
         pars(filename, True, TREE_MODEL.getRoot())
         return
+
+    def exportRefs(self):
+        selection = self.listView.selectionModel().selectedIndexes()
+        data = self.list_model.exportRefs(selection)
+        filename, _ = QtWidgets.QFileDialog.getSaveFileName(filter='*.txt')
+        if filename:
+            file = open(filename, 'w')
+            line = '\n'.join(data)
+            file.write(line + '\n')
+            file.close()
+        pass
+
+    def importRefs(self):
+        filename, _ = QtWidgets.QFileDialog.getOpenFileName(filter='*.txt')
+        if filename:
+            file = open(filename, 'r')
+            data = [x for x in file.read().split('\n') if x]
+            self.list_model.iterPopulate(((x, 'refcode', 'cryst') for x in data))
+        pass
+
 
 def show():
     global DB_VIEWER

@@ -74,7 +74,7 @@ def execute():
             self.setLayout(main_layout)
 
         def execute(self):
-            from .ChemPackSource import MoleculeClass
+            from .ChemPack import MoleculeClass
             try:
                 range = float(self.range_line.text())
                 id = int(self.res_line.text())
@@ -110,7 +110,7 @@ def execute():
 
             sel = []
 
-            from .ChemPackSource.contacts import dist
+            from .ChemPack.contacts import dist
 
             def rec_add(atom, prev_atom=None, mem=None):
                 if mem is None:
@@ -141,7 +141,7 @@ def execute():
                 molecule.addChild(atom)
             if not molecule.children:
                 return
-            from .ChemPackSource import save_file
+            from .ChemPack import save_file
             import os
 
             filters = f'*.{" *.".join(save_file.SAVE_FILE.getFormats())}'

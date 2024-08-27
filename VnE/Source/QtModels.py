@@ -351,6 +351,10 @@ class QtPointsPropertyModel(QAbstractListModel):
 
 class QtPointsTreeModel(QAbstractItemModel):
 
+    item_selected = Signal(QModelIndex)
+    item_deselected = Signal(QModelIndex)
+    selection_changed = Signal(QModelIndex)
+
     def __init__(self, parent=None, data=None):
         if data is None:
             data = PointsList()
@@ -472,6 +476,12 @@ class QtPointsTreeModel(QAbstractItemModel):
     def setData(self, index: QModelIndex, value, role: int = ...) -> bool:
         if role == 99:
             property, value = value
+            if property == 'pick':
+                self.selection_changed.emit(index)
+                if value == 0 and index.internalPointer().pick == 1:
+                    self.item_deselected.emit(index)
+                elif value == 1 and index.internalPointer().pick == 0:
+                    self.item_selected.emit(index)
             point = index.internalPointer()
             point.__setattr__(property, value)
             return True

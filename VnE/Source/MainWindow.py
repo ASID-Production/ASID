@@ -255,10 +255,15 @@ class MainWindow(QtWidgets.QMainWindow):
         super().__init__()
         self.setWindowTitle('ASID View & Explore')
         widget = QtWidgets.QWidget()
-        frame = QtWidgets.QFrame(parent=widget)
-        opengl_frame = QtWidgets.QFrame(parent=widget)
+        self.frame = QtWidgets.QFrame(parent=widget)
+        self.frame.setObjectName('lists_frame')
+        self.opengl_frame = QtWidgets.QFrame(parent=widget)
+        self.opengl_frame.setObjectName('opengl_frame')
+        self.opengl_frame.setLayout(QtWidgets.QVBoxLayout())
+        self.opengl_frame.layout().setSpacing(0)
         vlayout = QtWidgets.QVBoxLayout()
         hlayout = QtWidgets.QHBoxLayout()
+        hlayout.setSpacing(0)
 
         self.treeView = TreeView()
         self.listView = ListView()
@@ -278,27 +283,32 @@ class MainWindow(QtWidgets.QMainWindow):
         self.opengl_widget = OpenGlWidget(parent=widget, model=self.points_list, uniformWidget=self.uniformWid)
         self.opengl_widget.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
         self.opengl_widget.setSelectionModel(self.selection_model)
+        self.opengl_frame.layout().addWidget(self.opengl_widget)
 
         self.listView.setSizePolicy(QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Expanding)
         self.listView.setMinimumWidth(300)
         self.treeView.setSizePolicy(QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Expanding)
         self.treeView.setMinimumWidth(300)
-        frame.setSizePolicy(QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Expanding)
-        frame.setMinimumWidth(300)
+        self.frame.setSizePolicy(QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Expanding)
+        self.frame.setMinimumWidth(300)
 
         vlayout.addWidget(self.treeView)
         vlayout.addWidget(self.listView)
-        frame.setLayout(vlayout)
-        hlayout.addWidget(frame)
-        hlayout.addWidget(self.opengl_widget)
+        self.frame.setLayout(vlayout)
+        hlayout.addWidget(self.frame)
+        hlayout.addWidget(self.opengl_frame)
 
         self.uniformModel = UniformListModel()
         self.uniformWid.setModel(self.uniformModel)
 
+        widget.setLayout(hlayout)
+        self.resize(1280, 720)
+
+        self.setCentralWidget(widget)
         from . import Extensions
 
         self.menu = self.menuBar()
-        self.extension_menu = Extensions.getMenu(self.model, self.uniformModel)
+        self.extension_menu = Extensions.getMenu(self.model, self.uniformModel, main_widget=widget)
         self.uniformAction = self.menu.addAction('Uniforms')
         self.menu.addMenu(self.extension_menu)
         self.uniformAction.triggered.connect(self.uniformWid.show)
@@ -311,11 +321,6 @@ class MainWindow(QtWidgets.QMainWindow):
         self.about_dialog.layout().addWidget(QtWidgets.QLabel("ASID\nconference demo version\nAuthors:\nAlexander A. Korlyukov (head),\nAlexander D. Volodin (author of cpplib),\nPetr A. Buikin (author of api_database),\nAlexander R. Romanenko (author of VnE)"))
 
         self.about.triggered.connect(self.about_dialog.show)
-
-        widget.setLayout(hlayout)
-        self.resize(1280, 720)
-
-        self.setCentralWidget(widget)
 
 
 def show():

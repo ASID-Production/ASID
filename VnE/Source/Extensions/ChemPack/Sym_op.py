@@ -27,6 +27,7 @@
 # ******************************************************************************************
 
 from PySide6 import QtWidgets
+import numpy as np
 
 import debug
 
@@ -66,10 +67,13 @@ class SymOpDialog(QtWidgets.QDialog):
 
         self.curr_sys = None
         self.mols = []
+        self.original_systems = []
+
         for mol_l in MOLECULE_SYSTEMS:
             if mol_l.isValid():
                 self.mols.append((mol_l, MOLECULE_SYSTEMS[mol_l]))
                 self.combo_box.addItem(mol_l.name)
+                self.original_systems.append((mol_l.copy(obs_clone=False), MOLECULE_SYSTEMS[mol_l]))
 
         self.changeSystem(0)
 
@@ -106,15 +110,28 @@ class SymOpDialog(QtWidgets.QDialog):
             self.update()
 
     def resetSystem(self):
-        from ..ChemPack import TREE_MODEL, PARSER, loadMolSys
-        args = PARSER.parsFile(self.curr_sys[1].file_name, True, TREE_MODEL.getRoot())
-        loadMolSys(args[0], args[1])
+        from ..ChemPack import TREE_MODEL, PARSER, loadMolSys, UNIFORM_MODEL
+        i = self.mols.index(self.curr_sys)
+        orig_sys = list(self.original_systems[i])
+        orig_sys[0] = orig_sys[0].copy(obs_clone=False)
         index = TREE_MODEL.index(0, 0, by_point=self.curr_sys[0])
-        TREE_MODEL.removeRow(index.row(), parent=index.parent())
+        parent = index.parent()
+        TREE_MODEL.removeRow(index.row(), parent=parent)
         i = self.mols.index(self.curr_sys)
         self.mols.pop(i)
-        self.mols.insert(i, (args[1][0], args[0]))
+        self.mols.insert(i, orig_sys)
         self.curr_sys = self.mols[i]
+        TREE_MODEL.getRoot().addChild(orig_sys[0])
+        TREE_MODEL.insertRow(0, parent=parent)
+        atoms_index = TREE_MODEL.index(0, 0, by_point=orig_sys[0].children[0])
+        bonds_index = TREE_MODEL.index(0, 0, by_point=orig_sys[0].children[1])
+        TREE_MODEL.attachObserver(atoms_index, 'Sphere')
+        TREE_MODEL.attachObserver(bonds_index, 'Bond')
+        coords = np.array([a.coord for a in orig_sys[0].children[0].children])
+        cent = np.sum(coords, axis=0) / len(coords)
+        if UNIFORM_MODEL is not None:
+            root = UNIFORM_MODEL.root()
+            root.rotation_point = cent.copy()
 
     def applySymOpFunc(self, ind):
         from . import MoleculeClass
@@ -141,6 +158,12 @@ class SymOpDialog(QtWidgets.QDialog):
 
         def applySymOps():
             import cpplib
+
+            try:
+                cell_list_copy = self.curr_sys[0].children[2].copy(obs_clone=False)
+            except IndexError:
+                cell_list_copy = None
+
             atoms = self.curr_sys[1].children[0].children
             sym_codes = atoms[0].cif_sym_codes
             sym_code = sym_codes[ind][1]
@@ -175,7 +198,7 @@ class SymOpDialog(QtWidgets.QDialog):
                 if i < len(atoms):
                     atom = MoleculeClass.Atom(coord.copy(), atom[0], parent=mol, name=atoms[i].name, **cif_data)
                 else:
-                    atom = MoleculeClass.Atom(coord.copy(), atom[0], parent=mol, name=PALETTE.getName(atom[0]),**cif_data)
+                    atom = MoleculeClass.Atom(coord.copy(), atom[0], parent=mol, name=PALETTE.getName(atom[0]), **cif_data)
             args = PARSER.parsMolSys(new_mol_sys, True, TREE_MODEL.getRoot())
             loadMolSys(args[0], args[1])
             index = TREE_MODEL.index(0, 0, by_point=self.curr_sys[0])
@@ -184,6 +207,12 @@ class SymOpDialog(QtWidgets.QDialog):
             self.mols.pop(i)
             self.mols.insert(i, (args[1][0], args[0]))
             self.curr_sys = self.mols[i]
+
+            if cell_list_copy:
+                self.curr_sys[0].addChild(cell_list_copy)
+                index = TREE_MODEL.index(0, 0, by_point=self.curr_sys[0])
+                TREE_MODEL.insertRow(TREE_MODEL.rowCount(parent=index), parent=index)
+
         return applySymOps
 
 

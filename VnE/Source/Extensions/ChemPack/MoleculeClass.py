@@ -116,6 +116,22 @@ class aEntity(ABC):
         if child in self.children:
             self.children.remove(child)
 
+    def findProp(self, prop, value, res=None):
+        if res is None:
+            res = []
+        try:
+            if self.__getattribute__(prop) == value:
+                res.append(self)
+        except AttributeError:
+            pass
+        for child in self.children:
+            res = child.findProp(prop, value, res=res)
+        return res
+
+    def updateProps(self, props: dict):
+        for arg in props:
+            self.__setattr__(arg, props[arg])
+
 
 class Bond:
     def __init__(self, atom1, atom2):
@@ -140,6 +156,8 @@ class Atom(DefaultData):
         if parent is not None:
             parent.addChild(self)
         self._point = None
+        if isinstance(coord, list) or isinstance(coord, tuple):
+            coord = np.array(coord, dtype=np.float32)
         self.coord = coord
         if type(atom_type) is list:
             self.atom_type = []
@@ -183,6 +201,20 @@ class Atom(DefaultData):
 
     def point(self):
         return self._point
+
+    def findProp(self, prop, value, res=None):
+        if res is None:
+            res = []
+        try:
+            if self.__getattribute__(prop) == value:
+                res.append(self)
+        except AttributeError:
+            pass
+        return res
+
+    def updateProps(self, props: dict):
+        for arg in props:
+            self.__setattr__(arg, props[arg])
 
 
 class Molecule(aEntity):
