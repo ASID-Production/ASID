@@ -28,10 +28,9 @@
 
 import networkx as nx
 import cpplib
-import json
 from ._element_numbers import element_numbers
-import os
 from django_project.loggers import set_prm_log
+from modules.gen2d.gen2d import main_v2
 import re
 
 
@@ -114,7 +113,6 @@ def make_graph_c(params, coords, types, refcode, add_graphs_logger, symops):
     cpplib_result = cpplib.FindMoleculesInCell(params, symops, types, coords)
     mols_str_graph = cpplib_result['graph_str']
     xyz_mols = cpplib_result['xyz_block']
-    # TODO: gen 2d graphs
     parse_mols = mols_str_graph.split(';')
     if len(parse_mols) == 1:
         graph_str, = parse_mols
@@ -125,7 +123,14 @@ def make_graph_c(params, coords, types, refcode, add_graphs_logger, symops):
         raise Exception(f"Invalid length of mols list: {len(parse_mols)}")
     if graph_str.split()[1] == 0:
         raise Exception(f"There are no atoms in graph! May be the structure was unordered")
-    return graph_str
+    # generate data for 2d graph picture
+    data_2d = main_v2(xyz_mols, element_numbers, types)
+    smiles = ''
+    inchi = ''
+    if data_2d:
+        smiles = data_2d['smiles']
+        inchi = data_2d['inchi']
+    return graph_str, smiles, inchi
 
 
 def save(params, coords, types, refcode, symops):
@@ -181,12 +186,15 @@ def add_graphs_c(queue, return_dict, proc_num: int):
             add_graphs_logger.info(f"Start processing structure {refcode}")
             params, coords, types, symops = get_data(cif_block, symops_db)
             add_graphs_logger.info(f"Received atomic coordinates and translation matrix")
-            graph_str = make_graph_c(params, coords, types, refcode, add_graphs_logger, symops)
-            add_graphs_logger.info(f"Received graph string")
-            bonds = []
+            graph_str, smiles, inchi = make_graph_c(params, coords, types, refcode, add_graphs_logger, symops)
+            if smiles and inchi:
+                add_graphs_logger.info(f"Received graph string and 2D representation")
+            else:
+                add_graphs_logger.warring(f"Build 2D representation failed!")
             add_graphs_logger.info(f"Processing completed {refcode}")
+            bonds = []
             angles = []
-            return_dict[refcode] = [graph_str, bonds, angles]
+            return_dict[refcode] = {'graph_str': graph_str, 'bonds': bonds, 'angles': angles, 'smiles': smiles, 'inchi': inchi}
             add_graphs_logger.info(f"Structure {refcode} successfully added to the resulting list!")
         except Exception as err:
             add_graphs_logger.error(f"Structure {refcode} not added to the resulting list!", exc_info=True)

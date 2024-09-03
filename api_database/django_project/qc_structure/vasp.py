@@ -45,7 +45,7 @@ from structure.management.commands.cif_db_update_modules._add_substructure_filtr
 from qc_structure.models import (QCStructureCode, QCCell, QCReducedCell, QCFormula,
                                  QCCompoundName, QCElementsManager, QCProperties,
                                  QCCoordinatesBlock, QCSubstructure1, QCSubstructure2,
-                                 QCProgram)
+                                 QCProgram, QCInChI)
 
 
 def save_program(struct_obj):
@@ -208,7 +208,7 @@ def save_graph(struct_obj):
             atoms_coords.extend(map(float, coords))
     symops = struct_obj.qc_cell.spacegroup.symops.split(';')
     # create graph
-    graph_str = make_graph_c(
+    graph_str, smiles, inchi = make_graph_c(
         params, atoms_coords, atoms_types,
         struct_obj, vasp_logger, symops
     )
@@ -217,6 +217,38 @@ def save_graph(struct_obj):
     if graph_str:
         struct_obj.qc_coordinates.graph = graph_str
         struct_obj.qc_coordinates.save()
+    return smiles, inchi
+
+
+def save_smiles_inchi(structure_obj, qc_smiles, qc_inchi):
+    vasp_logger.info('Save smiles and inchi...')
+    coord_block = QCCoordinatesBlock.objects.get(refcode=structure_obj)
+    if qc_smiles:
+        coord_block.smiles = qc_smiles
+        coord_block.save()
+    if qc_inchi:
+        inchi = qc_inchi.split('=')[1].split('/')
+        inchi_block = QCInChI.objects.create(refcode=structure_obj, version=inchi[0], formula=inchi[1])
+        for item in inchi[2:]:
+            if item.startswith('c'):
+                inchi_block.connectivity = item
+            elif item.startswith('h'):
+                inchi_block.hydrogens = item
+            elif item.startswith('q'):
+                inchi_block.q_charge = item
+            elif item.startswith('p'):
+                inchi_block.p_charge = item
+            elif item.startswith('b'):
+                inchi_block.b_stereo = item
+            elif item.startswith('t'):
+                inchi_block.t_stereo = item
+            elif item.startswith('m'):
+                inchi_block.m_stereo = item
+            elif item.startswith('s'):
+                inchi_block.s_stereo = item
+            elif item.startswith('i'):
+                inchi_block.i_isotopic = item
+        inchi_block.save()
 
 
 def save_formula(structure_obj, symmed_vasp_struct):
@@ -314,7 +346,8 @@ def vasp_parser(structure_obj, file: str, syst_name='', triv_name=''):
     symmed_vasp_struct = save_cell(structure_obj, vasp_structure, space_group)
     save_reduced_cell(structure_obj)
     save_coordinates(structure_obj, symmed_vasp_struct)
-    save_graph(structure_obj)
+    smiles, inchi = save_graph(structure_obj)
+    save_smiles_inchi(structure_obj, smiles, inchi)
     save_formula(structure_obj, symmed_vasp_struct)
     save_element_sets(structure_obj)
     save_substructure(structure_obj)

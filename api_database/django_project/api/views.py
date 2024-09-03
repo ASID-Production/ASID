@@ -212,6 +212,18 @@ class StructureViewSet(ReadOnlyModelViewSet):
         return response
 
     @action(
+        detail=True,
+        methods=['GET']
+    )
+    def img2d(self, request, pk):
+        structure = get_object_or_404(StructureCode, pk=pk)
+        h = int(request.GET.get('h', 0))
+        w = int(request.GET.get('w', 0))
+        if h and w:
+            return HttpResponse(structure.gen_2d_img(size=(w, h)), content_type='text/plain', status=200)
+        return HttpResponse(structure.gen_2d_img(), content_type='text/plain', status=200)
+
+    @action(
         detail=False,
         methods=['POST'],
         permission_classes=[IsAuthenticated],
@@ -291,6 +303,18 @@ class QCStructureViewSet(ReadOnlyModelViewSet):
         response = HttpResponse(content, content_type='text/xml')
         response['Content-Disposition'] = f'attachment; filename={filename}'
         return response
+
+    @action(
+        detail=True,
+        methods=['GET']
+    )
+    def img2d(self, request, pk):
+        structure = get_object_or_404(QCStructureCode, pk=pk)
+        h = int(request.GET.get('h', 0))
+        w = int(request.GET.get('w', 0))
+        if h and w:
+            return HttpResponse(structure.gen_2d_img(size=(w, h)), content_type='text/plain', status=200)
+        return HttpResponse(structure.gen_2d_img(), content_type='text/plain', status=200)
 
     @action(
         detail=False,

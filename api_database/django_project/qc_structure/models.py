@@ -30,9 +30,9 @@ from structure.models import (Spacegroup, AbstractCell, AbstractReducedCell,
                               AbstractCompoundName, AbstractCoordinatesBlock,
                               AbstractSubstructure1, AbstractSubstructure2,
                               AbstractFormula, AbstractElementsManager,
-                              ElementsSet1, ElementsSet2,
+                              AbstractStructureCode, ElementsSet1, ElementsSet2,
                               ElementsSet3, ElementsSet4, ElementsSet5,
-                              ElementsSet6, ElementsSet7, ElementsSet8)
+                              ElementsSet6, ElementsSet7, ElementsSet8, AbstractInChI)
 from django.db import models
 from django.contrib.auth import get_user_model
 import os
@@ -45,7 +45,7 @@ PROGRAMS = [
 ]
 
 
-class QCStructureCode(models.Model):
+class QCStructureCode(AbstractStructureCode):
     '''Table with codes.'''
     refcode = models.CharField(verbose_name='Refcode', max_length=17, unique=True)
     user = models.ForeignKey(
@@ -276,3 +276,15 @@ class QCProperties(models.Model):
 
     class Meta:
         verbose_name_plural = 'QCProperties'
+
+
+class QCInChI(AbstractInChI):
+    '''InChI data.'''
+    refcode = models.ForeignKey(
+        QCStructureCode,
+        related_name='qc_inchi',
+        on_delete=models.CASCADE
+    )
+
+    class Meta:
+        verbose_name_plural = 'QCInChI graphs'
