@@ -36,10 +36,11 @@ from .cif_db_update_modules._add_graphs_to_db import upload_graphs_to_db
 from .cif_db_update_modules._add_substructure_filtration import add_substructure_filters
 from .cif_db_update_modules._add_all_cif_data import add_all_cif_data
 from CifFile import ReadCif
-from structure.models import StructureCode
+from structure.models import StructureCode, InChI, CoordinatesBlock
 import multiprocessing
 from django_project.loggers import cif_db_update_main_logger as logger_main
 import chardet
+from typing import Dict
 
 NUM_OF_PROC = int(multiprocessing.cpu_count() / 2)  # number of physical processors
 MAX_TIME_WAIT = 600  # maximum time to wait for process completion (sec)
@@ -186,11 +187,42 @@ def create_graph_c(queue):
     return return_dict
 
 
-def manager_upload_graphs_to_db(graphs):
-    for refcode, graphs in graphs.items():
-        graphs_in_cif, bonds, angles = graphs
+def manager_upload_graphs_to_db(graphs: Dict[str, Dict]):
+    for refcode, graph in graphs.items():
         structure = StructureCode.objects.get(refcode=refcode)
-        upload_graphs_to_db(graphs_in_cif, structure, bonds, angles)
+        upload_graphs_to_db(graph, structure)
+
+def manager_upload_smiles_and_inchi_to_db(graphs: Dict[str, Dict]):
+    for refcode, graph in graphs.items():
+        structure = StructureCode.objects.get(refcode=refcode)
+        coord_block = CoordinatesBlock.objects.get(refcode=structure)
+        if graph['smiles'] and not coord_block.smiles:
+            coord_block.smiles = graph['smiles']
+            coord_block.save()
+        if graph['inchi'] and not InChI.objects.filter(refcode=structure).exists():
+            inchi = graph['inchi'].split('=')[1].split('/')
+            # print(inchi)
+            inchi_block = InChI.objects.create(refcode=structure, version=inchi[0], formula=inchi[1])
+            for item in inchi[2:]:
+                if item.startswith('c'):
+                    inchi_block.connectivity = item
+                elif item.startswith('h'):
+                    inchi_block.hydrogens = item
+                elif item.startswith('q'):
+                    inchi_block.q_charge = item
+                elif item.startswith('p'):
+                    inchi_block.p_charge = item
+                elif item.startswith('b'):
+                    inchi_block.b_stereo = item
+                elif item.startswith('t'):
+                    inchi_block.t_stereo = item
+                elif item.startswith('m'):
+                    inchi_block.m_stereo = item
+                elif item.startswith('s'):
+                    inchi_block.s_stereo = item
+                elif item.startswith('i'):
+                    inchi_block.i_isotopic = item
+            inchi_block.save()
 
 
 def main(args, all_data=False, user_refcodes=''):
@@ -234,6 +266,9 @@ def main(args, all_data=False, user_refcodes=''):
         # Adding graphs to the database
         logger_main.info(f"Start adding graphs into the database")
         manager_upload_graphs_to_db(graphs)
+        # Adding smiles and inchi
+        logger_main.info(f"Start adding smiles and inchi")
+        manager_upload_smiles_and_inchi_to_db(graphs)
         # Adding substructure info
         logger_main.info(f"Start adding substructure information")
         add_substructure_filters(graphs.keys(), NUM_OF_PROC)

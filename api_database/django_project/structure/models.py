@@ -30,6 +30,11 @@ import os.path
 
 from django.db import models
 from django.contrib.auth import get_user_model
+from io import BytesIO
+import base64
+
+from modules.gen2d.gen2d import gen2d
+
 
 User = get_user_model()
 
@@ -70,6 +75,32 @@ SHAPES = [
 
 def get_fields_list(model):
     return [field.name for field in model._meta.get_fields()]
+
+
+class AbstractStructureCode(models.Model):
+    '''(Abstract table) Table with structure codes.'''
+    refcode = models.CharField(verbose_name='Refcode', max_length=17, unique=True)
+
+    class Meta:
+        abstract = True
+
+    def gen_2d_img(self, size=(250, 250), format='gif'):
+        # TODO: delete this temp function! (keep pregenerated figures in database in base64 format)
+        smiles = ''
+        if hasattr(self, 'coordinates'):
+            smiles = self.coordinates.smiles
+        inchis_list = []
+        if hasattr(self, 'inchi') and self.inchi:
+            inchis = self.inchi.all()
+            for inchi in inchis:
+                inchis_list.append(inchi.get_inchi_string())
+        img = gen2d(smiles=smiles, inchis=inchis_list, sanitize=False, size=size)
+        if img:
+            buffer = BytesIO()
+            img.save(buffer, format)
+            img_base64 = f'data:image/{format};base64,' + base64.b64encode(buffer.getvalue()).decode()
+            return img_base64
+        return 0
 
 
 class AbstractCell(models.Model):
@@ -146,6 +177,82 @@ class AbstractCoordinatesBlock(models.Model):
 
     class Meta:
         abstract = True
+
+
+class AbstractInChI(models.Model):
+    '''(Abstract table) InChI graph.'''
+    version = models.CharField(
+        verbose_name='InChI version',
+        max_length=5
+    )
+    formula = models.TextField(
+        verbose_name='InChI formula',
+        max_length=200
+    )
+    connectivity = models.TextField(
+        verbose_name='InChI "c"',
+        blank=True,
+        null=True
+    )
+    hydrogens = models.TextField(
+        verbose_name='InChI "h"',
+        blank=True,
+        null=True
+    )
+    q_charge = models.CharField(
+        verbose_name='InChI "q"',
+        blank=True,
+        null=True,
+        max_length=10
+    )
+    p_charge = models.CharField(
+        verbose_name='InChI "p"',
+        blank=True,
+        null=True,
+        max_length=10
+    )
+    b_stereo = models.TextField(
+        verbose_name='InChI "b"',
+        blank=True,
+        null=True
+    )
+    t_stereo = models.TextField(
+        verbose_name='InChI "t"',
+        blank=True,
+        null=True
+    )
+    m_stereo = models.CharField(
+        verbose_name='InChI "m"',
+        blank=True,
+        null=True,
+        max_length=10
+    )
+    s_stereo = models.CharField(
+        verbose_name='InChI "s"',
+        blank=True,
+        null=True,
+        max_length=10
+    )
+    i_isotopic = models.CharField(
+        verbose_name='InChI "i"',
+        blank=True,
+        null=True,
+        max_length=100
+    )
+
+    class Meta:
+        abstract = True
+
+    def get_inchi_string(self):
+        inchi_parts = ['version', 'formula', 'connectivity', 'hydrogens',
+                 'q_charge', 'p_charge', 'b_stereo', 't_stereo',
+                 'm_stereo', 's_stereo', 'i_isotopic']
+        inchi = 'InChI='
+        for inchi_part in inchi_parts:
+            value = getattr(self, inchi_part)
+            if value is not None:
+                inchi += value + '/'
+        return inchi[:-1]
 
 
 class AbstractSubstructure1(models.Model):
@@ -257,7 +364,7 @@ class Author(models.Model):
         return self.family_name
 
 
-class StructureCode(models.Model):
+class StructureCode(AbstractStructureCode):
     '''Table with codes.'''
     refcode = models.CharField(verbose_name='Refcode', max_length=17, unique=True)
     CCDC_number = models.CharField(verbose_name='CCDC number', max_length=10, blank=True, null=True)
@@ -526,6 +633,18 @@ class CoordinatesBlock(AbstractCoordinatesBlock):
         related_name='coordinates',
         on_delete=models.CASCADE
     )
+
+
+class InChI(AbstractInChI):
+    '''Block of InChI.'''
+    refcode = models.ForeignKey(
+        StructureCode,
+        related_name='inchi',
+        on_delete=models.CASCADE
+    )
+
+    class Meta:
+        verbose_name_plural = 'InChI graphs'
 
 
 class Substructure1(AbstractSubstructure1):

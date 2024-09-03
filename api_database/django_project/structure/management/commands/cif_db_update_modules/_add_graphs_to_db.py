@@ -38,6 +38,6 @@ def add_string_graph_to_db(graphs, refcode):
     coord_block.save()
 
 
-def upload_graphs_to_db(graphs_in_cif, structure_in_db, bonds, angles):
-    add_string_graph_to_db(graphs_in_cif, structure_in_db)
+def upload_graphs_to_db(graph, structure_in_db):
+    add_string_graph_to_db(graph['graph_str'], structure_in_db)
     add_graphs_to_db_logger.info(f'Structure {structure_in_db} successfully added to the database')

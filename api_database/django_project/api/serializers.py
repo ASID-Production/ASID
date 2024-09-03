@@ -33,10 +33,10 @@ from structure.models import (StructureCode, Author, Spacegroup, Cell,
                               RefcodePublicationConnection, ExperimentalInfo,
                               ReducedCell, ExperimentalInfo, RefinementInfo,
                               CoordinatesBlock, CrystalAndStructureInfo,
-                              CifFile, Journal)
+                              CifFile, Journal, InChI)
 from qc_structure.models import (QCStructureCode, QCCell, QCCompoundName, QCFormula,
                                  QCReducedCell, QCCoordinatesBlock, QCProgram,
-                                 QCProperties, VaspFile)
+                                 QCProperties, VaspFile, QCInChI)
 from djoser.serializers import UserSerializer, UserCreateSerializer
 from django.contrib.auth import get_user_model
 from .fields import NodesListField, EdgesListField
@@ -158,6 +158,7 @@ class RefcodeFullSerializer(serializers.ModelSerializer):
     experiment = ExperimentalInfoSerializer(read_only=True, source='experimental_info')
     refinement_info = RefinementInfoSerializer(read_only=True)
     coordinates = CoordinatesSerializer(read_only=True)
+    inchi = SerializerMethodField(read_only=True)
     crystal_info = CrystalInfoSerializer(read_only=True, source='crystal_and_structure_info')
 
     class Meta:
@@ -166,13 +167,20 @@ class RefcodeFullSerializer(serializers.ModelSerializer):
             'id', 'refcode', 'CCDC_number', 'cell',
             'reduced_cells', 'compound_name', 'formula', 'authors',
             'publication', 'experiment', 'refinement_info', 'coordinates',
-            'crystal_info'
+            'inchi', 'crystal_info'
         )
 
     def get_publication(self, obj):
         try:
             publication = RefcodePublicationConnection.objects.get(refcode=obj).publication
             return PublicationSerializer(publication).data
+        except Exception:
+            pass
+
+    def get_inchi(self, obj):
+        try:
+            inchi = InChI.objects.get(refcode=obj).get_inchi_string()
+            return inchi
         except Exception:
             pass
 
@@ -293,13 +301,21 @@ class QCRefcodeFullSerializer(serializers.ModelSerializer):
     coordinates = QCCoordinatesSerializer(read_only=True, source='qc_coordinates')
     properties = QCPropertiesSerializer(read_only=True, source='qc_properties')
     programs = QCProgramSerializer(read_only=True, source='qc_prog')
+    inchi = SerializerMethodField(read_only=True)
 
     class Meta:
         model = QCStructureCode
         fields = (
             'id', 'refcode', 'cell', 'reduced_cells', 'compound_name',
-            'formula', 'coordinates', 'properties', 'programs'
+            'formula', 'coordinates', 'properties', 'programs', 'inchi'
         )
+
+    def get_inchi(self, obj):
+        try:
+            inchi = QCInChI.objects.get(refcode=obj).get_inchi_string()
+            return inchi
+        except Exception:
+            pass
 
 
 class QCRefcodeShortSerializer(serializers.ModelSerializer):
