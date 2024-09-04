@@ -60,7 +60,7 @@ std::vector<int> SearchMain(const char* search, std::vector<const char*>&& data,
 	SearchDataInterfaceType databuf(std::move(data), std::move(inputpair.second));
 	std::vector<std::thread> threads;
 	const size_t nThreads = std::min(std::min(static_cast<unsigned int>(np), std::thread::hardware_concurrency()),
-										static_cast<unsigned int>(databuf.size())) - 1;
+									 static_cast<unsigned int>(databuf.size())) - 1;
 	threads.reserve(nThreads);
 	auto ma = inputpair.first.findStart();
 

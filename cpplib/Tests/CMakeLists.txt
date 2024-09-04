@@ -26,18 +26,16 @@
 #
 # ******************************************************************************************
 
+
 project(MyTests)
 
 cmake_minimum_required(VERSION 3.14)
 
 # GoogleTest requires at least C++14
 
-if(COMPILER_SUPPORTS_CXX14)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14")
-endif(COMPILER_SUPPORTS_CXX14)
 
 if (POLICY CMP0135)
-cmake_policy(SET CMP0135 OLD) 
+    cmake_policy(SET CMP0135 OLD) 
 endif()
 include(FetchContent)
 FetchContent_Declare(
@@ -49,7 +47,6 @@ set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(gest)
 
 enable_testing()
-
 
 add_executable(
     ${PROJECT_NAME} 
