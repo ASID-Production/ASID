@@ -84,7 +84,7 @@ class AbstractStructureCode(models.Model):
     class Meta:
         abstract = True
 
-    def gen_2d_img(self, size=(250, 250), format='gif'):
+    def gen_2d_img(self, size=(250, 250), format='gif', f='img'):
         # TODO: delete this temp function! (keep pregenerated figures in database in base64 format)
         smiles = ''
         if hasattr(self, 'coordinates'):
@@ -94,12 +94,15 @@ class AbstractStructureCode(models.Model):
             inchis = self.inchi.all()
             for inchi in inchis:
                 inchis_list.append(inchi.get_inchi_string())
-        img = gen2d(smiles=smiles, inchis=inchis_list, sanitize=False, size=size)
+        img = gen2d(smiles=smiles, inchis=inchis_list, sanitize=False, size=size, format=f)
         if img:
-            buffer = BytesIO()
-            img.save(buffer, format)
-            img_base64 = f'data:image/{format};base64,' + base64.b64encode(buffer.getvalue()).decode()
-            return img_base64
+            if f == 'img':
+                buffer = BytesIO()
+                img.save(buffer, format)
+                img_base64 = f'data:image/{format};base64,' + base64.b64encode(buffer.getvalue()).decode()
+                return img_base64
+            elif f == 'cml':
+                return img
         return 0
 
 
