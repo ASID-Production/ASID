@@ -56,6 +56,8 @@ from .pagination import LimitPagination
 from rest_framework.views import APIView
 from rest_framework.renderers import JSONRenderer
 from django.core.cache import cache
+import base64
+from io import BytesIO
 import cpplib
 
 NUM_OF_PROC = int(cpu_count() / 2)
@@ -183,6 +185,27 @@ def structure_search(
     return response
 
 
+def get_img2d(structure, request):
+    '''Available formats: img (gif) and cml (ChemDraw).'''
+    h = int(request.GET.get('h', 0))
+    w = int(request.GET.get('w', 0))
+    f = request.GET.get('f', 'img')
+    file = int(request.GET.get('file', 0))
+    if h and w:
+        content = structure.gen_2d_img(size=(w, h), f=f)
+    else:
+        content = structure.gen_2d_img(f=f)
+    if file and content:
+        if f == 'img':
+            content = BytesIO(base64.b64decode(content.split(',')[-1])).getvalue()
+            f = 'gif'
+        response = HttpResponse(content, content_type='text/plain')
+        response['Content-Disposition'] = f'attachment; filename={structure.refcode}.{f}'
+        return response
+    else:
+        return HttpResponse(content, content_type='text/plain', status=200)
+
+
 class StructureViewSet(ReadOnlyModelViewSet):
     filter_backends = (DjangoFilterBackend,)
     filterset_class = StructureFilter
@@ -213,15 +236,12 @@ class StructureViewSet(ReadOnlyModelViewSet):
 
     @action(
         detail=True,
-        methods=['GET']
+        methods=['GET'],
+        url_path='export/2d'
     )
-    def img2d(self, request, pk):
+    def export_2d(self, request, pk):
         structure = get_object_or_404(StructureCode, pk=pk)
-        h = int(request.GET.get('h', 0))
-        w = int(request.GET.get('w', 0))
-        if h and w:
-            return HttpResponse(structure.gen_2d_img(size=(w, h)), content_type='text/plain', status=200)
-        return HttpResponse(structure.gen_2d_img(), content_type='text/plain', status=200)
+        return get_img2d(structure, request)
 
     @action(
         detail=False,
@@ -306,15 +326,12 @@ class QCStructureViewSet(ReadOnlyModelViewSet):
 
     @action(
         detail=True,
-        methods=['GET']
+        methods=['GET'],
+        url_path='export/2d'
     )
-    def img2d(self, request, pk):
+    def export_2d(self, request, pk):
         structure = get_object_or_404(QCStructureCode, pk=pk)
-        h = int(request.GET.get('h', 0))
-        w = int(request.GET.get('w', 0))
-        if h and w:
-            return HttpResponse(structure.gen_2d_img(size=(w, h)), content_type='text/plain', status=200)
-        return HttpResponse(structure.gen_2d_img(), content_type='text/plain', status=200)
+        return get_img2d(structure, request)
 
     @action(
         detail=False,

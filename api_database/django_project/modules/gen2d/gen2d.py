@@ -175,7 +175,12 @@ def draw_and_save_molecule(mol: Chem.Mol, structure_name: str = 'noname'):
     img.save(f'{structure_name}_2d.png')
 
 
-def gen2d(smiles: str = '', inchis: list = [], sanitize: bool = True, size: Tuple[int, int] = (800, 800)):
+def gen2d(smiles: str = '', inchis: list = [], sanitize: bool = True, size: Tuple[int, int] = (800, 800), format: str = 'img'):
+    '''
+    Supported formats:
+        img - 2d image
+        cml - ChemDraw format
+    '''
     mol = None
     # first check smiles
     if smiles:
@@ -190,8 +195,11 @@ def gen2d(smiles: str = '', inchis: list = [], sanitize: bool = True, size: Tupl
                 mol = Chem.CombineMols(mol, temp_mol)
     if mol is None:
         return 0
-    img = Draw.MolToImage(mol, size=size)
-    return img
+    # return formats
+    if format == 'cml':
+        return Chem.MolToCMLBlock(mol)
+    else:
+        return Draw.MolToImage(mol, size=size)
 
 
 def get_symbol_from_element_number(el_number: int, element_numbers: Dict[str, int]) -> str:

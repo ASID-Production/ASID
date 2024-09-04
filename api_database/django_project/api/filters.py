@@ -65,6 +65,27 @@ def get_reduced_cell(params: list, centring: str) -> list:
     return list(reduced_params)
 
 
+def general_refcode_filter(request, queryset, value):
+    exact = False
+    if request:
+        exact = request.GET.get('exact', False)
+    if value:
+        queryset_temp = 0
+        for element in value.split():
+            if exact == 'refcode':
+                if queryset_temp:
+                    queryset_temp = queryset_temp | queryset.filter(refcode__iexact=element)
+                else:
+                    queryset_temp = queryset.filter(refcode__iexact=element)
+            else:
+                if queryset_temp:
+                    queryset_temp = queryset_temp | queryset.filter(refcode__istartswith=element)
+                else:
+                    queryset_temp = queryset.filter(refcode__istartswith=element)
+        return queryset_temp
+    return queryset
+
+
 class StructureFilter(FilterSet):
     # refcode search
     refcode = filters.CharFilter(method='filter_refcode')
@@ -101,22 +122,7 @@ class StructureFilter(FilterSet):
         fields = []
 
     def filter_refcode(self, queryset, name, value):
-        exact = self.request.GET.get('exact', False)
-        if value:
-            queryset_temp = 0
-            for element in value.split():
-                if exact == 'refcode':
-                    if queryset_temp:
-                        queryset_temp = queryset_temp | queryset.filter(refcode__iexact=element)
-                    else:
-                        queryset_temp = queryset.filter(refcode__iexact=element)
-                else:
-                    if queryset_temp:
-                        queryset_temp = queryset_temp | queryset.filter(refcode__istartswith=element)
-                    else:
-                        queryset_temp = queryset.filter(refcode__istartswith=element)
-            return queryset_temp
-        return queryset
+        return general_refcode_filter(self.request, queryset, value)
 
     def filter_CCDC_number(self, queryset, name, value):
         if value:
@@ -279,22 +285,7 @@ class QCStructureFilter(FilterSet):
         fields = []
 
     def filter_refcode(self, queryset, name, value):
-        exact = self.request.GET.get('exact', False)
-        if value:
-            queryset_temp = 0
-            for element in value.split():
-                if exact == 'refcode':
-                    if queryset_temp:
-                        queryset_temp = queryset_temp | queryset.filter(refcode__iexact=element)
-                    else:
-                        queryset_temp = queryset.filter(refcode__iexact=element)
-                else:
-                    if queryset_temp:
-                        queryset_temp = queryset_temp | queryset.filter(refcode__istartswith=element)
-                    else:
-                        queryset_temp = queryset.filter(refcode__istartswith=element)
-            return queryset_temp
-        return queryset
+        return general_refcode_filter(self.request, queryset, value)
 
     def filter_user_db(self, queryset, name, value):
         if value:
