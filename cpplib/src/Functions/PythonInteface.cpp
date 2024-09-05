@@ -221,7 +221,7 @@ extern "C" {
 		for (auto & mol : ret.second)
 		{
 			PyObject* o_molecule = PyList_New(0);
-			for (auto& atom : mol.first) {
+			for (auto& atom : std::get<0>(mol)) {
 				PyObject* o_atom = Py_BuildValue("{s:f,s:f,s:f,s:l}",
 												 "x", float(std::get<0>(atom).get(0)),
 												 "y", float(std::get<0>(atom).get(1)),
@@ -229,12 +229,18 @@ extern "C" {
 												 "init_idx", long(std::get<1>(atom)));
 				PyList_Append(o_molecule, o_atom);
 			}
+			PyObject* o_bonds = PyList_New(0);
+			for (auto& bond : std::get<2>(mol)) {
+				PyObject* o_bond1 = Py_BuildValue("(ii)", int(bond.first), int(bond.second));
+				PyList_Append(o_bonds, o_bond1);
+			}
 
-			PyList_Append(o_xyz_block, Py_BuildValue("{s:l,s:O}",
-													 "count", long(mol.second),
-													 "atoms", o_molecule));
+			PyList_Append(o_xyz_block, Py_BuildValue("{s:l,s:O,s:O}",
+													 "count", long(std::get<1>(mol)),
+													 "atoms", o_molecule,
+													 "bonds", o_bonds));
 		}
-
+		// List[Tuple(atom1, atom2), ...] под ключом 'bonds' 
 		return Py_BuildValue("{s:s,s:O}", 
 							 "graph_str", ret.first.c_str(),
 							 "xyz_block", o_xyz_block);

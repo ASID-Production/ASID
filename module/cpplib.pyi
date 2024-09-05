@@ -12,7 +12,6 @@ def SearchMain(graph: str, data: List[str], procs: int, exact: bool) -> List[int
     """
     ...
 
-
 def CompareGraph(graph_1: str, graph_2: str, exact: bool) -> bool:
     """
         Compare 'graph_1' and 'graph_2'.
@@ -26,11 +25,11 @@ def CompareGraph(graph_1: str, graph_2: str, exact: bool) -> bool:
     ...
 
 
-def FindMoleculesInCell(cell_params: List[float], symops: List[str], atom_types: List[int], xyz: list[int]) -> dict:
+def FindMoleculesInCell(cell_params: List[float], symops: List[str], atom_types: List[int], xyz: List[int]) -> dict:
     """
         Find all different graphs of molecules in a crystal.
         Variables:
-          cell_params:  list of exactly 6 cell parameters in strict order: [a, b, c, alpha, beta, gamma].
+          cell_params: list of exactly 6 cell parameters in strict order: [a, b, c, alpha, beta, gamma].
             (a, b, c - are translation vectors (in Angstroms) and alpha, beta, gamma - are angles (in degrees)
           symops:  SYMM-codes of structure. Should contain 'x,y,z' (equivalent) as first ([0]) symmetry - it is ignored.
           atom_types: list of atomic types
