@@ -76,9 +76,10 @@ std::vector<int> SearchMain(const char* search, std::vector<const char*>&& data,
 	return databuf.getAllResults();
 }
 
-std::pair<std::string, FindMoleculesType::RightType>
-	FindMoleculesInCell(const std::array<float, 6>& unit_cell, std::vector<const char*>& symm, std::vector<int>& types, std::vector<float>& xyz) {
-
+std::pair<std::string, FindMoleculesType::RightType> FindMoleculesInCell(const std::array<float, 6>& unit_cell, 
+																		 std::vector<const char*>& symm, 
+																		 std::vector<int>& types, 
+																		 std::vector<float>& xyz) {
 	auto& distances = *(p_distances);
 	if (p_distances->isReady() == false) {
 		return std::make_pair(std::string(";Error! Could not open BondLength.ini"),

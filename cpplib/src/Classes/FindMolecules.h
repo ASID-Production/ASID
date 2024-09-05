@@ -538,9 +538,10 @@ namespace cpplib {
 				AtomIndex nei_size = net[res[low_pos]].neighboursSize();
 				for (AtomIndex j = 0; j < nei_size; j++) {
 					const auto cur_id = net[res[low_pos]].getNeighbour(j)->getID();
+					auto is_m = is_member(cur_id, res);
 					if (res[low_pos] < cur_id)
-						bonds.emplace_back(res[low_pos], cur_id);
-					if (is_member(cur_id, res) != -1) continue;
+						bonds.emplace_back(low_pos, is_m == size_t(-1) ? res.back() : is_m);
+					if (is_m != -1) continue;
 					res.emplace_back(cur_id);
 				}
 				seen[fs_.parseIndex[res[low_pos]]] = true;

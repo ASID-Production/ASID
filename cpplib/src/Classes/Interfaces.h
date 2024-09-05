@@ -67,7 +67,11 @@ namespace cpplib {
 		}
 		const char* getNext() {
 			try {
-				auto iter = getNextIterator();
+				size_type iter;
+				do {
+					iter = getNextIterator();
+				} while (rawdata_[iter][0] == '\0');
+
 				return rawdata_[iter];
 			}
 			catch (ErrorStates) {
