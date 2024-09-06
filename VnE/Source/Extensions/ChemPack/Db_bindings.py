@@ -33,6 +33,7 @@ from PySide6.QtWidgets import QDialog, QLabel, QVBoxLayout
 from PySide6.QtCore import QProcess
 import os.path as opath
 import os
+import base64
 
 import debug
 
@@ -41,7 +42,7 @@ search_types = ['refcode', 'name', 'elements', 'doi', 'authors', 'cell']
 SETUP = False
 SESSION = None
 SERVER_PROC = None
-
+requests.packages.urllib3.util.connection.HAS_IPV6 = False
 
 class ErrorDialog(QDialog):
 
@@ -175,17 +176,23 @@ def get_full_info(id, db_type='cryst'):
     return data_out
 
 
-def get_image(id, db_type='cryst', w=100, h=100):
+def get_image(id, db_type='cryst', w=250, h=250):
     url_mods = {'cryst': 'api/v1/structures'}
     url_mod = url_mods.get(db_type, 'api/v1/structures')
     if SESSION.user_token is not None:
         headers = {'Authorization': f'Token {SESSION.user_token}'}
-        data = requests.get(f'{SESSION.url_base}/{url_mod}/{id}/export/2d/?h={h}&w={w}&file=0&f=img', headers=headers)
+        data = requests.get(f'{SESSION.url_base}/{url_mod}/{id}/export/2d/?h={h}&w={w}&file=0&f=img', headers=headers, verify=False, allow_redirects=False)
     else:
         data = requests.get(f'{SESSION.url_base}/{url_mod}/{id}/export/2d/?h={h}&w={w}&file=0&f=img')
     data = data.content.decode(data.apparent_encoding)
-    data_out = json.loads(data)
-    return data_out
+    image_str = data.split(',')[1]
+    image_data = base64.b64decode(image_str)
+    root = opath.normpath(f'{opath.dirname(__file__)}/../../..')
+    path = opath.join(root, 'temp')
+    image = open(opath.join(path, f'{id}.gif'), 'wb')
+    image.write(image_data)
+    image.close()
+    return opath.join(path, f'{id}.gif')
 
 
 def getCif(id, db_type='cryst'):
