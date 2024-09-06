@@ -2,6 +2,7 @@ import requests
 import json
 import sys
 import argparse
+requests.packages.urllib3.util.connection.HAS_IPV6 = False
 
 
 def structureSearch(req, body, token=None):

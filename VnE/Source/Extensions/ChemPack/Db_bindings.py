@@ -33,6 +33,7 @@ from PySide6.QtWidgets import QDialog, QLabel, QVBoxLayout
 from PySide6.QtCore import QProcess
 import os.path as opath
 import os
+import base64
 
 import debug
 
@@ -41,7 +42,7 @@ search_types = ['refcode', 'name', 'elements', 'doi', 'authors', 'cell']
 SETUP = False
 SESSION = None
 SERVER_PROC = None
-
+requests.packages.urllib3.util.connection.HAS_IPV6 = False
 
 class ErrorDialog(QDialog):
 
@@ -132,7 +133,7 @@ class Session:
 SESSION: Session
 
 
-def search(text, search_type, db_type='cryst', process=None):
+def search(text, search_type, db_type='cryst', exact=None, process=None):
     url_mods = {'cryst': 'api/v1/structures',
                 'qm': 'api/v1/qc_structures'}
     if process is None:
@@ -145,7 +146,10 @@ def search(text, search_type, db_type='cryst', process=None):
         process = structureSearch(text, url_mod, process)
         return process
     token = SESSION.user_token
-    req = f'{SESSION.url_base}/{url_mod}/?{search_type}={text}&limit=1000'
+    if exact is None:
+        req = f'{SESSION.url_base}/{url_mod}/?{search_type}={text}&limit=1000'
+    else:
+        req = f'{SESSION.url_base}/{url_mod}/?{search_type}={text}&exact={exact}&limit=1000'
 
     root = opath.normpath(f'{opath.dirname(__file__)}/../../../..')
     path = opath.normpath(f'{root}/VnE/Source/Extensions/ChemPack/searchProcess.py')
@@ -162,17 +166,43 @@ def get_full_info(id, db_type='cryst'):
     url_mods = {'cryst': 'api/v1/structures',
                 'qm': 'api/v1/qc_structures'}
     url_mod = url_mods.get(db_type, 'api/v1/structures')
-    data = requests.get(f'{SESSION.url_base}/{url_mod}/{id}')
+    if SESSION.user_token is not None:
+        headers = {'Authorization': f'Token {SESSION.user_token}'}
+        data = requests.get(f'{SESSION.url_base}/{url_mod}/{id}', headers=headers)
+    else:
+        data = requests.get(f'{SESSION.url_base}/{url_mod}/{id}')
     data = data.content.decode(data.apparent_encoding)
     data_out = json.loads(data)
     return data_out
+
+
+def get_image(id, db_type='cryst', w=250, h=250):
+    url_mods = {'cryst': 'api/v1/structures'}
+    url_mod = url_mods.get(db_type, 'api/v1/structures')
+    if SESSION.user_token is not None:
+        headers = {'Authorization': f'Token {SESSION.user_token}'}
+        data = requests.get(f'{SESSION.url_base}/{url_mod}/{id}/export/2d/?h={h}&w={w}&file=0&f=img', headers=headers, verify=False, allow_redirects=False)
+    else:
+        data = requests.get(f'{SESSION.url_base}/{url_mod}/{id}/export/2d/?h={h}&w={w}&file=0&f=img')
+    data = data.content.decode(data.apparent_encoding)
+    image_str = data.split(',')[1]
+    image_data = base64.b64decode(image_str)
+    root = opath.normpath(f'{opath.dirname(__file__)}/../../..')
+    path = opath.join(root, 'temp')
+    image = open(opath.join(path, f'{id}.gif'), 'wb')
+    image.write(image_data)
+    image.close()
+    return opath.join(path, f'{id}.gif')
 
 
 def getCif(id, db_type='cryst'):
     url_mods = {'cryst': 'api/v1/structures',
                 'qm': 'api/v1/qc_structures'}
     url_mod = url_mods.get(db_type, 'api/v1/structures')
-    data = requests.get(f'{SESSION.url_base}/{url_mod}/{id}/download/')
+    if db_type == 'qm':
+        data = requests.get(f'{SESSION.url_base}/{url_mod}/{id}/export/cif')
+    else:
+        data = requests.get(f'{SESSION.url_base}/{url_mod}/{id}/download/')
     return data.content
 
 
@@ -185,7 +215,7 @@ def uploadFile(file, ext):
         return resp
 
     def uploadXml(files, headers):
-        url = f'{SESSION.url_base}/api/v1/qc_structures/upload/vasp'
+        url = f'{SESSION.url_base}/api/v1/qc_structures/upload/vasp/'
         resp = requests.request('POST', url, headers=headers, data={}, files=files)
         return resp
 
@@ -251,7 +281,7 @@ def structureSearch(struct, url_mod, process=None):
     return process
 
 
-def create_table(data):
+def create_table(data, img=None):
     text_dict = {}
     text_dict['RefCode'] = data['refcode']
     text_dict['Author(s)'] = ', '.join([f'{x["family_name"]} {x["initials"]}' for x in data['authors']])

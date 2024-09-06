@@ -27,7 +27,7 @@
 # ******************************************************************************************
 import os.path
 
-from PySide6 import QtWidgets
+from PySide6 import QtWidgets, QtGui
 from PySide6.QtCore import *
 from . import Db_bindings
 import typing
@@ -89,7 +89,7 @@ class StructuresListModel(QAbstractListModel):
         self._rows = 0
         self.endResetModel()
         for request in requests:
-            request, search_type, db_type = request
+            request, search_type, db_type, exact = request
             if self.progress_bar:
                 self.progress_bar.setValue(0)
                 self.progress = 0
@@ -98,7 +98,7 @@ class StructuresListModel(QAbstractListModel):
             search_proc.finished.connect(cb)
             cb = getCallBack(self.appendRes, search_proc)
             search_proc.readyReadStandardOutput.connect(cb)
-            self._iter_search_procs.append(Db_bindings.search(request, search_type, db_type, process=search_proc))
+            self._iter_search_procs.append(Db_bindings.search(request, search_type, db_type, exact, process=search_proc))
 
     def searchDone(self, *args, search_proc=None):
         if search_proc is None:
@@ -183,6 +183,7 @@ class InfoTableModel(QAbstractTableModel):
         self._rows = 0
         self._spans = []
         self._columns = 2
+        self._image = None
 
     def rowCount(self, parent: QModelIndex = ...) -> int:
         return self._rows
@@ -227,7 +228,9 @@ class InfoTableModel(QAbstractTableModel):
         self._fields = []
         self._spans = []
         self._selected = Db_bindings.get_full_info(selected_id)
+        self._image = Db_bindings.get_image(selected_id)
         rec_fill(self._selected)
+        self._fields.insert(0, ['img', self._image])
         self._rows = len(self._fields)
         self.endResetModel()
 
@@ -235,7 +238,15 @@ class InfoTableModel(QAbstractTableModel):
         if not index.isValid():
             return None
         if role == Qt.ItemDataRole.DisplayRole:
+            if index.row() == 0 and index.column() == 1:
+                return ''
             return self._fields[index.row()][index.column()]
+        else:
+            if index.row() == 0 and index.column() == 1 and role == Qt.ItemDataRole.DecorationRole:
+                if self._image is not None:
+                    image = QtGui.QImage(self._image)
+                    pixmap = QtGui.QPixmap.fromImage(image)
+                    return pixmap
 
     def headerData(self, section: int, orientation: Qt.Orientation, role: int = ...) -> typing.Any:
         return None
@@ -358,6 +369,8 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
         self.table_model = InfoTableModel()
         self.tableView: QtWidgets.QTableView
         self.tableView.setModel(self.table_model)
+        self.tableView.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
+        self.tableView.verticalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
         self.table_model.modelReset.connect(self.setSpan)
         self.tableView.verticalHeader().hide()
         self.tableView.horizontalHeader().hide()
@@ -455,7 +468,7 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
         if filename:
             file = open(filename, 'r')
             data = [x for x in file.read().split('\n') if x]
-            self.list_model.iterPopulate(((x, 'refcode', 'cryst') for x in data))
+            self.list_model.iterPopulate(((x, 'refcode', 'cryst', 'refcode') for x in data))
         pass
 
 
