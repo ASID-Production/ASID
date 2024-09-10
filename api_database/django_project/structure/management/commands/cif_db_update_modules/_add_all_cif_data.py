@@ -402,6 +402,7 @@ def add_journal_and_publication(cif_block, struct_obj):
         filtr['journal'] = journal_obj
     # publication
     year = 0
+    doi = ''
     if '_journal_year' in cif_block[1].keys():
         year = int(cif_block[1]['_journal_year'])
         filtr['year'] = year
@@ -433,12 +434,16 @@ def add_journal_and_publication(cif_block, struct_obj):
     for key in ['journal', 'page', 'volume', 'doi']:
         if key not in filtr.keys():
             filtr_is_null[f'{key}__isnull'] = True
-    if year:
+    if doi:
+        pub_obj, created = Publication.objects.get_or_create(doi=doi)
+        if year and created:
+            for key, value in filtr.items():
+                setattr(pub_obj, key, value)
+    elif year:
         pub_obj, created = Publication.objects.filter(**filtr_is_null).get_or_create(**filtr)
     else:
         return 0
     # authors
-    flag = False
     authors = []
     if '_publ_author_name' in cif_block[1].keys():
         try:
@@ -447,18 +452,17 @@ def add_journal_and_publication(cif_block, struct_obj):
                 authors.append(author[0])
         except:
             authors = cif_block[1]['_publ_author_name'].split(';')
-        flag = add_authors_and_get_flag()
+        add_authors_and_get_flag()
     if '_citation_author_name' in cif_block[1].keys():
         try:
             authors = cif_block[1].GetLoop('_citation_author_name')
         except:
             authors = cif_block[1]['_citation_author_name'].split(';')
-        flag = add_authors_and_get_flag()
+        add_authors_and_get_flag()
     # refcode connection
-    if flag:
-        ref_pub_obj, created = RefcodePublicationConnection.objects.get_or_create(refcode=struct_obj)
-        ref_pub_obj.publication = pub_obj
-        ref_pub_obj.save()
+    ref_pub_obj, created = RefcodePublicationConnection.objects.get_or_create(refcode=struct_obj)
+    ref_pub_obj.publication = pub_obj
+    ref_pub_obj.save()
 
 
 def add_element_composition(cif_block, struct_obj):
@@ -619,7 +623,7 @@ def add_universal(model, refcode_obj, cif_block, iucr_dict):
                 if key == 'wavelength' and type(value) == list:
                     value = float(value[0].split(',')[0])
                 if key == 'extinction_coef':
-                    value = float(value.split('(')[0])
+                    value = float(str(value).split('(')[0])
                 if key == 'formula_moiety' or key == 'formula_sum':
                     value = value.replace('\n', '')
                     value = value.replace('\r', '')
@@ -647,7 +651,8 @@ def add_all_cif_data(cifs: dict):
     for refcode, cif_block in cifs.items():
         logger_1.info(f'{refcode} in progres...')
         struct_obj = add_refcode(cif_block[1], refcode)
-        try:
+        if True:
+        #try:
             logger_1.info(f'Add authors')
             add_author(cif_block[1], struct_obj)
             logger_1.info(f'Check space group')
@@ -672,13 +677,13 @@ def add_all_cif_data(cifs: dict):
             logger_1.info(f'Add element composition')
             add_element_composition(cif_block, struct_obj)
             logger_1.info(f'Information addition from {refcode} is completed successfully!')
-        except Exception as err:
-            message = f'Caught an exception for structure {refcode}\n{err}'
-            logger_1.error(message)
-            # delete object if something went wrong
-            struct_obj.delete()
-            cif_blocks.pop(refcode)
-            # if only 1 structure was upload raise error
-            if len(cifs) == 1:
-                raise Exception(err)
+        #except Exception as err:
+        #    message = f'Caught an exception for structure {refcode}\n{err}'
+        #    logger_1.error(message)
+        #    # delete object if something went wrong
+        #    struct_obj.delete()
+        #    cif_blocks.pop(refcode)
+        #    # if only 1 structure was upload raise error
+        #    if len(cifs) == 1:
+        #        raise Exception(err)
     return cif_blocks

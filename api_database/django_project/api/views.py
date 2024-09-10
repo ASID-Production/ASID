@@ -262,19 +262,19 @@ class StructureViewSet(ReadOnlyModelViewSet):
         refcode_obj = StructureCode.objects.create(user=user, refcode=refcode)
         cif_file_obj = CifFile.objects.create(refcode=refcode_obj, file=file, old_file_name=file.name)
         cif_file_path = os.path.join(settings.BASE_DIR, 'media', str(cif_file_obj.file))
-        try:
-            add_cif_data(
-                args=(cif_file_path,),
-                all_data=True,
-                user_refcodes={cif_file_path: refcode, }
-            )
-        except Exception as error_message:
-            if StructureCode.objects.filter(refcode=refcode).exists():
-                refcode_obj.delete()
-            return Response(
-                {'errors': f'Structure information was not added! {error_message}'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        #try:
+        add_cif_data(
+            args=(cif_file_path,),
+            all_data=True,
+            user_refcodes={cif_file_path: refcode, }
+        )
+        #except Exception as error_message:
+        #    if StructureCode.objects.filter(refcode=refcode).exists():
+        #        refcode_obj.delete()
+        #    return Response(
+        #        {'errors': f'Structure information was not added! {error_message}'},
+        #        status=status.HTTP_400_BAD_REQUEST
+        #    )
         out_serializer = RefcodeFullSerializer(refcode_obj)
         return Response(
             out_serializer.data,
