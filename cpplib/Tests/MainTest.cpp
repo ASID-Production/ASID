@@ -59,11 +59,19 @@ struct FMIC_TS {
 };
 
 TEST(SearchMainTest, Coordf) {
-	const char search[]{ "1 2 0 6 0 2 4 6 0 2 4 " };
+	const char search[] {"1 2 0 6 0 2 4 6 0 2 4 "};
 	std::vector<const char*> dat(1, "1 2 1 6 0 6 1 1 2");
 
 	std::vector<int> res;
-	ASSERT_NO_THROW({ res = SearchMain(search, std::move(dat), 1, false); });
+	ASSERT_NO_THROW({res = SearchMain(search, std::move(dat), 1, false);});
+	EXPECT_EQ(res.size(), 0);
+}
+TEST(SearchMainTest, Empty) {
+	const char search[] {"1 2 0 6 0 2 4 6 0 2 4 "};
+	std::vector<const char*> dat(1, "");
+
+	std::vector<int> res;
+	ASSERT_NO_THROW({res = SearchMain(search, std::move(dat), 1, false);});
 	EXPECT_EQ(res.size(), 0);
 }
 TEST(SearchMainTest, 107403t) {
@@ -550,7 +558,7 @@ TEST(Benchmark, HexaneHeptane) {
 }
 #endif
 TEST(Benchmark, d10k) {
-	const char search1[]{ "1 5 4 6 2 2 4 6 2 2 4 6 0 0 4 6 2 2 4 6 2 2 4 1 2 2 3 3 4 4 5" };
+	const char search1[]{ "1 6 6 6 2 2 4 6 2 2 4 6 2 2 4 6 2 2 4 6 2 2 4 6 2 2 4 1 2 2 3 3 4 4 5 5 6 1 6" };
 
 	constexpr int np = 6;
 
