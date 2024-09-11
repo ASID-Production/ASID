@@ -331,3 +331,36 @@ class VaspUploadSerializer(serializers.ModelSerializer):
     class Meta:
         model = VaspFile
         fields = ('file', 'systematic_name', 'trivial_name')
+
+
+#########################################################################
+#                    Generate 2D images Serializer                      #
+#########################################################################
+
+
+class Gen2DImgSerializer(serializers.Serializer):
+    allowed_file_formats = ['cif', 'vasp', 'xyz']
+    allowed_output_formats = ['gif', 'cml']
+    return_type_formats = ['string', 'file']
+    # fields
+    file = serializers.FileField(required=True)
+    file_format = serializers.ChoiceField(
+        choices=allowed_file_formats,
+        required=True,
+        error_messages={"invalid_choice": f"Unsupported value: use {'/'.join(allowed_file_formats)} keywords"}
+    )
+    output_format = serializers.ChoiceField(
+        choices=allowed_output_formats,
+        required=False,
+        default=allowed_output_formats[0],
+        error_messages={"invalid_choice": f"Unsupported value: use {'/'.join(allowed_output_formats)} keywords"}
+    )
+    return_type = serializers.ChoiceField(
+        choices=return_type_formats,
+        required=False,
+        default=return_type_formats[0],
+        error_messages={"invalid_choice": f"Unsupported value: use {'/'.join(return_type_formats)} keywords"}
+    )
+    h_size = serializers.IntegerField(required=False, default=250, min_value=10, max_value=10000)
+    w_size = serializers.IntegerField(required=False, default=250, min_value=10, max_value=10000)
+    name = serializers.CharField(max_length=150, required=False, default='img2d')

@@ -130,19 +130,18 @@ def define_bonds_in_molecule_v2(
 
             manager = multiprocessing.Manager()
             return_dict = manager.dict()
-            # process1 = threading.Thread(target=rdDetermineBonds.DetermineBonds, args=(mol_copy, ), kwargs={'charge': mol_charge, 'allowChargedFragments': True})
             process1 = multiprocessing.Process(target=run_process, args=(mol_copy, mol_charge, return_dict))
             process1.start()
             start = time.time()
             flag = False
-            # kill if timeout (10.5 sec)
+            # kill if timeout (5 sec)
             while True:
                 time.sleep(0.5)
                 if not process1.is_alive():
                     flag = True
                     break
                 # if the waiting time is exceeded, we interrupt the processes
-                if time.time() - start > 10:
+                if time.time() - start > 4.5:
                     process1.terminate()
                     raise TimeoutError()
 
@@ -165,9 +164,8 @@ def define_bonds_in_molecule_v2(
                 if not charge_order_neg or not charge_order_pos:
                     print('Warring: Do not find available charge!')
                 mol_copy = define_connect_from_graph(mol_copy, bonds)
-                smiles = Chem.MolToSmiles(mol_copy, isomericSmiles=True, allHsExplicit=False)
+                smiles = Chem.MolToSmiles(mol_copy, isomericSmiles=True, allHsExplicit=True)
                 smol = Chem.MolFromSmiles(smiles, sanitize=False)
-                draw_and_save_molecule(smol)
                 return smol, structure_charge, None
     # define_connect_from_graph(mol_copy, bonds)
     return mol_copy, structure_charge, mol_charge
@@ -252,24 +250,12 @@ def get_symbol_from_element_number(el_number: int, element_numbers: Dict[str, in
             return element
 
 
-def construct_xyz_block(data, element_numbers: Dict[str, int], types: List[int], bonds: List[Tuple[int, int]]):
+def construct_xyz_block(data, element_numbers: Dict[str, int], types: List[int]):
     xyz_block = str(len(data)) + '\n'
     xyz_block += 'cpplib_xyz\n'
     for atom in data:
         element_symbol = get_symbol_from_element_number(types[atom['init_idx']], element_numbers)
         xyz_block += f'{element_symbol} {round(atom["x"], 4)} {round(atom["y"], 4)} {round(atom["z"], 4)}\n'
-    # bonds
-    #new_bonds = []
-    #for bond in bonds:
-    #    atom1 = bond[0]
-    #    atom2 = bond[1]
-    #    for idx, atom in enumerate(data):
-    #        if atom['init_idx'] == atom1:
-    #            atom3 = idx
-    #        elif atom['init_idx'] == atom2:
-    #            atom4 = idx
-    #    new_bonds.append((atom3, atom4))
-    #return xyz_block, new_bonds
     return xyz_block
 
 
@@ -384,7 +370,7 @@ def main_v2(xyz_mols, element_numbers: Dict[str, int], types: List[int]):
     # make xyz format block
     for xyz_mol in xyz_mols:
         if len(xyz_mol['atoms']):
-            xyz_block = construct_xyz_block(xyz_mol['atoms'], element_numbers, types, xyz_mol['bonds'])
+            xyz_block = construct_xyz_block(xyz_mol['atoms'], element_numbers, types)
             # for test
             xyz_blocks.append([xyz_mol['count'], xyz_block, xyz_mol['bonds']])
     xyz_blocks = sorted(xyz_blocks, key=lambda i: int(i[1][0].split('\n')[0]))
@@ -401,11 +387,13 @@ def main_v2(xyz_mols, element_numbers: Dict[str, int], types: List[int]):
         # define bonds and bond orders in each molecule
         rd_mol, structure_charge, mol_charge = define_bonds_in_molecule_v2(rd_mol, formula, structure_charge, mols_num, bonds)
         # merge molecules
-        if rd_mol is not None:
-            if final_structure is None:
-                final_structure = rd_mol
-            else:
-                final_structure = Chem.CombineMols(final_structure, rd_mol)
+        # TODO: delete "if mol_charge is not None" after fix problem in determination of bond orders!
+        if mol_charge is not None:
+            if rd_mol is not None:
+                if final_structure is None:
+                    final_structure = rd_mol
+                else:
+                    final_structure = Chem.CombineMols(final_structure, rd_mol)
     # final generation
     smiles = Chem.MolToSmiles(final_structure, isomericSmiles=True)
     smol = Chem.MolFromSmiles(smiles, sanitize=True)

@@ -45,7 +45,7 @@ if not os.path.exists(os.path.join(BASE_DIR, 'static')):
 SECRET_KEY = 'django-insecure-%v12=ty4+&c--ynk514n^3gg*_*q+6kb4=34vw@abxi4*cl2lj'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = False
+DEBUG = True
 
 ALLOWED_HOSTS = ['*']
 

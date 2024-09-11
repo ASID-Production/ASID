@@ -186,8 +186,11 @@ def add_author(cif_block, struct_obj, authors=None):
     return 0
 
 
-def get_or_create_space_group(cif_block):
-
+def get_or_create_space_group(cif_block, return_only_symops=False):
+    """return_only_symops:
+            if True:  returns only symmetry operations without changing data in database;
+            if False: get or create space group object and return it.
+    """
     def get_sg_number_by_h_m_name(h_m_name: str):
         file = open(os.path.join(os.path.dirname(__file__), '../symops.json'))
         symops_list = json.load(file)
@@ -259,25 +262,20 @@ def get_or_create_space_group(cif_block):
         logger_1.info(f'Hall name: {hall}')
         if Spacegroup.objects.filter(name=space_group_name, hall_name=hall).exists():
             space_group = Spacegroup.objects.get(name=space_group_name, hall_name=hall)
+            if return_only_symops:
+                return space_group.symops
             return space_group
     else:
         space_group = Spacegroup.objects.filter(name=space_group_name)
         if space_group.count() == 1:
+            if return_only_symops:
+                return space_group[0].symops
             return space_group[0]
         elif space_group.count() > 1:
             raise Exception('No space group found in cif!')
         elif space_group.count() == 0:
             # if such a group is not in the database, then add it
             logger_1.info(f'Creating new space group object...')
-    # create a space group object
-    space_group, create = Spacegroup.objects.get_or_create(
-        name=space_group_name,
-        number=int(sg_number),
-        system=system_id
-    )
-    # hall name
-    if hall:
-        space_group.hall_name = hall
     # symops
     try:
         symops = cif_block.GetLoop('_symmetry_equiv_pos_as_xyz')
@@ -287,7 +285,6 @@ def get_or_create_space_group(cif_block):
             symops = cif_block.GetLoop('_space_group_symop_operation_xyz')
             key = '_space_group_symop_operation_xyz'
         except:
-            space_group.delete()
             raise Exception('No symops found in cif!')
     keys: list = symops.GetItemOrder()
     symops_list = []
@@ -295,6 +292,18 @@ def get_or_create_space_group(cif_block):
         symop = item[keys.index(key)].replace(' ', '')
         symops_list.append(symop)
     operations = ";".join(symops_list)
+    if return_only_symops:
+        return operations
+    # create a space group object
+    space_group, create = Spacegroup.objects.get_or_create(
+        name=space_group_name,
+        number=int(sg_number),
+        system=system_id
+    )
+    # hall name
+    if hall:
+        space_group.hall_name = hall
+    # save symops
     space_group.symops = operations
     space_group.save()
     return space_group
@@ -651,8 +660,7 @@ def add_all_cif_data(cifs: dict):
     for refcode, cif_block in cifs.items():
         logger_1.info(f'{refcode} in progres...')
         struct_obj = add_refcode(cif_block[1], refcode)
-        if True:
-        #try:
+        try:
             logger_1.info(f'Add authors')
             add_author(cif_block[1], struct_obj)
             logger_1.info(f'Check space group')
@@ -677,13 +685,13 @@ def add_all_cif_data(cifs: dict):
             logger_1.info(f'Add element composition')
             add_element_composition(cif_block, struct_obj)
             logger_1.info(f'Information addition from {refcode} is completed successfully!')
-        #except Exception as err:
-        #    message = f'Caught an exception for structure {refcode}\n{err}'
-        #    logger_1.error(message)
-        #    # delete object if something went wrong
-        #    struct_obj.delete()
-        #    cif_blocks.pop(refcode)
-        #    # if only 1 structure was upload raise error
-        #    if len(cifs) == 1:
-        #        raise Exception(err)
+        except Exception as err:
+            message = f'Caught an exception for structure {refcode}\n{err}'
+            logger_1.error(message)
+            # delete object if something went wrong
+            struct_obj.delete()
+            cif_blocks.pop(refcode)
+            # if only 1 structure was upload raise error
+            if len(cifs) == 1:
+                raise Exception(err)
     return cif_blocks
