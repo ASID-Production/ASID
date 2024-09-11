@@ -162,6 +162,16 @@ namespace cpplib {
 				data_[i] = data_[i + 1];
 			}
 		}
+		bool exchange(const ShiftType cur, const ShiftType next) {
+
+			for (int8_t i = 0; i < size_; i++) {
+				if (data_[i] == cur) {
+					data_[i] = next;
+					return true;
+				}
+			}
+			return false;
+		}
 		template <class T>
 		inline void sort() {
 			for (size_t j = 1; j < size_; j++)
@@ -169,12 +179,15 @@ namespace cpplib {
 				auto& n = *(reinterpret_cast<Node<T>*const>(this) + data_[j]);
 				for (int8_t i = j - 1; i >= (int8_t)(0); i--)
 				{
-					if (n < (*(reinterpret_cast<Node<T>*const>(this) + data_[i]))) {
+					if (n > (*(reinterpret_cast<Node<T>*const>(this) + data_[i]))) {
 						::std::swap(data_[i], data_[i + 1]);
 					}
 					else break;
 				}
 			}
+		}
+		inline void simpleSort() {
+			std::sort(&(data_[0]), &(data_[size_]));
 		}
 		void addShift(ShiftType add) {
 			for (char i = 0; i < size_; i++)
@@ -296,6 +309,9 @@ namespace cpplib {
 		inline void sortNeighbours() {
 			neighbours_.sort<A>();
 		}
+		inline void sortNeighboursSimple() {
+			neighbours_.simpleSort();
+		}
 		constexpr void addBondWithSort(Node& other) {
 			neighbours_.push_back(&other - this);
 			other.neighbours_.push_back(this - &other);
@@ -335,31 +351,49 @@ namespace cpplib {
 		void addNeighboursVector(NeighboursType&& other) {
 			neighbours_ = std::move(other);
 		}
-
-		// Does not change id or neighbours of neighbours
+		void exchangeNeighbour(const Node* cur, const Node* next) noexcept {
+			auto curshift = cur - this;
+			auto nextshift = next - this;
+			bool ret = neighbours_.exchange(curshift, nextshift);
+			_ASSERT(ret);
+		}
 		constexpr void swap(Node& other) noexcept {
 			::std::swap(type_, other.type_);
 			::std::swap(hAtoms_, other.hAtoms_);
-			::std::swap(id_, other.id_);
 			::std::swap(coord_, other.coord_);
+			const auto n1size = this->neighboursSize();
+			const auto n2size = other.neighboursSize();
+			for (AtomIndex i = 0; i < n1size; i++) {
+				this->getNeighbour(i)->exchangeNeighbour(this, &other);
+			}
+			for (AtomIndex i = 0; i < n2size; i++) {
+				other.getNeighbour(i)->exchangeNeighbour(&other, this);
+			}
 			::std::swap(neighbours_, other.neighbours_);
 			NeighboursType::ShiftType shift = &other - this;
 			neighbours_.addShift(shift);
 			other.neighbours_.addShift(-shift);
+
+			// Aditional shift if bond exists
+			bool bondExists = neighbours_.exchange(0, shift);
+			if(bondExists == true) other.neighbours_.exchange(0, -shift);
 		}
 	private:
 		inline void deleteNeighbour(const Node& node) noexcept {
 			return deleteNeighbour(&node);
 		}
 		constexpr void deleteNeighbour(const Node* pnode) noexcept {
+			_ASSERT(pnode != this);
 			using ShiftType = NeighboursType::ShiftType;
 			auto s = neighbours_.size();
 			ShiftType shift = pnode - this;
 			decltype(s) i = 0;
 			for (; i < s; i++) {
-				if (neighbours_[i] == shift) break;
+				if (neighbours_[i] == shift) {
+					neighbours_.erase(i);
+					return;
+				}
 			}
-			neighbours_.erase(i);
 		}
 
 

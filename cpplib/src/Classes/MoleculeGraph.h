@@ -37,7 +37,7 @@ namespace cpplib {
 	template<class A> class MoleculeGraph  {
 	public:
 		// Declarations
-		using NodeType = Node<A>;
+		using NodeType = typename Node<A>;
 		using NodeContainer = ::std::vector<NodeType>;
 		using BondType = currents::BondType;
 		using AtomIndex = currents::AtomIndex;
@@ -69,10 +69,9 @@ namespace cpplib {
 		static ::std::pair<MoleculeGraph, ::std::bitset<mend_size>> ReadInput(const char* str) {
 			MoleculeGraph mg;
 			const auto sn = mg.parseMainstring<true>(str);
-			//::std::stringstream ss(str);
 			auto multiAtomBits = mg.parseMultiatom(str, sn);
 			mg.release_HAtoms(multiAtomBits, sn);
-			//mg.sortGraph();
+			mg.sortGraph();
 			return ::std::make_pair(std::move(mg), ::std::move(multiAtomBits));
 		}
 
@@ -137,19 +136,6 @@ namespace cpplib {
 		}
 		constexpr const NodeType* getNeighbourPointer(AtomIndex cur, AtomIndex neighbourIt) const noexcept {
 			return data_[cur].getNeighbour(neighbourIt);
-		}
-		constexpr void exchange(AtomIndex a1, AtomIndex a2) {
-			const auto n1size = data_[a1].neighboursSize();
-			const auto n2size = data_[a2].neighboursSize();
-			auto a1p = &(data_[a1]);
-			auto a2p = &(data_[a2]);
-			for (AtomIndex i = 0; i < n1size; i++) {
-				data_[getNeighbourId(a1, i)].exchangeNeighbour(a1p, a2p);
-			}
-			for (AtomIndex i = 0; i < n2size; i++) {
-				data_[getNeighbourId(a2, i)].exchangeNeighbour(a2p, a1p);
-			}
-			data_[a1].swap(data_[a2]);
 		}
 
 		// Copy function
@@ -219,6 +205,38 @@ namespace cpplib {
 				pos += 5;
 			}
 			return ret;
+		}
+
+		void sortGraph() {
+			// Seclection sort
+
+			AtomIndex s = data_.size();
+			AtomIndex best = 1;
+			for (AtomIndex i = 1; i < s; i++)
+			{
+				best = i;
+				for (AtomIndex j = i + 1; j < s; j++)
+				{
+					if (data_[best] < data_[j]) {
+						best = j;
+					}
+				}
+				if (best != i) {
+					exchange(i, best);
+				}
+			}
+			for (AtomIndex i = 1; i < s; i++)
+			{
+				data_[i].sortNeighboursSimple();
+			}
+		}
+
+		static std::string ResortString(const char* str) {
+			MoleculeGraph mg;
+			mg.parseMainstring<false>(str);
+			mg.sortGraph();
+			
+			return mg.writeDataString();
 		}
 
 	private:
@@ -358,30 +376,40 @@ namespace cpplib {
 				}
 			}
 		}
-
-		void sortGraph() {
-			const auto s = this->size();
-			std::vector<AtomIndex> order(s);
-			std::iota(order.begin(), order.end(), 0);
-			auto MoreLambda = [this](AtomIndex a, AtomIndex b) {return this->operator[](a).RawMore(this->operator[](b)); };
-			std::stable_sort((++order.begin()), order.end(), MoreLambda);
-
-			std::vector<AtomIndex> reorder(s,0);
-			for (typename ::std::remove_const<decltype(s)>::type i = 0; i < s; i++)
+		constexpr void exchange(AtomIndex a1, AtomIndex a2) {
+			data_[a1].swap(data_[a2]);
+		}
+		std::string writeDataString() const {
+			AtomIndex ns = data_.size();
+			AtomIndex bs = 0;
+			std::vector<BondType> bonds;
+			std::string bond_str; // starts with ' '
+			std::string node_str;
+			for (AtomIndex i = 1; i < ns; i++)
 			{
-				reorder[order[i]] = i;
-			}
+				node_str += ' ';
+				node_str += std::to_string(static_cast<int>(static_cast<char>(data_[i].getType())));
+				node_str += ' ';
+				node_str += std::to_string(static_cast<int>(data_[i].getHAtoms()));
 
-			for (typename ::std::remove_const<decltype(s)>::type i = 1; i < s; i++)
-			{
-				if (reorder[i] == i)
-					continue;
-				decltype(i) other = order[i];
-				order[reorder[i]] = other;
-				
-				exchange(i, other);
+				int8_t neis = data_[i].neighboursSize();
+				for (int8_t j = 0; j < neis; j++)
+				{
+					AtomIndex neindex = getNeighbourId(i, j);
+					if(neindex > i) {
+						bond_str += ' ';
+						bond_str += std::to_string(i);
+						bond_str += ' ';
+						bond_str += std::to_string(neindex);
+					}					
+				}
+				bs += neis;
 			}
-			return;
+			bs >>= 1;
+
+			std::string res = (std::to_string(id_) + ' ')
+				+ (std::to_string(ns-1) + ' ') + std::to_string(bs);
+			return res + node_str + bond_str;
 		}
 	};
 }

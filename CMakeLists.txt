@@ -86,7 +86,20 @@ project(cpplib)
 
     #Generate the shared library from the library sources
     if(CMAKE_BUILD_TYPE MATCHES Release)
-        add_library(cpplib SHARED "cpplib/src/Functions/Functions.cpp" "cpplib/src/Functions/PythonInteface.cpp" "cpplib/src/BaseHeaders/Currents.h")
+        add_library(cpplib SHARED "cpplib/src/Functions/Functions.cpp" 
+                           "cpplib/src/BaseHeaders/Support.h"
+                           "cpplib/src/BaseHeaders/DebugMes.h"
+                           "cpplib/src/Classes/Distances.h"
+                           "cpplib/src/Classes/FindMolecules.h"
+                           "cpplib/src/Classes/Hash.h"
+                           "cpplib/src/Classes/Interfaces.h"
+                           "cpplib/src/Classes/MoleculeGraph.h"
+                           "cpplib/src/Classes/Engine.h"
+                           "cpplib/src/Classes/Geometry.h"
+                           "cpplib/src/Classes/SearchGraph.h"
+                           "cpplib/src/Functions/Functions.h"
+                           "cpplib/src/Functions/AllInOneAndCurrent.h" 
+                           "cpplib/src/Classes/FindGeometry.h" "cpplib/src/Functions/PythonInteface.cpp" "cpplib/src/BaseHeaders/Currents.h")
         target_link_libraries(cpplib ${PYTHON_LIBRARIES} Python::Python)
         set_target_properties(cpplib PROPERTIES
             PREFIX ""
