@@ -28,7 +28,8 @@
 
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import StructureViewSet, QCStructureViewSet, structure_search_view, qc_structure_search_view
+from .views import (StructureViewSet, QCStructureViewSet, structure_search_view,
+                    qc_structure_search_view, gen_img2d_view)
 from rest_framework import permissions
 from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
@@ -55,6 +56,7 @@ router_v1.register(r'qc_structures', QCStructureViewSet, 'qc_structure')
 urlpatterns = [
     path('v1/structures/search/', structure_search_view),
     path('v1/qc_structures/search/', qc_structure_search_view),
+    path('v1/generate/2d/', gen_img2d_view),
     url(r'^v1/redoc/$', schema_view.with_ui('redoc', cache_timeout=0), name='schema-redoc'),
     path('v1/', include(router_v1.urls)),
     path('auth/', include('djoser.urls')),

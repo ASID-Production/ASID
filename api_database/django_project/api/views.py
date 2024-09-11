@@ -34,7 +34,7 @@ from qc_structure.vasp import vasp_parser as add_vasp_data
 from qc_structure.export.cif import qc_get_cif_content
 from .serializers import (RefcodeShortSerializer, RefcodeFullSerializer, CifUploadSerializer,
                           SearchSerializer, QCRefcodeShortSerializer, QCRefcodeFullSerializer,
-                          VaspUploadSerializer)
+                          VaspUploadSerializer, Gen2DImgSerializer)
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from django.http import HttpResponse
@@ -59,6 +59,12 @@ from django.core.cache import cache
 import base64
 from io import BytesIO
 import cpplib
+from rest_framework.decorators import api_view
+from structure.management.commands.cif_db_update import collect_cif_data
+from structure.management.commands.cif_db_update_modules._make_graphs_c import get_data
+from structure.management.commands.cif_db_update_modules._add_all_cif_data import get_or_create_space_group
+from modules.gen2d.gen2d import main_v2 as gen_smiles_inchi
+from modules.gen2d.gen2d import gen2d
 
 NUM_OF_PROC = int(cpu_count() / 2)
 MAX_STRS_SIZE = 30000
@@ -70,7 +76,7 @@ async def qc_structure_search_view(request):
     request = view.initialize_request(request)
     serializer = SearchSerializer(data=request.data)
     if not serializer.is_valid():
-        return HttpResponse(
+        return Response(
             serializer.errors,
             status=status.HTTP_400_BAD_REQUEST
         )
@@ -89,7 +95,7 @@ async def structure_search_view(request):
     request = view.initialize_request(request)
     serializer = SearchSerializer(data=request.data)
     if not serializer.is_valid():
-        return HttpResponse(
+        return Response(
             serializer.errors,
             status=status.HTTP_400_BAD_REQUEST
         )
@@ -199,11 +205,69 @@ def get_img2d(structure, request):
         if f == 'img':
             content = BytesIO(base64.b64decode(content.split(',')[-1])).getvalue()
             f = 'gif'
-        response = HttpResponse(content, content_type='text/plain')
+        response = HttpResponse(content, content_type='text/plain', status=200)
         response['Content-Disposition'] = f'attachment; filename={structure.refcode}.{f}'
         return response
     else:
         return HttpResponse(content, content_type='text/plain', status=200)
+
+
+@api_view(['GET'])
+def gen_img2d_view(request):
+    serializer = Gen2DImgSerializer(data=request.data)
+    if serializer.is_valid():
+        file = request.data.get('file')
+        file_format = serializer.data.get('file_format')
+        output_format = serializer.data.get('output_format')
+        return_type = serializer.data.get('return_type')
+        h_size = serializer.data.get('h_size')
+        w_size = serializer.data.get('w_size')
+        name = serializer.data.get('name')
+        # generate smiles and inchi
+        inchi = ''
+        smiles = ''
+        if file_format == 'cif':
+            data = collect_cif_data(file, dict(), user_refcode='1', use_db=False)
+            cif_block = data['1']
+            # INFO: "get_or_create_space_group" with "return_only_symops"=True does not change data in database!
+            symops_db = get_or_create_space_group(cif_block[1], return_only_symops=True)
+            params, coords, types, symops = get_data(cif_block, symops_db)
+            cpplib_result = cpplib.FindMoleculesInCell(params, symops, types, coords)
+            xyz_mols = cpplib_result['xyz_block']
+            data_2d = gen_smiles_inchi(xyz_mols, element_numbers, types)
+            if data_2d:
+                smiles = data_2d['smiles']
+                inchi = data_2d['inchi']
+        elif file_format == 'vasp':
+            pass
+        elif file_format == 'xyz':
+            pass
+        # if failed
+        if not smiles and not inchi:
+            return Response({'error': 'Failed to create smiles or inchi for this structure!'}, status=status.HTTP_400_BAD_REQUEST)
+        # generate 2d representation
+        img_type = output_format
+        if output_format in ['gif', ]:
+            img_type = 'img'
+        content = gen2d(smiles=smiles, inchis=[inchi, ], sanitize=False, size=(w_size, h_size), format=img_type)
+        if content:
+            if img_type == 'img':
+                buffer = BytesIO()
+                content.save(buffer, output_format)
+            # return as string
+            if return_type == 'string':
+                if img_type == 'img':
+                    content = f'data:image/{output_format};base64,' + base64.b64encode(buffer.getvalue()).decode()
+                response = HttpResponse(content, content_type='text/plain', status=200)
+            # return as file
+            elif return_type == 'file':
+                if img_type == 'img':
+                    content = buffer.getvalue()
+                response = HttpResponse(content, content_type='text/plain', status=200)
+                response['Content-Disposition'] = f'attachment; filename={name}.{output_format}'
+            return response
+        return Response({'error': 'Failed to create 2D graph for this structure!'}, status=status.HTTP_400_BAD_REQUEST)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class StructureViewSet(ReadOnlyModelViewSet):

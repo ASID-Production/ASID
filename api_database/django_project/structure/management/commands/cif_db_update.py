@@ -47,7 +47,7 @@ MAX_TIME_WAIT = 600  # maximum time to wait for process completion (sec)
 CHUNK_SIZE = 5000  # size of the processed part of the array
 
 
-def collect_cif_data(file: str, cif_blocks: dict, user_refcode=''):
+def collect_cif_data(file: str, cif_blocks: dict, user_refcode='', use_db=True):
     # read cif file
     try:
         cif = ReadCif(file)
@@ -82,7 +82,7 @@ def collect_cif_data(file: str, cif_blocks: dict, user_refcode=''):
         else:
             raise Exception(f'No refcode was found in cif file or in input parameters!')
         # if it belongs to another database, then we record the information
-        if db:
+        if db and use_db:
             str_obj, created = StructureCode.objects.get_or_create(refcode=refcode)
             setattr(str_obj, db, True)
             str_obj.save()

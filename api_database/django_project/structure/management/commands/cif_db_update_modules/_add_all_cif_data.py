@@ -186,8 +186,11 @@ def add_author(cif_block, struct_obj, authors=None):
     return 0
 
 
-def get_or_create_space_group(cif_block):
-
+def get_or_create_space_group(cif_block, return_only_symops=False):
+    """return_only_symops:
+            if True:  returns only symmetry operations without changing data in database;
+            if False: get or create space group object and return it.
+    """
     def get_sg_number_by_h_m_name(h_m_name: str):
         file = open(os.path.join(os.path.dirname(__file__), '../symops.json'))
         symops_list = json.load(file)
@@ -259,25 +262,20 @@ def get_or_create_space_group(cif_block):
         logger_1.info(f'Hall name: {hall}')
         if Spacegroup.objects.filter(name=space_group_name, hall_name=hall).exists():
             space_group = Spacegroup.objects.get(name=space_group_name, hall_name=hall)
+            if return_only_symops:
+                return space_group.symops
             return space_group
     else:
         space_group = Spacegroup.objects.filter(name=space_group_name)
         if space_group.count() == 1:
+            if return_only_symops:
+                return space_group[0].symops
             return space_group[0]
         elif space_group.count() > 1:
             raise Exception('No space group found in cif!')
         elif space_group.count() == 0:
             # if such a group is not in the database, then add it
             logger_1.info(f'Creating new space group object...')
-    # create a space group object
-    space_group, create = Spacegroup.objects.get_or_create(
-        name=space_group_name,
-        number=int(sg_number),
-        system=system_id
-    )
-    # hall name
-    if hall:
-        space_group.hall_name = hall
     # symops
     try:
         symops = cif_block.GetLoop('_symmetry_equiv_pos_as_xyz')
@@ -287,7 +285,6 @@ def get_or_create_space_group(cif_block):
             symops = cif_block.GetLoop('_space_group_symop_operation_xyz')
             key = '_space_group_symop_operation_xyz'
         except:
-            space_group.delete()
             raise Exception('No symops found in cif!')
     keys: list = symops.GetItemOrder()
     symops_list = []
@@ -295,6 +292,18 @@ def get_or_create_space_group(cif_block):
         symop = item[keys.index(key)].replace(' ', '')
         symops_list.append(symop)
     operations = ";".join(symops_list)
+    if return_only_symops:
+        return operations
+    # create a space group object
+    space_group, create = Spacegroup.objects.get_or_create(
+        name=space_group_name,
+        number=int(sg_number),
+        system=system_id
+    )
+    # hall name
+    if hall:
+        space_group.hall_name = hall
+    # save symops
     space_group.symops = operations
     space_group.save()
     return space_group
@@ -402,6 +411,7 @@ def add_journal_and_publication(cif_block, struct_obj):
         filtr['journal'] = journal_obj
     # publication
     year = 0
+    doi = ''
     if '_journal_year' in cif_block[1].keys():
         year = int(cif_block[1]['_journal_year'])
         filtr['year'] = year
@@ -433,12 +443,16 @@ def add_journal_and_publication(cif_block, struct_obj):
     for key in ['journal', 'page', 'volume', 'doi']:
         if key not in filtr.keys():
             filtr_is_null[f'{key}__isnull'] = True
-    if year:
+    if doi:
+        pub_obj, created = Publication.objects.get_or_create(doi=doi)
+        if year and created:
+            for key, value in filtr.items():
+                setattr(pub_obj, key, value)
+    elif year:
         pub_obj, created = Publication.objects.filter(**filtr_is_null).get_or_create(**filtr)
     else:
         return 0
     # authors
-    flag = False
     authors = []
     if '_publ_author_name' in cif_block[1].keys():
         try:
@@ -447,18 +461,17 @@ def add_journal_and_publication(cif_block, struct_obj):
                 authors.append(author[0])
         except:
             authors = cif_block[1]['_publ_author_name'].split(';')
-        flag = add_authors_and_get_flag()
+        add_authors_and_get_flag()
     if '_citation_author_name' in cif_block[1].keys():
         try:
             authors = cif_block[1].GetLoop('_citation_author_name')
         except:
             authors = cif_block[1]['_citation_author_name'].split(';')
-        flag = add_authors_and_get_flag()
+        add_authors_and_get_flag()
     # refcode connection
-    if flag:
-        ref_pub_obj, created = RefcodePublicationConnection.objects.get_or_create(refcode=struct_obj)
-        ref_pub_obj.publication = pub_obj
-        ref_pub_obj.save()
+    ref_pub_obj, created = RefcodePublicationConnection.objects.get_or_create(refcode=struct_obj)
+    ref_pub_obj.publication = pub_obj
+    ref_pub_obj.save()
 
 
 def add_element_composition(cif_block, struct_obj):
@@ -619,7 +632,7 @@ def add_universal(model, refcode_obj, cif_block, iucr_dict):
                 if key == 'wavelength' and type(value) == list:
                     value = float(value[0].split(',')[0])
                 if key == 'extinction_coef':
-                    value = float(value.split('(')[0])
+                    value = float(str(value).split('(')[0])
                 if key == 'formula_moiety' or key == 'formula_sum':
                     value = value.replace('\n', '')
                     value = value.replace('\r', '')

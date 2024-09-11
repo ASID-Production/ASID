@@ -31,6 +31,9 @@ from rdkit import Chem
 from rdkit.Chem import Draw, rdDetermineBonds, AllChem, rdAbbreviations
 from typing import List, Tuple, Dict
 from collections import defaultdict
+import multiprocessing
+import time
+import traceback
 
 METAL_IONS = {
     'Li': 1,
@@ -80,10 +83,23 @@ IONS = dict(**METAL_IONS, ** ANIONS)
 
 def define_connect_from_graph(mol: Chem.Mol, bonds: List[Tuple]) -> Chem.Mol:
     mol = Chem.RWMol(mol)
+    bnds: List[Chem.Bond] = list(mol.GetBonds())
+    for bond in bnds:
+        mol.RemoveBond(bond.GetBeginAtomIdx(), bond.GetEndAtomIdx(), Chem.BondType.SINGLE)
     for bond in bonds:
-        mol.AddBond(*bond)
+        mol.AddBond(bond[0], bond[1])
     mol = mol.GetMol()
     return mol
+
+
+def run_process(mol_copy, mol_charge, return_dict):
+    return_dict['error'] = ''
+    try:
+        rdDetermineBonds.DetermineBonds(mol_copy, charge=mol_charge, allowChargedFragments=True)
+    except Exception as error_msg:
+        return_dict['error'] = error_msg
+    return_dict['mol'] = mol_copy
+    return return_dict
 
 
 def define_bonds_in_molecule_v2(
@@ -93,6 +109,7 @@ def define_bonds_in_molecule_v2(
     charge_order_pos = [0, 1, -1, 2, -2, 3, -3, 4, -4, 5, -5, 6, -6]
     charge_order_neg.reverse()
     charge_order_pos.reverse()
+    # draw_and_save_molecule(rdkit_molecule)
     init_flag: int = 0 - structure_charge
     while True:
         try:
@@ -110,7 +127,31 @@ def define_bonds_in_molecule_v2(
             else:
                 mol_charge = charge_order_pos.pop()
             set_C_charge_zero(mol_copy)
-            rdDetermineBonds.DetermineBonds(mol_copy, charge=mol_charge, allowChargedFragments=True)
+
+            manager = multiprocessing.Manager()
+            return_dict = manager.dict()
+            process1 = multiprocessing.Process(target=run_process, args=(mol_copy, mol_charge, return_dict))
+            process1.start()
+            start = time.time()
+            flag = False
+            # kill if timeout (5 sec)
+            while True:
+                time.sleep(0.5)
+                if not process1.is_alive():
+                    flag = True
+                    break
+                # if the waiting time is exceeded, we interrupt the processes
+                if time.time() - start > 4.5:
+                    process1.terminate()
+                    raise TimeoutError()
+
+            mol_copy = return_dict.get('mol')
+            # if critical error in rdDetermineBonds.DetermineBonds function
+            if not flag:
+                mol_copy = copy.deepcopy(rdkit_molecule)
+                raise Exception('')
+            if return_dict['error']:
+                raise Exception(return_dict['error'])
 
             # if composition is not modified
             if formula_init == mol_to_formula(mol_copy):
@@ -119,14 +160,14 @@ def define_bonds_in_molecule_v2(
             elif rdkit_molecule.GetProp(key='charge'):
                 raise Exception('ChargeError: Do not find available charge!')
         except Exception as err:
-            if 'determineBondOrdering() does not work with' in str(err):
-                return mol_copy, structure_charge, mol_charge
-            if not charge_order_neg or not charge_order_pos:
-                print('Warring: Do not find available charge!')
-                # define_connect_from_graph(mol_copy, bonds)
+            if (not charge_order_neg) or (not charge_order_pos) or ('Final molecular charge does not match input' not in str(err)):
+                if not charge_order_neg or not charge_order_pos:
+                    print('Warring: Do not find available charge!')
+                mol_copy = define_connect_from_graph(mol_copy, bonds)
                 smiles = Chem.MolToSmiles(mol_copy, isomericSmiles=True, allHsExplicit=True)
-                smol = Chem.MolFromSmiles(smiles)
+                smol = Chem.MolFromSmiles(smiles, sanitize=False)
                 return smol, structure_charge, None
+    # define_connect_from_graph(mol_copy, bonds)
     return mol_copy, structure_charge, mol_charge
 
 
@@ -331,13 +372,11 @@ def main_v2(xyz_mols, element_numbers: Dict[str, int], types: List[int]):
         if len(xyz_mol['atoms']):
             xyz_block = construct_xyz_block(xyz_mol['atoms'], element_numbers, types)
             # for test
-            xyz_blocks.append([xyz_mol['count'], xyz_block])
-            #xyz_blocks.append([xyz_mol['count'], xyz_block, xyz_mol['bonds']])
+            xyz_blocks.append([xyz_mol['count'], xyz_block, xyz_mol['bonds']])
     xyz_blocks = sorted(xyz_blocks, key=lambda i: int(i[1][0].split('\n')[0]))
     final_structure = None
     for xyz_block in xyz_blocks:
-        mols_num, xyz_block = xyz_block
-        #mols_num, xyz_block, bonds = xyz_block
+        mols_num, xyz_block, bonds = xyz_block
         # make rdkit mol
         raw_mol = Chem.MolFromXYZBlock(xyz_block)
         rd_mol: Chem.Mol = Chem.Mol(raw_mol)
@@ -346,14 +385,15 @@ def main_v2(xyz_mols, element_numbers: Dict[str, int], types: List[int]):
             set_atom_charge(rd_mol)
         formula = mol_to_formula(rd_mol)
         # define bonds and bond orders in each molecule
-        rd_mol, structure_charge, mol_charge = define_bonds_in_molecule_v2(rd_mol, formula, structure_charge, mols_num)
-        #rd_mol, structure_charge, mol_charge = define_bonds_in_molecule_v2(rd_mol, formula, structure_charge, mols_num, bonds)
+        rd_mol, structure_charge, mol_charge = define_bonds_in_molecule_v2(rd_mol, formula, structure_charge, mols_num, bonds)
         # merge molecules
-        if rd_mol is not None:
-            if final_structure is None:
-                final_structure = rd_mol
-            else:
-                final_structure = Chem.CombineMols(final_structure, rd_mol)
+        # TODO: delete "if mol_charge is not None" after fix problem in determination of bond orders!
+        if mol_charge is not None:
+            if rd_mol is not None:
+                if final_structure is None:
+                    final_structure = rd_mol
+                else:
+                    final_structure = Chem.CombineMols(final_structure, rd_mol)
     # final generation
     smiles = Chem.MolToSmiles(final_structure, isomericSmiles=True)
     smol = Chem.MolFromSmiles(smiles, sanitize=True)
