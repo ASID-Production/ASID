@@ -16,7 +16,7 @@ std::vector<int> SearchMain(const char* search,
 							const int np,
 							const bool exact);
 
-std::pair<std::string, std::vector<std::pair<std::vector<std::tuple<cpplib::currents::PointType, cpplib::currents::AtomIndex>>, int>>>
+std::pair<std::string, cpplib::FindMolecules::RightType>
 	FindMoleculesInCell(const std::array<float, 6>& unit_cell,
 						std::vector<const char*>& symm,
 						std::vector<int>& types,

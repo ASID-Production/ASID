@@ -366,13 +366,14 @@ namespace cpplib {
 		using NodeType = Node<AtomType>;
 		using HType = NodeType::HType;
 		using HashType = Hash<AtomType>;
+		using RightType = std::vector<std::tuple<std::vector<std::tuple<PointType, AtomIndex>>, int, std::vector<BondType>>>;
 	private:
 		FAMSType fs_;
 
 	public:
 		FindMolecules() noexcept = delete;
 		explicit FindMolecules(FAMSType&& fs) : fs_(std::move(fs)) {}
-		std::pair<std::string, std::vector<std::pair<std::vector<std::tuple<PointType, AtomIndex>>, int>>> findMolecules(const DistancesType& distances, std::vector<BondType>& bonds, const std::vector<AtomIndex>& invalids, std::string& errorMsg) {
+		std::pair<std::string, RightType> findMolecules(const DistancesType& distances, std::vector<BondType>& bonds, const std::vector<AtomIndex>& invalids, std::string& errorMsg) {
 			std::vector<NodeType> net;
 			net.reserve(fs_.sizePoints);
 
@@ -413,13 +414,14 @@ namespace cpplib {
 			// 4. Find molecules
 
 			std::vector<bool> seen(fs_.sizeUnique, false); // seen unique atoms
-			std::vector<std::pair<std::vector<AtomIndex>, int>> molecules;
+			std::vector<std::tuple<std::vector<AtomIndex>, int, std::vector<BondType>>> molecules;
 			std::vector<HashType> hashs;
 			for (AtomIndex i = 0; i < fs_.sizeUnique; i++) {
 				if (net[i].getType() == AtomType(1) || seen[i] == true)
 					continue;
 				seen[i] = true;
-				auto singleTable = findNextMolecule(i, net, seen);
+				auto temp_pair = findNextMolecule(i, net, seen);
+				auto singleTable = std::move(temp_pair.first);
 
 				// 4.1. 
 				auto singleTableSize = singleTable.size();
@@ -439,27 +441,27 @@ namespace cpplib {
 				for (size_type j = 0; j < molecules_size; j++) {
 					if (hash == hashs[j]) {
 						exist = true;
-						molecules[j].second++;
+						(std::get<1>(molecules[j]))++;
 						break;
 					}
 				}
 				if (!exist) {
-					molecules.emplace_back(std::move(singleTable), 1);
+					molecules.emplace_back(std::move(singleTable), 1, std::move(temp_pair.second));
 					hashs.emplace_back(hash);
 				}
 			}
 			auto molecules_size = molecules.size();
-			std::vector<std::pair<std::vector<std::tuple<PointType, AtomIndex>>, int>> right(molecules_size);
+			RightType right(0);
 			for (size_t i = 0; i < molecules_size; i++)
 			{
-				const auto mis = molecules[i].first.size();
+				const auto mis = std::get<0>(molecules[i]).size();
 				std::vector<std::tuple<PointType, AtomIndex>> oneMol;
 				for (size_t j = 0; j < mis; j++)
 				{
-					auto realID = molecules[i].first[j];
-					oneMol.emplace_back(fs_.points[molecules[i].first[j]], fs_.parseIndex[realID]);
+					auto realID = std::get<0>(molecules[i])[j];
+					oneMol.emplace_back(fs_.points[std::get<0>(molecules[i]).operator[](j)], fs_.parseIndex[realID]);
 				}
-				right.emplace_back(std::move(oneMol), molecules[i].second);
+				right.emplace_back(std::move(oneMol), std::get<1>(molecules[i]), std::move(std::get<2>(molecules[i])));
 			}
 			auto res = output(molecules, net);
 			if (errorMsg.empty())
@@ -468,9 +470,8 @@ namespace cpplib {
 				return std::make_pair(output(molecules, net) + ";" + errorMsg, std::move(right));
 		}
 
-
 	private:
-		std::string output(const std::vector<std::pair<std::vector<AtomIndex>, int>>& molecules, const std::vector<NodeType>& net) const {
+		std::string output(const std::vector<std::tuple<std::vector<AtomIndex>, int, std::vector<BondType>>>& molecules, const std::vector<NodeType>& net) const {
 			size_type n = 1;
 			size_type b = 0;
 			std::string res;
@@ -481,17 +482,17 @@ namespace cpplib {
 			size_type m1s = molecules.size();
 
 			for (size_type i = 0; i < m1s; i++) {
-				size_type m2s = molecules[i].first.size();
+				size_type m2s = std::get<0>(molecules[i]).size();
 				for (size_type j = 0; j < m2s; j++) {
-					if (net[molecules[i].first[j]].getType() == AtomType(1) && net[molecules[i].first[j]].neighboursSize() == 1) {
+					if (net[std::get<0>(molecules[i])[j]].getType() == AtomType(1) && net[std::get<0>(molecules[i])[j]].neighboursSize() == 1) {
 						continue;
 					}
 
-					revers[molecules[i].first[j]] = n;
+					revers[std::get<0>(molecules[i])[j]] = n;
 					n++;
-					res += std::to_string(static_cast<int>(static_cast<char>(net[molecules[i].first[j]].getType())));
+					res += std::to_string(static_cast<int>(static_cast<char>(net[std::get<0>(molecules[i])[j]].getType())));
 					res += " ";
-					res += std::to_string(calculateHAtoms(net[molecules[i].first[j]]));
+					res += std::to_string(calculateHAtoms(net[std::get<0>(molecules[i])[j]]));
 					res += " ";
 				}
 			}
@@ -526,9 +527,10 @@ namespace cpplib {
 			return res;
 		}
 
-		std::vector<AtomIndex> findNextMolecule(const AtomIndex start, const std::vector<NodeType>& net, std::vector<bool>& seen) const {
+		std::pair<std::vector<AtomIndex>,std::vector<BondType>> findNextMolecule(const AtomIndex start, const std::vector<NodeType>& net, std::vector<bool>& seen) const {
 			// 1. Create vector with single element and define limitators
 			std::vector<AtomIndex> res(1, start);
+			std::vector<BondType> bonds(0);
 			AtomIndex low_pos = 0;
 
 			// 2. Breadth first
@@ -536,13 +538,23 @@ namespace cpplib {
 				AtomIndex nei_size = net[res[low_pos]].neighboursSize();
 				for (AtomIndex j = 0; j < nei_size; j++) {
 					const auto cur_id = net[res[low_pos]].getNeighbour(j)->getID();
-					if (is_member(cur_id, res) != -1) continue;
+					auto is_m = is_member(cur_id, res);
+					if (is_m != ((size_t)(-1))) {
+						if (low_pos < is_m)
+							bonds.emplace_back(low_pos, is_m);
+						else {
+							continue;
+						}
+						continue;
+					} else {
+						bonds.emplace_back(low_pos, res.size());
+					}
 					res.emplace_back(cur_id);
 				}
 				seen[fs_.parseIndex[res[low_pos]]] = true;
 				low_pos++;
 			}
-			return res;
+			return std::make_pair(res,bonds);
 		}
 	};
 }

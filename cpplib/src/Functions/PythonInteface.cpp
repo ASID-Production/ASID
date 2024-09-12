@@ -78,7 +78,6 @@ extern "C" {
 		}
 		deb_write("pyListToVectorCharP return");
 	}
-
 	inline static void useDistances(PyObject* self) {
 		if (p_distances != nullptr)
 			return;
@@ -114,7 +113,8 @@ extern "C" {
 		{
 			line += std::to_string(bonds[i].first) + ':' + std::to_string(bonds[i].second) + '\n';
 		}
-		return PyUnicode_FromString(line.c_str());
+		return Py_BuildValue("{s:s}",
+							 "bonds", PyUnicode_FromString(line.c_str()));
 	}
 	static PyObject* cpplib_GenBondsEx(PyObject* self, PyObject* arg) {
 		useDistances(self);
@@ -142,7 +142,8 @@ extern "C" {
 			line += std::to_string(bonds[i].first) + ':' + std::to_string(bonds[i].second)
 				+ ':' + std::to_string(bonds[i].length) + '\n';
 		}
-		return PyUnicode_FromString(line.c_str());
+		return Py_BuildValue("{s:s}",
+							 "bonds", PyUnicode_FromString(line.c_str()));
 	}
 
 	static PyObject* cpplib_SearchMain(PyObject* self, PyObject* args) {
@@ -173,7 +174,6 @@ extern "C" {
 		deb_write("py_SearchMain return");
 		return ret_o;
 	}
-
 	static PyObject* cpplib_CompareGraph(PyObject* self, PyObject* args)
 	{
 		deb_write("py_CompareGraph in");
@@ -221,7 +221,7 @@ extern "C" {
 		for (auto & mol : ret.second)
 		{
 			PyObject* o_molecule = PyList_New(0);
-			for (auto& atom : mol.first) {
+			for (auto& atom : std::get<0>(mol)) {
 				PyObject* o_atom = Py_BuildValue("{s:f,s:f,s:f,s:l}",
 												 "x", float(std::get<0>(atom).get(0)),
 												 "y", float(std::get<0>(atom).get(1)),
@@ -229,17 +229,22 @@ extern "C" {
 												 "init_idx", long(std::get<1>(atom)));
 				PyList_Append(o_molecule, o_atom);
 			}
+			PyObject* o_bonds = PyList_New(0);
+			for (auto& bond : std::get<2>(mol)) {
+				PyObject* o_bond1 = Py_BuildValue("(ii)", int(bond.first), int(bond.second));
+				PyList_Append(o_bonds, o_bond1);
+			}
 
-			PyList_Append(o_xyz_block, Py_BuildValue("{s:l,s:O}",
-													 "count", long(mol.second),
-													 "atoms", o_molecule));
+			PyList_Append(o_xyz_block, Py_BuildValue("{s:l,s:O,s:O}",
+													 "count", long(std::get<1>(mol)),
+													 "atoms", o_molecule,
+													 "bonds", o_bonds));
 		}
-
+		// List[Tuple(atom1, atom2), ...] под ключом 'bonds' 
 		return Py_BuildValue("{s:s,s:O}", 
 							 "graph_str", ret.first.c_str(),
 							 "xyz_block", o_xyz_block);
 	}
-
 	static PyObject* cpplib_FindMoleculesWithoutCell(PyObject* self, PyObject* args) {
 		useDistances(self);
 
@@ -388,7 +393,6 @@ extern "C" {
 
 		return PyUnicode_FromString(ret.c_str());
 	}
-
 	static PyObject* cpplib_FindDistanceWC(PyObject* self, PyObject* args) {
 
 		PyObject* oxyz = NULL;
@@ -469,7 +473,6 @@ extern "C" {
 
 		return PyUnicode_FromString(ret.c_str());
 	}
-
 	static PyObject* cpplib_FindAngleWC(PyObject* self, PyObject* args) {
 
 		PyObject* oxyz = NULL;
@@ -510,7 +513,6 @@ extern "C" {
 
 		return PyUnicode_FromString(ret.c_str());
 	}
-
 	static PyObject* cpplib_FindTorsionIC(PyObject* self, PyObject* args) {
 
 		PyObject* ocell = NULL;
@@ -565,7 +567,6 @@ extern "C" {
 
 		return PyUnicode_FromString(ret.c_str());
 	}
-
 	static PyObject* cpplib_FindTorsionWC(PyObject* self, PyObject* args) {
 
 		PyObject* oxyz = NULL;
@@ -612,7 +613,6 @@ extern "C" {
 
 		return PyUnicode_FromString(ret.c_str());
 	}
-
 	static PyObject* cpplib_FindDAT_IC(PyObject* self, PyObject* args) {
 
 		PyObject* ocell = NULL;
@@ -718,9 +718,12 @@ extern "C" {
 		return ret;
 	}
 
-}
+	static PyObject* cpplib_SortDatabase(PyObject* self, PyObject* arg) {
+		const auto ret = cpplib::currents::SearchGraphType::DatabaseGraphType::ResortString(PyUnicode_AsUTF8(arg));
+		return PyUnicode_FromString(ret.c_str());
+	}
 
-// PyDict_SetItemString
+}
 
 
 static struct PyMethodDef methods[] = {
@@ -739,6 +742,7 @@ static struct PyMethodDef methods[] = {
 	{ "FindTorsionWC", cpplib_FindTorsionWC, METH_VARARGS, "Find torsions with current parameters in xyz"},
 	{ "FindDAT_IC", cpplib_FindDAT_IC, METH_VARARGS, "Create dictionary with distances, angles and torsions in cell"},
 	{ "FindDAT_WC", cpplib_FindDAT_WC, METH_VARARGS, "Create dictionary with distances, angles and torsions in xyz"},
+	{ "SortDatabase", cpplib_SortDatabase, METH_O, "Sort graph"},
 
 	{ NULL, NULL, 0, NULL }
 };

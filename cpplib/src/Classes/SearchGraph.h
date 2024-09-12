@@ -63,6 +63,7 @@ namespace cpplib {
 		}
 		inline void setupData(DatabaseGraphType&& molGraph) noexcept {
 			data_ = ::std::move(molGraph);
+			//data_.sortGraph();
 			dataSize_ = data_.size();
 		}
 
