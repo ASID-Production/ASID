@@ -33,7 +33,6 @@ from typing import List, Tuple, Dict
 from collections import defaultdict
 import multiprocessing
 import time
-import traceback
 
 METAL_IONS = {
     'Li': 1,
@@ -371,7 +370,6 @@ def main_v2(xyz_mols, element_numbers: Dict[str, int], types: List[int]):
     for xyz_mol in xyz_mols:
         if len(xyz_mol['atoms']):
             xyz_block = construct_xyz_block(xyz_mol['atoms'], element_numbers, types)
-            # for test
             xyz_blocks.append([xyz_mol['count'], xyz_block, xyz_mol['bonds']])
     xyz_blocks = sorted(xyz_blocks, key=lambda i: int(i[1][0].split('\n')[0]))
     final_structure = None

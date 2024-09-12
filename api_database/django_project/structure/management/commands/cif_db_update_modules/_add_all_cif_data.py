@@ -191,6 +191,7 @@ def get_or_create_space_group(cif_block, return_only_symops=False):
             if True:  returns only symmetry operations without changing data in database;
             if False: get or create space group object and return it.
     """
+
     def get_sg_number_by_h_m_name(h_m_name: str):
         file = open(os.path.join(os.path.dirname(__file__), '../symops.json'))
         symops_list = json.load(file)

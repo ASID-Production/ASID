@@ -121,7 +121,7 @@ def make_graph_c(params, coords, types, refcode, add_graphs_logger, symops):
         add_graphs_logger.warning(f"FindMoleculesInCellError in {refcode}:\n\t{warnings}")
     else:
         raise Exception(f"Invalid length of mols list: {len(parse_mols)}")
-    if graph_str.split()[1] == 0:
+    if graph_str.split()[1] == '0':
         raise Exception(f"There are no atoms in graph! May be the structure was unordered")
     # generate data for 2d graph picture
     data_2d = main_v2(xyz_mols, element_numbers, types)
@@ -182,8 +182,7 @@ def add_graphs_c(queue, return_dict, proc_num: int):
         except Exception:
             # if the queue is empty, terminate the thread
             break
-        if True:
-        #try:
+        try:
             add_graphs_logger.info(f"Start processing structure {refcode}")
             params, coords, types, symops = get_data(cif_block, symops_db)
             add_graphs_logger.info(f"Received atomic coordinates and translation matrix")
@@ -197,7 +196,7 @@ def add_graphs_c(queue, return_dict, proc_num: int):
             angles = []
             return_dict[refcode] = {'graph_str': graph_str, 'bonds': bonds, 'angles': angles, 'smiles': smiles, 'inchi': inchi}
             add_graphs_logger.info(f"Structure {refcode} successfully added to the resulting list!")
-        #except Exception as err:
-        #    add_graphs_logger.error(f"Structure {refcode} not added to the resulting list!", exc_info=True)
+        except Exception as err:
+            add_graphs_logger.error(f"Structure {refcode} not added to the resulting list!", exc_info=True)
     add_graphs_logger.info(f"The queue is empty, the thread completed successfully!")
     return 0

@@ -192,6 +192,7 @@ def manager_upload_graphs_to_db(graphs: Dict[str, Dict]):
         structure = StructureCode.objects.get(refcode=refcode)
         upload_graphs_to_db(graph, structure)
 
+
 def manager_upload_smiles_and_inchi_to_db(graphs: Dict[str, Dict]):
     for refcode, graph in graphs.items():
         structure = StructureCode.objects.get(refcode=refcode)
