@@ -103,12 +103,12 @@ std::pair<std::string, FindMoleculesType::RightType> FindMoleculesInCell(const s
 
 	return fm.findMolecules(distances, res.first, res.second, errorMsg);
 }
-std::string FindMoleculesWithoutCell(const std::vector<int>& types, std::vector<float>& xyz) {
-	std::string ret;
+std::pair<std::string, FindMoleculesType::RightType> FindMoleculesWithoutCell(const std::vector<int>& types, std::vector<float>& xyz) {
 	auto& distances = *(p_distances);
 
-	if (distances.isReady() == false) {
-		return std::string(";Error! Could not open BondLength.ini");
+	if (p_distances->isReady() == false) {
+		return std::make_pair(std::string(";Error! Could not open BondLength.ini"),
+							  FindMoleculesType::RightType());
 	}
 
 	FAMStructType fs;
@@ -117,10 +117,8 @@ std::string FindMoleculesWithoutCell(const std::vector<int>& types, std::vector<
 	auto res = fs.findBonds(distances, errorMsg, PointType::distance);
 
 	FindMoleculesType fm(std::move(fs));
-
-	ret = fm.findMolecules(distances, res.first, res.second, errorMsg).first;
-
-	return ret.c_str();
+	
+	return fm.findMolecules(distances, res.first, res.second, errorMsg);
 }
 
 std::string FindDistanceWC(std::vector<int>& types,

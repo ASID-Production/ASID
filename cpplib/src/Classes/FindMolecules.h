@@ -463,11 +463,12 @@ namespace cpplib {
 				}
 				right.emplace_back(std::move(oneMol), std::get<1>(molecules[i]), std::move(std::get<2>(molecules[i])));
 			}
-			auto res = output(molecules, net);
+			auto outputStr = output(molecules, net);
+			auto res = cpplib::currents::SearchGraphType::DatabaseGraphType::ResortString(outputStr.c_str()).substr(2);
 			if (errorMsg.empty())
-				return std::make_pair(output(molecules, net), std::move(right));
+				return std::make_pair(res, std::move(right));
 			else
-				return std::make_pair(output(molecules, net) + ";" + errorMsg, std::move(right));
+				return std::make_pair(res + ";" + errorMsg, std::move(right));
 		}
 
 	private:
@@ -513,7 +514,7 @@ namespace cpplib {
 				}
 			}
 
-			return std::to_string(n) + " " + std::to_string(b) + " " + res;
+			return std::string("0 ") + std::to_string(n) + " " + std::to_string(b) + " " + res;
 		}
 		HType calculateHAtoms(const NodeType& node) const {
 			HType res = 0;

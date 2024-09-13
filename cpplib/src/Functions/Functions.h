@@ -21,8 +21,8 @@ std::pair<std::string, cpplib::FindMolecules::RightType>
 						std::vector<const char*>& symm,
 						std::vector<int>& types,
 						std::vector<float>& xyz);
-
-std::string FindMoleculesWithoutCell(const std::vector<int>& types,
+std::pair<std::string, cpplib::currents::FindMoleculesType::RightType> 
+	FindMoleculesWithoutCell(const std::vector<int>& types,
 										std::vector<float>& xyz);
 
 
