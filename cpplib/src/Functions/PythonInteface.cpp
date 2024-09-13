@@ -257,8 +257,8 @@ extern "C" {
 		Py_ssize_t s = PyList_Size(otypes);
 		const int types_s = static_cast<int>(s);
 
-		std::vector<int> types;
-		std::vector<float> xyz;
+		std::vector<int> types(types_s);
+		std::vector<float> xyz(types_s*3);
 		for (Py_ssize_t i = 0; i < s; i++) {
 			types[i] = static_cast<int>(PyLong_AsLong(PyList_GetItem(otypes, i)));
 			xyz[i * 3] = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(oxyz, i * 3)));
@@ -266,7 +266,9 @@ extern "C" {
 			xyz[i * 3 + 2] = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(oxyz, i * 3 + 2)));
 		}
 
+		deb_write("py_FMWC invoke FindMoleculesInCell");
 		auto ret = FindMoleculesWithoutCell(types, xyz);
+		deb_write("py_FMWC returned from FindMoleculesInCell");
 		PyObject* o_xyz_block = PyList_New(0);
 
 		PyObject* o_ret = PyDict_New();
