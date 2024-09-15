@@ -113,7 +113,7 @@ namespace cpplib {
 
 			AtomIndex j = 0;
 			for (AtomIndex i = 0; i < si; ++i) {
-				if (static_cast<char>(inputNode.getNeighbour(i)->getType()) < 0)
+				if (inputNode.getNeighbour(i)->getType().get_simple() < 0)
 					continue;
 				bool condition = false;
 				for (; j < sn; ++j) {

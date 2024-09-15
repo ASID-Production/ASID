@@ -362,7 +362,7 @@ namespace cpplib {
 					check = ((static_cast<XAtom>(data_[i].getType())).get_bitset() & bits).any();
 				}
 				else {
-					check = bits[(char)(this->operator[](i).getType())];
+					check = bits[(currents::AtomTypeData)(this->operator[](i).getType())];
 				}
 				if(check) {
 					auto hAtoms = this->operator[](i).getHAtoms();
