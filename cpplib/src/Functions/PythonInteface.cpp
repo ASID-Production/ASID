@@ -803,7 +803,7 @@ extern "C" {
 		else {
 			pyListToVectorFloat(o_himp, &himp);
 		}
-
+		const int himp_s = himp.size();
 		// Code section
 		const int s = types.size();
 		for (int i = 0; i < s; i++)
@@ -820,10 +820,10 @@ extern "C" {
 					best = j;
 				}
 			}
-			if(himp.size() < types[best])
-				return Py_BuildValue("{s:s(}",
-									 "Error", (std::string("Too short himp list: type ")+ std::to_string(types[best]) + " is not exist.").c_str());
-
+			if (himp_s <= types[best]) {
+				std::string err = std::string("Too short himp list: type ") + std::to_string(types[best]) + " is not exist.";
+				return Py_BuildValue("{s:s}", "Error", err.c_str());
+			}
 			points[i] = (points[best] + ((points[i] - points[best])* (himp[types[best]] / dist)));
 		}
 		
