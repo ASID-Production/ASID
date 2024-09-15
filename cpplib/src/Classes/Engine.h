@@ -38,42 +38,49 @@
 #include "../BaseHeaders/Currents.h"
 namespace cpplib {
 	class XAtom {
+	public:
+		using SimpleAtomType = currents::AtomTypeData;
 	private:
-		using AtomType = currents::AtomTypeData;
-		AtomType simple_representation = 0;
+		SimpleAtomType simple_representation = 0;
 		::std::bitset<mend_size> types = {0};
 	public:
 		// Constructors
 		XAtom() = default;
-		constexpr XAtom(AtomType input) : simple_representation(input) {
+		constexpr XAtom(SimpleAtomType input) : simple_representation(input) {
 			if (input > 0) {
 				types.set(input);
 			}
 		}
 
-		inline void AddType(const AtomType t) {
+		inline void AddType(const SimpleAtomType t) {
+			_ASSERT(t > 0);
+			_ASSERT(t < mend_size);
 			types.set(t);
 		}
-		inline bool include(const AtomType t) const {
+		inline bool include(const SimpleAtomType t) const {
+			_ASSERT(t > 0);
 			return types.test(t);
 		}
-		inline bool include(const XAtom& t) const {
-			return !((types ^ t.types) & t.types).any();
-		}
-		inline bool simple_eq(const AtomType other) const {
+		//inline bool include(const XAtom& t) const {
+		//	return !((types ^ t.types) & t.types).any();
+		//}
+		inline bool simple_eq(const SimpleAtomType other) const {
 			return simple_representation == other;
 		}
 		inline const ::std::bitset<mend_size>& get_bitset() const {
 			return types;
 		}
-
+		inline SimpleAtomType get_simple() const {
+			return simple_representation;
+		}
 		// operators
-		inline bool operator==(const AtomType other) const noexcept {
+		inline bool operator==(const currents::AtomTypeData other) const noexcept {
 			return include(other);
 		}
-		inline bool operator!=(const AtomType other) const noexcept {
-			return !include(other);
-		}
+		//inline bool operator!=(const currents::AtomTypeData other) const noexcept {
+		//	return !include(other);
+		//}
+
 
 		// operator for sorting
 		inline bool operator<(const XAtom& other) const noexcept {
@@ -99,36 +106,35 @@ namespace cpplib {
 		inline bool operator!=(const XAtom& other) const noexcept {
 			return simple_representation != other.simple_representation;
 		}
-		inline explicit operator char() const { return simple_representation; }
+		inline explicit operator SimpleAtomType() const { return simple_representation; }
 	};
 
 	class Coord {
 	public:
-		using argumentType = unsigned char;
-		using innerType = unsigned char;
+		using argumentType = int8_t;
+		using innerType = int8_t[2];
 	private:
-		innerType number_ = 0;
-		static constexpr innerType LOWMASK = 0b00001111;
-		static constexpr innerType HIGHMASK = 0b11110000;
+		innerType number_ = {0, 0};
+		//static constexpr innerType LOWMASK = 0b00001111;
+		//static constexpr innerType HIGHMASK = 0b11110000;
 		// mono <= 14
 		// mono == 15 for internal use
 	public:
 
 		constexpr inline Coord() noexcept {};
-		constexpr inline Coord(argumentType mono) noexcept : number_(mono) {};
-		constexpr inline Coord(argumentType first, argumentType second) noexcept : number_((first) | (second << 4)) {};
+		constexpr inline Coord(argumentType mono) noexcept { number_[0] = mono; };
+		constexpr inline Coord(argumentType first, argumentType second) noexcept { number_[0] = first; number_[1] = second; };
 		bool right_in_left(const Coord duo) const {
-			return duo.number_ >= first() && duo.number_ <= second();
+			return duo.number_[0] >= first() && duo.number_[0] <= second();
 		}
 	private:
 		inline argumentType first() const {
-			return number_ & LOWMASK;
+			return number_[0];
 		}
 		inline argumentType second() const {
-			return (number_ & HIGHMASK) >> 4;
+			return number_[1];
 		}
 	};
-	template<class A> class Node;
 
 	class NeighboursType {
 	public:

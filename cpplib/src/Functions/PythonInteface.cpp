@@ -36,16 +36,22 @@ using namespace cpplib::currents;
 
 // Utilities section
 
+enum class ErrorState {
+	OK = 0,
+	UnknownError,
+};
+
 extern "C" {
-	inline static void pyListToVectorFloat(PyObject* plist, std::vector<float>* pret) {
+	inline static ErrorState pyListToVectorFloat(PyObject* plist, std::vector<float>* pret) {
 		const Py_ssize_t s = PyList_Size(plist);
 		std::vector<float>& ret = *pret;
 		ret.resize(s);
 		for (Py_ssize_t i = 0; i < s; i++) {
 			ret[i] = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(plist, i)));
 		}
+		return ErrorState::OK;
 	}
-	inline static void pyListToVectorCurPoint(PyObject* plist, std::vector<PointType>* retp) {
+	inline static ErrorState pyListToVectorCurPoint(PyObject* plist, std::vector<PointType>* retp) {
 		std::vector<PointType>& ret = *retp;
 		const Py_ssize_t s = PyList_Size(plist);
 		ret.reserve(s);
@@ -54,16 +60,18 @@ extern "C" {
 							 static_cast<FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(plist, i + 1))),
 							 static_cast<FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(plist, i + 2))));
 		}
+		return ErrorState::OK;
 	}
-	inline static void pyListToVectorInt(PyObject* plist, std::vector<int>* pret) {
+	inline static ErrorState pyListToVectorInt(PyObject* plist, std::vector<int>* pret) {
 		const Py_ssize_t s = PyList_Size(plist);
 		std::vector<int>& ret = *pret;
 		ret.resize(s);
 		for (Py_ssize_t i = 0; i < s; i++) {
 			ret[i] = static_cast<int>(PyLong_AsLong(PyList_GetItem(plist, i)));
 		}
+		return ErrorState::OK;
 	}
-	inline static void pyListToVectorCharP(PyObject* plist, std::vector<const char*>* pret) {
+	inline static ErrorState pyListToVectorCharP(PyObject* plist, std::vector<const char*>* pret) {
 
 		std::vector<const char*>& ret = *pret;
 		deb_write("pyListToVectorCharP called");
@@ -77,6 +85,24 @@ extern "C" {
 			deb_write("pyListToVectorCharP end   i = ", i);
 		}
 		deb_write("pyListToVectorCharP return");
+		return ErrorState::OK;
+	}
+	inline static ErrorState pyTXYZparse(PyObject* o_list, std::vector<AtomTypeData>* types, std::vector<PointType>* points) {
+		Py_ssize_t s = PyList_Size(o_list);
+		types->clear();
+		types->reserve(static_cast<int>(s));
+		points->clear();
+		points->reserve(static_cast<int>(s));
+		
+		for (Py_ssize_t i = 0; i < s; i++) {
+			PyObject* o_tuple = PyList_GetItem(o_list, i);
+			//if (o_tuple == NULL) return ErrorState::UnknownError;
+			types->push_back(static_cast<AtomTypeData>(PyLong_AsLong(PyTuple_GetItem(o_tuple, 0))));
+			points->emplace_back(static_cast<float>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 1))),
+								 static_cast<float>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 2))),
+								 static_cast<float>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 3))));
+		}
+		return ErrorState::OK;
 	}
 	inline static void useDistances(PyObject* self) {
 		if (p_distances != nullptr)
@@ -755,6 +781,56 @@ extern "C" {
 		return PyUnicode_FromString(ret.c_str());
 	}
 
+	static PyObject* cpplib_himp(PyObject* self, PyObject* args) {
+		// args [2] = [(type,x,y,z), ... ], 
+		//            length
+
+		PyObject* o_list = NULL;
+		std::vector<AtomTypeData> types;
+		std::vector<PointType> points;
+		float himp = 0;
+
+		PyArg_ParseTuple(args, "Of", &o_list, &himp);
+
+		deb_write("py_himp invoke pyTXYZparse");
+		pyTXYZparse(o_list, &types, &points);
+		deb_write("py_himp returned from pyTXYZparse");
+
+		// Code section
+		const int s = types.size();
+		for (int i = 0; i < s; i++)
+		{
+			if (types[i] != 1) continue;
+			FloatingPointType dist = INFINITY;
+			int best = i;
+			for (int j = 0; j < s; j++)
+			{
+				if (j == i) continue;
+				auto temp = PointType::distance(points[i], points[j]);
+				if (temp < dist) {
+					dist = temp;
+					best = j;
+				}
+			}
+			points[i] = (points[best] + ((points[i] - points[best])* (himp / dist)));
+		}
+		
+		// Return section
+		PyObject* o_xyz_block = PyList_New(0);
+		PyObject* o_ret = PyDict_New();
+		for (int i = 0; i < s; i++)
+		{
+			PyObject* o_atom = Py_BuildValue("(fff)",
+											 static_cast<float>(points[i].get(0)),
+											 static_cast<float>(points[i].get(1)),
+											 static_cast<float>(points[i].get(2)));
+			PyList_Append(o_xyz_block, o_atom);
+		}
+		// List[Tuple(atom1, atom2), ...] под ключом 'bonds' 
+		return Py_BuildValue("{s:O}",
+							 "xyz_block", o_xyz_block);
+	}
+
 }
 
 
@@ -775,6 +851,7 @@ static struct PyMethodDef methods[] = {
 	{ "FindDAT_IC", cpplib_FindDAT_IC, METH_VARARGS, "Create dictionary with distances, angles and torsions in cell"},
 	{ "FindDAT_WC", cpplib_FindDAT_WC, METH_VARARGS, "Create dictionary with distances, angles and torsions in xyz"},
 	{ "SortDatabase", cpplib_SortDatabase, METH_O, "Sort graph"},
+	{ "himp", cpplib_himp, METH_VARARGS, "Moves hydrogens to the nearest atom"},
 
 	{ NULL, NULL, 0, NULL }
 };
