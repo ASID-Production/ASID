@@ -783,18 +783,26 @@ extern "C" {
 
 	static PyObject* cpplib_himp(PyObject* self, PyObject* args) {
 		// args [2] = [(type,x,y,z), ... ], 
-		//            length
+		//            length : float or [float,...]
 
 		PyObject* o_list = NULL;
+		PyObject* o_himp = NULL;
 		std::vector<AtomTypeData> types;
 		std::vector<PointType> points;
-		float himp = 0;
+		std::vector<FloatingPointType> himp;
 
-		PyArg_ParseTuple(args, "Of", &o_list, &himp);
+		PyArg_ParseTuple(args, "OO", &o_list, &o_himp);
 
 		deb_write("py_himp invoke pyTXYZparse");
 		pyTXYZparse(o_list, &types, &points);
 		deb_write("py_himp returned from pyTXYZparse");
+		bool simplehimp = PyFloat_CheckExact(o_himp);
+		if (simplehimp) {
+			himp.resize(cpplib::mend_size, static_cast<FloatingPointType>(PyFloat_AsDouble(o_himp)));
+		}
+		else {
+			pyListToVectorFloat(o_himp, &himp);
+		}
 
 		// Code section
 		const int s = types.size();
@@ -812,7 +820,11 @@ extern "C" {
 					best = j;
 				}
 			}
-			points[i] = (points[best] + ((points[i] - points[best])* (himp / dist)));
+			if(himp.size() < types[best])
+				return Py_BuildValue("{s:s(}",
+									 "Error", (std::string("Too short himp list: type ")+ std::to_string(types[best]) + " is not exist.").c_str());
+
+			points[i] = (points[best] + ((points[i] - points[best])* (himp[types[best]] / dist)));
 		}
 		
 		// Return section
