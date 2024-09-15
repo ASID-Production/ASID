@@ -6,7 +6,7 @@
 using namespace cpplib;
 using namespace cpplib::currents;
 
-// XAtom Section
+// XAtom section
 TEST(EngineTest, XAtomType) {
 	ASSERT_NO_THROW({ XAtom atom; });
 	ASSERT_NO_THROW({
@@ -37,9 +37,7 @@ TEST(EngineTest, XAtomType) {
 	EXPECT_FALSE(atom == XAtom::SimpleAtomType(6));
 }
 
-
-// Coord Section
-
+// Coord section
 TEST(EngineTest, CoordType) {
 	ASSERT_NO_THROW({ Coord c; });
 	ASSERT_NO_THROW({ Coord c(0); });
@@ -58,17 +56,45 @@ TEST(EngineTest, CoordType) {
 }
 
 
+// NeighboursType section
+TEST(EngineTest, NeighboursType) {
+	ASSERT_NO_THROW({ NeighboursType a; });
+	ASSERT_NO_THROW({ NeighboursType::ShiftType shift = 1; });
+	NeighboursType a;
+	NeighboursType::ShiftType shift = 1;
+	EXPECT_EQ(a.size(), 0);
+	a.push_back(shift);
+	EXPECT_EQ(a.size(), 1);
+	a.push_back(-shift);
+	EXPECT_EQ(a.size(), 2);
+	EXPECT_EQ(a[0], shift);
+	EXPECT_EQ(a[1], -shift);
 
+	ASSERT_NO_THROW({ a.simpleSort(); });
+	EXPECT_EQ(a.size(), 2);
+	EXPECT_EQ(a[0], -shift);
+	EXPECT_EQ(a[1], shift);
+	ASSERT_NO_THROW({ a.erase(0); });
+	EXPECT_EQ(a[0], shift);
+	EXPECT_EQ(a.size(), 1);
+	EXPECT_TRUE(a.exchange(shift, -shift));
+	EXPECT_FALSE(a.exchange(0, shift));
+	EXPECT_EQ(a[0], -shift);
+	EXPECT_EQ(a.size(), 1);
+	ASSERT_NO_THROW({ a.addShift(shift); });
+	ASSERT_NO_THROW({ a.addShift(-shift); });
+	EXPECT_EQ(a[0], -shift);
+	EXPECT_EQ(a[1], shift);
+	EXPECT_EQ(a[2], -shift);
+	EXPECT_EQ(a.size(), 3);
 
+	// NeighboursType::sort<A> was not tested
+}
 
 
 // Node Section
 using NodeData = cpplib::Node<AtomTypeData>;
 using NodeRequest = cpplib::Node<AtomTypeRequest>;
-TEST(EngineTest, NodeType) {
-
-
-}
 TEST(NodeRequestTest, Constructors) {
 
 	EXPECT_NO_THROW({ NodeRequest a1(1, 1, 1); });
