@@ -73,7 +73,7 @@ def save_properties(struct_obj, vasp_out):
     prop.save()
 
 
-def get_or_create_space_group(vasp_structure):
+def get_or_create_space_group(vasp_structure, return_only_symops=False):
 
     def get_system_id(system):
         system_id = 0
@@ -114,6 +114,8 @@ def get_or_create_space_group(vasp_structure):
         system_id = get_system_id(system)
         number = int(symmetry_info['number'])
         symops = get_symops(hall)
+        if return_only_symops:
+            return symops
         space_group, create = Spacegroup.objects.get_or_create(
             name=space_group_name,
             number=int(number),
@@ -121,6 +123,8 @@ def get_or_create_space_group(vasp_structure):
             hall_name=hall,
             symops=symops
         )
+    if return_only_symops:
+        return space_group.symops
     return space_group
 
 
@@ -174,7 +178,7 @@ def save_reduced_cell(struct_obj):
     )
 
 
-def save_coordinates(struct_obj, symmed_vasp_struct):
+def save_coordinates(struct_obj, symmed_vasp_struct, return_only_str_sites=False):
     vasp_logger.info('Add coordinates...')
     cif_form_vasp = symmed_vasp_struct.to(fmt='cif', symprec=0.02)
     from pymatgen.io.cif import CifParser
@@ -187,6 +191,8 @@ def save_coordinates(struct_obj, symmed_vasp_struct):
     str_sites = ''
     for idx in range(len(atom_types)):
         str_sites += f'{atom_types[idx]}{idx + 1} {atom_types[idx]} {x_coord[idx]} {y_coord[idx]} {z_coord[idx]}\n'
+    if return_only_str_sites:
+        return str_sites
     cb_obj, created = QCCoordinatesBlock.objects.get_or_create(refcode=struct_obj)
     cb_obj.coordinates = str_sites
     cb_obj.save()

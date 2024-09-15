@@ -31,6 +31,8 @@ from structure.models import StructureCode, CifFile, CoordinatesBlock
 from structure.download import create_cif_text
 from qc_structure.models import QCStructureCode, VaspFile, QCCoordinatesBlock
 from qc_structure.vasp import vasp_parser as add_vasp_data
+from qc_structure.vasp import get_or_create_space_group as vasp_get_or_create_space_group
+from qc_structure.vasp import save_coordinates as vasp_save_coordinates
 from qc_structure.export.cif import qc_get_cif_content
 from .serializers import (RefcodeShortSerializer, RefcodeFullSerializer, CifUploadSerializer,
                           SearchSerializer, QCRefcodeShortSerializer, QCRefcodeFullSerializer,
@@ -65,6 +67,11 @@ from structure.management.commands.cif_db_update_modules._make_graphs_c import g
 from structure.management.commands.cif_db_update_modules._add_all_cif_data import get_or_create_space_group
 from modules.gen2d.gen2d import main_v2 as gen_smiles_inchi
 from modules.gen2d.gen2d import gen2d
+from pymatgen.io.vasp.outputs import Vasprun
+from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
+from django.core.files.uploadedfile import TemporaryUploadedFile
+from pymatgen.core import Molecule
+import itertools
 
 NUM_OF_PROC = int(cpu_count() / 2)
 MAX_STRS_SIZE = 30000
@@ -227,6 +234,7 @@ def gen_img2d_view(request):
             # generate smiles and inchi
             inchi = ''
             smiles = ''
+            # cif
             if file_format == 'cif':
                 data = collect_cif_data(file, dict(), user_refcode='1', use_db=False)
                 cif_block = data['1']
@@ -234,16 +242,51 @@ def gen_img2d_view(request):
                 symops_db = get_or_create_space_group(cif_block[1], return_only_symops=True)
                 params, coords, types, symops = get_data(cif_block, symops_db)
                 cpplib_result = cpplib.FindMoleculesInCell(params, symops, types, coords)
-                xyz_mols = cpplib_result['xyz_block']
-                data_2d = gen_smiles_inchi(xyz_mols, element_numbers, types)
-                if data_2d:
-                    smiles = data_2d['smiles']
-                    inchi = data_2d['inchi']
+            # vasp
             elif file_format == 'vasp':
-                pass
+                if type(file) is TemporaryUploadedFile:
+                    vasp_out = Vasprun(file.temporary_file_path())
+                else:
+                    vasp_out = Vasprun(file.file.getvalue().decode())
+                vasp_structure = vasp_out.final_structure
+                # INFO: "vasp_get_or_create_space_group" with "return_only_symops"=True does not change data in database!
+                symops = vasp_get_or_create_space_group(vasp_structure, return_only_symops=True).split(';')
+                spgran = SpacegroupAnalyzer(vasp_structure, symprec=0.02)
+                symmed_vasp_struct = spgran.get_refined_structure()
+                a, b, c = symmed_vasp_struct.lattice.abc
+                al, be, ga = symmed_vasp_struct.lattice.angles
+                params = [a, b, c, al, be, ga]
+                sites_info = vasp_save_coordinates(None, symmed_vasp_struct, return_only_str_sites=True).split('\n')
+                types = []
+                atoms_coords = []
+                for site in sites_info:
+                    if site:
+                        site_info = site.split()
+                        element = site_info[1]
+                        types.append(element_numbers[element])
+                        coords = [site_info[2], site_info[3], site_info[4]]
+                        atoms_coords.extend(map(float, coords))
+                cpplib_result = cpplib.FindMoleculesInCell(params, symops, types, atoms_coords)
+            # xyz
             elif file_format == 'xyz':
-                pass
-            # if failed
+                if type(file) is TemporaryUploadedFile:
+                    file_content = file.temporary_file_path()
+                    mol = Molecule.from_file(file_content)
+                else:
+                    file_content = file.file.getvalue().decode()
+                    mol = Molecule.from_str(file_content, 'xyz')
+                types = list(mol.atomic_numbers)
+                coords = list(itertools.chain(*mol.cart_coords))
+                cpplib_result = cpplib.FindMoleculesWithoutCell(types, coords)
+
+            # get smiles and inchi
+            xyz_mols = cpplib_result['xyz_block']
+            data_2d = gen_smiles_inchi(xyz_mols, element_numbers, types)
+            if data_2d:
+                smiles = data_2d['smiles']
+                inchi = data_2d['inchi']
+
+            # get response
             if not smiles and not inchi:
                 return Response({'error': 'Failed to create smiles or inchi for this structure!'}, status=status.HTTP_400_BAD_REQUEST)
             # generate 2d representation
