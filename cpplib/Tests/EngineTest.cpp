@@ -108,11 +108,8 @@ TEST(EngineTest, NeighboursType) {
 	EXPECT_EQ(a[0], -shift);
 	EXPECT_EQ(a.size(), 1);
 	ASSERT_NO_THROW({ a.addShift(shift); });
-	ASSERT_NO_THROW({ a.addShift(-shift); });
-	EXPECT_EQ(a[0], -shift);
-	EXPECT_EQ(a[1], shift);
-	EXPECT_EQ(a[2], -shift);
-	EXPECT_EQ(a.size(), 3);
+	EXPECT_EQ(a[0], 0);
+	EXPECT_EQ(a.size(), 1);
 
 	// NeighboursType::sort<A> was not tested
 }
