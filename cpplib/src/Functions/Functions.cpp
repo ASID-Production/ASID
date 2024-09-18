@@ -94,21 +94,39 @@ std::tuple<std::string, std::string, FindMoleculesType::RightType> FindMolecules
 	std::string errorMsg;
 	auto res = fs.findBonds(distances, errorMsg, [fc](const PointType& p1, const PointType& p2) {return fc.distanceInCell(p1, p2); });
 	
-	// For Petr's enjoyment
-	const auto res_s = res.first.size();
-	for (size_t i = 0; i < res_s; i++)
-	{
-		fs.points[res.first[i].second] += (fs.points[res.first[i].first] - fs.points[res.first[i].second]).round();
-	}
-
-	for (size_t i = 0; i < fs.sizePoints; i++)
-	{
-		fs.points[i] = fc.fracToCart() * fs.points[i];
-	}
-
 	FindMoleculesType fm(std::move(fs));
 
-	return fm.findMolecules(distances, res.first, res.second, errorMsg);
+	auto ret = fm.findMolecules(distances, res.first, res.second, errorMsg);
+
+	// For Petr's enjoyment
+	auto mol_s = std::get<2>(ret).size();
+	for (size_t i = 0; i < mol_s; i++)
+	{
+		auto j_s = std::get<2>(std::get<2>(ret)[i]).size();
+		for (size_t j = 0; j < j_s; j++) {
+			auto ai = std::get<2>(std::get<2>(ret)[i])[j].first;
+			auto& a = std::get<0>(std::get<0>(std::get<2>(ret)[i])[ai]);
+			auto bi = std::get<2>(std::get<2>(ret)[i])[j].second;
+			auto& b = std::get<0>(std::get<0>(std::get<2>(ret)[i])[bi]);
+			auto d = a - b;
+			auto dd = d.round();
+			if (d.r() > 0.5) {
+				d += 0;
+			}
+			b += dd;
+		}
+	}
+
+	for (size_t i = 0; i < mol_s; i++)
+	{
+		auto j_s = std::get<0>(std::get<2>(ret)[i]).size();
+		for (size_t j = 0; j < j_s; j++)
+		{
+			auto& point = std::get<0>(std::get<0>(std::get<2>(ret)[i])[j]);
+			point = fc.fracToCart() * point;
+		}
+	}
+	return ret;
 }
 std::tuple<std::string, std::string, FindMoleculesType::RightType>  FindMoleculesWithoutCell(cpplib::currents::FAMStructType::AtomContainerType& types,
 																			  cpplib::currents::FAMStructType::PointConteinerType& points) {
