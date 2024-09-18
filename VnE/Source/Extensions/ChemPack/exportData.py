@@ -28,10 +28,11 @@
 
 import debug
 
+
 def execute():
     from ..ChemPack import MOLECULE_SYSTEMS
     from PySide6.QtWidgets import QFileDialog
-    import cpplib
+    #import cpplib
     import csv
 
     mol_sys = None
@@ -47,19 +48,18 @@ def execute():
             return
         atoms = mol_sys.children[0].children
         arg = [[x.atom_type, *list(x.coord)] for x in atoms]
-        ret_dist = [[int(x) if i != 2 else float(x) for i, x in enumerate(pair.split(':'))] for pair in cpplib.GenBondsEx(arg).split('\n')[:-1]]
+        #ret_dist = [[int(x) if i != 2 else float(x) for i, x in enumerate(pair.split(':'))] for pair in cpplib.GenBondsEx(arg)['bonds'].split('\n')[:-1]]
         args = [
-            [x.atom_type for x in atoms],
-            [list(x.coord) for x in atoms],
-            [0, 0, 0, 0.0, 0.0, 0.0, 0.0, -180.0, 180]
+            [(x.atom_type, *list(x.coord)) for x in atoms],
+            [0, 0, 0, 0.0, 0.0, 0.0, 0.0, -180.0, 180.0]
         ]
         args_tors = [
-            [x.atom_type for x in atoms],
-            [list(x.coord) for x in atoms],
-            [0, 0, 0, 0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -180.0, 180, -180.0, 180, -180.0, 180]
+            [(x.atom_type, *list(x.coord)) for x in atoms],
+            [0, 0, 0, 0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -180.0, 180, -180.0, 180, -180.0, 180.0]
         ]
         #angles = cpplib.FindAngleWC(*args)
-        #tors = cpplib.FindTorsionWC(*args)
+        #_ = cpplib.FindDAT_WC(*args[:-1])
+        #tors = cpplib.FindTorsionWC(*args_tors)
         with open(filepath[0], 'w', newline='') as out:
             writer = csv.writer(out, delimiter=';')
             lines = []

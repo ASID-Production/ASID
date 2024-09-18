@@ -143,8 +143,8 @@ def SymOp():
     return
 
 
-def exportData():
-    from . import exportData
+def exportDataF():
+    from . import exportData as exportData
     exportData.execute()
     return
 
@@ -184,6 +184,27 @@ def parseWinxpro():
             loadMolSys(molsys, points_lists)
     else:
         molsys, _ = PARSER.parsWinxproPaths(filename)
+    return molsys, points_lists
+
+
+def parsAIMALLsumviz():
+    from PySide6.QtWidgets import QFileDialog
+
+    global PARSER
+    global TREE_MODEL
+    if PARSER is None:
+        from .parsers import PARSER as parser
+        PARSER = parser
+    filename, _ = QFileDialog.getOpenFileName(filter='*.sumviz')
+    if not filename:
+        return None, None
+    molsys, points_lists = None, None
+    if TREE_MODEL is not None:
+        gen = PARSER.parsAIMALLsumviz(filename, bond=True, root=TREE_MODEL.getRoot())
+        for molsys, points_lists in gen:
+            loadMolSys(molsys, points_lists)
+    else:
+        molsys, _ = PARSER.parsWinxproOut(filename)
     return molsys, points_lists
 
 
@@ -266,7 +287,7 @@ def setup(menu, model, uniform_model=None, *args, main_widget=None, **kwargs):
     cmenu.addAction(action_sym_op)
 
     action_export = QAction('Export Data')
-    action_export.triggered.connect(exportData)
+    action_export.triggered.connect(exportDataF)
     cmenu.addAction(action_export)
 
     action_attach = QAction('Attach CPprop')
@@ -277,5 +298,9 @@ def setup(menu, model, uniform_model=None, *args, main_widget=None, **kwargs):
     action_winx.triggered.connect(parseWinxpro)
     cmenu.addAction(action_winx)
 
-    actions = [open_action, action_test, action_DB, save_action, action_sym_op, action_export, action_attach, action_winx]
+    action_aimall = QAction('Parse AIMALL sumviz')
+    action_aimall.triggered.connect(parsAIMALLsumviz)
+    cmenu.addAction(action_aimall)
+
+    actions = [open_action, action_test, action_DB, save_action, action_sym_op, action_export, action_attach, action_winx, action_aimall]
     return actions

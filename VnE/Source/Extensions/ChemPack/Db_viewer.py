@@ -228,7 +228,10 @@ class InfoTableModel(QAbstractTableModel):
         self._fields = []
         self._spans = []
         self._selected = Db_bindings.get_full_info(selected_id)
-        self._image = Db_bindings.get_image(selected_id)
+        try:
+            self._image = Db_bindings.get_image(selected_id)
+        except Exception:
+            self._image = None
         rec_fill(self._selected)
         self._fields.insert(0, ['img', self._image])
         self._rows = len(self._fields)
