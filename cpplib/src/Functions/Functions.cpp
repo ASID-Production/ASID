@@ -76,23 +76,30 @@ std::vector<int> SearchMain(const char* search, std::vector<const char*>&& data,
 	return databuf.getAllResults();
 }
 
-std::pair<std::string, FindMoleculesType::RightType> FindMoleculesInCell(const std::array<float, 6>& unit_cell, 
+std::tuple<std::string, std::string, FindMoleculesType::RightType> FindMoleculesInCell(const std::array<float, 6>& unit_cell,
 																		 std::vector<const char*>& symm, 
-																		 std::vector<int>& types, 
-																		 std::vector<float>& xyz) {
+																		 cpplib::currents::FAMStructType::AtomContainerType& types,
+																		 cpplib::currents::FAMStructType::PointConteinerType& points) {
 	auto& distances = *(p_distances);
 	if (p_distances->isReady() == false) {
-		return std::make_pair(std::string(";Error! Could not open BondLength.ini"),
+		return std::make_tuple(std::string(),std::string("Error! Could not open BondLength.ini"),
 							  FindMoleculesType::RightType());
 	}
 	FAMStructType fs;
 	FAMCellType fc(FAMCellType::base(unit_cell, true));
-	ParseDataType(fs, fc, symm, types, xyz);
+	ParseDataType(fs, fc, symm, std::move(types), std::move(points));
 
 	fc.CreateSupercell(fs.points, fs.findCutoff(distances));
 
 	std::string errorMsg;
 	auto res = fs.findBonds(distances, errorMsg, [fc](const PointType& p1, const PointType& p2) {return fc.distanceInCell(p1, p2); });
+	
+	// For Petr's enjoyment
+	const auto res_s = res.first.size();
+	for (size_t i = 0; i < res_s; i++)
+	{
+		fs.points[res.first[i].second] += (fs.points[res.first[i].first] - fs.points[res.first[i].second]).round();
+	}
 
 	for (size_t i = 0; i < fs.sizePoints; i++)
 	{
@@ -103,16 +110,17 @@ std::pair<std::string, FindMoleculesType::RightType> FindMoleculesInCell(const s
 
 	return fm.findMolecules(distances, res.first, res.second, errorMsg);
 }
-std::pair<std::string, FindMoleculesType::RightType> FindMoleculesWithoutCell(const std::vector<int>& types, std::vector<float>& xyz) {
+std::tuple<std::string, std::string, FindMoleculesType::RightType>  FindMoleculesWithoutCell(cpplib::currents::FAMStructType::AtomContainerType& types,
+																			  cpplib::currents::FAMStructType::PointConteinerType& points) {
 	auto& distances = *(p_distances);
 
 	if (p_distances->isReady() == false) {
-		return std::make_pair(std::string(";Error! Could not open BondLength.ini"),
-							  FindMoleculesType::RightType());
+		return std::make_tuple(std::string(), std::string("Error! Could not open BondLength.ini"),
+							   FindMoleculesType::RightType());
 	}
 
 	FAMStructType fs;
-	ParseDataType(fs, types, xyz);
+	ParseDataType(fs, std::move(types), std::move(points));
 	std::string errorMsg;
 	auto res = fs.findBonds(distances, errorMsg, PointType::distance);
 
@@ -121,13 +129,13 @@ std::pair<std::string, FindMoleculesType::RightType> FindMoleculesWithoutCell(co
 	return fm.findMolecules(distances, res.first, res.second, errorMsg);
 }
 
-std::string FindDistanceWC(std::vector<int>& types,
-							std::vector<float>& xyz,
-							const std::array<int, 2>& type,
-							const std::pair<float, float>& value)
+std::string FindDistanceWC(cpplib::currents::FAMStructType::AtomContainerType& types,
+						   cpplib::currents::FAMStructType::PointConteinerType& points,
+						   const std::array<int, 2>& type,
+						   const std::pair<float, float>& value)
 {
 	FAMStructType fs;
-	ParseDataType(fs, types, xyz);
+	ParseDataType(fs, std::move(types), std::move(points));
 	FindGeometryType fg(fs);
 	const auto raw = fg.findDistance(static_cast<FindGeometryType::AtomType>(type[0]),
 										static_cast<FindGeometryType::AtomType>(type[1]),
@@ -144,14 +152,14 @@ std::string FindDistanceWC(std::vector<int>& types,
 }
 
 std::string FindDistanceIC(const std::array<float, 6>& unit_cell,
-							std::vector<const char*>& symm,
-							std::vector<int>& types,
-							std::vector<float>& xyz,
-							const std::array<int, 2>& type,
-							const std::pair<float, float>& value) {
+						   std::vector<const char*>& symm,
+						   cpplib::currents::FAMStructType::AtomContainerType& types,
+						   cpplib::currents::FAMStructType::PointConteinerType& points,
+						   const std::array<int, 2>& type,
+						   const std::pair<float, float>& value) {
 	FAMStructType fs;
 	FAMCellType fc(FAMCellType::base(unit_cell, true));
-	ParseDataType(fs, fc, symm, types, xyz);
+	ParseDataType(fs, fc, symm, std::move(types), std::move(points));
 
 	fc.CreateSupercell(fs.points, static_cast<FloatingPointType>(8.5), 2);
 
@@ -175,14 +183,14 @@ std::string FindDistanceIC(const std::array<float, 6>& unit_cell,
 	return res;
 }
 
-std::string FindAngleWC(std::vector<int>& types,
-						std::vector<float>& xyz,
+std::string FindAngleWC(cpplib::currents::FAMStructType::AtomContainerType& types,
+						cpplib::currents::FAMStructType::PointConteinerType& points,
 						const std::array<int, 3>& type,
 						const std::array<std::pair<float, float>, 2>& value_d,
 						const std::pair<float, float>& value_a)
 {
 	FAMStructType fs;
-	ParseDataType(fs, types, xyz);
+	ParseDataType(fs, std::move(types), std::move(points));
 	FindGeometryType fg(fs);
 	const auto raw12 = fg.findDistance(static_cast<FindGeometryType::AtomType>(std::get<0>(type)),
 										static_cast<FindGeometryType::AtomType>(std::get<1>(type)),
@@ -204,16 +212,16 @@ std::string FindAngleWC(std::vector<int>& types,
 }
 
 std::string FindAngleIC(const std::array<float, 6>& unit_cell,
-						std::vector<const char*>& symm,
-						std::vector<int>& types,
-						std::vector<float>& xyz,
+						std::vector<const char*>& symm, 
+						cpplib::currents::FAMStructType::AtomContainerType& types,
+						cpplib::currents::FAMStructType::PointConteinerType& points,
 						const std::array<int, 3>& type,
 						const std::array<std::pair<float, float>, 2>& value_d,
 						const std::pair<float, float>& value_a)
 {
 	FAMStructType fs;
 	FAMCellType fc(FAMCellType::base(unit_cell, true));
-	ParseDataType(fs, fc, symm, types, xyz);
+	ParseDataType(fs, fc, symm, std::move(types), std::move(points));
 
 	fc.CreateSupercell(fs.points, static_cast<FloatingPointType>(8.5), 2);
 
@@ -242,15 +250,15 @@ std::string FindAngleIC(const std::array<float, 6>& unit_cell,
 	return res;
 }
 
-std::string FindTorsionWC(std::vector<int>& types,
-							std::vector<float>& xyz,
+std::string FindTorsionWC(cpplib::currents::FAMStructType::AtomContainerType& types,
+						  cpplib::currents::FAMStructType::PointConteinerType& points,
 							const std::array<int, 4>& type,
 							const std::array<std::pair<float, float>, 3>& value_d,
 							const std::array<std::pair<float, float>, 2>& value_a,
 							const std::pair<float, float>& value_t)
 {
 	FAMStructType fs;
-	ParseDataType(fs, types, xyz);
+	ParseDataType(fs, std::move(types), std::move(points));
 	FindGeometryType fg(fs);
 
 	const auto raw12 = fg.findDistance(static_cast<FindGeometryType::AtomType>(type[0]), static_cast<FindGeometryType::AtomType>(type[1]), value_d[0]);
@@ -276,16 +284,16 @@ std::string FindTorsionWC(std::vector<int>& types,
 	return res;
 }
 std::string FindTorsionIC(const std::array<float, 6>& unit_cell,
-							std::vector<const char*>& symm,
-							std::vector<int>& types,
-							std::vector<float>& xyz,
-							const std::array<int, 4>& type,
-							const std::array<std::pair<float, float>, 3>& value_d,
-							const std::array<std::pair<float, float>, 2>& value_a,
-							const std::pair<float, float>& value_t) {
+						  std::vector<const char*>& symm,
+						  cpplib::currents::FAMStructType::AtomContainerType& types,
+						  cpplib::currents::FAMStructType::PointConteinerType& points,
+						  const std::array<int, 4>& type,
+						  const std::array<std::pair<float, float>, 3>& value_d,
+						  const std::array<std::pair<float, float>, 2>& value_a,
+						  const std::pair<float, float>& value_t) {
 	FAMStructType fs;
 	FAMCellType fc(FAMCellType::base(unit_cell, true));
-	ParseDataType(fs, fc, symm, types, xyz);
+	ParseDataType(fs, fc, symm, std::move(types), std::move(points));
 
 	fc.CreateSupercell(fs.points, static_cast<FloatingPointType>(8.5), 2);
 
@@ -321,11 +329,11 @@ std::string FindTorsionIC(const std::array<float, 6>& unit_cell,
 
 cpplib::DATTuple FindDAT_IC(const std::array<float, 6>& unit_cell,
 							std::vector<const char*>& symm,
-							std::vector<int>& types,
-							std::vector<float>& xyz) {
+							cpplib::currents::FAMStructType::AtomContainerType& types,
+							cpplib::currents::FAMStructType::PointConteinerType& points) {
 	FAMStructType fs;
 	FAMCellType fc(FAMCellType::base(unit_cell, true));
-	ParseDataType(fs, fc, symm, types, xyz);
+	ParseDataType(fs, fc, symm, std::move(types), std::move(points));
 
 
 	fc.CreateSupercell(fs.points, static_cast<FloatingPointType>(8.5), 2);
@@ -340,10 +348,10 @@ cpplib::DATTuple FindDAT_IC(const std::array<float, 6>& unit_cell,
 	return ConvertDATTuple(fg.findMolDAT_Rad(*p_distances), fs);
 }
 
-cpplib::DATTuple FindDAT_WC(std::vector<int>& types,
-							std::vector<float>& xyz) {
+cpplib::DATTuple FindDAT_WC(cpplib::currents::FAMStructType::AtomContainerType& types,
+							cpplib::currents::FAMStructType::PointConteinerType& points) {
 	FAMStructType fs;
-	ParseDataType(fs, types, xyz);
+	ParseDataType(fs, std::move(types), std::move(points));
 	FindGeometryType fg(fs);
 	return ConvertDATTuple(fg.findMolDAT_Rad(*p_distances), fs);
 }

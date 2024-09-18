@@ -373,7 +373,7 @@ namespace cpplib {
 	public:
 		FindMolecules() noexcept = delete;
 		explicit FindMolecules(FAMSType&& fs) : fs_(std::move(fs)) {}
-		std::pair<std::string, RightType> findMolecules(const DistancesType& distances, std::vector<BondType>& bonds, const std::vector<AtomIndex>& invalids, std::string& errorMsg) {
+		std::tuple<std::string, std::string, RightType> findMolecules(const DistancesType& distances, std::vector<BondType>& bonds, const std::vector<AtomIndex>& invalids, std::string& errorMsg) {
 			std::vector<NodeType> net;
 			net.reserve(fs_.sizePoints);
 
@@ -465,10 +465,7 @@ namespace cpplib {
 			}
 			auto outputStr = output(molecules, net);
 			auto res = cpplib::currents::SearchGraphType::DatabaseGraphType::ResortString(outputStr.c_str()).substr(2);
-			if (errorMsg.empty())
-				return std::make_pair(res, std::move(right));
-			else
-				return std::make_pair(res + ";" + errorMsg, std::move(right));
+			return std::make_tuple(res, errorMsg, std::move(right));
 		}
 
 	private:

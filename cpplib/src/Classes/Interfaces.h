@@ -121,21 +121,19 @@ namespace cpplib {
 			fs.parseIndex.resize(types_s);
 			std::iota(fs.parseIndex.begin(), fs.parseIndex.end(), 0); // Fill with 0, 1...
 		}
-
-		ParseData(FAMStructType& fs, std::vector<AtomType>&& types, std::vector<PointType>&& points) {
+		ParseData(FAMStructType& fs, FAMStructType::AtomContainerType && types, FAMStructType::PointConteinerType && points) {
+			const auto types_s = types.size();
 			fs.types = std::move(types);
 			fs.points = std::move(points);
-			fs.sizePoints = fs.points.size();
-			fs.sizeUnique = fs.types.size();
-			for (int i = 0, i3 = 0; i < fs.sizePoints; i++) {
-				fs.points[i].MoveToCell();
-			}
-			fs.parseIndex.resize(fs.sizeUnique);
+			fs.sizePoints = types_s;
+			fs.sizeUnique = types_s;
+
+			fs.parseIndex.resize(types_s);
 			std::iota(fs.parseIndex.begin(), fs.parseIndex.end(), 0); // Fill with 0, 1...
 		}
 
-		ParseData(FAMStructType& fs, FAMCellType& fc, const std::vector<const char*>& symm, const std::vector<int>& types, const std::vector<float>& xyz)
-			: ParseData(fs, types, xyz)
+		ParseData(FAMStructType& fs, FAMCellType& fc, const std::vector<const char*>& symm, FAMStructType::AtomContainerType&& types, FAMStructType::PointConteinerType&& points)
+			: ParseData(fs, std::move(types), std::move(points))
 		{
 			const int symm_s = symm.size();
 			std::vector<SymmType> symmv;
