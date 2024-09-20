@@ -52,21 +52,6 @@ def execute():
         dist = ret_dict['bonds']
         angles = ret_dict['angles']
         tors = ret_dict['tors']
-        args = [
-            [(x.atom_type, *list(x.coord)) for x in atoms],
-            [6, 6, 6, 0.0, 0.0, 0.0, 0.0, -180.0, 180.0]
-        ]
-        args_tors = [
-            [(x.atom_type, *list(x.coord)) for x in atoms],
-            [6, 6, 6, 6, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -180.0, 180.0, -180.0, 180.0, -180.0, 180.0]
-        ]
-        args_dist = [
-            [(x.atom_type, *list(x.coord)) for x in atoms],
-            [6, 6, 1.0, 3.0]
-        ]
-        angles_test = cpplib.FindAngleWC(*args)
-        dist_test = cpplib.FindDistanceWC(*args_dist)
-        tors_test = cpplib.FindTorsionWC(*args_tors)
         with open(filepath[0], 'w', newline='') as out:
             writer = csv.writer(out, delimiter=';')
             lines = []

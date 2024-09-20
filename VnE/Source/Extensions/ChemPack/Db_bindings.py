@@ -207,7 +207,7 @@ def getImageFromFile(file_path, o_file_path, format='gif', w=250, h=250):
     if format not in formats:
         format = formats[0]
     url_mod = 'api/v1/generate'
-    data = {'file_format ': opath.splitext(file_path)[1],
+    data_i = {'file_format ': opath.splitext(file_path)[1][1:],
             'output_format ': format,
             'return_type': 'string',
             'h_size': f'{h}',
@@ -216,9 +216,9 @@ def getImageFromFile(file_path, o_file_path, format='gif', w=250, h=250):
     files = [('file', (opath.basename(file_path), open(file_path, 'rb'), 'application/octet-stream'))]
     if SESSION.user_token is not None:
         headers = {'Authorization': f'Token {SESSION.user_token}'}
-        data = requests.request('GET', f'{SESSION.url_base}/{url_mod}/', headers=headers, data=data, files=files)
+        data = requests.request('GET', f'{SESSION.url_base}/{url_mod}/2d/', headers=headers, data=data_i, files=files)
     else:
-        data = requests.request('GET', f'{SESSION.url_base}/{url_mod}/', headers={}, data=data, files=files)
+        data = requests.request('GET', f'{SESSION.url_base}/{url_mod}/2d/', headers={}, data=data_i, files=files)
     data = data.content.decode(data.apparent_encoding)
     image_str = data.split(',')[1]
     image_data = base64.b64decode(image_str)
