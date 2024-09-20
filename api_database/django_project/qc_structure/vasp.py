@@ -81,7 +81,7 @@ def get_or_create_space_group(vasp_structure, return_only_symops=False):
             if system in syst:
                 system_id = syst[0]
         if not system_id:
-            vasp_logger.warring(f'Unknown lattice system: {system}!')
+            vasp_logger.warning(f'Unknown lattice system: {system}!')
         return system_id
 
     def get_symops(vasp_hall):
@@ -204,18 +204,18 @@ def save_graph(struct_obj):
               struct_obj.qc_cell.al, struct_obj.qc_cell.be, struct_obj.qc_cell.ga]
     sites_info = struct_obj.qc_coordinates.coordinates.split('\n')
     atoms_types = []
-    atoms_coords = []
+    atoms_coords_types = []
     for site in sites_info:
         if site:
             site_info = site.split()
             element = site_info[1]
             atoms_types.append(element_numbers[element])
-            coords = [site_info[2], site_info[3], site_info[4]]
-            atoms_coords.extend(map(float, coords))
+            coords = [element_numbers[element], float(site_info[2]), float(site_info[3]), float(site_info[4])]
+            atoms_coords_types.append(tuple(coords))
     symops = struct_obj.qc_cell.spacegroup.symops.split(';')
     # create graph
     graph_str, smiles, inchi = make_graph_c(
-        params, atoms_coords, atoms_types,
+        params, atoms_coords_types, atoms_types,
         struct_obj, vasp_logger, symops
     )
     graph_str = str(struct_obj.id) + ' ' + graph_str

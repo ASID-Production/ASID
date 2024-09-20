@@ -84,9 +84,9 @@ def define_connect_from_graph(mol: Chem.Mol, bonds: List[Tuple]) -> Chem.Mol:
     mol = Chem.RWMol(mol)
     bnds: List[Chem.Bond] = list(mol.GetBonds())
     for bond in bnds:
-        mol.RemoveBond(bond.GetBeginAtomIdx(), bond.GetEndAtomIdx(), Chem.BondType.SINGLE)
+        mol.RemoveBond(bond.GetBeginAtomIdx(), bond.GetEndAtomIdx())
     for bond in bonds:
-        mol.AddBond(bond[0], bond[1])
+        mol.AddBond(bond[0], bond[1], Chem.BondType.SINGLE)
     mol = mol.GetMol()
     return mol
 
@@ -159,14 +159,14 @@ def define_bonds_in_molecule_v2(
             elif rdkit_molecule.GetProp(key='charge'):
                 raise Exception('ChargeError: Do not find available charge!')
         except Exception as err:
-            if (not charge_order_neg) or (not charge_order_pos) or ('Final molecular charge does not match input' not in str(err)):
+            if (not charge_order_neg) or (not charge_order_pos) or (
+                    'Final molecular charge' in str(err) and 'does not match input' in str(err)):
                 if not charge_order_neg or not charge_order_pos:
-                    print('Warring: Do not find available charge!')
+                    print('Warning: Do not find available charge!')
                 mol_copy = define_connect_from_graph(mol_copy, bonds)
                 smiles = Chem.MolToSmiles(mol_copy, isomericSmiles=True, allHsExplicit=True)
                 smol = Chem.MolFromSmiles(smiles, sanitize=False)
                 return smol, structure_charge, None
-    # define_connect_from_graph(mol_copy, bonds)
     return mol_copy, structure_charge, mol_charge
 
 
@@ -289,7 +289,22 @@ def reduce_charges(mol: Chem.Mol):
                             validate_a = atom.HasValenceViolation()
                             validate_n = neighbor.HasValenceViolation()
                             if not (validate_a and validate_n):
-                                print(f'Warring: Bond order validation error ({atom.GetSymbol()}...{neighbor.GetSymbol()})')
+                                print(f'Warning: Bond order validation error ({atom.GetSymbol()}...{neighbor.GetSymbol()})')
+                # if N / P /
+                if atom.GetSymbol() == 'C' and a_chg != 0 and len(
+                        atom.GetNeighbors()) < 3 and neighbor.GetSymbol() in ['N', 'P'] and len(
+                        neighbor.GetNeighbors()) < 4:
+                    bond = mol.GetBondBetweenAtoms(atom.GetIdx(), neighbor.GetIdx())
+                    if bond.GetBondType() == Chem.BondType.SINGLE:
+                        bond.SetBondType(Chem.BondType.DOUBLE)
+                        neighbor.SetFormalCharge(n_chg + 1)
+                        atom.SetFormalCharge(0)
+                        validate_a = atom.HasValenceViolation()
+                        validate_n = neighbor.HasValenceViolation()
+                        if not (validate_a and validate_n):
+                            print(
+                                f'Warning: Bond order validation error ({atom.GetSymbol()}...{neighbor.GetSymbol()})')
+
     return mol
 
 
@@ -297,31 +312,45 @@ def reduce_radicals(mol: Chem.Mol):
     excluded_atoms = ['P', ]
     atoms: List[Chem.rdchem.Atom] = mol.GetAtoms()
     for atom in sorted(atoms, key=lambda x: x.GetAtomicNum(), reverse=True):
-        if atom.GetNumRadicalElectrons() and atom.GetSymbol() not in excluded_atoms:
+        if atom.GetNumRadicalElectrons():
             neighbors = atom.GetNeighbors()
             for neighbor in sorted(neighbors, key=lambda x: x.GetAtomicNum(), reverse=True):
                 a_rad = atom.GetNumRadicalElectrons()
                 n_rad = neighbor.GetNumRadicalElectrons()
-                if a_rad and n_rad and neighbor.GetSymbol() not in excluded_atoms:
-                    a_val, n_val = atom.GetTotalValence(), neighbor.GetTotalValence()
-                    a_max_val = MAX_VALENCE.get(atom.GetSymbol(), 14)
-                    n_max_val = MAX_VALENCE.get(neighbor.GetSymbol(), 14)
-                    # if valences allowed
-                    if a_val < a_max_val and n_val < n_max_val:
-                        bond = mol.GetBondBetweenAtoms(atom.GetIdx(), neighbor.GetIdx())
-                        if bond.GetBondType() in [Chem.BondType.SINGLE, Chem.BondType.DOUBLE]:
-                            # change bond order
-                            if bond.GetBondType() == Chem.BondType.SINGLE:
-                                bond.SetBondType(Chem.BondType.DOUBLE)
-                            elif bond.GetBondType() == Chem.BondType.DOUBLE:
-                                bond.SetBondType(Chem.BondType.TRIPLE)
-                            # change radicals
-                            atom.SetNumRadicalElectrons(a_rad - 1)
-                            neighbor.SetNumRadicalElectrons(n_rad - 1)
-                            validate_a = atom.HasValenceViolation()
-                            validate_n = neighbor.HasValenceViolation()
-                            if not (validate_a and validate_n):
-                                print(f'Warring: Bond order validation error ({atom.GetSymbol()}...{neighbor.GetSymbol()})')
+                if a_rad and n_rad:
+                    if neighbor.GetSymbol() not in excluded_atoms and atom.GetSymbol() not in excluded_atoms:
+                        a_val, n_val = atom.GetTotalValence(), neighbor.GetTotalValence()
+                        a_max_val = MAX_VALENCE.get(atom.GetSymbol(), 14)
+                        n_max_val = MAX_VALENCE.get(neighbor.GetSymbol(), 14)
+                        # if valences allowed
+                        if a_val < a_max_val and n_val < n_max_val:
+                            bond = mol.GetBondBetweenAtoms(atom.GetIdx(), neighbor.GetIdx())
+                            if bond.GetBondType() in [Chem.BondType.SINGLE, Chem.BondType.DOUBLE]:
+                                # change bond order
+                                if bond.GetBondType() == Chem.BondType.SINGLE:
+                                    bond.SetBondType(Chem.BondType.DOUBLE)
+                                elif bond.GetBondType() == Chem.BondType.DOUBLE:
+                                    bond.SetBondType(Chem.BondType.TRIPLE)
+                                # change radicals
+                                atom.SetNumRadicalElectrons(a_rad - 1)
+                                neighbor.SetNumRadicalElectrons(n_rad - 1)
+                                validate_a = atom.HasValenceViolation()
+                                validate_n = neighbor.HasValenceViolation()
+                                if not (validate_a and validate_n):
+                                    print(f'Warning: Bond order validation error ({atom.GetSymbol()}...{neighbor.GetSymbol()})')
+                # if N / P /
+                if a_rad and atom.GetSymbol() == 'C' and len(atom.GetNeighbors()) < 3 and neighbor.GetSymbol() in ['N', 'P'] and len(neighbor.GetNeighbors()) < 4:
+                    bond = mol.GetBondBetweenAtoms(atom.GetIdx(), neighbor.GetIdx())
+                    if bond.GetBondType() == Chem.BondType.SINGLE:
+                        bond.SetBondType(Chem.BondType.DOUBLE)
+                        n_chg = neighbor.GetFormalCharge()
+                        neighbor.SetFormalCharge(n_chg + 1)
+                        atom.SetNumRadicalElectrons(a_rad - 1)
+                        validate_a = atom.HasValenceViolation()
+                        validate_n = neighbor.HasValenceViolation()
+                        if not (validate_a and validate_n):
+                            print(f'Warning: Bond order validation error ({atom.GetSymbol()}...{neighbor.GetSymbol()})')
+
     return mol
 
 
@@ -388,31 +417,42 @@ def main_v2(xyz_mols, element_numbers: Dict[str, int], types: List[int]):
         # TODO: delete "if mol_charge is not None" after fix problem in determination of bond orders!
         if mol_charge is not None:
             if rd_mol is not None:
-                if final_structure is None:
-                    final_structure = rd_mol
-                else:
-                    final_structure = Chem.CombineMols(final_structure, rd_mol)
+                temp_smiles = Chem.MolToSmiles(rd_mol, isomericSmiles=True)
+                temp_smol = Chem.MolFromSmiles(temp_smiles, sanitize=True)
+                set_C_charge_zero(temp_smol)
+                Chem.SanitizeMol(temp_smol)
+                reduce_radicals(temp_smol)
+                reduce_charges(temp_smol)
+                reduce_radicals_with_metalls(temp_smol)
+                Chem.SanitizeMol(temp_smol)
+                if validate_mol(temp_smol):
+                    if final_structure is None:
+                        final_structure = rd_mol
+                    else:
+                        final_structure = Chem.CombineMols(final_structure, rd_mol)
     # final generation
-    smiles = Chem.MolToSmiles(final_structure, isomericSmiles=True)
-    smol = Chem.MolFromSmiles(smiles, sanitize=True)
-    set_C_charge_zero(smol)
-    Chem.SanitizeMol(smol)
-    reduce_radicals(smol)
-    reduce_charges(smol)
-    reduce_radicals_with_metalls(smol)
-    if validate_mol(smol):
-        try:
-            AllChem.GenerateDepictionMatching3DStructure(smol, reference=final_structure)
-        except:
-            AllChem.Compute2DCoords(smol)
-        # draw the picture
-        # to set draw options use rdkit.Chem.Draw.rdMolDraw2D.MolDrawOptions (only for Draw.MolToImage)
-        # to draw aromatic rings use kekulize=False (only for Draw.MolToImage)
-        result_data = {
-            'mol_obj_with_coords': final_structure,
-            'mol_obj_pretty': smol, 'smiles': Chem.MolToSmiles(smol, isomericSmiles=True),
-            'inchi': Chem.MolToInchi(smol),
-            'formula': ''.join(mol_to_formula(final_structure))
-        }
-        return result_data
+    if final_structure:
+        smiles = Chem.MolToSmiles(final_structure, isomericSmiles=True)
+        smol = Chem.MolFromSmiles(smiles, sanitize=True)
+        set_C_charge_zero(smol)
+        Chem.SanitizeMol(smol)
+        reduce_radicals(smol)
+        reduce_charges(smol)
+        reduce_radicals_with_metalls(smol)
+        Chem.SanitizeMol(smol)
+        if validate_mol(smol):
+            try:
+                AllChem.GenerateDepictionMatching3DStructure(smol, reference=final_structure)
+            except:
+                AllChem.Compute2DCoords(smol)
+            # draw the picture
+            # to set draw options use rdkit.Chem.Draw.rdMolDraw2D.MolDrawOptions (only for Draw.MolToImage)
+            # to draw aromatic rings use kekulize=False (only for Draw.MolToImage)
+            result_data = {
+                'mol_obj_with_coords': final_structure,
+                'mol_obj_pretty': smol, 'smiles': Chem.MolToSmiles(smol, isomericSmiles=True),
+                'inchi': Chem.MolToInchi(smol),
+                'formula': ''.join(mol_to_formula(final_structure))
+            }
+            return result_data
     return 0
