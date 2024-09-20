@@ -151,7 +151,7 @@ class Bond:
 
 
 class Atom(DefaultData):
-    def __init__(self, coord, atom_type: int, parent=None, **kwargs):
+    def __init__(self, coord, atom_type: int|str|list, parent=None, **kwargs):
         self._parent = parent
         if parent is not None:
             parent.addChild(self)
@@ -244,10 +244,8 @@ class Molecule(aEntity):
         import cpplib
         if self.__len__() < 1:
             return
-        b = [[int(x.atom_type), float(x.coord[0]), float(x.coord[1]), float(x.coord[2])] for x in self.children]
-        res = cpplib.GenBonds(b).split()
-        res = [x.split(':') for x in res]
-        res = [[int(x[0]), int(x[1])] for x in res]
+        b = [(int(x.atom_type), *x.coord) for x in self.children]
+        res = cpplib.GenBonds(b)['bonds']
         for ind in res:
             pair = [self.children[ind[0]], self.children[ind[1]]]
             bond = Bond(*pair)

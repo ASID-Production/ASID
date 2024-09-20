@@ -653,6 +653,188 @@ class FileParser:
             list_tuple[1].rad = 0.02
         yield mol_sys, list_tuple
 
+    def parsAIMALLsumviz(self, file_path, bond=False, root=None, *args, **kwargs):
+
+        def parseAtm(line, file):
+            nonlocal flag
+            if 'Atom      Charge                X                  Y                  Z' in line:
+                flag = True
+                file.__next__()
+                return
+            if flag:
+                if line == ' \n':
+                    flag = False
+                    methods.pop(0)
+                    return
+                data = [x for x in line[:-1].split(' ') if x]
+                name = data[0]
+                atom_type = ''.join([x for x in name if not x.isdigit()])
+                coords = [float(x) for x in data[2:5]]
+                frac_coords = np.array([float(x) for x in data[2:5]], dtype=np.float32)
+                atom = MoleculeClass.Atom(coords, atom_type, None, name=name, cif_frac_coords=frac_coords)
+                atoms.append(atom)
+
+        def parseCP(line, file):
+            nonlocal flag
+
+            types = {'(3,-3)': 6,
+                     '(3,-1)': 7,
+                     '(3,+1)': 8,
+                     '(3,+3)': 9}
+
+            spec_props = ['GradRho', 'HessRho_EigVals', 'HessRho_EigVec1', 'HessRho_EigVec2', 'HessRho_EigVec3', 'Stress_EigVals', 'Stress_EigVec1', 'Stress_EigVec2', 'Stress_EigVec3']
+
+            if 'CP#' in line:
+                def create_atom():
+                    atom_type = types[data['Type']]
+                    atom = MoleculeClass.Atom(coord, atom_type, None, name=cp_name, sup_data_dict=data)
+                    cps.append(atom)
+
+                flag = True
+                line = [x for x in line.split(' ') if x]
+                coord = line[4:7]
+                cp_name = line[1]
+                coord = [float(x) for x in coord]
+                data = {}
+
+                for line in file:
+                    if line == '\n':
+                        flag = False
+                        create_atom()
+                        return
+                    if 'sample points along' in line:
+                        create_atom()
+                        parsePath(line, file)
+                        flag = False
+                        return
+                    if 'Bond Ellipticity' in line:
+                        line = [x for x in line.split(' ') if x]
+                        name = 'Bond_Ellipticity'
+                        value = line[3]
+                        if 'NA' in value:
+                            value = None
+                        else:
+                            value = float(line[3])
+                        data[name] = value
+                    elif '-DivStress' in line:
+                        line = [x for x in line.split(' ') if x]
+                        name = 'm_DivStress'
+                        values = [float(x) if 'NA' not in x else None for x in line[2:5]]
+                        data[name] = values
+                    elif 'Type' in line:
+                        line = [x for x in line.split(' ') if x]
+                        name = line[0]
+                        value = line[2]
+                        if 'NA' in value:
+                            value = None
+                        else:
+                            value = line[2]
+                        data[name] = value
+                    else:
+                        check = [x in line for x in spec_props]
+                        if any(check):
+                            line = [x for x in line.split(' ') if x]
+                            name = line[0]
+                            values = [float(x) if 'NA' not in x else None for x in line[2:5]]
+                            data[name] = values
+                        else:
+                            line = [x for x in line.split(' ') if x]
+                            name = line[0]
+                            value = line[2]
+                            if 'NA' in value:
+                                value = None
+                            else:
+                                value = float(line[2])
+                            data[name] = value
+
+            if flag:
+                if line == ' \n':
+                    flag = False
+                    methods.pop(0)
+                    return
+                data = [x for x in line[:-1].split(' ') if x]
+                name = data[0]
+                atom_type = ''.join([x for x in name if not x.isdigit()])
+                coords = [float(x) for x in data[2:5]]
+                frac_coords = np.array([float(x) for x in data[2:5]], dtype=np.float32)
+                atom = MoleculeClass.Atom(coords, atom_type, None, name=name, cif_frac_coords=frac_coords)
+                atoms.append(atom)
+
+        def parsePath(line, file):
+            nonlocal flag
+            for line in file:
+                if 'sample points along' in line:
+                    pass
+                elif line == '\n':
+                    flag = False
+                    return
+                else:
+                    line = line.split(' ')
+                    coord = [float(x) for x in line[:-1] if x][0:3]
+                    atom = MoleculeClass.Atom(coord, atom_type=6)
+                    paths.append(atom)
+            return
+
+        mol_list, atom_list, bonds_l = None, None, None
+        mol_sys = MoleculeClass.MoleculeSystem()
+        mol_sys.file_name = file_path
+        mol_sys.open_func = lambda: self.parsWinxproOut(file_path, bond=bond, root=root, *args, **kwargs)
+        mol_sys.name = os.path.basename(file_path).split('.')[0]
+        mol = MoleculeClass.Molecule(parent=mol_sys)
+
+        cps_sys = MoleculeClass.MoleculeSystem()
+        cps_sys.file_name = file_path
+        cps_sys.name = 'CPs'
+        cp_mol = MoleculeClass.Molecule(parent=cps_sys)
+
+        paths_sys = MoleculeClass.MoleculeSystem()
+        paths_sys.file_name = file_path
+        paths_sys.name = 'Paths'
+        path_mol = MoleculeClass.Molecule(parent=paths_sys)
+
+        flag = False
+        methods = [parseAtm, parseCP]
+        atoms = []
+        cps = []
+        paths = []
+
+        with open(file_path, 'r') as file:
+            for line in file:
+                if methods:
+                    methods[0](line, file)
+                else:
+                    break
+
+        for atom in atoms:
+            mol.addChild(atom)
+
+        for cp in cps:
+            cp_mol.addChild(cp)
+
+        def createCpp(atom_list, atom):
+            coord = atom.coord.copy()
+            point = point_class.Point(parent=atom_list, coord=coord, rad=atom_list,
+                                      color=PALETTE.point_dict[PALETTE.getName(atom.atom_type)],
+                                      atom_type=atom.atom_type,
+                                      name=atom.name,
+                                      connectivity=None,
+                                      label=atom.name,
+                                      **atom.sup_data_dict)
+            return point
+
+        yield self.parsMolSys(mol_sys, bond, root)
+        list_tuple = self.parsMolSys(cps_sys, False, root, createCpp)
+        if list_tuple[1]:
+            list_tuple[1][1].rad = 0.15
+        yield list_tuple
+
+        for path in paths:
+            path_mol.addChild(path)
+        list_tuple = self.parsMolSys(paths_sys, False, root)
+        if list_tuple[1]:
+            list_tuple[1][1].rad = 0.02
+        yield list_tuple
+
     @staticmethod
     def _pointCreation(atom_list, atom):
         coord = atom.coord.copy()

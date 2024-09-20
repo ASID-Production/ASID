@@ -308,7 +308,8 @@ class MainWindow(QtWidgets.QMainWindow):
         from . import Extensions
 
         self.menu = self.menuBar()
-        self.extension_menu = Extensions.getMenu(self.model, self.uniformModel, main_widget=widget)
+        self.menu.setObjectName('MenuBar')
+        self.extension_menu = Extensions.getMenu(self.model, self.uniformModel, main_widget=widget, main_menu=self.menu)
         self.uniformAction = self.menu.addAction('Uniforms')
         self.menu.addMenu(self.extension_menu)
         self.uniformAction.triggered.connect(self.uniformWid.show)
