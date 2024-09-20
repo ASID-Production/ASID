@@ -44,6 +44,7 @@ SESSION = None
 SERVER_PROC = None
 requests.packages.urllib3.util.connection.HAS_IPV6 = False
 
+
 class ErrorDialog(QDialog):
 
     def __init__(self, label):
@@ -176,7 +177,14 @@ def get_full_info(id, db_type='cryst'):
     return data_out
 
 
-def get_image(id, db_type='cryst', w=250, h=250):
+def get_image_temp(id, db_type='cryst', w=250, h=250):
+    root = opath.normpath(f'{opath.dirname(__file__)}/../../..')
+    path = opath.join(root, 'temp')
+    o_file = opath.join(path, f'{id}.gif')
+    return get_image(id, o_file, db_type, w, h)
+
+
+def get_image(id, o_file_path, db_type='cryst', w=250, h=250):
     url_mods = {'cryst': 'api/v1/structures'}
     url_mod = url_mods.get(db_type, 'api/v1/structures')
     if SESSION.user_token is not None:
@@ -187,12 +195,37 @@ def get_image(id, db_type='cryst', w=250, h=250):
     data = data.content.decode(data.apparent_encoding)
     image_str = data.split(',')[1]
     image_data = base64.b64decode(image_str)
-    root = opath.normpath(f'{opath.dirname(__file__)}/../../..')
-    path = opath.join(root, 'temp')
-    image = open(opath.join(path, f'{id}.gif'), 'wb')
+    path = o_file_path
+    image = open(path, 'wb')
     image.write(image_data)
     image.close()
-    return opath.join(path, f'{id}.gif')
+    return o_file_path
+
+
+def getImageFromFile(file_path, o_file_path, format='gif', w=250, h=250):
+    formats = ['gif']
+    if format not in formats:
+        format = formats[0]
+    url_mod = 'api/v1/generate'
+    data = {'file_format ': opath.splitext(file_path)[1],
+            'output_format ': format,
+            'return_type': 'string',
+            'h_size': f'{h}',
+            'w_size': f'{w}',
+            'name': opath.splitext(opath.basename(o_file_path))[0]}
+    files = [('file', (opath.basename(file_path), open(file_path, 'rb'), 'application/octet-stream'))]
+    if SESSION.user_token is not None:
+        headers = {'Authorization': f'Token {SESSION.user_token}'}
+        data = requests.request('GET', f'{SESSION.url_base}/{url_mod}/', headers=headers, data=data, files=files)
+    else:
+        data = requests.request('GET', f'{SESSION.url_base}/{url_mod}/', headers={}, data=data, files=files)
+    data = data.content.decode(data.apparent_encoding)
+    image_str = data.split(',')[1]
+    image_data = base64.b64decode(image_str)
+    image = open('.'.join([opath.splitext(o_file_path)[0], format]), 'wb')
+    image.write(image_data)
+    image.close()
+    return '.'.join([opath.splitext(o_file_path)[0], format])
 
 
 def getCif(id, db_type='cryst'):

@@ -47,6 +47,8 @@ UNIFORM_MODEL = None
 
 MAIN_WIDGET = None
 
+MAIN_MENU = None
+
 
 def loadMolSys(molsys, points_lists):
     if TREE_MODEL is not None:
@@ -255,9 +257,11 @@ def setup(menu, model, uniform_model=None, *args, main_widget=None, **kwargs):
     global TREE_MODEL
     global UNIFORM_MODEL
     global MAIN_WIDGET
+    global MAIN_MENU
     TREE_MODEL = model
     UNIFORM_MODEL = uniform_model
     MAIN_WIDGET = main_widget
+    MAIN_MENU = kwargs.get('main_menu', None)
 
     createPalette()
 
@@ -269,6 +273,7 @@ def setup(menu, model, uniform_model=None, *args, main_widget=None, **kwargs):
     action_test.triggered.connect(find_sub)
     cmenu.addAction(action_test)
 
+    from . import Db_viewer
     action_DB = QAction('DB Search')
     action_DB.triggered.connect(DbSearch)
     cmenu.addAction(action_DB)
