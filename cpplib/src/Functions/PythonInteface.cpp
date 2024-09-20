@@ -83,7 +83,7 @@ static std::array<std::pair<float, float>, times> FindDParamsParse(PyObject* sel
 
 		if (value[i].first == 0) {
 			useDistances(self);
-			value[i].second = p_distances->minDistance(type[i], type[i + 1]);
+			value[i].first = p_distances->minDistance(type[i], type[i + 1]);
 		}
 
 		if (value[i].second == 0) {
@@ -480,7 +480,14 @@ extern "C" {
 		auto value = FindDParamsParse<1>(self, oparams, type, d);
 
 
+		deb_write("cpplib_FindDistanceWC: all.types.size: ", all.types.size());
+		deb_write("cpplib_FindDistanceWC: all.points.size: ", all.points.size());
+		deb_write("cpplib_FindDistanceWC: param type1: ", type[0]);
+		deb_write("cpplib_FindDistanceWC: param type2: ", type[1]);
+		deb_write("cpplib_FindDistanceWC: param min: ", value[0].first);
+		deb_write("cpplib_FindDistanceWC: param max: ", value[0].second);
 		std::string ret = FindDistanceWC(all.types, all.points, type, value[0]);
+		deb_write("cpplib_FindDistanceWC: FindDistanceWC return ", ret);
 
 		return PyUnicode_FromString(ret.c_str());
 	}
@@ -630,7 +637,7 @@ extern "C" {
 												static_cast<unsigned int>(std::get<3>(dattor[i])),
 												static_cast<float>(std::get<4>(dattor[i]))));
 		}
-		PyDict_SetItemString(ret, "angles", list_t);
+		PyDict_SetItemString(ret, "tors", list_t);
 
 		return ret;
 	}
@@ -673,7 +680,7 @@ extern "C" {
 												static_cast<unsigned int>(std::get<3>(dattor[i])),
 												static_cast<float>(std::get<4>(dattor[i]))));
 		}
-		PyDict_SetItemString(ret, "angles", list_t);
+		PyDict_SetItemString(ret, "tors", list_t);
 
 		return ret;
 	}
