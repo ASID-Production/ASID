@@ -199,6 +199,7 @@ def structure_search(
     return response
 
 
+@sync_to_async(thread_sensitive=False)
 def get_img2d(structure, request):
     '''Available formats: img (gif) and cml (ChemDraw).'''
     h = int(request.GET.get('h', 0))
@@ -241,8 +242,8 @@ def gen_img2d_view(request):
                 cif_block = data['1']
                 # INFO: "get_or_create_space_group" with "return_only_symops"=True does not change data in database!
                 symops_db = get_or_create_space_group(cif_block[1], return_only_symops=True)
-                params, coords, types, symops = get_data(cif_block, symops_db)
-                cpplib_result = cpplib.FindMoleculesInCell(params, symops, types, coords)
+                params, coords_types, types, symops = get_data(cif_block, symops_db)
+                cpplib_result = cpplib.FindMoleculesInCell(params, symops, coords_types)
             # vasp
             elif file_format == 'vasp':
                 if type(file) is TemporaryUploadedFile:
@@ -259,15 +260,16 @@ def gen_img2d_view(request):
                 params = [a, b, c, al, be, ga]
                 sites_info = vasp_save_coordinates(None, symmed_vasp_struct, return_only_str_sites=True).split('\n')
                 types = []
-                atoms_coords = []
+                atoms_coords_types = []
                 for site in sites_info:
                     if site:
                         site_info = site.split()
                         element = site_info[1]
                         types.append(element_numbers[element])
-                        coords = [site_info[2], site_info[3], site_info[4]]
-                        atoms_coords.extend(map(float, coords))
-                cpplib_result = cpplib.FindMoleculesInCell(params, symops, types, atoms_coords)
+                        coords = [element_numbers[element], float(site_info[2]), float(site_info[3]),
+                                  float(site_info[4])]
+                        atoms_coords_types.append(tuple(coords))
+                cpplib_result = cpplib.FindMoleculesInCell(params, symops, atoms_coords_types)
             # xyz
             elif file_format == 'xyz':
                 if type(file) is TemporaryUploadedFile:
@@ -277,8 +279,12 @@ def gen_img2d_view(request):
                     file_content = file.file.getvalue().decode()
                     mol = Molecule.from_str(file_content, 'xyz')
                 types = list(mol.atomic_numbers)
-                coords = list(itertools.chain(*mol.cart_coords))
-                cpplib_result = cpplib.FindMoleculesWithoutCell(types, coords)
+                coords = tuple(itertools.chain(*mol.cart_coords))
+                coords = [coords[i:i + 3] for i in range(0, len(coords), 3)]
+                coords_types = []
+                for idx, pos in enumerate(coords):
+                    coords_types.append(tuple([types[idx], *pos]))
+                cpplib_result = cpplib.FindMoleculesWithoutCell(coords_types)
 
             # change R-H distance
             # sites = []
@@ -372,7 +378,7 @@ class StructureViewSet(ReadOnlyModelViewSet):
     def upload(self, request):
         user = request.user
         count_user_cifs = StructureCode.objects.filter(user=user).count()
-        # if user deleted structures before
+        # if user removed structures before
         while True:
             refcode = 'user-' + str(user.id) + '-' + str(count_user_cifs + 1)
             if StructureCode.objects.filter(refcode=refcode).count() == 0:

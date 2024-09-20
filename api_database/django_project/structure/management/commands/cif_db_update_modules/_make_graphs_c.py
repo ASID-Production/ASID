@@ -83,18 +83,20 @@ def get_data(cif_block, symops_db):
     params = list(map(float, params))
     atomic_sites, atoms = get_coords(cif_block)
     atoms_coords = []
+    atoms_coords_types = []
     atoms_types = []
     atoms_info = atomic_sites.split()
     for idx, element in enumerate(atoms_info, start=1):
         if idx % 5 == 2:
             element = re.findall(r'[A-Za-z]{1,3}', element)
             if element and element[0] in element_numbers.keys():
-                atoms_types.append(element_numbers[element[0]])
+                atom_type = element_numbers[element[0]]
+                atoms_types.append(atom_type)
             else:
                 raise Exception(f'Error: check the element: {element}')
         elif idx % 5 == 3:
-            coords = [atoms_info[idx - 1], atoms_info[idx], atoms_info[idx + 1]]
-            atoms_coords.extend(map(float, coords))
+            coords = [atom_type, float(atoms_info[idx - 1]), float(atoms_info[idx]), float(atoms_info[idx + 1])]
+            atoms_coords_types.append(tuple(coords))
     # symops
     symops_list = []
     if '_symmetry_equiv_pos_as_xyz' in cif_block[1].keys():
@@ -106,21 +108,16 @@ def get_data(cif_block, symops_db):
                 symops_list.append(symop[symops_idx])
     else:
         symops_list = symops_db.split(';')
-    return params, atoms_coords, atoms_types, symops_list
+    return params, atoms_coords_types, atoms_types, symops_list
 
 
 def make_graph_c(params, coords, types, refcode, add_graphs_logger, symops):
-    cpplib_result = cpplib.FindMoleculesInCell(params, symops, types, coords)
-    mols_str_graph = cpplib_result['graph_str']
+    cpplib_result = cpplib.FindMoleculesInCell(params, symops, coords)
+    graph_str = cpplib_result['graph_str']
+    warning = cpplib_result['error_str']
     xyz_mols = cpplib_result['xyz_block']
-    parse_mols = mols_str_graph.split(';')
-    if len(parse_mols) == 1:
-        graph_str, = parse_mols
-    elif len(parse_mols) == 2:
-        graph_str, warnings = parse_mols
-        add_graphs_logger.warning(f"FindMoleculesInCellError in {refcode}:\n\t{warnings}")
-    else:
-        raise Exception(f"Invalid length of mols list: {len(parse_mols)}")
+    if warning:
+        add_graphs_logger.warning(f"FindMoleculesInCellError in {refcode}:\n\t{warning}")
     if graph_str.split()[1] == '0':
         raise Exception(f"There are no atoms in graph! May be the structure was unordered")
     # generate data for 2d graph picture
@@ -184,9 +181,9 @@ def add_graphs_c(queue, return_dict, proc_num: int):
             break
         try:
             add_graphs_logger.info(f"Start processing structure {refcode}")
-            params, coords, types, symops = get_data(cif_block, symops_db)
+            params, coords_types, types, symops = get_data(cif_block, symops_db)
             add_graphs_logger.info(f"Received atomic coordinates and translation matrix")
-            graph_str, smiles, inchi = make_graph_c(params, coords, types, refcode, add_graphs_logger, symops)
+            graph_str, smiles, inchi = make_graph_c(params, coords_types, types, refcode, add_graphs_logger, symops)
             if smiles and inchi:
                 add_graphs_logger.info(f"Received graph string and 2D representation")
             else:
