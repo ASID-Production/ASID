@@ -84,9 +84,9 @@ def define_connect_from_graph(mol: Chem.Mol, bonds: List[Tuple]) -> Chem.Mol:
     mol = Chem.RWMol(mol)
     bnds: List[Chem.Bond] = list(mol.GetBonds())
     for bond in bnds:
-        mol.RemoveBond(bond.GetBeginAtomIdx(), bond.GetEndAtomIdx(), Chem.BondType.SINGLE)
+        mol.RemoveBond(bond.GetBeginAtomIdx(), bond.GetEndAtomIdx())
     for bond in bonds:
-        mol.AddBond(bond[0], bond[1])
+        mol.AddBond(bond[0], bond[1], Chem.BondType.SINGLE)
     mol = mol.GetMol()
     return mol
 
@@ -161,7 +161,7 @@ def define_bonds_in_molecule_v2(
         except Exception as err:
             if (not charge_order_neg) or (not charge_order_pos) or ('Final molecular charge does not match input' not in str(err)):
                 if not charge_order_neg or not charge_order_pos:
-                    print('Warring: Do not find available charge!')
+                    print('Warning: Do not find available charge!')
                 mol_copy = define_connect_from_graph(mol_copy, bonds)
                 smiles = Chem.MolToSmiles(mol_copy, isomericSmiles=True, allHsExplicit=True)
                 smol = Chem.MolFromSmiles(smiles, sanitize=False)
@@ -289,7 +289,7 @@ def reduce_charges(mol: Chem.Mol):
                             validate_a = atom.HasValenceViolation()
                             validate_n = neighbor.HasValenceViolation()
                             if not (validate_a and validate_n):
-                                print(f'Warring: Bond order validation error ({atom.GetSymbol()}...{neighbor.GetSymbol()})')
+                                print(f'Warning: Bond order validation error ({atom.GetSymbol()}...{neighbor.GetSymbol()})')
     return mol
 
 
@@ -321,7 +321,7 @@ def reduce_radicals(mol: Chem.Mol):
                             validate_a = atom.HasValenceViolation()
                             validate_n = neighbor.HasValenceViolation()
                             if not (validate_a and validate_n):
-                                print(f'Warring: Bond order validation error ({atom.GetSymbol()}...{neighbor.GetSymbol()})')
+                                print(f'Warning: Bond order validation error ({atom.GetSymbol()}...{neighbor.GetSymbol()})')
     return mol
 
 

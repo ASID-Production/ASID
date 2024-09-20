@@ -76,6 +76,7 @@ import itertools
 NUM_OF_PROC = int(cpu_count() / 2)
 MAX_STRS_SIZE = 30000
 CHUNK_SIZE = 10000  # the number of structures for search in
+R_H_DIST = 0.95  # distance of R-H bonds in angstroms
 
 
 async def qc_structure_search_view(request):
@@ -278,6 +279,15 @@ def gen_img2d_view(request):
                 types = list(mol.atomic_numbers)
                 coords = list(itertools.chain(*mol.cart_coords))
                 cpplib_result = cpplib.FindMoleculesWithoutCell(types, coords)
+
+            # change R-H distance
+            # sites = []
+            # for molc in cpplib_result['xyz_block']:
+            #     for atom in molc['atoms']:
+            #         sites.append((types[atom['init_idx']], atom['x'], atom['y'], atom['z']))
+            #     new_sites = cpplib.himp(sites, 0.95)['xyz_block']
+            #     for idx, atom in enumerate(molc['atoms']):
+            #         atom['x'], atom['y'], atom['z'] = new_sites[idx]
 
             # get smiles and inchi
             xyz_mols = cpplib_result['xyz_block']

@@ -81,7 +81,7 @@ def get_or_create_space_group(vasp_structure, return_only_symops=False):
             if system in syst:
                 system_id = syst[0]
         if not system_id:
-            vasp_logger.warring(f'Unknown lattice system: {system}!')
+            vasp_logger.warning(f'Unknown lattice system: {system}!')
         return system_id
 
     def get_symops(vasp_hall):
