@@ -33,7 +33,7 @@ from . import Db_bindings
 import typing
 import numpy as np
 from ... import point_class
-from ..ChemPack import PALETTE, MOLECULE_SYSTEMS, TREE_MODEL
+from ..ChemPack import PALETTE, MOLECULE_SYSTEMS, TREE_MODEL, MAIN_MENU
 from . import MoleculeClass
 import os.path as opath
 import json
@@ -61,9 +61,11 @@ class StructuresListModel(QAbstractListModel):
         self._display_tag = 'refcode'
         self._search_proc = None
         self._iter_search_procs = []
+        self._last_db_type = None
 
     def populate(self, request):
         request, search_type, db_type = request
+        self._last_db_type = db_type
         if self._search_proc is None:
             if self.progress_bar:
                 self.progress_bar.setValue(0)
@@ -90,6 +92,7 @@ class StructuresListModel(QAbstractListModel):
         self.endResetModel()
         for request in requests:
             request, search_type, db_type, exact = request
+            self._last_db_type = db_type
             if self.progress_bar:
                 self.progress_bar.setValue(0)
                 self.progress = 0
@@ -171,6 +174,13 @@ class StructuresListModel(QAbstractListModel):
             ret.append(self.data(ind, 99)['refcode'])
         return ret
 
+    def exportGifs(self, indices, dir_path):
+        for ind in indices:
+            id = self.data(ind, 99)['id']
+            ref_code = self.data(ind, 99)['refcode']
+            o_file_path = opath.join(dir_path, ref_code, '.gif')
+            Db_bindings.get_image(id, o_file_path, db_type=self._last_db_type)
+
 
 class InfoTableModel(QAbstractTableModel):
 
@@ -228,7 +238,10 @@ class InfoTableModel(QAbstractTableModel):
         self._fields = []
         self._spans = []
         self._selected = Db_bindings.get_full_info(selected_id)
-        self._image = Db_bindings.get_image(selected_id)
+        try:
+            self._image = Db_bindings.get_image_temp(selected_id)
+        except Exception:
+            self._image = None
         rec_fill(self._selected)
         self._fields.insert(0, ['img', self._image])
         self._rows = len(self._fields)
@@ -463,13 +476,25 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
             file.close()
         pass
 
+    def exportGifs(self):
+        selection = self.listView.selectionModel().selectedIndexes()
+        filename, _ = QtWidgets.QFileDialog.getExistingDirectory()
+        self.list_model.exportGifs(selection, filename)
+
     def importRefs(self):
         filename, _ = QtWidgets.QFileDialog.getOpenFileName(filter='*.txt')
         if filename:
             file = open(filename, 'r')
             data = [x for x in file.read().split('\n') if x]
             self.list_model.iterPopulate(((x, 'refcode', 'cryst', 'refcode') for x in data))
-        pass
+
+
+def exportGif():
+    file, _ = QtWidgets.QFileDialog.getOpenFileName(filter='*.xyz *.cif')
+    filename, _ = QtWidgets.QFileDialog.getSaveFileName(filter='*.gif')
+    if not Db_bindings.SESSION.ready:
+        Db_bindings.SESSION.startServer(8000)
+    Db_bindings.getImageFromFile(file, filename)
 
 
 def show():
@@ -477,3 +502,8 @@ def show():
     if DB_VIEWER is None:
         DB_VIEWER = DbWindow()
     DB_VIEWER.show()
+
+
+if MAIN_MENU:
+    exportGifAction = MAIN_MENU.addAction('Export 2d diagram')
+    exportGifAction.triggered.connect(exportGif)

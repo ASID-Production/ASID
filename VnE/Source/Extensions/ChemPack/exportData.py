@@ -27,6 +27,7 @@
 # ******************************************************************************************
 
 import debug
+import numpy as np
 
 def execute():
     from ..ChemPack import MOLECULE_SYSTEMS
@@ -46,25 +47,32 @@ def execute():
         if not filepath[0]:
             return
         atoms = mol_sys.children[0].children
-        arg = [[x.atom_type, *list(x.coord)] for x in atoms]
-        ret_dist = [[int(x) if i != 2 else float(x) for i, x in enumerate(pair.split(':'))] for pair in cpplib.GenBondsEx(arg).split('\n')[:-1]]
-        args = [
-            [x.atom_type for x in atoms],
-            [list(x.coord) for x in atoms],
-            [0, 0, 0, 0.0, 0.0, 0.0, 0.0, -180.0, 180]
-        ]
-        args_tors = [
-            [x.atom_type for x in atoms],
-            [list(x.coord) for x in atoms],
-            [0, 0, 0, 0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -180.0, 180, -180.0, 180, -180.0, 180]
-        ]
-        #angles = cpplib.FindAngleWC(*args)
-        #tors = cpplib.FindTorsionWC(*args)
+        arg = [(x.atom_type, *x.coord) for x in atoms]
+        ret_dict = cpplib.FindDAT_WC(arg)
+        dist = ret_dict['bonds']
+        angles = ret_dict['angles']
+        tors = ret_dict['tors']
         with open(filepath[0], 'w', newline='') as out:
             writer = csv.writer(out, delimiter=';')
             lines = []
-            for pair in ret_dist:
+            for pair in dist:
                 line = [f'{atoms[pair[0]].name}--{atoms[pair[1]].name}', str(round(pair[2], 4))]
                 lines.append(line)
             writer.writerow(['Pair', 'Dist'])
+            writer.writerows(lines)
+            writer.writerow([''])
+
+            lines = []
+            for pair in angles:
+                line = [f'{atoms[pair[0]].name}--{atoms[pair[1]].name}--{atoms[pair[2]].name}', str(round(pair[3]/np.pi*180, 2))]
+                lines.append(line)
+            writer.writerow(['Atoms', 'Angle'])
+            writer.writerows(lines)
+            writer.writerow([''])
+
+            lines = []
+            for pair in tors:
+                line = [f'{atoms[pair[0]].name}--{atoms[pair[1]].name}--{atoms[pair[2]].name}--{atoms[pair[3]].name}', str(round(pair[4]/np.pi*180, 2))]
+                lines.append(line)
+            writer.writerow(['Atoms', 'Angle'])
             writer.writerows(lines)

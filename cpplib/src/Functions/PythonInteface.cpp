@@ -40,8 +40,71 @@ enum class ErrorState {
 	OK = 0,
 	UnknownError,
 };
+struct Prepare_WC {
+	std::vector<cpplib::currents::AtomTypeData> types;
+	std::vector<cpplib::currents::PointType> points;
+	Prepare_WC(PyObject* otuples) {
+		Py_ssize_t s = PyList_Size(otuples);
+		types.reserve(static_cast<size_t>(s));
+		points.reserve(static_cast<size_t>(s));
 
+		for (Py_ssize_t i = 0; i < s; i++) {
+			PyObject* o_tuple = PyList_GetItem(otuples, i);
+			types.push_back(static_cast<AtomTypeData>(PyLong_AsLong(PyTuple_GetItem(o_tuple, 0))));
+			points.emplace_back(static_cast<float>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 1))),
+								static_cast<float>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 2))),
+								static_cast<float>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 3))));
+		}
+	}
+};
+struct Prepare_IC : public Prepare_WC {
+	std::array<float, 6> cell;
+	std::vector<const char*> symm;
+	Prepare_IC(PyObject* ocell, PyObject* osymm, PyObject* otuples) : Prepare_WC(otuples) {
+		for (Py_ssize_t i = 0; i < 6; i++) {
+			cell[i] = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(ocell, i)));
+		}
+		const Py_ssize_t s = PyList_Size(osymm);
+		deb_write("pyListToVectorCharP s =", s);
+		symm.resize(s);
+		for (Py_ssize_t i = 0; i < s; i++) {
+			symm[i] = PyUnicode_AsUTF8(PyList_GetItem(osymm, i));
+		}
+	}
+};
+
+template <char times>
+static std::array<std::pair<float, float>, times> FindDParamsParse(PyObject* self, PyObject* oparams, const std::array<int, times+1> type, char& d) {
+	std::array<std::pair<float, float>, times> value;
+	for (char i = 0; i < times; i++, d += 2)
+	{
+		value[i].first = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(oparams, d)));
+		value[i].second = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(oparams, d + 1)));
+
+		if (value[i].first == 0) {
+			useDistances(self);
+			value[i].second = p_distances->minDistance(type[i], type[i + 1]);
+		}
+
+		if (value[i].second == 0) {
+			useDistances(self);
+			value[i].second = p_distances->maxDistance(type[i], type[i + 1]);
+		}
+	}
+	return value;
+}
+template <char times>
+static std::array<std::pair<float, float>, times> FindATParamsParse(PyObject* oparams, char& d) {
+	std::array<std::pair<float, float>, times> value;
+	for (char i = 0; i < times; i++, d += 2)
+	{
+		value[i].first = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(oparams, d)));
+		value[i].second = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(oparams, d + 1)));
+	}
+	return value;
+}
 extern "C" {
+
 	inline static ErrorState pyListToVectorFloat(PyObject* plist, std::vector<float>* pret) {
 		const Py_ssize_t s = PyList_Size(plist);
 		std::vector<float>& ret = *pret;
@@ -117,59 +180,40 @@ extern "C" {
 	static PyObject* cpplib_GenBonds(PyObject* self, PyObject* arg) {
 		useDistances(self);
 		auto& distances = *(p_distances);
-		const Py_ssize_t s = PyList_Size(arg);
-		std::vector<AtomTypeData> types;
-		types.reserve(s);
-		std::vector<PointType> points;
-		points.reserve(s);
-
-		for (Py_ssize_t i = 0; i < s; i++) {
-			PyObject* tp = PyList_GetItem(arg, i);
-			types.emplace_back(static_cast<AtomTypeData>(PyLong_AsLong(PyList_GetItem(tp, 0))));
-			points.emplace_back(static_cast<FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(tp, 1))),
-								static_cast<FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(tp, 2))),
-								static_cast<FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(tp, 3))));
-		}
-		FAMStructType famstr(std::move(types), std::move(points));
+		Prepare_WC all(arg);
+		
+		FAMStructType famstr(std::move(all.types), std::move(all.points));
 		std::string errM;
 		auto&& bonds = famstr.findBonds(distances, errM, [](const PointType& p1, const PointType& p2) {return (p1 - p2).r(); }).first;
 
-		std::string line;
+		PyObject* lst = PyList_New(0);
 		for (size_t i = 0; i < bonds.size(); i++)
 		{
-			line += std::to_string(bonds[i].first) + ':' + std::to_string(bonds[i].second) + '\n';
+			PyList_Append(lst, Py_BuildValue("(ll)",
+											 static_cast<long>(bonds[i].first),
+											 static_cast<long>(bonds[i].second)));
 		}
-		return Py_BuildValue("{s:s}",
-							 "bonds", PyUnicode_FromString(line.c_str()));
+		return Py_BuildValue("{s:O}",
+							 "bonds", lst);
 	}
 	static PyObject* cpplib_GenBondsEx(PyObject* self, PyObject* arg) {
 		useDistances(self);
 		auto& distances = *(p_distances);
-		const Py_ssize_t s = PyList_Size(arg);
-		std::vector<AtomTypeData> types;
-		types.reserve(s);
-		std::vector<PointType> points;
-		points.reserve(s);
-
-		for (Py_ssize_t i = 0; i < s; i++) {
-			PyObject* tp = PyList_GetItem(arg, i);
-			types.emplace_back(static_cast<AtomTypeData>(PyLong_AsLong(PyList_GetItem(tp, 0))));
-			points.emplace_back(static_cast<FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(tp, 1))),
-								static_cast<FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(tp, 2))),
-								static_cast<FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(tp, 3))));
-		}
-		FAMStructType famstr(std::move(types), std::move(points));
+		Prepare_WC all(arg);
+		FAMStructType famstr(std::move(all.types), std::move(all.points));
 		std::string errM;
 		auto&& bonds = famstr.findBondsEx(distances, errM, [](const PointType& p1, const PointType& p2) {return (p1 - p2).r(); }).first;
 
-		std::string line;
+		PyObject* lst = PyList_New(0);
 		for (size_t i = 0; i < bonds.size(); i++)
 		{
-			line += std::to_string(bonds[i].first) + ':' + std::to_string(bonds[i].second)
-				+ ':' + std::to_string(bonds[i].length) + '\n';
+			PyList_Append(lst, Py_BuildValue("(llf)",
+											 static_cast<long>(bonds[i].first),
+											 static_cast<long>(bonds[i].second),
+											 static_cast<float>(bonds[i].length)));
 		}
-		return Py_BuildValue("{s:s}",
-							 "bonds", PyUnicode_FromString(line.c_str()));
+		return Py_BuildValue("{s:O}",
+							 "bonds", lst);
 	}
 
 	static PyObject* cpplib_SearchMain(PyObject* self, PyObject* args) {
@@ -177,7 +221,10 @@ extern "C" {
 		PyObject* o = NULL;
 		int np = 0;
 		int exact = 0;
-		PyArg_ParseTuple(args, "sOip", &search, &o, &np, &exact);
+		if (!PyArg_ParseTuple(args, "sOip", &search, &o, &np, &exact)) {
+			deb_write("! Critic Error: Parse Error - return None");
+			Py_RETURN_NONE;
+		}
 		const Py_ssize_t s = PyList_Size(o);
 		const int ds = static_cast<int>(s);
 
@@ -202,16 +249,19 @@ extern "C" {
 	}
 	static PyObject* cpplib_CompareGraph(PyObject* self, PyObject* args)
 	{
-		deb_write("py_CompareGraph in");
+		deb_write("cpplib_CompareGraph: start");
 		const char* s1 = NULL;
 		const char* s2 = NULL;
 		int b = 0;
-		deb_write("py_CompareGraph arg parse start");
-		PyArg_ParseTuple(args, "ssp", &s1, &s2, &b);
+		deb_write("cpplib_CompareGraph: arg parse start");
+		if(!PyArg_ParseTuple(args, "ssp", &s1, &s2, &b)) {
+			deb_write("! Critic Error: Parse Error - return None");
+			Py_RETURN_NONE;
+		}
 		deb_write("s1 = ", s1);
 		deb_write("s2 = ", s2);
 		deb_write("exact = ", b);
-		deb_write("py_CompareGraph invoke CompareGraph");
+		deb_write("cpplib_CompareGraph: invoke CompareGraph");
 		if (CompareGraph(s1, s2, (b != 0))) {
 			Py_RETURN_TRUE;
 		}
@@ -224,27 +274,18 @@ extern "C" {
 		useDistances(self);
 		PyObject* ocell = NULL;
 		PyObject* osymm = NULL;
-		PyObject* oxyz = NULL;
-		PyObject* otypes = NULL;
-		PyArg_ParseTuple(args, "OOOO", &ocell, &osymm, &otypes, &oxyz);
-
-		std::array<float, 6> cell;
-		for (Py_ssize_t i = 0; i < 6; i++) {
-			cell[i] = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(ocell, i)));
+		PyObject* otuple = NULL;
+		if(!PyArg_ParseTuple(args, "OOO", &ocell, &osymm, &otuple)) {
+			deb_write("! Critic Error: Parse Error - return None");
+			Py_RETURN_NONE;
 		}
 
-		std::vector<const char*> symm; pyListToVectorCharP(osymm, &symm);
-		std::vector<int> types; pyListToVectorInt(otypes, &types);
-		std::vector<float> xyz; pyListToVectorFloat(oxyz, &xyz);
+		Prepare_IC all(ocell, osymm, otuple);
 
-		auto ret = FindMoleculesInCell(cell, symm, types, xyz);
+		auto ret = FindMoleculesInCell(all.cell, all.symm, all.types, all.points);
 		PyObject* o_xyz_block = PyList_New(0);
 
-		PyObject* o_ret = PyDict_New();
-
-		PyDict_SetItemString(o_ret, "graph_str", PyUnicode_FromString(ret.first.c_str()));
-
-		for (auto & mol : ret.second)
+		for (auto & mol : std::get<2>(ret))
 		{
 			PyObject* o_molecule = PyList_New(0);
 			for (auto& atom : std::get<0>(mol)) {
@@ -267,41 +308,22 @@ extern "C" {
 													 "bonds", o_bonds));
 		}
 		// List[Tuple(atom1, atom2), ...] под ключом 'bonds' 
-		return Py_BuildValue("{s:s,s:O}", 
-							 "graph_str", ret.first.c_str(),
+		return Py_BuildValue("{s:s,s:s,s:O}",
+							 "graph_str", std::get<0>(ret).c_str(),
+							 "error_str", std::get<1>(ret).c_str(),
 							 "xyz_block", o_xyz_block);
 	}
-	static PyObject* cpplib_FindMoleculesWithoutCell(PyObject* self, PyObject* args) {
+	static PyObject* cpplib_FindMoleculesWithoutCell(PyObject* self, PyObject* otuple) {
 		useDistances(self);
 
-		PyObject* oxyz = NULL;
-		PyObject* otypes = NULL;
+		Prepare_WC all(otuple);
 
-		PyArg_ParseTuple(args, "OO", &otypes, &oxyz);
-
-
-		Py_ssize_t s = PyList_Size(otypes);
-		const int types_s = static_cast<int>(s);
-
-		std::vector<int> types(types_s);
-		std::vector<float> xyz(types_s*3);
-		for (Py_ssize_t i = 0; i < s; i++) {
-			types[i] = static_cast<int>(PyLong_AsLong(PyList_GetItem(otypes, i)));
-			xyz[i * 3] = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(oxyz, i * 3)));
-			xyz[i * 3 + 1] = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(oxyz, i * 3 + 1)));
-			xyz[i * 3 + 2] = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(oxyz, i * 3 + 2)));
-		}
-
-		deb_write("py_FMWC invoke FindMoleculesInCell");
-		auto ret = FindMoleculesWithoutCell(types, xyz);
-		deb_write("py_FMWC returned from FindMoleculesInCell");
+		deb_write("cpplib_FindMoleculesWithoutCell invoke FindMoleculesInCell");
+		auto ret = FindMoleculesWithoutCell(all.types, all.points);
+		deb_write("cpplib_FindMoleculesWithoutCell returned from FindMoleculesInCell");
 		PyObject* o_xyz_block = PyList_New(0);
 
-		PyObject* o_ret = PyDict_New();
-
-		PyDict_SetItemString(o_ret, "graph_str", PyUnicode_FromString(ret.first.c_str()));
-
-		for (auto& mol : ret.second)
+		for (auto& mol : std::get<2>(ret))
 		{
 			PyObject* o_molecule = PyList_New(0);
 			for (auto& atom : std::get<0>(mol)) {
@@ -324,8 +346,9 @@ extern "C" {
 													 "bonds", o_bonds));
 		}
 		// List[Tuple(atom1, atom2), ...] под ключом 'bonds' 
-		return Py_BuildValue("{s:s,s:O}",
-							 "graph_str", ret.first.c_str(),
+		return Py_BuildValue("{s:s,s:s,s:O}",
+							 "graph_str", std::get<0>(ret).c_str(),
+							 "error_str", std::get<1>(ret).c_str(),
 							 "xyz_block", o_xyz_block);
 	}
 
@@ -334,9 +357,9 @@ extern "C" {
 		PyObject* arg = NULL;
 		unsigned char flags;
 
-		deb_write("Parsing start");
-		if(!PyArg_ParseTuple(args, "ObO", &arg, &flags, &osymm)) {
-			deb_write("Parse Error");
+		deb_write("cpplib_GenSymm: Parsing start");
+		if(!PyArg_ParseTuple(args, "OBO", &arg, &flags, &osymm)) {
+			deb_write("! Critic Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
 		bool movetocell = flags & 1;
@@ -349,16 +372,18 @@ extern "C" {
 		std::vector<PointType> points;
 		points.reserve(s_points);
 
-		deb_write("Parsing: atom parsing started");
+		deb_write("cpplib_GenSymm: atom parsing started");
 		for (Py_ssize_t i = 0; i < s_points; i++) {
 			PyObject* tp = PyList_GetItem(arg, i);
 			types.emplace_back(PyLong_AsLong(PyList_GetItem(tp, 0)));
 			points.emplace_back(PyFloat_AsDouble(PyList_GetItem(tp, 1)), PyFloat_AsDouble(PyList_GetItem(tp, 2)), PyFloat_AsDouble(PyList_GetItem(tp, 3)));
 		}
-		deb_write("pyListToVectorCharP invoking");
+		deb_write("cpplib_GenSymm: atom parsing ended");
+		deb_write("cpplib_GenSymm: pyListToVectorCharP invoking");
 		std::vector<const char*> nsymm; pyListToVectorCharP(osymm, &nsymm);
+		deb_write("cpplib_GenSymm: pyListToVectorCharP returned");
 
-		deb_write("Parsing: symm parsing started");
+		deb_write("cpplib_GenSymm: symm parsing started");
 		std::vector<SymmType> symm;
 		const size_t ss = nsymm.size();
 		for (size_t i = 0; i < ss; i++)
@@ -366,6 +391,9 @@ extern "C" {
 			symm.emplace_back(nsymm[i]);
 		}
 		deb_write("Parsing ended");
+
+
+
 		if (movemasstocell) {
 			deb_write("Move center of mass started");
 			PointType centerofmass(0, 0, 0);
@@ -413,261 +441,147 @@ extern "C" {
 	}
 
 	static PyObject* cpplib_FindDistanceIC(PyObject* self, PyObject* args) {
+		deb_write("cpplib_FindDistanceIC: invoked");
 
 		PyObject* ocell = NULL;
 		PyObject* osymm = NULL;
-		PyObject* oxyz = NULL;
-		PyObject* otypes = NULL;
+		PyObject* otuples = NULL;
 		PyObject* oparams = NULL;
-		PyArg_ParseTuple(args, "OOOOO", &ocell, &osymm, &otypes, &oxyz, &oparams);
 
-		std::array<float, 6> cell;
-		for (Py_ssize_t i = 0; i < 6; i++) {
-			cell[i] = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(ocell, i)));
+		if(!PyArg_ParseTuple(args, "OOOO", &ocell, &osymm, &otuples, &oparams)) {
+			deb_write("! Critic Error: Parse Error - return None");
+			Py_RETURN_NONE;
 		}
-
-		std::vector<const char*> symm; pyListToVectorCharP(osymm, &symm);
-		std::vector<int> types; pyListToVectorInt(otypes, &types);
-		std::vector<float> xyz; pyListToVectorFloat(oxyz, &xyz);
+		Prepare_IC all(ocell, osymm, otuples);
 
 		const std::array<int, 2> type {static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 0))),
 										static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 1)))};
-		std::pair<float, float> value;
-		value.first = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 2)));
-		value.second = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 3)));
+		char d = 2;
+		auto value = FindDParamsParse<1>(self, oparams, type, d);
 
 
-		if (value.first == 0) {
-			useDistances(self);
-			value.second = p_distances->minDistance(type[0], type[1]);
-		}
-		if (value.second == 0) {
-			useDistances(self);
-			value.second = p_distances->maxDistance(type[0], type[1]);
-		}
-
-
-		std::string ret = FindDistanceIC(cell, symm, types, xyz, type, value);
+		std::string ret = FindDistanceIC(all.cell, all.symm, all.types, all.points, type, value[0]);
 
 		return PyUnicode_FromString(ret.c_str());
 	}
 	static PyObject* cpplib_FindDistanceWC(PyObject* self, PyObject* args) {
-
-		PyObject* oxyz = NULL;
-		PyObject* otypes = NULL;
+		deb_write("cpplib_FindDistanceWC: invoked");
+		PyObject* otuples = NULL;
 		PyObject* oparams = NULL;
-		PyArg_ParseTuple(args, "OOO", &otypes, &oxyz, &oparams);
-
-		std::vector<int> types; pyListToVectorInt(otypes, &types);
-		std::vector<float> xyz; pyListToVectorFloat(oxyz, &xyz);
+		if(!PyArg_ParseTuple(args, "OO", &otuples, &oparams)) {
+			deb_write("! Critic Error: Parse Error - return None");
+			Py_RETURN_NONE;
+		}
+		Prepare_WC all(otuples);
 
 		const std::array<int, 2> type {static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 0))),
 										static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 1)))};
-		std::pair<float, float> value;
-		value.first = static_cast<float>(PyLong_AsLong(PyList_GetItem(oparams, 2)));
-		value.second = static_cast<float>(PyLong_AsLong(PyList_GetItem(oparams, 3)));
+		char d = 2;
+		auto value = FindDParamsParse<1>(self, oparams, type, d);
 
 
-		if (value.first == 0) {
-			useDistances(self);
-			value.second = p_distances->minDistance(type[0], type[1]);
-		}
-		if (value.second == 0) {
-			useDistances(self);
-			value.second = p_distances->maxDistance(type[0], type[1]);
-		}
-
-
-		std::string ret = FindDistanceWC(types, xyz, type, value);
+		std::string ret = FindDistanceWC(all.types, all.points, type, value[0]);
 
 		return PyUnicode_FromString(ret.c_str());
 	}
 
 	static PyObject* cpplib_FindAngleIC(PyObject* self, PyObject* args) {
-
+		deb_write("cpplib_FindAngleIC: invoked");
 		PyObject* ocell = NULL;
 		PyObject* osymm = NULL;
-		PyObject* oxyz = NULL;
-		PyObject* otypes = NULL;
+		PyObject* otuples = NULL;
 		PyObject* oparams = NULL;
-		PyArg_ParseTuple(args, "OOOOO", &ocell, &osymm, &otypes, &oxyz, &oparams);
-
-		std::array<float, 6> cell;
-		for (Py_ssize_t i = 0; i < 6; i++) {
-			cell[i] = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(ocell, i)));
+		if (!PyArg_ParseTuple(args, "OOOO", &ocell, &osymm, &otuples, &oparams)) {
+			deb_write("! Critic Error: Parse Error - return None");
+			Py_RETURN_NONE;
 		}
-
-		std::vector<const char*> symm; pyListToVectorCharP(osymm, &symm);
-		std::vector<int> types; pyListToVectorInt(otypes, &types);
-		std::vector<float> xyz; pyListToVectorFloat(oxyz, &xyz);
+		Prepare_IC all(ocell, osymm, otuples);
 
 		const std::array<int, 3> type {static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 0))),
 										static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 1))),
 										static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 2)))};
 		char d = type.size();
-		std::array<std::pair<float, float>, 2> value_d;
-		for (char i = 0; i < 2; i++, d += 2)
-		{
-			value_d[i].first = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d)));
-			value_d[i].second = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d + 1)));
+		auto value_d = FindDParamsParse<2>(self, oparams, type, d);
+		auto value_a = FindATParamsParse<1>(oparams, d);
 
-			if (value_d[i].first == 0) {
-				useDistances(self);
-				value_d[i].second = p_distances->minDistance(type[i], type[i + 1]);
-			}
 
-			if (value_d[i].second == 0) {
-				useDistances(self);
-				value_d[i].second = p_distances->maxDistance(type[i], type[i + 1]);
-			}
-		}
-
-		std::pair<float, float> value_a;
-
-		value_a.first = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d)));
-		value_a.second = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d + 1)));
-
-		std::string ret = FindAngleIC(cell, symm, types, xyz, type, value_d, value_a);
+		std::string ret = FindAngleIC(all.cell, all.symm, all.types, all.points, type, value_d, value_a[0]);
 
 		return PyUnicode_FromString(ret.c_str());
 	}
 	static PyObject* cpplib_FindAngleWC(PyObject* self, PyObject* args) {
-
-		PyObject* oxyz = NULL;
-		PyObject* otypes = NULL;
+		deb_write("cpplib_FindAngleWC: invoked");
+		PyObject* otuples = NULL;
 		PyObject* oparams = NULL;
-		PyArg_ParseTuple(args, "OOO", &otypes, &oxyz, &oparams);
-
-		std::vector<int> types; pyListToVectorInt(otypes, &types);
-		std::vector<float> xyz; pyListToVectorFloat(oxyz, &xyz);
-
-		const std::array<int, 3> type {static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 0))),
-										static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 1))),
-										static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 2)))};
-		char d = type.size();
-		std::array<std::pair<float, float>, 2> value_d;
-		for (char i = 0; i < 2; i++, d += 2)
-		{
-			value_d[i].first = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d)));
-			value_d[i].second = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d + 1)));
-
-			if (value_d[i].first == 0) {
-				useDistances(self);
-				value_d[i].second = p_distances->minDistance(type[i], type[i + 1]);
-			}
-
-			if (value_d[i].second == 0) {
-				useDistances(self);
-				value_d[i].second = p_distances->maxDistance(type[i], type[i + 1]);
-			}
+		if (!PyArg_ParseTuple(args, "OO", &otuples, &oparams)) {
+			deb_write("! Critic Error: Parse Error - return None");
+			Py_RETURN_NONE;
 		}
 
-		std::pair<float, float> value_a;
+		Prepare_WC all(otuples);
 
-		value_a.first = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d)));
-		value_a.second = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d + 1)));
+		const std::array<int, 3> type {static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 0))),
+			                           static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 1))),
+									   static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 2)))};
+		char d = type.size();
+		auto value_d = FindDParamsParse<2>(self, oparams, type, d);
+		auto value_a = FindATParamsParse<1>(oparams, d);
 
-		std::string ret = FindAngleWC(types, xyz, type, value_d, value_a);
 
+		std::string ret = FindAngleWC(all.types, all.points, type, value_d, value_a[0]);
+
+		deb_write("cpplib_FindAngleWC: parse and return");
 		return PyUnicode_FromString(ret.c_str());
 	}
 	static PyObject* cpplib_FindTorsionIC(PyObject* self, PyObject* args) {
 
 		PyObject* ocell = NULL;
 		PyObject* osymm = NULL;
-		PyObject* oxyz = NULL;
-		PyObject* otypes = NULL;
+		PyObject* otuples = NULL;
 		PyObject* oparams = NULL;
-		PyArg_ParseTuple(args, "OOOOO", &ocell, &osymm, &otypes, &oxyz, &oparams);
-
-		std::array<float, 6> cell;
-		for (Py_ssize_t i = 0; i < 6; i++) {
-			cell[i] = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(ocell, i)));
+		if (!PyArg_ParseTuple(args, "OOOO", &ocell, &osymm, &otuples, &oparams)) {
+			deb_write("! Critic Error: Parse Error - return None");
+			Py_RETURN_NONE;
 		}
 
-		std::vector<const char*> symm; pyListToVectorCharP(osymm, &symm);
-		std::vector<int> types; pyListToVectorInt(otypes, &types);
-		std::vector<float> xyz; pyListToVectorFloat(oxyz, &xyz);
+		Prepare_IC all(ocell, osymm, otuples);
 
 		const std::array<int, 4> type {static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 0))),
 										static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 1))),
 										static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 2))),
 										static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 3)))};
+
 		char d = type.size();
-		std::array<std::pair<float, float>, 3> value_d;
-		for (char i = 0; i < 3; i++, d += 2)
-		{
-			value_d[i].first = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d)));
-			value_d[i].second = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d + 1)));
+		auto value_d = FindDParamsParse<3>(self, oparams, type, d);
+		auto value_a = FindATParamsParse<2>(oparams, d);
+		auto value_t = FindATParamsParse<2>(oparams, d);
 
-			if (value_d[i].first == 0) {
-				useDistances(self);
-				value_d[i].second = p_distances->minDistance(type[i], type[i + 1]);
-			}
-
-			if (value_d[i].second == 0) {
-				useDistances(self);
-				value_d[i].second = p_distances->maxDistance(type[i], type[i + 1]);
-			}
-		}
-		std::array<std::pair<float, float>, 2> value_a;
-		for (char i = 0; i < 2; i++, d += 2)
-		{
-			value_a[i].first = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d)));
-			value_a[i].second = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d + 1)));
-		}
-		std::pair<float, float> value_t;
-
-		value_t.first = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d)));
-		value_t.second = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d + 1)));
-
-		std::string ret = FindTorsionIC(cell, symm, types, xyz, type, value_d, value_a, value_t);
+		std::string ret = FindTorsionIC(all.cell, all.symm, all.types, all.points, type, value_d, value_a, value_t[0]);
 
 		return PyUnicode_FromString(ret.c_str());
 	}
 	static PyObject* cpplib_FindTorsionWC(PyObject* self, PyObject* args) {
 
-		PyObject* oxyz = NULL;
-		PyObject* otypes = NULL;
+		PyObject* otuples = NULL;
 		PyObject* oparams = NULL;
-		PyArg_ParseTuple(args, "OOO", &otypes, &oxyz, &oparams);
+		if (!PyArg_ParseTuple(args, "OO", &otuples, &oparams)) {
+			deb_write("! Critic Error: Parse Error - return None");
+			Py_RETURN_NONE;
+		}
 
-		std::vector<int> types; pyListToVectorInt(otypes, &types);
-		std::vector<float> xyz; pyListToVectorFloat(oxyz, &xyz);
+		Prepare_WC all(otuples);
 
 		const std::array<int, 4> type {static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 0))),
 										static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 1))),
 										static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 2))),
 										static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 3)))};
+
 		char d = type.size();
-		std::array<std::pair<float, float>, 3> value_d;
-		for (char i = 0; i < 3; i++, d += 2)
-		{
-			value_d[i].first = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d)));
-			value_d[i].second = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d + 1)));
+		auto value_d = FindDParamsParse<3>(self, oparams, type, d);
+		auto value_a = FindATParamsParse<2>(oparams, d);
+		auto value_t = FindATParamsParse<2>(oparams, d);
 
-			if (value_d[i].first == 0) {
-				useDistances(self);
-				value_d[i].second = p_distances->minDistance(type[i], type[i + 1]);
-			}
-
-			if (value_d[i].second == 0) {
-				useDistances(self);
-				value_d[i].second = p_distances->maxDistance(type[i], type[i + 1]);
-			}
-		}
-		std::array<std::pair<float, float>, 2> value_a;
-		for (char i = 0; i < 2; i++, d += 2)
-		{
-			value_a[i].first = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d)));
-			value_a[i].second = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d + 1)));
-		}
-		std::pair<float, float> value_t;
-
-		value_t.first = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d)));
-		value_t.second = static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, d + 1)));
-
-		std::string ret = FindTorsionWC(types, xyz, type, value_d, value_a, value_t);
+		std::string ret = FindTorsionWC(all.types, all.points, type, value_d, value_a, value_t[0]);
 
 		return PyUnicode_FromString(ret.c_str());
 	}
@@ -675,20 +589,14 @@ extern "C" {
 
 		PyObject* ocell = NULL;
 		PyObject* osymm = NULL;
-		PyObject* otypes = NULL;
-		PyObject* oxyz = NULL;
-		PyArg_ParseTuple(args, "OOOO", &ocell, &osymm, &otypes, &oxyz);
-
-		std::array<float, 6> cell;
-		for (Py_ssize_t i = 0; i < 6; i++) {
-			cell[i] = static_cast<float>(PyFloat_AsDouble(PyList_GetItem(ocell, i)));
+		PyObject* otuples = NULL;
+		if (!PyArg_ParseTuple(args, "OOO", &ocell, &osymm, &otuples)) {
+			deb_write("! Critic Error: Parse Error - return None");
+			Py_RETURN_NONE;
 		}
+		Prepare_IC all(ocell, osymm, otuples);
 
-		std::vector<const char*> symm; pyListToVectorCharP(osymm, &symm);
-		std::vector<int> types; pyListToVectorInt(otypes, &types);
-		std::vector<float> xyz; pyListToVectorFloat(oxyz, &xyz);
-
-		auto dat = FindDAT_IC(cell, symm, types, xyz);
+		auto dat = FindDAT_IC(all.cell, all.symm, all.types, all.points);
 		auto& datdist = std::get<0>(dat);
 		auto& datang = std::get<1>(dat);
 		auto& dattor = std::get<2>(dat);
@@ -726,18 +634,12 @@ extern "C" {
 
 		return ret;
 	}
-	static PyObject* cpplib_FindDAT_WC(PyObject* self, PyObject* args) {
+	static PyObject* cpplib_FindDAT_WC(PyObject* self, PyObject* otuples) {
+		deb_write("cpplib_FindDAT_WC started");
 
-		PyObject* ocell = NULL;
-		PyObject* osymm = NULL;
-		PyObject* otypes = NULL;
-		PyObject* oxyz = NULL;
-		PyArg_ParseTuple(args, "OO", &otypes, &oxyz);
-
-		std::vector<int> types; pyListToVectorInt(otypes, &types);
-		std::vector<float> xyz; pyListToVectorFloat(oxyz, &xyz);
-
-		auto dat = FindDAT_WC(types, xyz);
+		Prepare_WC all(otuples);
+		
+		auto dat = FindDAT_WC(all.types, all.points);
 		auto& datdist = std::get<0>(dat);
 		auto& datang = std::get<1>(dat);
 		auto& dattor = std::get<2>(dat);
@@ -783,19 +685,30 @@ extern "C" {
 
 	static PyObject* cpplib_himp(PyObject* self, PyObject* args) {
 		// args [2] = [(type,x,y,z), ... ], 
-		//            length
+		//            length : float or [float, ...]
 
 		PyObject* o_list = NULL;
+		PyObject* o_himp = NULL;
 		std::vector<AtomTypeData> types;
 		std::vector<PointType> points;
-		float himp = 0;
+		std::vector<FloatingPointType> himp;
 
-		PyArg_ParseTuple(args, "Of", &o_list, &himp);
+		if (!PyArg_ParseTuple(args, "OO", &o_list, &o_himp)) {
+			deb_write("! Critic Error: Parse Error - return None");
+			Py_RETURN_NONE;
+		}
 
 		deb_write("py_himp invoke pyTXYZparse");
 		pyTXYZparse(o_list, &types, &points);
 		deb_write("py_himp returned from pyTXYZparse");
-
+		bool simplehimp = PyFloat_CheckExact(o_himp);
+		if (simplehimp) {
+			himp.resize(cpplib::mend_size, static_cast<FloatingPointType>(PyFloat_AsDouble(o_himp)));
+		}
+		else {
+			pyListToVectorFloat(o_himp, &himp);
+		}
+		const int himp_s = himp.size();
 		// Code section
 		const int s = types.size();
 		for (int i = 0; i < s; i++)
@@ -812,7 +725,11 @@ extern "C" {
 					best = j;
 				}
 			}
-			points[i] = (points[best] + ((points[i] - points[best])* (himp / dist)));
+			if (himp_s <= types[best]) {
+				std::string err = std::string("Too short himp list: type ") + std::to_string(types[best]) + " is not exist.";
+				return Py_BuildValue("{s:s}", "Error", err.c_str());
+			}
+			points[i] = (points[best] + ((points[i] - points[best])* (himp[types[best]] / dist)));
 		}
 		
 		// Return section
@@ -837,11 +754,11 @@ extern "C" {
 static struct PyMethodDef methods[] = {
 	{ "GenBonds", cpplib_GenBonds, METH_O, "Generate bond list"},
 	{ "GenBondsEx", cpplib_GenBondsEx, METH_O, "Generate bond list with length"},
-	{ "GenSymm", cpplib_GenSymm, METH_VARARGS, "Generates symmetry by symm code"},
 	{ "SearchMain", cpplib_SearchMain, METH_VARARGS, "Compare graph with data"},
 	{ "CompareGraph", cpplib_CompareGraph, METH_VARARGS, "Compare two graphs"},
 	{ "FindMoleculesInCell", cpplib_FindMoleculesInCell, METH_VARARGS, "Create graph from cell"},
-	{ "FindMoleculesWithoutCell", cpplib_FindMoleculesWithoutCell, METH_VARARGS, "Create graph from xyz"},
+	{ "FindMoleculesWithoutCell", cpplib_FindMoleculesWithoutCell, METH_O, "Create graph from xyz"},
+	{ "GenSymm", cpplib_GenSymm, METH_VARARGS, "Generates symmetry by symm code"},
 	{ "FindDistanceIC", cpplib_FindDistanceIC, METH_VARARGS, "Find distances with current parameters in cell"},
 	{ "FindDistanceWC", cpplib_FindDistanceWC, METH_VARARGS, "Find distances with current parameters in xyz"},
 	{ "FindAngleIC", cpplib_FindAngleIC, METH_VARARGS, "Find angles with current parameters in cell"},
@@ -849,7 +766,7 @@ static struct PyMethodDef methods[] = {
 	{ "FindTorsionIC", cpplib_FindTorsionIC, METH_VARARGS, "Find torsions with current parameters in cell"},
 	{ "FindTorsionWC", cpplib_FindTorsionWC, METH_VARARGS, "Find torsions with current parameters in xyz"},
 	{ "FindDAT_IC", cpplib_FindDAT_IC, METH_VARARGS, "Create dictionary with distances, angles and torsions in cell"},
-	{ "FindDAT_WC", cpplib_FindDAT_WC, METH_VARARGS, "Create dictionary with distances, angles and torsions in xyz"},
+	{ "FindDAT_WC", cpplib_FindDAT_WC, METH_O, "Create dictionary with distances, angles and torsions in xyz"},
 	{ "SortDatabase", cpplib_SortDatabase, METH_O, "Sort graph"},
 	{ "himp", cpplib_himp, METH_VARARGS, "Moves hydrogens to the nearest atom"},
 

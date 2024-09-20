@@ -100,7 +100,12 @@ namespace cpplib {
 			static constexpr T torsionGrad(const Point& a, const Point& b, const Point& c, const Point& d) noexcept {
 				return RadtoGrad(torsionRad(a, b, c, d));
 			}
-
+			constexpr Point& round() noexcept {
+				a_[0] = std::round(a_[0]);
+				a_[1] = std::round(a_[1]);
+				a_[2] = std::round(a_[2]);
+				return *this;
+			}
 
 			//Operators
 			constexpr Point operator-() const noexcept {
