@@ -147,29 +147,20 @@ std::tuple<std::string, std::string, FindMoleculesType::RightType>  FindMolecule
 	return fm.findMolecules(distances, res.first, res.second, errorMsg);
 }
 
-std::string FindDistanceWC(cpplib::currents::FAMStructType::AtomContainerType& types,
+std::vector<FindGeometryType::tupleDistance> FindDistanceWC(cpplib::currents::FAMStructType::AtomContainerType& types,
 						   cpplib::currents::FAMStructType::PointConteinerType& points,
 						   const std::array<int, 2>& type,
-						   const std::pair<float, float>& value)
-{
+						   const std::pair<float, float>& value) {
 	FAMStructType fs;
 	ParseDataType(fs, std::move(types), std::move(points));
 	FindGeometryType fg(fs);
 	const auto raw = fg.findDistance(static_cast<FindGeometryType::AtomType>(type[0]),
 										static_cast<FindGeometryType::AtomType>(type[1]),
 										value);
-	const auto raws = raw.size();
-	std::string res;
-	for (size_t i = 0; i < raws; i++)
-	{
-		res += std::to_string(std::get<0>(raw[i])) + ':';
-		res += std::to_string(std::get<1>(raw[i])) + ':';
-		res += std::to_string(std::get<2>(raw[i])) + ";\n";
-	}
-	return res;
+	return raw;
 }
 
-std::string FindDistanceIC(const std::array<float, 6>& unit_cell,
+std::vector<FindGeometryType::tupleDistance> FindDistanceIC(const std::array<float, 6>& unit_cell,
 						   std::vector<const char*>& symm,
 						   cpplib::currents::FAMStructType::AtomContainerType& types,
 						   cpplib::currents::FAMStructType::PointConteinerType& points,
@@ -190,23 +181,14 @@ std::string FindDistanceIC(const std::array<float, 6>& unit_cell,
 	const auto raw = fg.findDistance(static_cast<FindGeometryType::AtomType>(std::get<0>(type)),
 										static_cast<FindGeometryType::AtomType>(std::get<1>(type)),
 										value);
-	const auto raws = raw.size();
-	std::string res;
-	for (size_t i = 0; i < raws; i++)
-	{
-		res += std::to_string(std::get<0>(raw[i])) + ':';
-		res += std::to_string(std::get<1>(raw[i])) + ':';
-		res += (std::to_string(std::get<2>(raw[i])) + ';') + '\n';
-	}
-	return res;
+	return raw;
 }
 
-std::string FindAngleWC(cpplib::currents::FAMStructType::AtomContainerType& types,
-						cpplib::currents::FAMStructType::PointConteinerType& points,
-						const std::array<int, 3>& type,
-						const std::array<std::pair<float, float>, 2>& value_d,
-						const std::pair<float, float>& value_a)
-{
+std::vector<FindGeometryType::tupleAngle> FindAngleWC(cpplib::currents::FAMStructType::AtomContainerType& types,
+						                              cpplib::currents::FAMStructType::PointConteinerType& points,
+						                              const std::array<int, 3>& type,
+						                              const std::array<std::pair<float, float>, 2>& value_d,
+						                              const std::pair<float, float>& value_a) {
 	FAMStructType fs;
 	ParseDataType(fs, std::move(types), std::move(points));
 	FindGeometryType fg(fs);
@@ -217,25 +199,16 @@ std::string FindAngleWC(cpplib::currents::FAMStructType::AtomContainerType& type
 										static_cast<FindGeometryType::AtomType>(std::get<2>(type)),
 										value_d[1]);
 	const auto raw = fg.findAngle(raw12, raw23, std::make_pair(cpplib::geometry::GradtoRad(value_a.first), cpplib::geometry::GradtoRad(value_a.second)));
-	const auto raws = raw.size();
-	std::string res;
-	for (size_t i = 0; i < raws; i++)
-	{
-		res += std::to_string(std::get<0>(raw[i])) + ':';
-		res += std::to_string(std::get<1>(raw[i])) + ':';
-		res += std::to_string(std::get<2>(raw[i])) + ':';
-		res += (std::to_string(cpplib::geometry::RadtoGrad(std::get<3>(raw[i]))) + ';') + '\n';
-	}
-	return res;
+	return raw;
 }
 
-std::string FindAngleIC(const std::array<float, 6>& unit_cell,
-						std::vector<const char*>& symm, 
-						cpplib::currents::FAMStructType::AtomContainerType& types,
-						cpplib::currents::FAMStructType::PointConteinerType& points,
-						const std::array<int, 3>& type,
-						const std::array<std::pair<float, float>, 2>& value_d,
-						const std::pair<float, float>& value_a)
+std::vector<FindGeometryType::tupleAngle> FindAngleIC(const std::array<float, 6>& unit_cell,
+						                              std::vector<const char*>& symm, 
+						                              cpplib::currents::FAMStructType::AtomContainerType& types,
+						                              cpplib::currents::FAMStructType::PointConteinerType& points,
+						                              const std::array<int, 3>& type,
+						                              const std::array<std::pair<float, float>, 2>& value_d,
+						                              const std::pair<float, float>& value_a)
 {
 	FAMStructType fs;
 	FAMCellType fc(FAMCellType::base(unit_cell, true));
@@ -255,25 +228,16 @@ std::string FindAngleIC(const std::array<float, 6>& unit_cell,
 	const auto raw23 = fg.findDistance(static_cast<FindGeometryType::AtomType>(std::get<1>(type)),
 										static_cast<FindGeometryType::AtomType>(std::get<2>(type)),
 										value_d[1]);
-	const auto raw = fg.findAngle(raw12, raw23, std::make_pair(cpplib::geometry::GradtoRad(value_a.first), cpplib::geometry::GradtoRad(value_a.second)));
-	const auto raws = raw.size();
-	std::string res;
-	for (size_t i = 0; i < raws; i++)
-	{
-		res += std::to_string(std::get<0>(raw[i])) + ':';
-		res += std::to_string(std::get<1>(raw[i])) + ':';
-		res += std::to_string(std::get<2>(raw[i])) + ':';
-		res += (std::to_string(cpplib::geometry::RadtoGrad(std::get<3>(raw[i]))) + ';') + '\n';
-	}
-	return res;
+	auto raw = fg.findAngle(raw12, raw23, std::make_pair(cpplib::geometry::GradtoRad(value_a.first), cpplib::geometry::GradtoRad(value_a.second)));
+	return raw;
 }
 
-std::string FindTorsionWC(cpplib::currents::FAMStructType::AtomContainerType& types,
-						  cpplib::currents::FAMStructType::PointConteinerType& points,
-							const std::array<int, 4>& type,
-							const std::array<std::pair<float, float>, 3>& value_d,
-							const std::array<std::pair<float, float>, 2>& value_a,
-							const std::pair<float, float>& value_t)
+std::vector<FindGeometryType::tupleTorsion> FindTorsionWC(cpplib::currents::FAMStructType::AtomContainerType& types,
+						                                  cpplib::currents::FAMStructType::PointConteinerType& points,
+							                              const std::array<int, 4>& type,
+							                              const std::array<std::pair<float, float>, 3>& value_d,
+							                              const std::array<std::pair<float, float>, 2>& value_a,
+							                              const std::pair<float, float>& value_t)
 {
 	FAMStructType fs;
 	ParseDataType(fs, std::move(types), std::move(points));
@@ -286,29 +250,18 @@ std::string FindTorsionWC(cpplib::currents::FAMStructType::AtomContainerType& ty
 									 std::make_pair(cpplib::geometry::GradtoRad(value_a[0].first), cpplib::geometry::GradtoRad(value_a[0].second)));
 	const auto raw234 = fg.findAngle(raw23, raw34,
 									 std::make_pair(cpplib::geometry::GradtoRad(value_a[1].first), cpplib::geometry::GradtoRad(value_a[1].second)));
-	const auto raw = fg.findTorsion(raw123, raw234,
-									std::make_pair(cpplib::geometry::GradtoRad(value_t.first), cpplib::geometry::GradtoRad(value_t.second)));
-
-	const auto raws = raw.size();
-	std::string res;
-	for (size_t i = 0; i < raws; i++)
-	{
-		res += std::to_string(std::get<0>(raw[i])) + ':';
-		res += std::to_string(std::get<1>(raw[i])) + ':';
-		res += std::to_string(std::get<2>(raw[i])) + ':';
-		res += std::to_string(std::get<3>(raw[i])) + ':';
-		res += std::to_string(cpplib::geometry::RadtoGrad(std::get<4>(raw[i]))) + ";\n";
-	}
-	return res;
+	auto raw = fg.findTorsion(raw123, raw234,
+							  std::make_pair(cpplib::geometry::GradtoRad(value_t.first), cpplib::geometry::GradtoRad(value_t.second)));
+	return raw;
 }
-std::string FindTorsionIC(const std::array<float, 6>& unit_cell,
-						  std::vector<const char*>& symm,
-						  cpplib::currents::FAMStructType::AtomContainerType& types,
-						  cpplib::currents::FAMStructType::PointConteinerType& points,
-						  const std::array<int, 4>& type,
-						  const std::array<std::pair<float, float>, 3>& value_d,
-						  const std::array<std::pair<float, float>, 2>& value_a,
-						  const std::pair<float, float>& value_t) {
+std::vector<FindGeometryType::tupleTorsion> FindTorsionIC(const std::array<float, 6>& unit_cell,
+						                                  std::vector<const char*>& symm,
+						                                  cpplib::currents::FAMStructType::AtomContainerType& types,
+						                                  cpplib::currents::FAMStructType::PointConteinerType& points,
+						                                  const std::array<int, 4>& type,
+						                                  const std::array<std::pair<float, float>, 3>& value_d,
+						                                  const std::array<std::pair<float, float>, 2>& value_a,
+						                                  const std::pair<float, float>& value_t) {
 	FAMStructType fs;
 	FAMCellType fc(FAMCellType::base(unit_cell, true));
 	ParseDataType(fs, fc, symm, std::move(types), std::move(points));
@@ -331,18 +284,7 @@ std::string FindTorsionIC(const std::array<float, 6>& unit_cell,
 									 std::make_pair(cpplib::geometry::GradtoRad(value_a[1].first), cpplib::geometry::GradtoRad(value_a[1].second)));
 	const auto raw = fg.findTorsion(raw123, raw234,
 									std::make_pair(cpplib::geometry::GradtoRad(value_t.first), cpplib::geometry::GradtoRad(value_t.second)));
-
-	const auto raws = raw.size();
-	std::string res;
-	for (size_t i = 0; i < raws; i++)
-	{
-		res += std::to_string(std::get<0>(raw[i])) + ':';
-		res += std::to_string(std::get<1>(raw[i])) + ':';
-		res += std::to_string(std::get<2>(raw[i])) + ':';
-		res += std::to_string(std::get<3>(raw[i])) + ':';
-		res += std::to_string(cpplib::geometry::RadtoGrad(std::get<4>(raw[i]))) + ";\n";
-	}
-	return res;
+	return raw;
 }
 
 cpplib::DATTuple FindDAT_IC(const std::array<float, 6>& unit_cell,
