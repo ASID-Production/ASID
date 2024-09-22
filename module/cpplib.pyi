@@ -252,8 +252,8 @@ def FindTorsionWC(atoms: List[Tuple[int, float, float, float]], params: List[int
     """
     ...
 def FindDAT_IC(cell_params: List[float,float,float,float,float,float], symms: List[str], atoms: List[(int, float, float, float)]) -> Dict[
-    "bonds":  List[Tuple[int,int,int,int,float]],
-    "angles": List[Tuple[int,int,int,int,float]],
+    "bonds":  List[Tuple[int,int,float]],
+    "angles": List[Tuple[int,int,int,float]],
     "tors":   List[Tuple[int,int,int,int,float]]]:
     """
         Create dictionary with distances, angles and torsions in cell.
@@ -281,8 +281,8 @@ def FindDAT_IC(cell_params: List[float,float,float,float,float,float], symms: Li
     """
     ...
 def FindDAT_WC(atoms: List[(int, float, float, float)]) -> Dict[
-    "bonds":  List[Tuple[int,int,int,int,float]],
-    "angles": List[Tuple[int,int,int,int,float]],
+    "bonds":  List[Tuple[int,int,float]],
+    "angles": List[Tuple[int,int,int,float]],
     "tors":   List[Tuple[int,int,int,int,float]]]:
     """
         Create dictionary with distances, angles and torsions in xyz.
