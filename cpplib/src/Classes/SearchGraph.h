@@ -30,6 +30,51 @@
 #include <list>
 #include <vector>
 namespace cpplib {
+	class UllmannTable {
+	public:
+		using AtomIndex = currents::AtomIndex;
+		using RequestNodeType = Node<currents::AtomTypeRequest>;
+		using DatabaseNodeType = Node<currents::AtomTypeData>;
+		using CompareFuncType = std::function<bool(const RequestNodeType& inputNode, const DatabaseNodeType& dataNode, const bool exact)> const&;
+	private:
+		std::vector<char> vec;
+		AtomIndex rs = 0;
+		AtomIndex ds = 0;
+	public:
+		UllmannTable() = default;
+		UllmannTable(AtomIndex r, AtomIndex d) : vec(size_t(r)* d), rs(r), ds(d) {
+			_ASSERT(r > 0 && d > 0);
+		}
+		bool Check(const RequestNodeType& inputNode, const DatabaseNodeType& dataNode, const bool exact, CompareFuncType func) {
+			const char c = 0;
+			const auto i_ID = inputNode.getID();
+			const auto d_ID = dataNode.getID();
+			char g = get(i_ID, d_ID);
+			if (g == 0) {
+				bool b = func(inputNode, dataNode, exact);
+				if (b)
+					set(i_ID, d_ID, 1);
+				else
+					set(i_ID, d_ID, -1);
+				return b;
+			}
+			else
+				return g == 1;
+		}
+	private:
+		inline char get(AtomIndex r, AtomIndex d) {
+			_ASSERT(r < rs && d < ds);
+			size_t s = r;
+			return vec[s * ds + d];
+		}
+		inline void set(AtomIndex r, AtomIndex d, char state) {
+			_ASSERT(r < rs && d < ds);
+			size_t s = r;
+			vec[s * ds + d] = state;
+		}
+	};
+
+
 	class SearchGraph {
 	public:
 		// Declarations
@@ -54,7 +99,7 @@ namespace cpplib {
 		CompareVectorType comp_;
 		Log log_;
 		::std::vector<bool> usedInComp_;
-
+		UllmannTable ullmann;
 	public:
 		SearchGraph() {}
 		inline void setupInput(RequestGraphType&& molGraph) noexcept {
@@ -72,6 +117,7 @@ namespace cpplib {
 			comp_.assign(inputSize_, 0);
 			log_.clear();
 			usedInComp_.assign(dataSize_, false);
+			ullmann = UllmannTable(inputSize_, dataSize_);
 		}
 		bool searchTry(AtomIndex startI, AtomIndex startD, bool exact) {
 			addComp(startI, startD);
@@ -93,7 +139,7 @@ namespace cpplib {
 		bool startFullSearch(const bool exact, AtomIndex startAtom = 0) {
 			if (startAtom == 0) startAtom = input_.findStart();
 			for (AtomIndex i = 1; i < dataSize_; i++) {
-				if (compare(input_[startAtom], data_[i], exact) == false) {
+				if (ullmann.Check(input_[startAtom], data_[i], exact, &compare) == false) {
 					continue;
 				}
 				if (searchTry(startAtom, i, exact) == true)
@@ -104,7 +150,7 @@ namespace cpplib {
 		}
 	private:
 		// Node comparision
-		bool compare(const RequestNodeType& inputNode, const DatabaseNodeType& dataNode, const bool exact) const noexcept {
+		static bool compare(const RequestNodeType& inputNode, const DatabaseNodeType& dataNode, const bool exact) noexcept {
 			if (compareLow(inputNode, dataNode, exact) == false)
 				return false;
 
@@ -126,7 +172,7 @@ namespace cpplib {
 			}
 			return true;
 		}
-		inline bool compareLow(const RequestNodeType& inputNode, const DatabaseNodeType& dataNode, const bool exact) const noexcept {
+		static inline bool compareLow(const RequestNodeType& inputNode, const DatabaseNodeType& dataNode, const bool exact) noexcept {
 			if (exact) {
 				return inputNode == dataNode;
 			}
@@ -232,7 +278,7 @@ namespace cpplib {
 			}
 			// need to find Twin for nextI
 			for (AtomIndex i = 1; i < dataSize_; i++) {
-				if ((usedInComp_[i] == true) || compare(input_[nextI], data_[i], exact) == false)
+				if ((usedInComp_[i] == true) || ullmann.Check(input_[nextI], data_[i], exact, &compare) == false)
 					continue;
 
 				addComp(nextI, i);
@@ -275,7 +321,7 @@ namespace cpplib {
 				const AtomIndex neiID = neiData.getID();
 				if (usedInComp_[neiID] == true)
 					continue;
-				if (compare(input_[nextI], neiData, exact) == false)
+				if (ullmann.Check(input_[nextI], neiData, exact, &compare) == false)
 					continue;
 				addComp(nextI, neiID);
 				prepareLogAndNodes(curI, nextI);

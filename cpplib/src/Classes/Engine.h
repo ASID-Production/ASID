@@ -32,6 +32,7 @@
 #include <string>
 
 #include <bitset> // for std::array in XAtom
+#include <functional>
 
 #include "../BaseHeaders/Support.h"
 #include "../BaseHeaders/DebugMes.h"
@@ -309,6 +310,9 @@ namespace cpplib {
 		}
 		inline void setCoord(Coord&& c) {
 			coord_ = c;
+		}
+		inline void calculateCoord() {
+			coord_ = Coord(hAtoms_ + neighboursSize());
 		}
 
 		// Algorithms

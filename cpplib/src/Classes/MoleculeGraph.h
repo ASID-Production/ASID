@@ -65,7 +65,6 @@ namespace cpplib {
 			//mg.sortGraph();
 			return mg;
 		}
-
 		static ::std::pair<MoleculeGraph, ::std::bitset<mend_size>> ReadInput(const char* str) {
 			MoleculeGraph mg;
 			const auto sn = mg.parseMainstring<true>(str);
@@ -74,7 +73,6 @@ namespace cpplib {
 			mg.sortGraph();
 			return ::std::make_pair(std::move(mg), ::std::move(multiAtomBits));
 		}
-
 
 		constexpr AtomIndex size() const noexcept {
 			return static_cast<AtomIndex>(data_.size());
@@ -120,13 +118,7 @@ namespace cpplib {
 
 		// For Search
 		constexpr AtomIndex findStart() const {
-			const AtomIndex s = size();
-			AtomIndex m = 1;
-			for (AtomIndex i = 2; i < s; i++) {
-				if ((data_[i]).RawMore(data_[m]))
-					m = i;
-			}
-			return m;
+			return 1;
 		}
 		constexpr AtomIndex getNeighbourId(AtomIndex cur, AtomIndex neighbourIt) const noexcept {
 			return data_[cur].getNeighbour(neighbourIt)->getID();
@@ -305,8 +297,7 @@ namespace cpplib {
 			}
 			if (is_request == false) {
 				for (AtomIndex i = 1; i < sn; i++) {
-					Coord c = Coord(static_cast<Coord::argumentType>(data_[i].getHAtoms() + data_[i].neighboursSize()));
-					data_[i].setCoord(::std::move(c));
+					data_[i].calculateCoord();
 				}
 			}
 			return sn;
