@@ -199,7 +199,6 @@ def structure_search(
     return response
 
 
-@sync_to_async(thread_sensitive=False)
 def get_img2d(structure, request):
     '''Available formats: img (gif) and cml (ChemDraw).'''
     h = int(request.GET.get('h', 0))
