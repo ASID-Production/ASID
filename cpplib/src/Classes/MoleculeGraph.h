@@ -301,7 +301,9 @@ namespace cpplib {
 			for (AtomIndex i = 0; i < sb; i++) {
 				int a = readSingleInt(str);
 				int b = readSingleInt(str);
-				data_[a].addBondWithSort(data_[b]);
+				data_[a].addBondSimple(data_[b]);
+
+				//data_[a].addBondWithSort(data_[b]);
 			}
 			if (is_request == false) {
 				for (AtomIndex i = 1; i < sn; i++) {
@@ -309,6 +311,10 @@ namespace cpplib {
 					data_[i].setCoord(::std::move(c));
 				}
 			}
+			for (AtomIndex i = 0; i < sn; i++) {
+				data_[i].sortNeighbours();
+			}
+
 			return sn;
 		}
 		::std::bitset<mend_size> parseMultiatom(const char* str, const AtomIndex sn) {

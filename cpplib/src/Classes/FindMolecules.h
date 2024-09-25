@@ -536,8 +536,8 @@ namespace cpplib {
 				AtomIndex nei_size = net[res[low_pos]].neighboursSize();
 				for (AtomIndex j = 0; j < nei_size; j++) {
 					const auto cur_id = net[res[low_pos]].getNeighbour(j)->getID();
-					auto is_m = is_member(cur_id, res);
-					if (is_m != ((size_t)(-1))) {
+					auto is_m = static_cast<AtomIndex>(is_member(cur_id, res));
+					if (is_m != (static_cast<AtomIndex>((size_t)(-1)))) {
 						if (low_pos < is_m)
 							bonds.emplace_back(low_pos, is_m);
 						else {

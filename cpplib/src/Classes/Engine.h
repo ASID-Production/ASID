@@ -332,6 +332,10 @@ namespace cpplib {
 				((&other) + other.neighbours_[i])->sortNeighbours();
 			}
 		}
+		constexpr void addBondSimple(Node& other) {
+			neighbours_.push_back(&other - this);
+			other.neighbours_.push_back(this - &other);
+		}
 		constexpr void deleteBond(Node& other) {
 			deleteNeighbour(other);
 			other.deleteNeighbour(this);
