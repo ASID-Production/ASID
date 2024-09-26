@@ -193,6 +193,8 @@ def get_image(id, o_file_path, db_type='cryst', w=250, h=250):
     else:
         data = requests.get(f'{SESSION.url_base}/{url_mod}/{id}/export/2d/?h={h}&w={w}&file=0&f=img')
     data = data.content.decode(data.apparent_encoding)
+    if data == '0':
+        return None
     image_str = data.split(',')[1]
     image_data = base64.b64decode(image_str)
     path = o_file_path

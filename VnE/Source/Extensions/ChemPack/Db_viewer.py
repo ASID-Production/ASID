@@ -178,7 +178,7 @@ class StructuresListModel(QAbstractListModel):
         for ind in indices:
             id = self.data(ind, 99)['id']
             ref_code = self.data(ind, 99)['refcode']
-            o_file_path = opath.join(dir_path, ref_code, '.gif')
+            o_file_path = opath.join(dir_path, ref_code + '.gif')
             Db_bindings.get_image(id, o_file_path, db_type=self._last_db_type)
 
 
@@ -355,6 +355,7 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
         self.export_menu = QtWidgets.QMenu()
         self.export_refs_a = self.export_menu.addAction('export refs')
         self.export_cif_a = self.export_menu.addAction('export cif')
+        self.export_gifs_a = self.export_menu.addAction('export gif')
 
         self.import_menu = QtWidgets.QMenu()
         self.import_refs_a = self.import_menu.addAction('import refs')
@@ -405,6 +406,7 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
         self.pushButton_6.pressed.connect(Db_bindings.SESSION.triggerLastConnectOp)
 
         self.export_refs_a.triggered.connect(self.exportRefs)
+        self.export_gifs_a.triggered.connect(self.exportGifs)
         self.import_refs_a.triggered.connect(self.importRefs)
 
     def setSpan(self):
@@ -478,7 +480,7 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
 
     def exportGifs(self):
         selection = self.listView.selectionModel().selectedIndexes()
-        filename, _ = QtWidgets.QFileDialog.getExistingDirectory()
+        filename = QtWidgets.QFileDialog.getExistingDirectory()
         self.list_model.exportGifs(selection, filename)
 
     def importRefs(self):
@@ -492,9 +494,10 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
 def exportGif():
     file, _ = QtWidgets.QFileDialog.getOpenFileName(filter='*.xyz *.cif')
     filename, _ = QtWidgets.QFileDialog.getSaveFileName(filter='*.gif')
-    if not Db_bindings.SESSION.ready:
-        Db_bindings.SESSION.startServer(8000)
-    Db_bindings.getImageFromFile(file, filename)
+    if filename and file:
+        if not Db_bindings.SESSION.ready:
+            Db_bindings.SESSION.startServer(8000)
+        Db_bindings.getImageFromFile(file, filename)
 
 
 def show():
