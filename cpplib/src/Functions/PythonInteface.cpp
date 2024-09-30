@@ -73,6 +73,10 @@ struct Prepare_IC : public Prepare_WC {
 	}
 };
 
+extern "C" {
+inline static void useDistances(PyObject * self);
+}
+
 template <char times>
 static std::array<std::pair<float, float>, times> FindDParamsParse(PyObject* self, PyObject* oparams, const std::array<int, times+1> type, char& d) {
 	std::array<std::pair<float, float>, times> value;

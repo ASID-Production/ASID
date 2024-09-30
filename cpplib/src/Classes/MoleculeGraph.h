@@ -33,11 +33,12 @@
 #include <type_traits> // for std::fundamental
 #include <numeric> // for std::iota
 #include <algorithm> // for std::stable_sort
+#include <sstream>
 namespace cpplib {
 	template<class A> class MoleculeGraph  {
 	public:
 		// Declarations
-		using NodeType = typename Node<A>;
+		using NodeType = Node<A>;
 		using NodeContainer = ::std::vector<NodeType>;
 		using BondType = currents::BondType;
 		using AtomIndex = currents::AtomIndex;
