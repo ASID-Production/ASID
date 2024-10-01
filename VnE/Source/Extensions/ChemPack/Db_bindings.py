@@ -205,13 +205,13 @@ def get_image(id, o_file_path, db_type='cryst', w=250, h=250):
 
 
 def getImageFromFile(file_path, o_file_path, format='gif', w=250, h=250):
-    formats = ['gif']
+    formats = ['gif', 'cml']
     if format not in formats:
         format = formats[0]
     url_mod = 'api/v1/generate'
     data_i = {'file_format ': opath.splitext(file_path)[1][1:],
             'output_format ': format,
-            'return_type': 'string',
+            'return_type': 'file',
             'h_size': f'{h}',
             'w_size': f'{w}',
             'name': opath.splitext(opath.basename(o_file_path))[0]}
@@ -221,9 +221,7 @@ def getImageFromFile(file_path, o_file_path, format='gif', w=250, h=250):
         data = requests.request('GET', f'{SESSION.url_base}/{url_mod}/2d/', headers=headers, data=data_i, files=files)
     else:
         data = requests.request('GET', f'{SESSION.url_base}/{url_mod}/2d/', headers={}, data=data_i, files=files)
-    data = data.content.decode(data.apparent_encoding)
-    image_str = data.split(',')[1]
-    image_data = base64.b64decode(image_str)
+    image_data = data.content
     image = open('.'.join([opath.splitext(o_file_path)[0], format]), 'wb')
     image.write(image_data)
     image.close()

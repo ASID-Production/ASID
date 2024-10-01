@@ -30,19 +30,23 @@ import debug
 
 DIALOG = None
 
-def execute():
+
+def execute(mol=None):
     from .ui import select_mol_dialog
     from ..ChemPack import MOLECULE_SYSTEMS
     global DIALOG
-    DIALOG = select_mol_dialog.SelectMolDialog(MOLECULE_SYSTEMS, attachCPprop)
-    DIALOG.show()
+    if mol is None:
+        DIALOG = select_mol_dialog.SelectMolDialog(MOLECULE_SYSTEMS, attachCPprop)
+        DIALOG.show()
+    else:
+        attachCPprop(mol)
 
 
 def attachCPprop(molsys):
     from PySide6.QtWidgets import QFileDialog
     from .parsers import PARSER
     molsys = molsys[1]
-    file_path = QFileDialog.getOpenFileName()
+    file_path = QFileDialog.getOpenFileName(filter='CPprop.txt')
     if file_path:
         cp_props = PARSER.parsCpProp(file_path[0])[0]
         cp_props = cp_props.children[0].children

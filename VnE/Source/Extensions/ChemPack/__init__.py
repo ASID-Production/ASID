@@ -157,6 +157,56 @@ def attachCPprop():
     return
 
 
+def parseMultiWfn():
+    from PySide6.QtWidgets import QFileDialog
+
+    global PARSER
+    global TREE_MODEL
+    if PARSER is None:
+        from .parsers import PARSER as parser
+        PARSER = parser
+    filename, _ = QFileDialog.getOpenFileName(caption='Molecule file', filter='*.pdb')
+    if not filename:
+        pass
+    else:
+        molsys, points_lists = None, None
+        if TREE_MODEL is not None:
+            molsys, points_lists = PARSER.parsPdb(filename, bond=True, root=TREE_MODEL.getRoot())
+            loadMolSys(molsys, points_lists)
+        else:
+            molsys, _ = PARSER.parsPdb(filename)
+
+    filename, _ = QFileDialog.getOpenFileName(caption='Critical points file', filter='*.pdb')
+    if not filename:
+        pass
+    else:
+        cp_molsys, points_lists = None, None
+        if TREE_MODEL is not None:
+            cp_molsys, cp_points_lists = PARSER.parsPdb(filename, bond=False, root=TREE_MODEL.getRoot())
+            cp_points_lists[1].rad = 0.15
+            loadMolSys(cp_molsys, cp_points_lists)
+        else:
+            cp_molsys, _ = PARSER.parsPdb(filename, bond=False)
+
+    filename, _ = QFileDialog.getOpenFileName(caption='Paths file', filter='*.pdb')
+    if not filename:
+        pass
+    else:
+        molsys, points_lists = None, None
+        if TREE_MODEL is not None:
+            molsys, points_lists = PARSER.parsPdb(filename, bond=False, root=TREE_MODEL.getRoot())
+            points_lists[1].rad = 0.05
+            loadMolSys(molsys, points_lists)
+        else:
+            molsys, _ = PARSER.parsPdb(filename, bond=False)
+
+    from . import attach_cpprop
+
+    attach_cpprop.execute(cp_points_lists)
+
+    return molsys, points_lists
+
+
 def parseWinxpro():
     from PySide6.QtWidgets import QFileDialog
 
@@ -208,6 +258,12 @@ def parsAIMALLsumviz():
     else:
         molsys, _ = PARSER.parsWinxproOut(filename)
     return molsys, points_lists
+
+
+def export2dDiagram():
+    from . import Db_viewer
+
+    Db_viewer.exportGif()
 
 
 def execute(model, uniform_model=None):
@@ -295,10 +351,6 @@ def setup(menu, model, uniform_model=None, *args, main_widget=None, **kwargs):
     action_export.triggered.connect(exportDataF)
     cmenu.addAction(action_export)
 
-    action_attach = QAction('Attach CPprop')
-    action_attach.triggered.connect(attachCPprop)
-    cmenu.addAction(action_attach)
-
     action_winx = QAction('Parse Winxpro')
     action_winx.triggered.connect(parseWinxpro)
     cmenu.addAction(action_winx)
@@ -307,5 +359,13 @@ def setup(menu, model, uniform_model=None, *args, main_widget=None, **kwargs):
     action_aimall.triggered.connect(parsAIMALLsumviz)
     cmenu.addAction(action_aimall)
 
-    actions = [open_action, action_test, action_DB, save_action, action_sym_op, action_export, action_attach, action_winx, action_aimall]
+    action_multiwfn = QAction('Parse Multiwfn')
+    action_multiwfn.triggered.connect(parseMultiWfn)
+    cmenu.addAction(action_multiwfn)
+
+    action_2d_export = QAction('Export 2d diagram')
+    action_2d_export.triggered.connect(export2dDiagram)
+    cmenu.addAction(action_2d_export)
+
+    actions = [open_action, action_test, action_DB, save_action, action_sym_op, action_export, action_winx, action_aimall, action_2d_export, action_multiwfn]
     return actions

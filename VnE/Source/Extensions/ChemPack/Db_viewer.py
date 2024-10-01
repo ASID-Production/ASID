@@ -223,13 +223,21 @@ class InfoTableModel(QAbstractTableModel):
         def rec_fill(obj):
             if type(obj) is dict:
                 for key in obj:
+                    keyt = self.fieldDecorator(str(key))
                     if type(obj[key]) is dict or type(obj[key]) is list:
-                        self._fields.append([str(key), ''])
-                        self._spans.append(len(self._fields)-1)
+                        if keyt is None:
+                            pass
+                        else:
+                            self._fields.append([str(keyt), ''])
+                            self._spans.append(len(self._fields)-1)
+                            rec_fill(obj[key])
                     else:
-                        if obj[key] is not None:
-                            self._fields.append([str(key), str(obj[key])])
-                    rec_fill(obj[key])
+                        if obj[key] is not None and obj[key] != '':
+                            value = str(self.valueDecorator(obj[key]))
+                            if keyt is None:
+                                pass
+                            else:
+                                self._fields.append([str(keyt), str(value)])
             elif type(obj) is list:
                 for item in obj:
                     rec_fill(item)
@@ -242,8 +250,8 @@ class InfoTableModel(QAbstractTableModel):
             self._image = Db_bindings.get_image_temp(selected_id)
         except Exception:
             self._image = None
+        self._fields.insert(0, ['Image', self._image])
         rec_fill(self._selected)
-        self._fields.insert(0, ['img', self._image])
         self._rows = len(self._fields)
         self.endResetModel()
 
@@ -263,6 +271,27 @@ class InfoTableModel(QAbstractTableModel):
 
     def headerData(self, section: int, orientation: Qt.Orientation, role: int = ...) -> typing.Any:
         return None
+
+    def fieldDecorator(self, field):
+        change = {'al': f'{chr(0x03B1)}, {chr(0x00B0)}', 'be': f'{chr(0x03B2)}, {chr(0x00B0)}', 'ga': f'{chr(0x03B3)}, {chr(0x00B0)}', 'r_factor': 'R-factor', 'id': None, 'zvalue': 'Z',
+                  'symops': 'Symmetry operations', 'number': 'Space group number', 'CCDC_number': 'CCDC number', 'a': f'a, {chr(0x212B)}', 'b': f'b, {chr(0x212B)}',
+                  'c': f'c, {chr(0x212B)}'}
+        if field:
+            text = change.get(field, -1)
+            if text != -1:
+                return text
+            else:
+                text = field.capitalize()
+            if '_' in text:
+                text = text.replace('_', ' ')
+            return text
+        return field
+
+    def valueDecorator(self, value):
+        if type(value) is float:
+            return round(value, 4)
+        else:
+            return value
 
 
 from .ui import search_dialog
@@ -493,11 +522,11 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
 
 def exportGif():
     file, _ = QtWidgets.QFileDialog.getOpenFileName(filter='*.xyz *.cif')
-    filename, _ = QtWidgets.QFileDialog.getSaveFileName(filter='*.gif')
+    filename, _ = QtWidgets.QFileDialog.getSaveFileName(filter='*.gif *.cml')
     if filename and file:
         if not Db_bindings.SESSION.ready:
             Db_bindings.SESSION.startServer(8000)
-        Db_bindings.getImageFromFile(file, filename)
+        Db_bindings.getImageFromFile(file, filename, format=filename.split('.')[1])
 
 
 def show():
@@ -505,8 +534,3 @@ def show():
     if DB_VIEWER is None:
         DB_VIEWER = DbWindow()
     DB_VIEWER.show()
-
-
-if MAIN_MENU:
-    exportGifAction = MAIN_MENU.addAction('Export 2d diagram')
-    exportGifAction.triggered.connect(exportGif)

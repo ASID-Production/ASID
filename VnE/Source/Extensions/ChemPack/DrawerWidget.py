@@ -2106,6 +2106,8 @@ class DrawWidget(Drawer_model_ui.Ui_Dialog, QtWidgets.QDialog):
     def exportTable(self):
         if self.organizer is not None:
             filename = QtWidgets.QFileDialog.getSaveFileName(parent=self, filter='*.csv')[0]
+            if not filename:
+                return
             try:
                 out = open(filename, 'w')
                 table = self.organizer.getTable()
