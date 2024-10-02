@@ -43,6 +43,7 @@ from django.http import HttpResponse
 from django_filters.rest_framework import DjangoFilterBackend
 from .filters import StructureFilter, QCStructureFilter
 from .substructure_filtration import set_filter
+from .viewsets import StructureModelViewSet
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -331,7 +332,7 @@ def gen_img2d_view(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-class StructureViewSet(ReadOnlyModelViewSet):
+class StructureViewSet(StructureModelViewSet):
     filter_backends = (DjangoFilterBackend,)
     filterset_class = StructureFilter
 
@@ -346,6 +347,16 @@ class StructureViewSet(ReadOnlyModelViewSet):
         if self.action == 'list':
             return RefcodeShortSerializer
         return RefcodeFullSerializer
+
+    def destroy(self, request, *args, **kwargs):
+        ''' Delete structure on request. Delete only authenticated users' structure!'''
+        if request.user.is_authenticated:
+            instance = self.get_object()
+            if instance.user == request.user:
+                instance.delete()
+                return Response(status=status.HTTP_204_NO_CONTENT)
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        return Response(status=status.HTTP_401_UNAUTHORIZED)
 
     @action(
         detail=True,
@@ -407,7 +418,7 @@ class StructureViewSet(ReadOnlyModelViewSet):
         )
 
 
-class QCStructureViewSet(ReadOnlyModelViewSet):
+class QCStructureViewSet(StructureModelViewSet):
     filter_backends = (DjangoFilterBackend,)
     filterset_class = QCStructureFilter
 
@@ -422,6 +433,16 @@ class QCStructureViewSet(ReadOnlyModelViewSet):
         if self.action == 'list':
             return QCRefcodeShortSerializer
         return QCRefcodeFullSerializer
+
+    def destroy(self, request, *args, **kwargs):
+        ''' Delete structure on request. Delete only authenticated users' structure!'''
+        if request.user.is_authenticated:
+            instance = self.get_object()
+            if instance.user == request.user:
+                instance.delete()
+                return Response(status=status.HTTP_204_NO_CONTENT)
+            return Response(status=status.HTTP_403_FORBIDDEN)
+        return Response(status=status.HTTP_401_UNAUTHORIZED)
 
     @action(
         detail=True,
