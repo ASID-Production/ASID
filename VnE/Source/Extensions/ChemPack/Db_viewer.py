@@ -579,8 +579,9 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
             self.list_model.iterPopulate(((x, 'refcode', 'cryst', 'refcode') for x in data))
 
 
-def exportGif():
-    file, _ = QtWidgets.QFileDialog.getOpenFileName(filter='*.xyz *.cif')
+def exportGif(file=None):
+    if file is None:
+        file, _ = QtWidgets.QFileDialog.getOpenFileName(filter='*.xyz *.cif')
     filename, _ = QtWidgets.QFileDialog.getSaveFileName(filter='*.gif *.cml')
     if filename and file:
         if not Db_bindings.SESSION.ready:
