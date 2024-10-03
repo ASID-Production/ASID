@@ -61,7 +61,7 @@ class StructuresListModel(QAbstractListModel):
         self._display_tag = 'refcode'
         self._search_proc = None
         self._iter_search_procs = []
-        self._last_db_type = None
+        self._last_db_type = 'cryst'
 
     def populate(self, request):
         request, search_type, db_type = request
@@ -579,14 +579,70 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
             self.list_model.iterPopulate(((x, 'refcode', 'cryst', 'refcode') for x in data))
 
 
+DIALOG = None
+
+
 def exportGif(file=None):
+
+    class Dialog(QtWidgets.QDialog):
+        def __init__(self, parent=None):
+            QtWidgets.QDialog.__init__(self, parent)
+            self.setWindowTitle('Export 2d diagram')
+            buttonBox = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+
+            self.layout = QtWidgets.QVBoxLayout()
+
+            self.frame1 = QtWidgets.QFrame()
+            self.hlayout = QtWidgets.QHBoxLayout()
+            self.lineEd = QtWidgets.QLineEdit()
+            button = QtWidgets.QPushButton('...')
+            self.hlayout.addWidget(self.lineEd)
+            self.hlayout.addWidget(button)
+            button.pressed.connect(self.setFile)
+            self.frame1.setLayout(self.hlayout)
+
+            self.frame2 = QtWidgets.QFrame()
+            self.f_layout = QtWidgets.QFormLayout()
+            self.w = QtWidgets.QLineEdit()
+            self.f_layout.addRow('Width:', self.w)
+            self.h = QtWidgets.QLineEdit()
+            self.f_layout.addRow('Height:', self.h)
+            self.frame2.setLayout(self.f_layout)
+
+            self.layout.addWidget(self.frame1)
+            self.layout.addWidget(self.frame2)
+            self.layout.addWidget(buttonBox)
+
+            self.setLayout(self.layout)
+
+            buttonBox.accepted.connect(self.accept)
+            buttonBox.rejected.connect(self.reject)
+
+            self.accepted.connect(self.exportImg)
+
+        def setFile(self):
+            filename, _ = QtWidgets.QFileDialog.getSaveFileName(filter='*.gif *.cml')
+            self.lineEd.setText(filename)
+
+        def valRes(self, text):
+            try:
+                ret = int(text)
+            except ValueError:
+                ret = 250
+            return ret
+
+        def exportImg(self):
+            filename = self.lineEd.text()
+            if not Db_bindings.SESSION.ready:
+                Db_bindings.SESSION.startServer(8000)
+            Db_bindings.getImageFromFile(file, filename, format=filename.split('.')[1], w=self.valRes(self.w.text()), h=self.valRes(self.h.text()))
+
     if file is None:
         file, _ = QtWidgets.QFileDialog.getOpenFileName(filter='*.xyz *.cif')
-    filename, _ = QtWidgets.QFileDialog.getSaveFileName(filter='*.gif *.cml')
-    if filename and file:
-        if not Db_bindings.SESSION.ready:
-            Db_bindings.SESSION.startServer(8000)
-        Db_bindings.getImageFromFile(file, filename, format=filename.split('.')[1])
+
+    global DIALOG
+    DIALOG = Dialog()
+    DIALOG.show()
 
 
 def show():
