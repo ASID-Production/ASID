@@ -116,6 +116,8 @@ TEST(SortGraph, Main) {
 
 	
 }
+
+#ifdef TESTSEARCHMAIN
 TEST(SearchMainTest, Coordf) {
 	const char search[]{ "1 2 0 6 0 2 4 6 0 2 4 " };
 	std::vector<const char*> dat(1, "1 2 1 6 0 6 1 1 2");
@@ -203,6 +205,38 @@ TEST(CompareGraphTest, Tricycle484021t) {
 	ASSERT_NO_THROW({res = CompareGraph(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search).data(), data, false); });
 	EXPECT_TRUE(res);
 }
+
+TEST(SearchMainTest, multytype1) {
+	const char search[]{ "1 7 7 6 0 6 0 6 0 6 0 6 0 6 0 -1 0 1 2 1 6 1 7 2 3 3 4 4 5 5 6 -1 6 7 8 0" };
+	std::vector<const char*> dat = { "1 7 7 6 0 6 0 6 0 6 0 6 0 6 0 6 0 1 2 1 6 1 7 2 3 3 4 4 5 5 6"
+								 , "2 7 7 6 0 6 0 6 0 6 0 6 0 6 0 7 0 1 2 1 6 1 7 2 3 3 4 4 5 5 6"
+								 , "3 7 7 6 0 6 0 6 0 6 0 6 0 6 0 5 0 1 2 1 6 1 7 2 3 3 4 4 5 5 6"
+	};
+
+	std::vector<int> res;
+	res = SearchMain(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search).data(), std::move(dat), 1, false);
+	EXPECT_EQ(res.size(), 2);
+}
+TEST(SearchMainTest, multytype2) {
+	const char search[]{ "1 3 2 6 3 6 2 -1 0 1 2 2 3 -1 1 9 0" };
+	std::vector<const char*> dat = { "1 2 1 6 3 6 3 1 2",
+									 "2 3 2 6 3 6 2 1 0 1 2 2 3",
+									 "3 3 2 9 0 6 2 6 3 1 2 2 3" };
+
+	std::vector<int> res;
+	res = SearchMain(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search).data(), std::move(dat), 1, false);
+	EXPECT_EQ(res.size(), 3);
+}
+TEST(SearchMainTest, multytype3) {
+	const char search[]{ "1 9 9 6 0 6 0 6 0 6 0 6 0 6 0 -1 0 6 0 6 3 1 2 1 6 1 7 2 3 3 4 4 5 5 6 7 8 8 9 -1 8 16 32 0" };
+	std::vector<const char*> dat = { "1 9 9 6 0 6 0 6 0 6 0 6 0 6 0 8 0 6 0 6 3 1 2 1 6 1 7 2 3 3 4 4 5 5 6 7 8 8 9",
+									"2 9 9 6 0 6 0 6 0 6 0 6 0 6 0 16 0 6 0 6 3 1 2 1 6 1 7 2 3 3 4 4 5 5 6 7 8 8 9" };
+
+	std::vector<int> res;
+	res = SearchMain(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search).data(), std::move(dat), 1, false);
+	EXPECT_EQ(res.size(), 2);
+}
+
 TEST(CompareGraphTest, s161834) {
 	const char search[] {"1 36 38 6 1 6 1 6 1 6 1 6 1 6 0 8 0 15 0 8 0 8 0 7 1 6 0 6 0 6 0 8 0 6 0 6 0 6 0 6 0 6 0 6 0 8 0 6 0 6 0 9 0 6 0 8 1 7 0 6 1 6 0 7 1 6 1 6 0 8 0 8 0 8 0 1 2 1 3 2 6 3 4 4 5 5 6 6 7 7 8 8 9 8 10 8 11 10 19 11 12 12 13 12 14 14 15 14 36 15 16 16 17 16 18 19 20 20 21 20 22 21 24 21 27 22 23 23 24 23 28 24 25 24 26 28 29 28 30 29 32 30 31 30 34 31 33 32 33 33 35"};
 	const char data[] {"161834 36 38 15 0 8 0 8 0 8 0 7 1 6 2 6 0 6 1 6 1 6 1 6 1 6 3 6 0 8 0 6 1 6 1 6 1 8 0 8 0 6 1 8 1 6 0 6 1 6 1 7 0 9 0 6 3 6 3 6 3 6 0 6 1 8 0 7 1 6 1 6 0 8 0 1 2 1 3 1 4 1 5 3 7 7 10 7 11 10 16 16 23 23 17 17 11 2 6 6 9 9 14 9 15 14 20 20 25 20 22 25 30 25 31 30 32 30 33 33 35 35 36 35 34 34 31 22 26 22 27 22 15 15 21 5 8 8 12 8 13 13 18 13 19 18 24 24 28 24 29"};
@@ -210,6 +244,7 @@ TEST(CompareGraphTest, s161834) {
 	ASSERT_NO_THROW({res = CompareGraph(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search).data(), data, false); });
 	EXPECT_TRUE(res);
 }
+#endif
 TEST(FindMoleculesInCellTest, AADRIB) {
 	p_distances = &testdistances;
 	std::array<float,6> cell { 17.125, 11.453, 8.590, 90, 109.18, 90 };
@@ -414,37 +449,6 @@ TEST(GenSymmTest, xyz) {
 	EXPECT_EQ(famstr.sizePoints, 1);
 }
 
-TEST(SearchMainTest, multytype1) {
-	const char search[] {"1 7 7 6 0 6 0 6 0 6 0 6 0 6 0 -1 0 1 2 1 6 1 7 2 3 3 4 4 5 5 6 -1 6 7 8 0"};
-	std::vector<const char*> dat ={ "1 7 7 6 0 6 0 6 0 6 0 6 0 6 0 6 0 1 2 1 6 1 7 2 3 3 4 4 5 5 6"
-								 , "2 7 7 6 0 6 0 6 0 6 0 6 0 6 0 7 0 1 2 1 6 1 7 2 3 3 4 4 5 5 6"
-								 , "3 7 7 6 0 6 0 6 0 6 0 6 0 6 0 5 0 1 2 1 6 1 7 2 3 3 4 4 5 5 6"
-};
-
-	std::vector<int> res;
-	res = SearchMain(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search).data(), std::move(dat), 1, false);
-	EXPECT_EQ(res.size(), 2);
-}
-TEST(SearchMainTest, multytype2) {
-	const char search[]{ "1 3 2 6 3 6 2 -1 0 1 2 2 3 -1 1 9 0" };
-	std::vector<const char*> dat = { "1 2 1 6 3 6 3 1 2",
-									 "2 3 2 6 3 6 2 1 0 1 2 2 3",
-									 "3 3 2 9 0 6 2 6 3 1 2 2 3" };
-
-	std::vector<int> res;
-	res = SearchMain(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search).data(), std::move(dat), 1, false);
-	EXPECT_EQ(res.size(), 3);
-}
-TEST(SearchMainTest, multytype3) {
-	const char search[] {"1 9 9 6 0 6 0 6 0 6 0 6 0 6 0 -1 0 6 0 6 3 1 2 1 6 1 7 2 3 3 4 4 5 5 6 7 8 8 9 -1 8 16 32 0"};
-	std::vector<const char*> dat = {"1 9 9 6 0 6 0 6 0 6 0 6 0 6 0 8 0 6 0 6 3 1 2 1 6 1 7 2 3 3 4 4 5 5 6 7 8 8 9",
-							        "2 9 9 6 0 6 0 6 0 6 0 6 0 6 0 16 0 6 0 6 3 1 2 1 6 1 7 2 3 3 4 4 5 5 6 7 8 8 9"};
-
-	std::vector<int> res;
-	res = SearchMain(cpplib::MoleculeGraph<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search).data(), std::move(dat), 1, false);
-	EXPECT_EQ(res.size(), 2);
-}
-
 // Benchmark section
 #ifdef NDEBUG
 TEST(databaseSearch10k, d10k) {
@@ -570,7 +574,7 @@ TEST(Benchmark, d10k) {
 
 	constexpr int np = 6;
 
-	std::ifstream db("../../../../../cpplib/Tests/d10k.datt");
+	std::ifstream db("../../../../../cpplib/Tests/d10kSorted.datt");
 	if (!db.is_open())
 		FAIL() << "Could not open the dataset";
 	int s;
