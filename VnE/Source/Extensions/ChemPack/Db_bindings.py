@@ -331,6 +331,17 @@ def create_table(data, img=None):
     return text_dict
 
 
+def deleteEntry(id, db_type='cryst'):
+    url_mods = {'cryst': 'api/v1/structures',
+                'qm': 'api/v1/qc_structures'}
+    url_mod = url_mods.get(db_type, 'api/v1/structures')
+    if SESSION.user_token is not None:
+        headers = {'Authorization': f'Token {SESSION.user_token}'}
+        data = requests.request('DELETE', f'{SESSION.url_base}/{url_mod}/{id}/', headers=headers)
+    else:
+        data = requests.request('DELETE', f'{SESSION.url_base}/{url_mod}/{id}')
+
+
 def setup():
     global SESSION
     SESSION = Session()

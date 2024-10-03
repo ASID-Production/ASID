@@ -181,6 +181,60 @@ class StructuresListModel(QAbstractListModel):
             o_file_path = opath.join(dir_path, ref_code + '.gif')
             Db_bindings.get_image(id, o_file_path, db_type=self._last_db_type)
 
+    def removeRow(self, row, parent=QModelIndex(), *args, **kwargs):
+        self.beginRemoveRows(parent, row, row + 1 - 1)
+        self._data.pop(row)
+        self._rows -= 1
+        self.endRemoveRows()
+        return True
+
+    def removeRows(self, row, count, parent, *args, **kwargs):
+        self.beginRemoveRows(parent, row, row + count - 1)
+        del self._data[row:row+count]
+        self._rows -= count
+        self.endRemoveRows()
+        return True
+
+
+class StrListView(QtWidgets.QListView):
+
+    def __init__(self, parent=None, main_wid=None):
+        QtWidgets.QListView.__init__(self, parent)
+        self.main_wid = main_wid
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(self.showContextMenu)
+
+        self.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+        self.setSelectionModel(QItemSelectionModel(self.model(), parent=self))
+
+    def showContextMenu(self, pos: QPoint):
+        selected = self.selectionModel().selectedIndexes()
+
+        def delete():
+            if self.main_wid is not None:
+                db_type = self.main_wid.db_type
+            else:
+                db_type = 'cryst'
+            rows = []
+            for item in selected:
+                data = self.model().data(item, role=99)
+                id = data['id']
+                Db_bindings.deleteEntry(id, db_type=db_type)
+                rows.append(item.row())
+            rows.sort()
+            i = 0
+            for row in rows:
+                self.model().removeRow(row-i)
+                i += 1
+            self.selectionModel().clearSelection()
+
+        menu = QtWidgets.QMenu('Context Menu', self)
+        if selected:
+            delete_action = menu.addAction('delete')
+            delete_action.triggered.connect(delete)
+        menu.exec(self.mapToGlobal(pos))
+        return
+
 
 class InfoTableModel(QAbstractTableModel):
 
@@ -304,7 +358,7 @@ class SearchDialog(search_dialog.Ui_Dialog, QtWidgets.QDialog):
                 1: 'qm'}
 
     def __init__(self, parent=None):
-        super().__init__()
+        super().__init__(parent)
         self.setupUi(self)
         self.setWindowTitle('Search parameters')
         self.search_type = SearchDialog.SEARCH_TYPES[0]
@@ -315,6 +369,7 @@ class SearchDialog(search_dialog.Ui_Dialog, QtWidgets.QDialog):
         self.checkBox_10.stateChanged.connect(lambda: self.setSearchState(SearchDialog.SEARCH_TYPES[3], self.lineEdit_10))
         self.checkBox_11.stateChanged.connect(lambda: self.setSearchState(SearchDialog.SEARCH_TYPES[4], self.lineEdit_11))
         self.checkBox_12.stateChanged.connect(lambda: self.setSearchState(SearchDialog.SEARCH_TYPES[5], self.lineEdit_12))
+        self.comboBox.currentIndexChanged.connect(lambda: self.parent().__setattr__('db_type', self.getSearchDb()))
 
     def setSearchState(self, type, text):
         self.search_type = type
@@ -371,6 +426,7 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
         super().__init__()
         self.setupUi(self)
         self.toolBar = QtWidgets.QToolBar(self)
+        self.db_type = 'cryst'
 
         self.export_button = QtWidgets.QToolButton()
         self.import_button = QtWidgets.QToolButton()
@@ -401,9 +457,12 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
 
         self.list_model = StructuresListModel(self)
         self.listView: QtWidgets.QListView
-        self.listView.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
+        a = StrListView(self, main_wid=self)
+        self.verticalLayout_2.replaceWidget(self.listView, a)
+        self.listView.setParent(None)
+        self.listView.hide()
+        self.listView = a
         self.listView.setModel(self.list_model)
-        self.listView.setSelectionModel(QItemSelectionModel())
         self.listView.selectionModel().currentChanged.connect(self.newSelection)
 
         self.search_dialog = SearchDialog(parent=self)
