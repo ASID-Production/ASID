@@ -71,6 +71,8 @@ class FileParser:
         return self.SUPPORTED_FORMATS[ext](file_path, bond, root)
 
     def parsXyz(self, file_path, bond=True, root=None, *args, **kwargs):
+        from . import Db_viewer
+
         mol_list, atom_list, bonds_l = None, None, None
         file = open(file_path, 'r')
         mol_sys = MoleculeClass.MoleculeSystem()
@@ -86,7 +88,19 @@ class FileParser:
                 i += 1
                 coord = np.array([float(x) for x in line_p[1:]], dtype=np.float32)
                 atom = MoleculeClass.Atom(coord.copy(), PALETTE.getName(line_p[0]), parent=mol, name=f'{line_p[0]}{i}')
-        return self.parsMolSys(mol_sys, bond, root)
+
+        ret = self.parsMolSys(mol_sys, bond, root)
+
+        mol_list = ret[1][0]
+        if mol_list.additional_context_actions is None:
+            mol_list.addProperty('additional_context_actions',
+                                 [('Export 2d diagram', lambda: Db_viewer.exportGif(file=mol_sys.file_name))],
+                                 observed=False)
+        else:
+            mol_list.additional_context_actions.append(
+                ('Export 2d diagram', lambda: Db_viewer.exportGif(file=mol_sys.file_name)))
+
+        return ret
 
     def parsPdb(self, file_path, bond=True, root=None, *args, **kwargs):
         mol_list, atom_list, bonds_l = None, None, None
@@ -275,6 +289,7 @@ class FileParser:
 
     def parsCif(self, file_path, bond=True, root=None, *args, **kwargs):
         from gemmi import cif
+        from . import Db_viewer
 
         mol_list, atom_list, bonds_l = None, None, None
         blocks = cif.read_file(file_path)
@@ -335,6 +350,11 @@ class FileParser:
 
             mol_sys, list_tuple = self.parsMolSys(mol_sys, bond, root)
             mol_list = list_tuple[0]
+
+            if mol_list.additional_context_actions is None:
+                mol_list.addProperty('additional_context_actions', [('Export 2d diagram', lambda: Db_viewer.exportGif(file=mol_sys.file_name))], observed=False)
+            else:
+                mol_list.additional_context_actions.append(('Export 2d diagram', lambda: Db_viewer.exportGif(file=mol_sys.file_name)))
             cell_list = point_class.PointsList(parent=mol_list, name='Cell', color=[0, 0, 0, 1])
             o = point_class.Point(parent=cell_list, name='o', coord=cell_dec_coords[0], color=[0, 0, 0, 1], label='o')
             a = point_class.Point(parent=cell_list, name='a', coord=cell_dec_coords[1], color=[1, 0, 0, 1], label='a')

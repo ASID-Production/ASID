@@ -659,6 +659,15 @@ class TreeView(QtWidgets.QTreeView):
                     menu_attach.addAction(action)
                     actions.append(action)
 
+            additional_context_actions = selected.internalPointer().additional_context_actions
+            if additional_context_actions is not None:
+                add_actions = []
+                for action in additional_context_actions:
+                    action_o = QtGui.QAction(action[0], self)
+                    action_o.triggered.connect(action[1])
+                    add_actions.append(action_o)
+                    menu.addAction(action_o)
+
         def delete(row, parent):
             self.model().removeRow(row=selected.row(), parent=selected.parent())
             self.selectionModel().clearSelection()

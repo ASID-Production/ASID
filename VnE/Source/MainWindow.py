@@ -233,12 +233,13 @@ class OpenGlWidget(QOpenGLWidget):
 class UniformWid(QtWidgets.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent=parent)
+        self.setWindowIcon(QtGui.QIcon('Source/ico.svg'))
         self.setWindowTitle('Uniforms')
         self.listView = ListView(parent=self)
         self.hlayout = QtWidgets.QHBoxLayout()
         self.hlayout.addWidget(self.listView)
         self.setLayout(self.hlayout)
-        self.model = UniformListModel()
+        self.model = UniformListModel(self)
 
     def setUniforms(self, uniform):
         self.model.setModelData(uniform)
@@ -253,6 +254,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.points_list = PointsList()
         super().__init__()
+        self.setWindowIcon(QtGui.QIcon('Source/ico.svg'))
         self.setWindowTitle('ASID View & Explore')
         widget = QtWidgets.QWidget()
         self.frame = QtWidgets.QFrame(parent=widget)
@@ -319,7 +321,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.about_dialog = QtWidgets.QDialog(self)
         self.about_dialog.setWindowTitle('About')
         self.about_dialog.setLayout(QtWidgets.QVBoxLayout())
-        self.about_dialog.layout().addWidget(QtWidgets.QLabel("ASID\nconference demo version\nAuthors:\nAlexander A. Korlyukov (head),\nAlexander D. Volodin (author of cpplib),\nPetr A. Buikin (author of api_database),\nAlexander R. Romanenko (author of VnE)"))
+        self.about_dialog.layout().addWidget(QtWidgets.QLabel("ASID 1.0\nAuthors:\nAlexander A. Korlyukov (head),\nAlexander D. Volodin (author of cpplib),\nPetr A. Buikin (author of api_database),\nAlexander R. Romanenko (author of VnE)"))
 
         self.about.triggered.connect(self.about_dialog.show)
 
