@@ -348,16 +348,6 @@ class StructureViewSet(StructureModelViewSet):
             return RefcodeShortSerializer
         return RefcodeFullSerializer
 
-    def destroy(self, request, *args, **kwargs):
-        ''' Delete structure on request. Delete only authenticated users' structure!'''
-        if request.user.is_authenticated:
-            instance = self.get_object()
-            if instance.user == request.user:
-                instance.delete()
-                return Response(status=status.HTTP_204_NO_CONTENT)
-            return Response(status=status.HTTP_403_FORBIDDEN)
-        return Response(status=status.HTTP_401_UNAUTHORIZED)
-
     @action(
         detail=True,
         methods=['GET']
@@ -433,16 +423,6 @@ class QCStructureViewSet(StructureModelViewSet):
         if self.action == 'list':
             return QCRefcodeShortSerializer
         return QCRefcodeFullSerializer
-
-    def destroy(self, request, *args, **kwargs):
-        ''' Delete structure on request. Delete only authenticated users' structure!'''
-        if request.user.is_authenticated:
-            instance = self.get_object()
-            if instance.user == request.user:
-                instance.delete()
-                return Response(status=status.HTTP_204_NO_CONTENT)
-            return Response(status=status.HTTP_403_FORBIDDEN)
-        return Response(status=status.HTTP_401_UNAUTHORIZED)
 
     @action(
         detail=True,
