@@ -59,11 +59,8 @@ namespace cpplib {
 		
 		static MoleculeGraph ReadData(const char* str, const ::std::bitset<mend_size>& multiAtomBits) {
 			MoleculeGraph mg;
-			//::std::stringstream ss(str);
 			const auto sn = mg.parseMainstring<false>(str);
-			
 			mg.release_HAtoms(multiAtomBits, sn);
-			//mg.sortGraph();
 			return mg;
 		}
 
@@ -75,7 +72,6 @@ namespace cpplib {
 			mg.sortGraph();
 			return ::std::make_pair(std::move(mg), ::std::move(multiAtomBits));
 		}
-
 
 		constexpr AtomIndex size() const noexcept {
 			return static_cast<AtomIndex>(data_.size());

@@ -29,7 +29,53 @@
 #include "MoleculeGraph.h"
 #include <list>
 #include <vector>
+#include <functional>
 namespace cpplib {
+	class UllmannTable {
+	public:
+		using AtomIndex = currents::AtomIndex;
+		using RequestNodeType = Node<currents::AtomTypeRequest>;
+		using DatabaseNodeType = Node<currents::AtomTypeData>;
+		using CompareFuncType = std::function<bool(const RequestNodeType& inputNode, const DatabaseNodeType& dataNode, const bool exact)> const&;
+	private:
+		std::vector<char> vec;
+		AtomIndex rs = 0;
+		AtomIndex ds = 0;
+	public:
+		UllmannTable() = default;
+		UllmannTable(AtomIndex r, AtomIndex d) : vec(size_t(r)* d), rs(r), ds(d) {
+			_ASSERT(r > 0 && d > 0);
+		}
+		bool Check(const RequestNodeType& inputNode, const DatabaseNodeType& dataNode, const bool exact, CompareFuncType func) {
+			const char c = 0;
+			const auto i_ID = inputNode.getID();
+			const auto d_ID = dataNode.getID();
+			char g = get(i_ID, d_ID);
+			if (g == 0) {
+				bool b = func(inputNode, dataNode, exact);
+				if (b)
+					set(i_ID, d_ID, 1);
+				else
+					set(i_ID, d_ID, -1);
+				return b;
+			}
+			else
+				return g == 1;
+		}
+	private:
+		inline char get(AtomIndex r, AtomIndex d) {
+			_ASSERT(r < rs && d < ds);
+			size_t s = r;
+			return vec[s * ds + d];
+		}
+		inline void set(AtomIndex r, AtomIndex d, char state) {
+			_ASSERT(r < rs && d < ds);
+			size_t s = r;
+			vec[s * ds + d] = state;
+		}
+	};
+
+
 	class SearchGraph {
 	public:
 		// Declarations
@@ -54,6 +100,7 @@ namespace cpplib {
 		CompareVectorType comp_;
 		Log log_;
 		::std::vector<bool> usedInComp_;
+		UllmannTable ullmann;
 
 	public:
 		SearchGraph() {}
@@ -61,10 +108,24 @@ namespace cpplib {
 			input_ = ::std::move(molGraph);
 			inputSize_ = input_.size();
 		}
-		inline void setupData(DatabaseGraphType&& molGraph) noexcept {
+		inline bool setupData(DatabaseGraphType&& molGraph, const bool exact) noexcept {
+			_ASSERT(inputSize_ != 0);
 			data_ = ::std::move(molGraph);
-			//data_.sortGraph();
 			dataSize_ = data_.size();
+			ullmann = UllmannTable(inputSize_, dataSize_);
+
+			for (AtomIndex i = 1; i < inputSize_; i++)
+			{
+				bool wrong = true;
+				for (AtomIndex j = 1; j < dataSize_; j++)
+				{
+					bool res = ullmann.Check(input_[i], data_[j], exact, compareLow);
+					if (res) wrong = false;
+				}
+				if (wrong) 
+					return false;
+			}
+			return true;
 		}
 
 		// Input and Data should be ready
@@ -104,7 +165,7 @@ namespace cpplib {
 		}
 	private:
 		// Node comparision
-		bool compare(const RequestNodeType& inputNode, const DatabaseNodeType& dataNode, const bool exact) const noexcept {
+		static bool compare(const RequestNodeType& inputNode, const DatabaseNodeType& dataNode, const bool exact) noexcept {
 			if (compareLow(inputNode, dataNode, exact) == false)
 				return false;
 
@@ -126,7 +187,7 @@ namespace cpplib {
 			}
 			return true;
 		}
-		inline bool compareLow(const RequestNodeType& inputNode, const DatabaseNodeType& dataNode, const bool exact) const noexcept {
+		static inline bool compareLow(const RequestNodeType& inputNode, const DatabaseNodeType& dataNode, const bool exact) noexcept {
 			if (exact) {
 				return inputNode == dataNode;
 			}
