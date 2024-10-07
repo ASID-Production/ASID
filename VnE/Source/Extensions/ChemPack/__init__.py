@@ -254,7 +254,10 @@ def parsAIMALLsumviz():
     if TREE_MODEL is not None:
         gen = PARSER.parsAIMALLsumviz(filename, bond=True, root=TREE_MODEL.getRoot())
         for molsys, points_lists in gen:
-            loadMolSys(molsys, points_lists)
+            if type(molsys) is dict:
+                TREE_MODEL.insertRow(TREE_MODEL.rowCount())
+            else:
+                loadMolSys(molsys, points_lists)
     else:
         molsys, _ = PARSER.parsWinxproOut(filename)
     return molsys, points_lists
