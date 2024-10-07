@@ -434,6 +434,28 @@ class FileParser:
                             bonds.append(bond)
         return mol_sys, (mol_list, atom_list, bonds_l)
 
+    def parsDict(self, dict, root=None, point_func=None, name='None', *args, **kwargs):
+        if point_func is None:
+            point_func = self._pointCreation
+        mol_list = None
+        ret = None
+
+        def rec_p(val, parent):
+            if type(val) is list:
+                for item in val:
+                    point = point_func(parent, item)
+                    item.assignPoint(point)
+                return
+            else:
+                for key in val:
+                    par = point_class.PointsList(parent=parent, rad=parent, name=key)
+                    rec_p(val[key], par)
+
+        if root is not None:
+            ret = point_class.PointsList(parent=root, rad=0.25, name=name)
+            rec_p(dict, ret)
+        return dict, (ret, None, None)
+
     def parsWinxproOut(self, file_path, bond=True, root=None, *args, **kwargs):
 
         def parseCell(line, file):
@@ -692,10 +714,12 @@ class FileParser:
                 coords = [float(x) for x in data[2:5]]
                 frac_coords = np.array([float(x) for x in data[2:5]], dtype=np.float32)
                 atom = MoleculeClass.Atom(coords, atom_type, None, name=name, cif_frac_coords=frac_coords)
+                atom.coord = atom.coord/1.88973
                 atoms.append(atom)
 
         def parseCP(line, file):
             nonlocal flag
+            nonlocal last_cp
 
             types = {'(3,-3)': 6,
                      '(3,-1)': 7,
@@ -708,12 +732,14 @@ class FileParser:
                 def create_atom():
                     atom_type = types[data['Type']]
                     atom = MoleculeClass.Atom(coord, atom_type, None, name=cp_name, sup_data_dict=data)
+                    atom.coord = atom.coord/1.88973
                     cps.append(atom)
 
                 flag = True
                 line = [x for x in line.split(' ') if x]
                 coord = line[4:7]
                 cp_name = line[1]
+                last_cp = cp_name
                 coord = [float(x) for x in coord]
                 data = {}
 
@@ -723,8 +749,23 @@ class FileParser:
                         create_atom()
                         return
                     if 'sample points along' in line:
+
+                        f = False
+                        for key in cps_dict:
+                            if key in line:
+                                f = True
+                                dest = cps_dict[key].get(last_cp, None)
+                                if dest is None:
+                                    dest = []
+                                    cps_dict[key][last_cp] = dest
+                        if not f:
+                            dest = cps_dict['other'].get(last_cp, None)
+                            if dest is None:
+                                dest = []
+                                cps_dict['other'][last_cp] = dest
+
                         create_atom()
-                        parsePath(line, file)
+                        parsePath(line, file, dest)
                         flag = False
                         return
                     if 'Bond Ellipticity' in line:
@@ -780,19 +821,40 @@ class FileParser:
                 atom = MoleculeClass.Atom(coords, atom_type, None, name=name, cif_frac_coords=frac_coords)
                 atoms.append(atom)
 
-        def parsePath(line, file):
+        def parsePath(line, file, dest=None):
             nonlocal flag
+            if dest is None:
+                dest = []
             for line in file:
                 if 'sample points along' in line:
-                    pass
+                    if len(dest) % 2 != 0:
+                        atom = MoleculeClass.Atom(dest[-1].coord, atom_type=6)
+                        dest.append(atom)
+                    f = False
+                    for key in cps_dict:
+                        if key in line:
+                            f = True
+                            dest = cps_dict[key].get(last_cp, None)
+                            if dest is None:
+                                dest = []
+                                cps_dict[key][last_cp] = dest
+                    if not f:
+                        dest = cps_dict['other'].get(last_cp, None)
+                        if dest is None:
+                            dest = []
+                            cps_dict['other'][last_cp] = dest
                 elif line == '\n':
+                    if len(dest) % 2 != 0:
+                        atom = MoleculeClass.Atom(dest[-1].coord, atom_type=6)
+                        dest.append(atom)
                     flag = False
                     return
                 else:
                     line = line.split(' ')
                     coord = [float(x) for x in line[:-1] if x][0:3]
                     atom = MoleculeClass.Atom(coord, atom_type=6)
-                    paths.append(atom)
+                    atom.coord = atom.coord/1.88973
+                    dest.append(atom)
             return
 
         mol_list, atom_list, bonds_l = None, None, None
@@ -816,6 +878,16 @@ class FileParser:
         methods = [parseAtm, parseCP]
         atoms = []
         cps = []
+        cps_dict = {'first RCP attractor path': {},
+                    'second RCP attractor path': {},
+                    'path from RCP to BCP': {},
+                    'path from BCP to atom': {},
+                    'IAS +EV1 path from BCP': {},
+                    'IAS -EV1 path from BCP': {},
+                    'IAS +EV2 path from BCP': {},
+                    'IAS -EV2 path from BCP': {},
+                    'other': {}}
+        last_cp = None
         paths = []
 
         with open(file_path, 'r') as file:
@@ -845,14 +917,14 @@ class FileParser:
         yield self.parsMolSys(mol_sys, bond, root)
         list_tuple = self.parsMolSys(cps_sys, False, root, createCpp)
         if list_tuple[1]:
-            list_tuple[1][1].rad = 0.15
+            list_tuple[1][0].rad = 0.15
         yield list_tuple
 
         for path in paths:
             path_mol.addChild(path)
-        list_tuple = self.parsMolSys(paths_sys, False, root)
+        list_tuple = self.parsDict(cps_dict, root, name='Paths')
         if list_tuple[1]:
-            list_tuple[1][1].rad = 0.02
+            list_tuple[1][0].rad = 0.02
         yield list_tuple
 
     @staticmethod
