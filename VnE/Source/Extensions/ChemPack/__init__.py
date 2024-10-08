@@ -354,17 +354,19 @@ def setup(menu, model, uniform_model=None, *args, main_widget=None, **kwargs):
     action_export.triggered.connect(exportDataF)
     cmenu.addAction(action_export)
 
+    qtaim = cmenu.addMenu('QTAIM tools')
+
     action_winx = QAction('Parse Winxpro')
     action_winx.triggered.connect(parseWinxpro)
-    cmenu.addAction(action_winx)
+    qtaim.addAction(action_winx)
 
     action_aimall = QAction('Parse AIMALL sumviz')
     action_aimall.triggered.connect(parsAIMALLsumviz)
-    cmenu.addAction(action_aimall)
+    qtaim.addAction(action_aimall)
 
     action_multiwfn = QAction('Parse Multiwfn')
     action_multiwfn.triggered.connect(parseMultiWfn)
-    cmenu.addAction(action_multiwfn)
+    qtaim.addAction(action_multiwfn)
 
     action_2d_export = QAction('Export 2d diagram')
     action_2d_export.triggered.connect(export2dDiagram)
