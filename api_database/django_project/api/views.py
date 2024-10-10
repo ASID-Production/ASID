@@ -493,28 +493,31 @@ class QCStructureViewSet(StructureModelViewSet):
 
 
 def get_search_queryset_with_filtration(template):
+    # TODO: переделать формат строки при подструктурной фильтрации!!! cord_min cord_max
     graphs = CoordinatesBlock.objects.filter(graph__isnull=False)
-    filters = set_filter(template)
-    filtrs = dict()
-    for filtr, data in filters.items():
-        is_true, obj_name = data
-        if is_true:
-            filtrs[f'refcode__{obj_name.lower()}__{filtr}'] = is_true
-    structures = graphs.filter(**filtrs)
-    analyse_data = structures.values_list('graph', flat=True)
+    #filters = set_filter(template)
+    #filtrs = dict()
+    #for filtr, data in filters.items():
+    #    is_true, obj_name = data
+    #    if is_true:
+    #        filtrs[f'refcode__{obj_name.lower()}__{filtr}'] = is_true
+    #structures = graphs.filter(**filtrs)
+    #analyse_data = structures.values_list('graph', flat=True)
+    analyse_data = graphs.values_list('graph', flat=True)
     return analyse_data
 
 
 def get_search_queryset_with_filtration_qc(template):
     graphs = QCCoordinatesBlock.objects.filter(graph__isnull=False)
-    filters = set_filter(template)
-    filtrs = dict()
-    for filtr, data in filters.items():
-        is_true, obj_name = data
-        if is_true:
-            filtrs[f'refcode__qc_{obj_name.lower()}__{filtr}'] = is_true
-    structures = graphs.filter(**filtrs)
-    analyse_data = structures.values_list('graph', flat=True)
+    #filters = set_filter(template)
+    #filtrs = dict()
+    #for filtr, data in filters.items():
+    #    is_true, obj_name = data
+    #    if is_true:
+    #        filtrs[f'refcode__qc_{obj_name.lower()}__{filtr}'] = is_true
+    #structures = graphs.filter(**filtrs)
+    #analyse_data = structures.values_list('graph', flat=True)
+    analyse_data = graphs.values_list('graph', flat=True)
     return analyse_data
 
 
