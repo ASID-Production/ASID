@@ -12,7 +12,7 @@ networkx>=2.8.8
 pycifrw>=4.4.5
 pymatgen>=2024.3.1
 pyopengl>=3.1.7
-pyside6>=6.6.1
+pyside6==6.7.2
 rdkit~=2023.9.6
 requests~=2.32.0
 setuptools
