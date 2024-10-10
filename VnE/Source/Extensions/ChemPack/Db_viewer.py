@@ -61,7 +61,7 @@ class StructuresListModel(QAbstractListModel):
         self._display_tag = 'refcode'
         self._search_proc = None
         self._iter_search_procs = []
-        self._last_db_type = None
+        self._last_db_type = 'cryst'
 
     def populate(self, request):
         request, search_type, db_type = request

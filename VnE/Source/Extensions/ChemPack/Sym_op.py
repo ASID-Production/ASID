@@ -167,7 +167,7 @@ class SymOpDialog(QtWidgets.QDialog):
             atoms = self.curr_sys[1].children[0].children
             sym_codes = atoms[0].cif_sym_codes
             sym_code = sym_codes[ind][1]
-            data = [[x.atom_type, *list(x.cif_frac_coords)] for x in atoms]
+            data = [tuple([x.atom_type, *list(x.cif_frac_coords)]) for x in atoms]
             flag = 0b0 | (int(self.check_box.isChecked()) << 1)
             new_atoms = cpplib.GenSymm(data, flag, [sym_code])
             new_coords = [x[1:] for x in new_atoms]
