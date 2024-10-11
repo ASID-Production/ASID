@@ -328,7 +328,7 @@ def gen_img2d_view(request):
                 return response
             return Response({'error': 'Failed to create 2D graph for this structure!'}, status=status.HTTP_400_BAD_REQUEST)
         except Exception as err:
-            return Response({'error': err}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response({'error': str(err)}, status=status.HTTP_400_BAD_REQUEST)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
@@ -495,29 +495,27 @@ class QCStructureViewSet(StructureModelViewSet):
 def get_search_queryset_with_filtration(template):
     # TODO: переделать формат строки при подструктурной фильтрации!!! cord_min cord_max
     graphs = CoordinatesBlock.objects.filter(graph__isnull=False)
-    #filters = set_filter(template)
-    #filtrs = dict()
-    #for filtr, data in filters.items():
-    #    is_true, obj_name = data
-    #    if is_true:
-    #        filtrs[f'refcode__{obj_name.lower()}__{filtr}'] = is_true
-    #structures = graphs.filter(**filtrs)
-    #analyse_data = structures.values_list('graph', flat=True)
-    analyse_data = graphs.values_list('graph', flat=True)
+    filters = set_filter(template)
+    filtrs = dict()
+    for filtr, data in filters.items():
+        is_true, obj_name = data
+        if is_true:
+            filtrs[f'refcode__{obj_name.lower()}__{filtr}'] = is_true
+    structures = graphs.filter(**filtrs)
+    analyse_data = structures.values_list('graph', flat=True)
     return analyse_data
 
 
 def get_search_queryset_with_filtration_qc(template):
     graphs = QCCoordinatesBlock.objects.filter(graph__isnull=False)
-    #filters = set_filter(template)
-    #filtrs = dict()
-    #for filtr, data in filters.items():
-    #    is_true, obj_name = data
-    #    if is_true:
-    #        filtrs[f'refcode__qc_{obj_name.lower()}__{filtr}'] = is_true
-    #structures = graphs.filter(**filtrs)
-    #analyse_data = structures.values_list('graph', flat=True)
-    analyse_data = graphs.values_list('graph', flat=True)
+    filters = set_filter(template)
+    filtrs = dict()
+    for filtr, data in filters.items():
+        is_true, obj_name = data
+        if is_true:
+            filtrs[f'refcode__qc_{obj_name.lower()}__{filtr}'] = is_true
+    structures = graphs.filter(**filtrs)
+    analyse_data = structures.values_list('graph', flat=True)
     return analyse_data
 
 

@@ -233,7 +233,7 @@ def get_or_create_space_group(cif_block, return_only_symops=False):
     if system:
         system_id = 0
         for syst in SYSTEMS:
-            if system in syst:
+            if system.lower() in syst:
                 system_id = syst[0]
         if system_id:
             logger_1.info(f'Space group system number: {system_id}')

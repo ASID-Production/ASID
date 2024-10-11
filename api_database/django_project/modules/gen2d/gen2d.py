@@ -400,7 +400,7 @@ def main_v2(xyz_mols, element_numbers: Dict[str, int], types: List[int]):
         if len(xyz_mol['atoms']):
             xyz_block = construct_xyz_block(xyz_mol['atoms'], element_numbers, types)
             xyz_blocks.append([xyz_mol['count'], xyz_block, xyz_mol['bonds']])
-    xyz_blocks = sorted(xyz_blocks, key=lambda i: int(i[1][0].split('\n')[0]))
+    xyz_blocks = sorted(xyz_blocks, key=lambda i: int(i[1][0].split('\n')[0]), reverse=True)
     final_structure = None
     for xyz_block in xyz_blocks:
         mols_num, xyz_block, bonds = xyz_block

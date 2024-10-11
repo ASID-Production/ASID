@@ -56,7 +56,7 @@ def set_elements(analyse_mol):
     mol_data = analyse_mol.split()
     num_nodes = int(mol_data[1])
     for idx, el in enumerate(mol_data[3:], start=1):
-        if idx < num_nodes * 2 and idx % 2 == 1:
+        if idx < num_nodes * 4 and idx % 4 == 1:
             if int(el) > 0:
                 element = NUM_ELEM_DICT[int(el)]
                 elem_found.add(element)
@@ -70,17 +70,17 @@ def set_filter(analyse_mol):
 
     # check analyse_mol has multitypes
     # TODO: добавить подструктурную фильтрацию (мультитипы преобразовать!!!)
-    multitypes = False
-    if '-' in analyse_mol:
-        multitypes = True
-    if not multitypes:
-        for attr_name, data in TEMPLATES.items():
-            template_graph, obj_name = data
-            output = set_substructure(template_graph, analyse_mol)
-            if output:
-                result[attr_name] = [True, obj_name]
-            else:
-                result[attr_name] = [False, obj_name]
+    # multitypes = False
+    # if '-' in analyse_mol:
+    #     multitypes = True
+    # if not multitypes:
+    #     for attr_name, data in TEMPLATES.items():
+    #         template_graph, obj_name = data
+    #         output = set_substructure(template_graph, analyse_mol)
+    #         if output:
+    #             result[attr_name] = [True, obj_name]
+    #         else:
+    #             result[attr_name] = [False, obj_name]
 
     elem_found = set_elements(analyse_mol)
     # only if no multitypes
