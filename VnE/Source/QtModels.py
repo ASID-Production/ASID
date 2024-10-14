@@ -669,8 +669,8 @@ class TreeView(QtWidgets.QTreeView):
                     menu.addAction(action_o)
 
         def delete(row, parent):
-            self.model().removeRow(row=selected.row(), parent=selected.parent())
             self.selectionModel().clearSelection()
+            self.model().removeRow(row=selected.row(), parent=selected.parent())
         action1 = QtGui.QAction('Add list', self)
         action2 = QtGui.QAction('Add point', self)
         action3 = QtGui.QAction('Delete', self)

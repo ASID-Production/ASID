@@ -41,7 +41,9 @@ class FileParser:
     def __init__(self):
         self.SUPPORTED_FORMATS = {'.xyz': self.parsXyz,
                                   '.pdb': self.parsPdb,
-                                  '.cif': self.parsCif}
+                                  '.cif': self.parsCif,
+                                  'POSCAR*': self.parsPOSCAR_CONTCAR,
+                                  'CONTCAR*': self.parsPOSCAR_CONTCAR}
 
     @staticmethod
     def fracToDec(a, b, c, al, be, ga, coords):
@@ -63,12 +65,17 @@ class FileParser:
         return coords
 
     def parsFile(self, file_path, bond=True, root=None):
-        _, ext = os.path.splitext(file_path)
+        basename, ext = os.path.splitext(file_path)
+        basename = os.path.basename(basename)
         ext = ext.lower()
-        if ext not in self.SUPPORTED_FORMATS:
-            print('File is not supported')
-            return None, None
-        return self.SUPPORTED_FORMATS[ext](file_path, bond, root)
+        if ext in self.SUPPORTED_FORMATS:
+            return self.SUPPORTED_FORMATS[ext](file_path, bond, root)
+        else:
+            e = [x for x in self.SUPPORTED_FORMATS if x.replace('*', '') in basename]
+            if e:
+                return self.SUPPORTED_FORMATS[e[0]](file_path, bond, root)
+            else:
+                return (None, None)
 
     def parsXyz(self, file_path, bond=True, root=None, *args, **kwargs):
         from . import Db_viewer
@@ -355,47 +362,62 @@ class FileParser:
                 mol_list.addProperty('additional_context_actions', [('Export 2d diagram', lambda: Db_viewer.exportGif(file=mol_sys.file_name))], observed=False)
             else:
                 mol_list.additional_context_actions.append(('Export 2d diagram', lambda: Db_viewer.exportGif(file=mol_sys.file_name)))
-            cell_list = point_class.PointsList(parent=mol_list, name='Cell', color=[0, 0, 0, 1])
-            o = point_class.Point(parent=cell_list, name='o', coord=cell_dec_coords[0], color=[0, 0, 0, 1], label='o')
-            a = point_class.Point(parent=cell_list, name='a', coord=cell_dec_coords[1], color=[1, 0, 0, 1], label='a')
-            b = point_class.Point(parent=cell_list, name='b', coord=cell_dec_coords[2], color=[0, 1, 0, 1], label='b')
-            c = point_class.Point(parent=cell_list, name='c', coord=cell_dec_coords[3], color=[0, 0, 1, 1], label='c')
-            cell_rend = point_class.PointsList(parent=cell_list, name='Cell render', color=cell_list)
 
-            oa = point_class.PointsList(parent=cell_rend, name='o-a', color=a)
-            point1, point2 = (point_class.Point(parent=oa, coord=o, color=oa), point_class.Point(parent=oa, coord=a, color=oa))
-
-            ob = point_class.PointsList(parent=cell_rend, name='o-b', color=b)
-            point1, point2 = (point_class.Point(parent=ob, coord=o, color=ob), point_class.Point(parent=ob, coord=b, color=ob))
-
-            oc = point_class.PointsList(parent=cell_rend, name='o-c', color=c)
-            point1, point2 = (point_class.Point(parent=oc, coord=o, color=oc), point_class.Point(parent=oc, coord=c, color=oc))
-
-            ab = point_class.PointsList(parent=cell_rend, name='a-b', color=cell_rend)
-            point1, point2 = (point_class.Point(parent=ab, coord=a, color=ab), point_class.Point(parent=ab, coord=cell_dec_coords[5], color=ab))
-            ac = point_class.PointsList(parent=cell_rend, name='a-c', color=cell_rend)
-            point1, point2 = (point_class.Point(parent=ac, coord=a, color=ac), point_class.Point(parent=ac, coord=cell_dec_coords[6], color=ac))
-
-            bc = point_class.PointsList(parent=cell_rend, name='b-c', color=cell_rend)
-            point1, point2 = (point_class.Point(parent=bc, coord=b, color=bc), point_class.Point(parent=bc, coord=cell_dec_coords[4], color=bc))
-            ba = point_class.PointsList(parent=cell_rend, name='b-a', color=cell_rend)
-            point1, point2 = (point_class.Point(parent=ba, coord=b, color=ba), point_class.Point(parent=ba, coord=cell_dec_coords[5], color=ba))
-
-            cb = point_class.PointsList(parent=cell_rend, name='c-b', color=cell_rend)
-            point1, point2 = (point_class.Point(parent=cb, coord=c, color=cb), point_class.Point(parent=cb, coord=cell_dec_coords[4], color=cb))
-            ca = point_class.PointsList(parent=cell_rend, name='c-a', color=cell_rend)
-            point1, point2 = (point_class.Point(parent=ca, coord=c, color=ca), point_class.Point(parent=ca, coord=cell_dec_coords[6], color=ca))
-
-            abc = point_class.PointsList(parent=cell_rend, name='ab-c', color=cell_rend)
-            point1, point2 = (point_class.Point(parent=abc, coord=cell_dec_coords[7], color=abc), point_class.Point(parent=abc, coord=cell_dec_coords[5], color=abc))
-            acb = point_class.PointsList(parent=cell_rend, name='ac-b', color=cell_rend)
-            point1, point2 = (point_class.Point(parent=acb, coord=cell_dec_coords[7], color=acb),
-                              point_class.Point(parent=acb, coord=cell_dec_coords[6], color=acb))
-            bca = point_class.PointsList(parent=cell_rend, name='bc-a', color=cell_rend)
-            point1, point2 = (point_class.Point(parent=bca, coord=cell_dec_coords[7], color=bca),
-                              point_class.Point(parent=bca, coord=cell_dec_coords[4], color=bca))
+            cell_list = self.createCellList(mol_list, cell_dec_coords)
 
             yield mol_sys, list_tuple
+
+    def createCellList(self, parent, cell_dec_coords):
+        cell_list = point_class.PointsList(parent=parent, name='Cell', color=[0, 0, 0, 1])
+        o = point_class.Point(parent=cell_list, name='o', coord=cell_dec_coords[0], color=[0, 0, 0, 1], label='o')
+        a = point_class.Point(parent=cell_list, name='a', coord=cell_dec_coords[1], color=[1, 0, 0, 1], label='a')
+        b = point_class.Point(parent=cell_list, name='b', coord=cell_dec_coords[2], color=[0, 1, 0, 1], label='b')
+        c = point_class.Point(parent=cell_list, name='c', coord=cell_dec_coords[3], color=[0, 0, 1, 1], label='c')
+        cell_rend = point_class.PointsList(parent=cell_list, name='Cell render', color=cell_list)
+
+        oa = point_class.PointsList(parent=cell_rend, name='o-a', color=a)
+        point1, point2 = (
+        point_class.Point(parent=oa, coord=o, color=oa), point_class.Point(parent=oa, coord=a, color=oa))
+
+        ob = point_class.PointsList(parent=cell_rend, name='o-b', color=b)
+        point1, point2 = (
+        point_class.Point(parent=ob, coord=o, color=ob), point_class.Point(parent=ob, coord=b, color=ob))
+
+        oc = point_class.PointsList(parent=cell_rend, name='o-c', color=c)
+        point1, point2 = (
+        point_class.Point(parent=oc, coord=o, color=oc), point_class.Point(parent=oc, coord=c, color=oc))
+
+        ab = point_class.PointsList(parent=cell_rend, name='a-b', color=cell_rend)
+        point1, point2 = (point_class.Point(parent=ab, coord=a, color=ab),
+                          point_class.Point(parent=ab, coord=cell_dec_coords[5], color=ab))
+        ac = point_class.PointsList(parent=cell_rend, name='a-c', color=cell_rend)
+        point1, point2 = (point_class.Point(parent=ac, coord=a, color=ac),
+                          point_class.Point(parent=ac, coord=cell_dec_coords[6], color=ac))
+
+        bc = point_class.PointsList(parent=cell_rend, name='b-c', color=cell_rend)
+        point1, point2 = (point_class.Point(parent=bc, coord=b, color=bc),
+                          point_class.Point(parent=bc, coord=cell_dec_coords[4], color=bc))
+        ba = point_class.PointsList(parent=cell_rend, name='b-a', color=cell_rend)
+        point1, point2 = (point_class.Point(parent=ba, coord=b, color=ba),
+                          point_class.Point(parent=ba, coord=cell_dec_coords[5], color=ba))
+
+        cb = point_class.PointsList(parent=cell_rend, name='c-b', color=cell_rend)
+        point1, point2 = (point_class.Point(parent=cb, coord=c, color=cb),
+                          point_class.Point(parent=cb, coord=cell_dec_coords[4], color=cb))
+        ca = point_class.PointsList(parent=cell_rend, name='c-a', color=cell_rend)
+        point1, point2 = (point_class.Point(parent=ca, coord=c, color=ca),
+                          point_class.Point(parent=ca, coord=cell_dec_coords[6], color=ca))
+
+        abc = point_class.PointsList(parent=cell_rend, name='ab-c', color=cell_rend)
+        point1, point2 = (point_class.Point(parent=abc, coord=cell_dec_coords[7], color=abc),
+                          point_class.Point(parent=abc, coord=cell_dec_coords[5], color=abc))
+        acb = point_class.PointsList(parent=cell_rend, name='ac-b', color=cell_rend)
+        point1, point2 = (point_class.Point(parent=acb, coord=cell_dec_coords[7], color=acb),
+                          point_class.Point(parent=acb, coord=cell_dec_coords[6], color=acb))
+        bca = point_class.PointsList(parent=cell_rend, name='bc-a', color=cell_rend)
+        point1, point2 = (point_class.Point(parent=bca, coord=cell_dec_coords[7], color=bca),
+                          point_class.Point(parent=bca, coord=cell_dec_coords[4], color=bca))
+        return cell_list
 
     def parsMolSys(self, mol_sys, bond=True, root=None, point_func=None, *args, **kwargs):
         if point_func is None:
@@ -728,7 +750,7 @@ class FileParser:
 
             spec_props = ['GradRho', 'HessRho_EigVals', 'HessRho_EigVec1', 'HessRho_EigVec2', 'HessRho_EigVec3', 'Stress_EigVals', 'Stress_EigVec1', 'Stress_EigVec2', 'Stress_EigVec3']
 
-            if 'CP#' in line:
+            if 'CP#' in line and 'Coords' in line:
                 def create_atom():
                     atom_type = types[data['Type']]
                     atom = MoleculeClass.Atom(coord, atom_type, None, name=cp_name, sup_data_dict=data)
@@ -927,14 +949,91 @@ class FileParser:
             list_tuple[1][0].rad = 0.02
         yield list_tuple
 
+    def parsPOSCAR_CONTCAR(self, file_path, bond=False, root=None, *args, **kwargs):
+        from pymatgen.core import Structure
+
+        def pymatgenStructureToMolSys(struct):
+            mol_sys = MoleculeClass.MoleculeSystem()
+            mol_sys.name = os.path.basename(file_path).split('.')[0]
+            mol_sys.file_name = file_path
+            mol = MoleculeClass.Molecule(parent=mol_sys)
+
+            types = struct.atomic_numbers
+            coords = struct.cart_coords
+            names = struct.labels
+
+            for i in range(len(types)):
+                type = types[i]
+                coord = coords[i]
+                add_data = {'cif_sym_codes': [[0, 'x,y,z'],
+                                              [1, 'x+1,y,z'],
+                                              [2, 'x-1,y,z'],
+                                              [3, 'x,y+1,z'],
+                                              [4, 'x,y-1,z'],
+                                              [5, 'x,y,z+1'],
+                                              [6, 'x,y,z-1']],
+                            'cif_cell_a': struct.lattice.a,
+                            'cif_cell_b': struct.lattice.b,
+                            'cif_cell_c': struct.lattice.c,
+                            'cif_cell_al': struct.lattice.alpha,
+                            'cif_cell_be': struct.lattice.beta,
+                            'cif_cell_ga': struct.lattice.gamma,
+                            'cif_frac_coords': np.array(struct.frac_coords[i], dtype=np.float32)}
+                atom = MoleculeClass.Atom(coord, type, parent=mol, name=names[i], **add_data)
+            return mol_sys
+
+        def savePOSCAR_ToCif(molsys):
+            from pymatgen.io.cif import CifWriter
+            from PySide6 import QtWidgets
+            file = molsys.file_name
+            filename, _ = QtWidgets.QFileDialog.getSaveFileName(None, 'POSCAR to cif', filter='*.cif, *')
+            w = CifWriter(Structure.from_file(file))
+            w.write_file(filename)
+
+
+        struct = Structure.from_file(file_path)
+        mol_sys = pymatgenStructureToMolSys(struct)
+        ret = self.parsMolSys(mol_sys, bond, root)
+
+        cell_coords = [[0, 0, 0],
+                       [1, 0, 0],
+                       [0, 1, 0],
+                       [0, 0, 1],
+                       [0, 1, 1],
+                       [1, 1, 0],
+                       [1, 0, 1],
+                       [1, 1, 1]]
+        args = (*struct.lattice.abc, *struct.lattice.angles, cell_coords)
+        cell_dec_coords = self.fracToDec(*args)
+        self.createCellList(ret[1][0], cell_dec_coords)
+        a = 0
+
+        mol_list = ret[1][0]
+        if mol_list.additional_context_actions is None:
+            mol_list.addProperty('additional_context_actions', [('Save to cif', lambda: savePOSCAR_ToCif(mol_sys))], observed=False)
+        else:
+            mol_list.additional_context_action.append([('Save to cif', lambda: savePOSCAR_ToCif(mol_sys))])
+        a = 0
+        return ret
+
     @staticmethod
     def _pointCreation(atom_list, atom):
+
         coord = atom.coord.copy()
-        point = point_class.Point(parent=atom_list, coord=coord, rad=atom_list,
-                                  color=PALETTE.point_dict[PALETTE.getName(atom.atom_type)],
-                                  atom_type=atom.atom_type,
-                                  name=atom.name,
-                                  label=atom.name)
+        add_data = atom.sup_data_dict
+        if add_data is None:
+            point = point_class.Point(parent=atom_list, coord=coord, rad=atom_list,
+                                      color=PALETTE.point_dict[PALETTE.getName(atom.atom_type)],
+                                      atom_type=atom.atom_type,
+                                      name=atom.name,
+                                      label=atom.name)
+        else:
+            point = point_class.Point(parent=atom_list, coord=coord, rad=atom_list,
+                                      color=PALETTE.point_dict[PALETTE.getName(atom.atom_type)],
+                                      atom_type=atom.atom_type,
+                                      name=atom.name,
+                                      label=atom.name,
+                                      **add_data)
         return point
 
 

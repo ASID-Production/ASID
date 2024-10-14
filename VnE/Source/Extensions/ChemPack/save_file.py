@@ -80,7 +80,8 @@ class SaveFile:
         return
 
     __formats = {'pdb': save_pdb,
-                 'xyz': save_xyz}
+                 'xyz': save_xyz,
+                 }
 
 
 SAVE_FILE = SaveFile()
