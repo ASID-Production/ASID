@@ -819,11 +819,37 @@ extern "C" {
 							 "atoms", o_xyz_block);
 	}
 
-	//static PyObject* cpplib_SortDatabase(PyObject* self, PyObject* arg) {
-	//	const auto ret = cpplib::currents::SearchGraphType::DatabaseGraphType::ResortString(PyUnicode_AsUTF8(arg));
-	//	return PyUnicode_FromString(ret.c_str());
-	//}
+	static PyObject* cpplib_SubSearch(PyObject* self, PyObject* args) {
+		deb_write("cpplib_SubSearch started");
 
+		const char* s1 = NULL;
+		const char* s2 = NULL;
+		if (!PyArg_ParseTuple(args, "ss", &s1, &s2)) {
+			deb_write("! Critic Error: Parse Error - return None");
+			Py_RETURN_NONE;
+		}
+		deb_write("s1 = ", s1);
+		deb_write("s2 = ", s2);
+		deb_write("cpplib_SubSearch: invoke CompareGraph");
+		bool res = false;
+
+		cpplib::SearchGraph graph;
+
+		auto&& inputpair = SearchGraphType::RequestGraphType::ReadInput(s1);
+		graph.setupInput(std::move(inputpair.first));
+		deb_write("cpplib_SubSearch start ReadData");
+		auto datg = SearchGraphType::RequestGraphType::ReadInput(s2).first.makeCopyEx<AtomTypeData>();
+		graph.setupData(std::move(datg));
+		deb_write("cpplib_SubSearch start prepareSearch");
+		graph.prepareToSearch();
+		deb_write("cpplib_SubSearch start FullSearch");
+		if( graph.startFullSearch(false)){
+			Py_RETURN_TRUE;
+		}
+		else {
+			Py_RETURN_FALSE;
+		}
+	}
 }
 
 
@@ -844,7 +870,7 @@ static struct PyMethodDef methods[] = {
 	{ "FindDAT_IC", cpplib_FindDAT_IC, METH_VARARGS, "Create dictionary with distances, angles and torsions in cell"},
 	{ "FindDAT_WC", cpplib_FindDAT_WC, METH_O, "Create dictionary with distances, angles and torsions in xyz"},
 	{ "himp", cpplib_himp, METH_VARARGS, "Moves hydrogens to the nearest atom"},
-	/*{ "SortDatabase", cpplib_SortDatabase, METH_O, "Sort graph"},*/
+	{ "SubSearch", cpplib_SubSearch, METH_VARARGS, "Compare two graphs"},
 
 	{ NULL, NULL, 0, NULL }
 };

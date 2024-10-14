@@ -112,27 +112,29 @@ namespace cpplib {
 	class Coord {
 	public:
 		using argumentType = int8_t;
-		using innerType = int8_t[2];
+		using innerType = int8_t;
 	private:
-		innerType number_ = {0, 0};
-		//static constexpr innerType LOWMASK = 0b00001111;
-		//static constexpr innerType HIGHMASK = 0b11110000;
+		innerType low = 0;
+		innerType high = 0;
 		// mono <= 14
 		// mono == 15 for internal use
 	public:
 
 		constexpr inline Coord() noexcept {};
-		constexpr inline Coord(argumentType mono) noexcept { number_[0] = mono; };
-		constexpr inline Coord(argumentType first, argumentType second) noexcept { number_[0] = first; number_[1] = second; };
-		bool right_in_left(const Coord duo) const {
-			return duo.number_[0] >= first() && duo.number_[0] <= second();
+		constexpr inline Coord(argumentType mono) noexcept { low = mono; high = mono; };
+		constexpr inline Coord(argumentType first, argumentType second) noexcept { low = first; high = second; };
+		//bool right_in_left(const Coord duo) const {
+		//	return duo.number_[0] >= first() && duo.number_[0] <= second();
+		//}
+		inline bool intersect(const Coord other) const noexcept {
+			return first() <= other.second() && other.first() <= second();
 		}
 	private:
 		inline argumentType first() const {
-			return number_[0];
+			return low;
 		}
 		inline argumentType second() const {
-			return number_[1];
+			return high;
 		}
 	};
 
@@ -232,7 +234,7 @@ namespace cpplib {
 			return (type_ == other.type_) && 
 				(hAtoms_ == other.hAtoms_) &&
 				(neighbours_.size() == other.neighbours_.size()) &&
-				(coord_.right_in_left(other.coord_));
+				(coord_.intersect(other.coord_));
 		}
 		// Raw comparision
 		bool RawLess(const Node& other) const noexcept {
@@ -266,7 +268,7 @@ namespace cpplib {
 			return type_ == other.type_ &&
 				hAtoms_ <= other.hAtoms_ &&
 				neighbours_.size() <= other.neighbours_.size() &&
-				coord_.right_in_left(other.coord_);
+				coord_.intersect(other.coord_);
 		}
 
 		// Methods Neighbours
@@ -307,7 +309,10 @@ namespace cpplib {
 		inline void setHAtoms(const HType& hAtoms) noexcept {
 			this->hAtoms_ = hAtoms;
 		}
-		inline void setCoord(Coord&& c) {
+		inline const Coord& getCoord() const noexcept {
+			return this->coord_;
+		}
+		inline void setCoord(const Coord& c) {
 			coord_ = c;
 		}
 
@@ -360,6 +365,10 @@ namespace cpplib {
 		}
 		void addNeighboursVector(NeighboursType&& other) {
 			neighbours_ = std::move(other);
+		}
+		NeighboursType getNeighboursVector() const {
+			return neighbours_;
+
 		}
 		void exchangeNeighbour(const Node* cur, const Node* next) noexcept {
 			auto curshift = cur - this;

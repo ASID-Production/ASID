@@ -63,6 +63,28 @@ struct FMIC_TS {
 	}
 };
 
+
+
+
+TEST(SubSearch, Same) {
+	deb_write("cpplib_SubSearch started");
+
+	const char* s1 = "1 6 5 6 2 4 4 6 2 4 4 6 2 4 4 6 2 4 4 6 2 4 4 6 2 4 4 1 2 2 3 3 4 4 5 1 6";
+	const char* s2 = "1 6 5 6 2 4 4 6 2 4 4 6 2 4 4 6 2 4 4 6 2 4 4 6 2 4 4 2 3 3 4 4 5 5 6 1 6";
+
+	cpplib::SearchGraph graph;
+
+	auto&& inputpair = SearchGraphType::RequestGraphType::ReadInput(s1);
+	graph.setupInput(std::move(inputpair.first));
+	deb_write("cpplib_SubSearch start ReadData");
+	auto datg = SearchGraphType::RequestGraphType::ReadInput(s2).first.makeCopyEx<AtomTypeData>();
+	graph.setupData(std::move(datg));
+	deb_write("cpplib_SubSearch start prepareSearch");
+	graph.prepareToSearch();
+	deb_write("cpplib_SubSearch start FullSearch");
+	EXPECT_TRUE(graph.startFullSearch(false));
+}
+
 TEST(FindDistanceTest, C3H6O2) {
 	p_distances = &testdistances;
 	std::vector<AtomTypeData>  types {1,8,8,6,6,1,1,6,1,1,1};

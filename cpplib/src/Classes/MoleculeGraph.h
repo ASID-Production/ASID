@@ -45,6 +45,9 @@ namespace cpplib {
 		using MoleculeIndex = currents::MoleculeIndex;
 		using HType = typename NodeType::HType;
 
+		template <class OT>
+		friend class MoleculeGraph;
+
 	private:
 		// Data
 		NodeContainer data_;
@@ -139,7 +142,7 @@ namespace cpplib {
 			return data_[cur].getNeighbour(neighbourIt);
 		}
 
-		// Copy function
+		// Copy functions
 		[[nodiscard]] constexpr MoleculeGraph makeCopy() const noexcept(false) {
 			// Copy
 			MoleculeGraph ret;
@@ -150,6 +153,22 @@ namespace cpplib {
 			for (AtomIndex i = 0; i < s; i++) {
 				const auto& node = data_[i];
 				ret.data_.emplace_back(node);
+			}
+			return ret;
+		}
+		template <class OT>
+		[[nodiscard]] constexpr MoleculeGraph<OT> makeCopyEx() const noexcept(false) {
+			// Copy
+			MoleculeGraph<OT> ret;
+			ret.id_ = id_;
+			AtomIndex s = size();
+			ret.data_.reserve(s);
+			// Convertion to Correct Neighbours
+			for (AtomIndex i = 0; i < s; i++) {
+				const auto& node = data_[i];
+				ret.data_.emplace_back(XAtom(node.getType()).get_simple(), node.getHAtoms(), node.getID());
+				ret.data_.back().addNeighboursVector(node.getNeighboursVector());
+				ret.data_.back().setCoord(std::move(node.getCoord()));
 			}
 			return ret;
 		}

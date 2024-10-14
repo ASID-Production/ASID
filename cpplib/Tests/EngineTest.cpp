@@ -74,11 +74,11 @@ TEST(EngineTest, CoordType) {
 	Coord duo3(2, 4);
 	Coord duo4(3, 4);
 	Coord duo5(4, 4);
-	EXPECT_FALSE(duo1.right_in_left(mono));
-	EXPECT_TRUE(duo2.right_in_left(mono));
-	EXPECT_TRUE(duo3.right_in_left(mono));
-	EXPECT_TRUE(duo4.right_in_left(mono));
-	EXPECT_FALSE(duo5.right_in_left(mono));
+	EXPECT_FALSE(duo1.intersect(mono));
+	EXPECT_TRUE(duo2.intersect(mono));
+	EXPECT_TRUE(duo3.intersect(mono));
+	EXPECT_TRUE(duo4.intersect(mono));
+	EXPECT_FALSE(duo5.intersect(mono));
 }
 
 
