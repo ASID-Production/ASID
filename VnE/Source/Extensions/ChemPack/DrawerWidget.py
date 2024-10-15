@@ -1237,7 +1237,11 @@ class Draw(aDrawWidgetEvent):
                     self.line_list = point_class.PointsList(parent=self.widget.l_list)
                     self.create_bond_command = CreateBondCommand(self.widget.drawing, self.line_list)
                     self.create_bond_command.apply(self.point1.create_command, self.point2.create_command)
-                    self.create_bond_command.appendStack(self.create_bond_command)
+
+                    coms = [x for x in [self.create_atom1_command, self.create_atom2_command, self.create_bond_command, self.drag_command] if x]
+                    com = CompositeCommand(*coms)
+                    com.appendStack(com)
+
                 elif self.point2 is None:
                     pos = event.localPos()
                     point_a = self.widget.select(pos)

@@ -78,15 +78,19 @@ def pars(file, bond=True, root=None):
         from .parsers import PARSER as parser
         PARSER = parser
     if TREE_MODEL is not None:
+        if root is None:
+            root = TREE_MODEL.getRoot()
         if os.path.basename(file) == 'paths.pdb' or os.path.basename(file) == 'CPs.pdb':
             bond = False
         ret = PARSER.parsFile(file, bond=bond, root=root)
         if isinstance(ret, types.GeneratorType):
             for molsys, lists in ret:
-                loadMolSys(molsys, lists)
+                if molsys and lists:
+                    loadMolSys(molsys, lists)
             return molsys, lists
         else:
-            loadMolSys(*ret)
+            if ret[0]:
+                loadMolSys(*ret)
             return ret
     else:
         ret = PARSER.parsFile(file)
@@ -269,6 +273,11 @@ def export2dDiagram():
     Db_viewer.exportGif()
 
 
+def symmPOSCAR():
+    from . import symm_poscar
+    symm_poscar.execute(pars)
+
+
 def execute(model, uniform_model=None):
     from PySide6.QtWidgets import QFileDialog
     global PARSER
@@ -372,5 +381,9 @@ def setup(menu, model, uniform_model=None, *args, main_widget=None, **kwargs):
     action_2d_export.triggered.connect(export2dDiagram)
     cmenu.addAction(action_2d_export)
 
-    actions = [open_action, action_test, action_DB, save_action, action_sym_op, action_export, action_winx, action_aimall, action_2d_export, action_multiwfn]
+    action_symm_poscar = QAction('Symm POSCAR')
+    action_symm_poscar.triggered.connect(symmPOSCAR)
+    cmenu.addAction(action_symm_poscar)
+
+    actions = [open_action, action_test, action_DB, save_action, action_sym_op, action_export, action_winx, action_aimall, action_2d_export, action_multiwfn, action_symm_poscar]
     return actions
