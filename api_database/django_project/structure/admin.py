@@ -31,7 +31,7 @@ from .models import (StructureCode, Author, Spacegroup, Cell,
                      NormalisedReducedCell, ReducedCell,
                      ExperimentalInfo, RefinementInfo,
                      CoordinatesBlock, CrystalAndStructureInfo,
-                     Journal, RefcodePublicationConnection, Other)
+                     Journal, RefcodePublicationConnection, Other, InChI)
 from django.contrib import admin
 
 
@@ -149,4 +149,15 @@ class OtherAdmin(admin.ModelAdmin):
     list_display = ('id', 'refcode', 'has_3d_structure', 'number_atoms_with_sites', 'maximum_atomic_number')
     search_fields = ('refcode__refcode__startswith',)
     list_filter = ('has_3d_structure',)
+    empty_value_display = '-empty-'
+
+
+@admin.register(InChI)
+class InChIAdmin(admin.ModelAdmin):
+    list_display = (
+        'id', 'refcode', 'version', 'formula', 'connectivity',
+        'hydrogens', 'q_charge', 'p_charge', 'b_stereo',
+        't_stereo', 'm_stereo', 's_stereo', 'i_isotopic'
+    )
+    search_fields = ('refcode__refcode__startswith', 'formula')
     empty_value_display = '-empty-'

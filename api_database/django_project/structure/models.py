@@ -188,7 +188,7 @@ class AbstractInChI(models.Model):
         verbose_name='InChI version',
         max_length=5
     )
-    formula = models.TextField(
+    formula = models.CharField(
         verbose_name='InChI formula',
         max_length=200
     )
@@ -206,41 +206,43 @@ class AbstractInChI(models.Model):
         verbose_name='InChI "q"',
         blank=True,
         null=True,
-        max_length=10
+        max_length=500
     )
     p_charge = models.CharField(
         verbose_name='InChI "p"',
         blank=True,
         null=True,
-        max_length=10
+        max_length=500
     )
-    b_stereo = models.TextField(
+    b_stereo = models.CharField(
         verbose_name='InChI "b"',
         blank=True,
-        null=True
+        null=True,
+        max_length=500
     )
-    t_stereo = models.TextField(
+    t_stereo = models.CharField(
         verbose_name='InChI "t"',
         blank=True,
-        null=True
+        null=True,
+        max_length=500
     )
     m_stereo = models.CharField(
         verbose_name='InChI "m"',
         blank=True,
         null=True,
-        max_length=10
+        max_length=500
     )
     s_stereo = models.CharField(
         verbose_name='InChI "s"',
         blank=True,
         null=True,
-        max_length=10
+        max_length=500
     )
     i_isotopic = models.CharField(
         verbose_name='InChI "i"',
         blank=True,
         null=True,
-        max_length=100
+        max_length=500
     )
 
     class Meta:

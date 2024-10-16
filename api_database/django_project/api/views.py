@@ -443,7 +443,7 @@ class QCStructureViewSet(StructureModelViewSet):
     )
     def download(self, request, pk):
         qc_structure = get_object_or_404(QCStructureCode, pk=pk)
-        filename = f'{qc_structure.refcode}.cif'
+        filename = f'{qc_structure.refcode}.txt'
         vasp_file = open(os.path.join(settings.BASE_DIR, 'media', str(qc_structure.vasp_file.file)), 'r')
         content = vasp_file.readlines()
         response = HttpResponse(content, content_type='text/xml')
