@@ -29,7 +29,7 @@
 from .models import (QCStructureCode, QCCell, QCProgram,
                      QCCompoundName, QCFormula, QCReducedCell,
                      QCCoordinatesBlock, QCProperties,
-                     QCSubstructure1, QCSubstructure2)
+                     QCSubstructure1, QCSubstructure2, QCInChI)
 from django.contrib import admin
 
 
@@ -118,4 +118,15 @@ class QCProgramAdmin(admin.ModelAdmin):
 class QCPropertiesAdmin(admin.ModelAdmin):
     list_display = ('id', 'refcode', 'energy', 'calculated_density')
     search_fields = ('refcode__qc_refcode__startswith',)
+    empty_value_display = '-empty-'
+
+
+@admin.register(QCInChI)
+class QCInChIAdmin(admin.ModelAdmin):
+    list_display = (
+        'id', 'refcode', 'version', 'formula', 'connectivity',
+        'hydrogens', 'q_charge', 'p_charge', 'b_stereo',
+        't_stereo', 'm_stereo', 's_stereo', 'i_isotopic'
+    )
+    search_fields = ('refcode__qc_refcode__startswith', 'formula')
     empty_value_display = '-empty-'
