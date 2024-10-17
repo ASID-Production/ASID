@@ -159,7 +159,7 @@ def define_bonds_in_molecule_v2(
             elif rdkit_molecule.GetProp(key='charge'):
                 raise Exception('ChargeError: Do not find available charge!')
         except Exception as err:
-            if (not charge_order_neg) or (not charge_order_pos) or (
+            if (not charge_order_neg) or (not charge_order_pos) or not (
                     'Final molecular charge' in str(err) and 'does not match input' in str(err)):
                 if not charge_order_neg or not charge_order_pos:
                     print('Warning: Do not find available charge!')
