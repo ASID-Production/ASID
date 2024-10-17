@@ -197,8 +197,19 @@ def get_or_create_space_group(cif_block, return_only_symops=False):
         symops_list = json.load(file)
         for i, symops in enumerate(symops_list):
             if i > 0:
+                if symops['crystal_class'] == 'monoclinic' and symops['hermann_mauguin'].split()[1] == '1' and symops['hermann_mauguin'].split()[3] == '1':
+                    if ' '.join([symops['hermann_mauguin'].split()[0], symops['hermann_mauguin'].split()[2]]) == h_m_name:
+                        return symops['number']
                 if symops['hermann_mauguin'] == h_m_name:
                     return symops['number']
+
+    def get_symops_by_number(sg_number: int):
+        file = open(os.path.join(os.path.dirname(__file__), '../symops.json'))
+        symops_list = json.load(file)
+        for i, symops in enumerate(symops_list):
+            if i > 0:
+                if symops['number'] == sg_number:
+                    return symops['symops']
 
     def get_system_from_numb(sg_number: int):
         file = open(os.path.join(os.path.dirname(__file__), '../symops.json'))
@@ -278,6 +289,7 @@ def get_or_create_space_group(cif_block, return_only_symops=False):
             # if such a group is not in the database, then add it
             logger_1.info(f'Creating new space group object...')
     # symops
+    get_symops_from_json = False
     try:
         symops = cif_block.GetLoop('_symmetry_equiv_pos_as_xyz')
         key = '_symmetry_equiv_pos_as_xyz'
@@ -286,12 +298,14 @@ def get_or_create_space_group(cif_block, return_only_symops=False):
             symops = cif_block.GetLoop('_space_group_symop_operation_xyz')
             key = '_space_group_symop_operation_xyz'
         except:
-            raise Exception('No symops found in cif!')
-    keys: list = symops.GetItemOrder()
-    symops_list = []
-    for item in symops:
-        symop = item[keys.index(key)].replace(' ', '')
-        symops_list.append(symop)
+            symops_list = get_symops_by_number(sg_number)
+            get_symops_from_json = True
+    if not get_symops_from_json:
+        keys: list = symops.GetItemOrder()
+        symops_list = []
+        for item in symops:
+            symop = item[keys.index(key)].replace(' ', '')
+            symops_list.append(symop)
     operations = ";".join(symops_list)
     if return_only_symops:
         return operations
@@ -444,9 +458,9 @@ def add_journal_and_publication(cif_block, struct_obj):
     for key in ['journal', 'page', 'volume', 'doi']:
         if key not in filtr.keys():
             filtr_is_null[f'{key}__isnull'] = True
-    if doi:
-        pub_obj, created = Publication.objects.get_or_create(doi=doi)
-        if year and created:
+    if doi and Publication.objects.filter(doi=doi).exists():
+        pub_obj = Publication.objects.get(doi=doi)
+        if year:
             for key, value in filtr.items():
                 setattr(pub_obj, key, value)
     elif year:
@@ -597,51 +611,55 @@ def add_universal(model, refcode_obj, cif_block, iucr_dict):
     obj_obj, created = model.objects.get_or_create(refcode=refcode_obj)
     for key, values in iucr_dict.items():
         for data_key in values:
-            if data_key in cif_block[1].keys():
-                value = cif_block[1][data_key]
-                if value == '?':
-                    break
-                if '(' in value and ')' in value and re.search(r'\d', value) and not re.search(r'[a-zA-Z]', value):
-                    value = float(value.split('(')[0])
-                if data_key == '_exptl_special_details':
-                    for line in value.split('\n'):
-                        if key == 'bioactivity' and 'drug' in line:
-                            value = line
-                            break
-                        elif key == 'phase_transitions' and 'phase' in line:
-                            value = line
-                            break
-                        elif key == 'polymorph' and 'polymorph' in line:
-                            value = line
-                            break
-                        elif key == 'sensitivity' and {'decomposition', 'sensitve', 'oxidant', 'stable', 'chromic', 'hygroscopic', 'thermolabile'}.intersection(set(line.split())):
-                            value = line
-                            break
-                        elif key == 'pressure' and ('pressure' in line or re.search(r'[KkGgMmPa]{3}', line)):
-                            value = line
-                            break
-                        elif key == 'disorder' and 'disorder' in line:
-                            value = line
-                            break
-                        elif key == 'melting_point' and {'sublimes', 'above'}.intersection(set(line.split())):
-                            value = line
-                            break
-                        else:
-                            value = ''
-                if key == 'systematic_name':
-                    value = ' '.join(value.split())
-                if key == 'wavelength' and type(value) == list:
-                    value = float(value[0].split(',')[0])
-                if key == 'extinction_coef':
-                    value = float(str(value).split('(')[0])
-                if key == 'formula_moiety' or key == 'formula_sum':
-                    value = value.replace('\n', '')
-                    value = value.replace('\r', '')
-                if key in ['r_factor', 'wR_factor', 'gof']:
-                    value = float(value) * 100
-                if value and value not in ['?', 'none']:
-                    setattr(obj_obj, key, value)
-                    break
+            # try to set values
+            try:
+                if data_key in cif_block[1].keys():
+                    value = cif_block[1][data_key]
+                    if value == '?':
+                        break
+                    if '(' in value and ')' in value and re.search(r'\d', value) and not re.search(r'[a-zA-Z]', value):
+                        value = float(value.split('(')[0])
+                    if data_key == '_exptl_special_details':
+                        for line in value.split('\n'):
+                            if key == 'bioactivity' and 'drug' in line:
+                                value = line
+                                break
+                            elif key == 'phase_transitions' and 'phase' in line:
+                                value = line
+                                break
+                            elif key == 'polymorph' and 'polymorph' in line:
+                                value = line
+                                break
+                            elif key == 'sensitivity' and {'decomposition', 'sensitve', 'oxidant', 'stable', 'chromic', 'hygroscopic', 'thermolabile'}.intersection(set(line.split())):
+                                value = line
+                                break
+                            elif key == 'pressure' and ('pressure' in line or re.search(r'[KkGgMmPa]{3}', line)):
+                                value = line
+                                break
+                            elif key == 'disorder' and 'disorder' in line:
+                                value = line
+                                break
+                            elif key == 'melting_point' and {'sublimes', 'above'}.intersection(set(line.split())):
+                                value = line
+                                break
+                            else:
+                                value = ''
+                    if key == 'systematic_name':
+                        value = ' '.join(value.split())
+                    if key == 'wavelength' and type(value) == list:
+                        value = float(value[0].split(',')[0])
+                    if key == 'extinction_coef':
+                        value = float(str(value).split('(')[0])
+                    if key == 'formula_moiety' or key == 'formula_sum':
+                        value = value.replace('\n', '')
+                        value = value.replace('\r', '')
+                    if key in ['r_factor', 'wR_factor', 'gof']:
+                        value = float(value) * 100
+                    if value and value not in ['?', 'none']:
+                        setattr(obj_obj, key, value)
+                        break
+            except Exception:
+                continue
     # if problems with attr values (first of all for COD structures)
     try:
         obj_obj.save()
