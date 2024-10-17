@@ -185,7 +185,8 @@ def get_image_temp(id, db_type='cryst', w=250, h=250):
 
 
 def get_image(id, o_file_path, db_type='cryst', w=250, h=250):
-    url_mods = {'cryst': 'api/v1/structures'}
+    url_mods = {'cryst': 'api/v1/structures',
+                'qm': 'api/v1/qc_structures'}
     url_mod = url_mods.get(db_type, 'api/v1/structures')
     if SESSION.user_token is not None:
         headers = {'Authorization': f'Token {SESSION.user_token}'}

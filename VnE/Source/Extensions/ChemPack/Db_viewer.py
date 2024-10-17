@@ -299,9 +299,9 @@ class InfoTableModel(QAbstractTableModel):
         self.beginResetModel()
         self._fields = []
         self._spans = []
-        self._selected = Db_bindings.get_full_info(selected_id)
+        self._selected = Db_bindings.get_full_info(selected_id, self.parent().db_type)
         try:
-            self._image = Db_bindings.get_image_temp(selected_id)
+            self._image = Db_bindings.get_image_temp(selected_id, self.parent().db_type)
         except Exception:
             self._image = None
         self._fields.insert(0, ['Image', self._image])
@@ -468,7 +468,7 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
         self.search_dialog = SearchDialog(parent=self)
         self.db_settings = DbSettings(parent=self)
 
-        self.table_model = InfoTableModel()
+        self.table_model = InfoTableModel(self)
         self.tableView: QtWidgets.QTableView
         self.tableView.setModel(self.table_model)
         self.tableView.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
