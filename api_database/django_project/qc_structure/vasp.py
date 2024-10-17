@@ -89,7 +89,8 @@ def get_or_create_space_group(vasp_structure, return_only_symops=False):
         symops_list = json.load(file)
         for i, symops in enumerate(symops_list):
             if i > 0:
-                json_hall = symops['hall']
+                # lstrip() to delete beginning spaces
+                json_hall = symops['hall'].lstrip()
                 if json_hall == vasp_hall:
                     operations = ";".join(symops['symops'])
                     return operations
