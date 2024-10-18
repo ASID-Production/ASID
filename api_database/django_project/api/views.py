@@ -131,7 +131,6 @@ def structure_search(
     graph.add_nodes_from(serializer.data.get('nodes'))
     graph.add_edges_from(serializer.data.get('edges'))
     template_data = get_template_graph(graph)
-    template_data_without_cord = get_template_graph(graph, cord_num=False)
 
     if search_type == 'substructure':
         exact = False
@@ -154,9 +153,9 @@ def structure_search(
             analyse_data_split = data['analyse_data_split']
     if not analyse_data_split:
         if not qc:
-            analyse_data = get_search_queryset_with_filtration(template_data_without_cord)
+            analyse_data = get_search_queryset_with_filtration(template_data)
         else:
-            analyse_data = get_search_queryset_with_filtration_qc(template_data_without_cord)
+            analyse_data = get_search_queryset_with_filtration_qc(template_data)
         # split search for chunk_size structures parts and then merge the result
         analyse_data_split = list(zip_longest(*[iter(analyse_data)] * chunk_size, fillvalue=''))
         if partial and request.user.is_authenticated:
