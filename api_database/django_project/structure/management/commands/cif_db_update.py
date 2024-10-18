@@ -56,9 +56,13 @@ def collect_cif_data(file: str, cif_blocks: dict, user_refcode='', use_db=True):
             result = chardet.detect(fl.read())
             encoding = result['encoding']
         with open(file, 'r', encoding=encoding) as f1:
-            lines = f1.read()
+            lines = f1.readlines()
+            # correct data name to except any forbidden symbols like spaces, points and others
+            for idx, line in enumerate(lines):
+                if line.startswith('data_'):
+                    lines[idx] = 'data_structure\n'
         with open(file, 'w', encoding='utf8') as f2:
-            f2.write(lines)
+            f2.writelines(lines)
         try:
             cif = ReadCif(file)
         except Exception as err:
