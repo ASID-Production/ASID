@@ -47,9 +47,9 @@ requests.packages.urllib3.util.connection.HAS_IPV6 = False
 
 class ErrorDialog(QDialog):
 
-    def __init__(self, label):
+    def __init__(self, label, title='Error'):
         QDialog.__init__(self)
-        self.setWindowTitle('Error')
+        self.setWindowTitle(title)
         self.label = QLabel(label)
         self.vblayout = QVBoxLayout()
         self.vblayout.addWidget(self.label)
@@ -190,7 +190,7 @@ def get_image(id, o_file_path, db_type='cryst', w=250, h=250):
     url_mod = url_mods.get(db_type, 'api/v1/structures')
     if SESSION.user_token is not None:
         headers = {'Authorization': f'Token {SESSION.user_token}'}
-        data = requests.get(f'{SESSION.url_base}/{url_mod}/{id}/export/2d/?h={h}&w={w}&file=0&f=img', headers=headers, verify=False, allow_redirects=False)
+        data = requests.get(f'{SESSION.url_base}/{url_mod}/{id}/export/2d/?h={h}&w={w}&file=0&f=img', headers=headers)
     else:
         data = requests.get(f'{SESSION.url_base}/{url_mod}/{id}/export/2d/?h={h}&w={w}&file=0&f=img')
     data = data.content.decode(data.apparent_encoding)
@@ -222,11 +222,16 @@ def getImageFromFile(file_path, o_file_path, format='gif', w=250, h=250):
         data = requests.request('GET', f'{SESSION.url_base}/{url_mod}/2d/', headers=headers, data=data_i, files=files)
     else:
         data = requests.request('GET', f'{SESSION.url_base}/{url_mod}/2d/', headers={}, data=data_i, files=files)
-    image_data = data.content
-    image = open('.'.join([opath.splitext(o_file_path)[0], format]), 'wb')
-    image.write(image_data)
-    image.close()
-    return '.'.join([opath.splitext(o_file_path)[0], format])
+    if data.ok:
+        image_data = data.content
+        image = open('.'.join([opath.splitext(o_file_path)[0], format]), 'wb')
+        image.write(image_data)
+        image.close()
+        return '.'.join([opath.splitext(o_file_path)[0], format])
+    else:
+        dialog = ErrorDialog(data.text)
+        dialog.show()
+        return None
 
 
 def getCif(id, db_type='cryst'):
@@ -262,10 +267,13 @@ def uploadFile(file, ext):
             files = [('file', (os.path.basename(file), open(file, 'rb'), 'application/octet-stream'))]
             headers = {'Authorization': f'Token {SESSION.user_token}'}
             resp = method(files, headers)
-            if resp.status_code == 400:
+            if not resp.ok:
                 error = json.loads(resp.text)
                 SESSION.error_dialog = ErrorDialog(error['errors'])
                 SESSION.error_dialog.show()
+            else:
+                dialog = ErrorDialog('Successful', 'Info')
+                dialog.show()
         else:
             SESSION.error_dialog = ErrorDialog('Unsupported file format')
             SESSION.error_dialog.show()
