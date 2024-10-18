@@ -206,37 +206,37 @@ class AbstractInChI(models.Model):
         verbose_name='InChI "q"',
         blank=True,
         null=True,
-        max_length=500
+        max_length=200
     )
     p_charge = models.CharField(
         verbose_name='InChI "p"',
         blank=True,
         null=True,
-        max_length=500
+        max_length=200
     )
     b_stereo = models.CharField(
         verbose_name='InChI "b"',
         blank=True,
         null=True,
-        max_length=500
+        max_length=1000
     )
     t_stereo = models.CharField(
         verbose_name='InChI "t"',
         blank=True,
         null=True,
-        max_length=500
+        max_length=1000
     )
     m_stereo = models.CharField(
         verbose_name='InChI "m"',
         blank=True,
         null=True,
-        max_length=500
+        max_length=200
     )
     s_stereo = models.CharField(
         verbose_name='InChI "s"',
         blank=True,
         null=True,
-        max_length=500
+        max_length=100
     )
     i_isotopic = models.CharField(
         verbose_name='InChI "i"',
