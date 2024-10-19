@@ -1233,6 +1233,7 @@ class Draw(aDrawWidgetEvent):
                 if point2 is not None and (point2 is not self.point2 and point2 is not self.point1):
                     self.create_bond_command.undo()
                     self.create_atom2_command.undo()
+                    self.create_atom2_command = None
                     self.point2 = point2
                     self.line_list = point_class.PointsList(parent=self.widget.l_list)
                     self.create_bond_command = CreateBondCommand(self.widget.drawing, self.line_list)
