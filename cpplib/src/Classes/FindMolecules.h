@@ -503,29 +503,28 @@ namespace cpplib {
 				seen[i] = true;
 				std::vector<AtomIndex> singleTable = findNextUniquePart(closest[i], net, seen);
 
-				// 4.1. Swap each coordinate
+				// 4.1. Shift Center of Mass
+				PointType center(0, 0, 0);
+				for (size_type j = 0; j < fs_.sizeUnique; j++)
+				{
+					center += fs_.points[singleTable[j]];
+				}
+				center /= fs_.sizeUnique;
+
+				PointType shift = (PointType(0.5, 0.5, 0.5) - center).round();
+				if (shift.r() > 0.5) {
+					for (size_type j = 0; j < fs_.sizeUnique; j++)
+					{
+						fs_.points[singleTable[j]] += shift;
+					}
+				}
+
+				// 4.2. Swap each coordinate
 				size_type singleTableSize = static_cast<size_type>(singleTable.size());
 				
-				for (size_type i = 0; i < singleTableSize; i++) {
-					if(singleTable[i] != fs_.parseIndex[singleTable[i]])
-						std::swap(fs_.points[singleTable[i]], fs_.points[fs_.parseIndex[singleTable[i]]]);
-				}
-			}
-
-			// 5. Shift Center of Mass
-			PointType center(0, 0, 0);
-			for (size_type i = 0; i < fs_.sizeUnique; i++)
-			{
-				center += fs_.points[i];
-			}
-			center /= fs_.sizeUnique;
-
-			PointType shift = (PointType(0.5,0.5,0.5) - center).round();
-
-			if (shift.r() > 0.5) {
-				for (size_type i = 0; i < fs_.sizeUnique; i++)
-				{
-					fs_.points[i] += shift;
+				for (size_type j = 0; j < singleTableSize; j++) {
+					if(singleTable[i] != fs_.parseIndex[singleTable[j]])
+						std::swap(fs_.points[singleTable[j]], fs_.points[fs_.parseIndex[singleTable[j]]]);
 				}
 			}
 

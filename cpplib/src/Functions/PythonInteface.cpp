@@ -909,6 +909,7 @@ static struct PyMethodDef methods[] = {
 	{ "FindDAT_WC", cpplib_FindDAT_WC, METH_O, "Create dictionary with distances, angles and torsions in xyz"},
 	{ "himp", cpplib_himp, METH_VARARGS, "Moves hydrogens to the nearest atom"},
 	{ "SubSearch", cpplib_SubSearch, METH_VARARGS, "Compare two graphs"},
+	{ "compaq", cpplib_compaq, METH_VARARGS, "Do the same as Olex2 'compaq' function"},
 
 	{ NULL, NULL, 0, NULL }
 };
