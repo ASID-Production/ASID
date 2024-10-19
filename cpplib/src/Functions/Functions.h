@@ -81,3 +81,8 @@ cpplib::DATTuple FindDAT_IC(const std::array<float, 6>& unit_cell,
 							cpplib::currents::FAMStructType::PointConteinerType& points);
 cpplib::DATTuple FindDAT_WC(cpplib::currents::FAMStructType::AtomContainerType& types,
 							cpplib::currents::FAMStructType::PointConteinerType& points);
+
+std::tuple<std::vector<cpplib::currents::PointType>, std::list<std::string>>  Compaq(const std::array<float, 6>& unit_cell,
+												const std::vector<const char*>& symm,
+												cpplib::currents::FAMStructType::AtomContainerType& types,
+												cpplib::currents::FAMStructType::PointConteinerType& points);

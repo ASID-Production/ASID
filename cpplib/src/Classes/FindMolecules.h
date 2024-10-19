@@ -467,6 +467,70 @@ namespace cpplib {
 			auto res = cpplib::currents::SearchGraphType::DatabaseGraphType::ResortString(outputStr.c_str()).substr(2);
 			return std::make_tuple(res, errorMsg, std::move(right));
 		}
+		PointConteinerType& compaq(const DistancesType& distances, std::vector<BondType>& bonds) {
+
+			// 1. Find closest atoms
+			std::vector<AtomIndex> closest(fs_.sizeUnique, 0);
+			std::iota(closest.begin(), closest.end(), 0);
+			for (AtomIndex i = 0; i < fs_.sizePoints; i++)
+			{
+				constexpr PointType m(0.5, 0.5, 0.5);
+				auto& cur = closest[fs_.parseIndex[i]];
+				if ((fs_.points[i] - m).r() < (fs_.points[cur] - m).r()) {
+					cur = i;
+				}
+			}
+
+			// 2. Create Nodes in net
+			std::vector<NodeType> net;
+			net.reserve(fs_.sizePoints);
+			for (size_type i = 0; i < fs_.sizePoints; i++) {
+				net.emplace_back(fs_.types[i], 0, i);
+			}
+
+			// 3. Add bonds to net
+			auto bond_size = bonds.size();
+			for (decltype(bond_size) i = 0; i < bond_size; i++) {
+				net[bonds[i].first].addBondSimple(net[bonds[i].second]);
+			}
+
+			// 4. Find molecules
+			std::vector<bool> seen(fs_.sizeUnique, false); // seen unique atoms
+
+			for (AtomIndex i = 0; i < fs_.sizeUnique; i++) {
+				if (seen[i] == true)
+					continue;
+				seen[i] = true;
+				std::vector<AtomIndex> singleTable = findNextUniquePart(closest[i], net, seen);
+
+				// 4.1. Swap each coordinate
+				size_type singleTableSize = static_cast<size_type>(singleTable.size());
+				
+				for (size_type i = 0; i < singleTableSize; i++) {
+					if(singleTable[i] != fs_.parseIndex[singleTable[i]])
+						std::swap(fs_.points[singleTable[i]], fs_.points[fs_.parseIndex[singleTable[i]]]);
+				}
+			}
+
+			// 5. Shift Center of Mass
+			PointType center(0, 0, 0);
+			for (size_type i = 0; i < fs_.sizeUnique; i++)
+			{
+				center += fs_.points[i];
+			}
+			center /= fs_.sizeUnique;
+
+			PointType shift = (PointType(0.5,0.5,0.5) - center).round();
+
+			if (shift.r() > 0.5) {
+				for (size_type i = 0; i < fs_.sizeUnique; i++)
+				{
+					fs_.points[i] += shift;
+				}
+			}
+
+			return fs_.points;
+		}
 
 	private:
 		std::string output(const std::vector<std::tuple<std::vector<AtomIndex>, int, std::vector<BondType>>>& molecules, const std::vector<NodeType>& net) const {
@@ -525,13 +589,13 @@ namespace cpplib {
 			return res;
 		}
 
-		std::pair<std::vector<AtomIndex>,std::vector<BondType>> findNextMolecule(const AtomIndex start, const std::vector<NodeType>& net, std::vector<bool>& seen) const {
+		std::pair<std::vector<AtomIndex>, std::vector<BondType>> findNextMolecule(const AtomIndex start, const std::vector<NodeType>& net, std::vector<bool>& seen) const {
 			// 1. Create vector with single element and define limitators
 			std::vector<AtomIndex> res(1, start);
 			std::vector<BondType> bonds(0);
 			AtomIndex low_pos = 0;
 
-			// 2. Breadth first
+			// 2. Breadth-first
 			while (low_pos < res.size()) {
 				AtomIndex nei_size = net[res[low_pos]].neighboursSize();
 				for (AtomIndex j = 0; j < nei_size; j++) {
@@ -544,7 +608,8 @@ namespace cpplib {
 							continue;
 						}
 						continue;
-					} else {
+					}
+					else {
 						bonds.emplace_back(low_pos, res.size());
 					}
 					res.emplace_back(cur_id);
@@ -552,7 +617,30 @@ namespace cpplib {
 				seen[fs_.parseIndex[res[low_pos]]] = true;
 				low_pos++;
 			}
-			return std::make_pair(res,bonds);
+			return std::make_pair(res, bonds);
+		}
+		std::vector<AtomIndex> findNextUniquePart(const AtomIndex start, const std::vector<NodeType>& net, std::vector<bool>& seen) {
+			// 1. Create vector with single element and define limitators
+			std::vector<AtomIndex> res(1, start);
+			AtomIndex low_pos = 0;
+
+			// 2. Breadth-first
+			while (low_pos < res.size()) {
+				AtomIndex nei_size = net[res[low_pos]].neighboursSize();
+				for (AtomIndex j = 0; j < nei_size; j++) {
+					const auto cur_id = net[res[low_pos]].getNeighbour(j)->getID();
+					auto is_m = static_cast<AtomIndex>(is_member(cur_id, res));
+					if (is_m == (static_cast<AtomIndex>((size_t)(-1))) && seen[fs_.parseIndex[cur_id]] == false) {
+						res.emplace_back(cur_id);
+						seen[fs_.parseIndex[cur_id]] = true;
+						auto shift = (fs_.points[cur_id] - fs_.points[res[low_pos]]).round();
+						if(shift.r() > 0.1) 
+							fs_.points[cur_id] += shift;
+					}
+				}
+				low_pos++;
+			}
+			return res;
 		}
 	};
 }

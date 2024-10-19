@@ -416,3 +416,27 @@ static cpplib::DATTuple& ConvertDATTuple(cpplib::DATTuple&& dat, const cpplib::c
 
 	return dat;
 }
+
+std::tuple<std::vector<cpplib::currents::PointType>, std::list<std::string>> Compaq(const std::array<float, 6>& unit_cell,
+												const std::vector<const char*>& symm,
+												cpplib::currents::FAMStructType::AtomContainerType& types,
+												cpplib::currents::FAMStructType::PointConteinerType& points) {
+	auto& distances = *(p_distances);
+	if (p_distances->isReady() == false) {
+		return std::make_tuple(std::vector<cpplib::currents::PointType>(), std::list<std::string>(1, "Error!Could not open BondLength.ini"));
+	}
+	FAMStructType fs;
+	FAMCellType fc(FAMCellType::base(unit_cell, true));
+	ParseDataType(fs, fc, symm, std::move(types), std::move(points));
+
+	const auto su = fs.sizeUnique;
+	std::string errorMsg;
+	std::list<std::string> res_errors;
+	auto res = fs.findBonds(distances, errorMsg, [fc](const PointType& p1, const PointType& p2) {return fc.distanceInCell(p1, p2); });
+	if (!errorMsg.empty()) res_errors.emplace_back(std::move(errorMsg));
+
+	FindMoleculesType fm(std::move(fs));
+	auto & compaqed = fm.compaq(distances, res.first);
+	compaqed.resize(su);
+	return std::make_tuple(std::move(compaqed), res_errors);
+}

@@ -31,6 +31,7 @@
 #include "Functions.h"
 #include "../Classes/Interfaces.h"
 #include "../BaseHeaders/DebugMes.h"
+#include <list>
 
 using namespace cpplib::currents;
 
@@ -180,6 +181,7 @@ extern "C" {
 		static DistancesType dist(bond_filename);
 		p_distances = &dist;
 	}
+
 	// Python section
 	static PyObject* cpplib_GenBonds(PyObject* self, PyObject* arg) {
 		useDistances(self);
@@ -849,6 +851,42 @@ extern "C" {
 		else {
 			Py_RETURN_FALSE;
 		}
+	}
+
+	static PyObject* cpplib_compaq(PyObject* self, PyObject* args) {
+		useDistances(self);
+		PyObject* ocell = NULL;
+		PyObject* osymm = NULL;
+		PyObject* otuple = NULL;
+		if (!PyArg_ParseTuple(args, "OOO", &ocell, &osymm, &otuple)) {
+			deb_write("! Critic Error: Parse Error - return None");
+			Py_RETURN_NONE;
+		}
+
+		Prepare_IC all(ocell, osymm, otuple);
+
+		auto ret = Compaq(all.cell, all.symm, all.types, all.points);
+		PyObject* o_xyz_block = PyList_New(0);
+		PyObject* o_errors = PyList_New(0);
+
+		for (int i = 0; i < std::get<0>(ret).size(); i++)
+		{
+			PyObject* o_atom = Py_BuildValue("lfff",
+											 static_cast<long>(all.types[i]),
+											 static_cast<float>(std::get<0>(ret)[i].get(0)),
+											 static_cast<float>(std::get<0>(ret)[i].get(0)),
+											 static_cast<float>(std::get<0>(ret)[i].get(0)));
+			PyList_Append(o_xyz_block, o_atom);
+		}
+		while(std::get<1>(ret).empty() == false)
+		{
+			PyList_Append(o_errors, Py_BuildValue("s", (std::get<1>(ret)).front().c_str()));
+			(std::get<1>(ret)).pop_front();
+		}
+		// List[Tuple(atom1, atom2), ...] под ключом 'bonds' 
+		return Py_BuildValue("{s:O,s:O}",
+							 "errors", o_errors,
+							 "xyz_block", o_xyz_block);
 	}
 }
 
