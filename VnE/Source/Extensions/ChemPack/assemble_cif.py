@@ -43,6 +43,7 @@ def execute():
             be = (be/180)*np.pi
             ga = (ga/180)*np.pi
 
+            coords = coords.copy()
             sin = np.sin
             cos = np.cos
             cot = lambda x: np.tan(x)**-1
