@@ -37,7 +37,7 @@ import base64
 
 import debug
 
-search_types = ['refcode', 'name', 'elements', 'doi', 'authors', 'cell']
+search_types = ['refcode', 'name', 'elements', 'doi', 'authors', 'cell', 'formula']
 
 SETUP = False
 SESSION = None
@@ -148,9 +148,9 @@ def search(text, search_type, db_type='cryst', exact=None, process=None):
         return process
     token = SESSION.user_token
     if exact is None:
-        req = f'{SESSION.url_base}/{url_mod}/?{search_type}={text}&limit=1000'
+        req = f'{SESSION.url_base}/{url_mod}/?{search_type}={text}'
     else:
-        req = f'{SESSION.url_base}/{url_mod}/?{search_type}={text}&exact={exact}&limit=1000'
+        req = f'{SESSION.url_base}/{url_mod}/?{search_type}={text}&exact={exact}'
 
     root = opath.normpath(f'{opath.dirname(__file__)}/../../../..')
     path = opath.normpath(f'{root}/VnE/Source/Extensions/ChemPack/searchProcess.py')
@@ -158,7 +158,7 @@ def search(text, search_type, db_type='cryst', exact=None, process=None):
         prog = opath.normpath(f'{root}\\venv\\Scripts\\python.exe')
     elif os.name == 'posix':
         prog = opath.normpath(f'{root}/venv/bin/python3')
-    process.startCommand(f'{prog} {path} -f search -r {req} -t {token}')
+    process.startCommand(f'{prog} {path} -f search -r "{req}" -t {token}')
     process.waitForStarted()
     return process
 
@@ -317,7 +317,7 @@ def structureSearch(struct, url_mod, process=None):
     elif os.name == 'posix':
         prog = opath.normpath(f'{root}/venv/bin/python3')
     body = json.dumps(body)+'\n'
-    process.startCommand(f'{prog} {path} -f structureSearch -r {req} -t {token} -b True')
+    process.startCommand(f'{prog} {path} -f structureSearch -r "{req}" -t {token} -b True')
     process.waitForStarted()
     process.write(bytes(body, encoding='utf-8'))
     return process

@@ -369,6 +369,7 @@ class SearchDialog(search_dialog.Ui_Dialog, QtWidgets.QDialog):
         self.checkBox_10.stateChanged.connect(lambda: self.setSearchState(SearchDialog.SEARCH_TYPES[3], self.lineEdit_10))
         self.checkBox_11.stateChanged.connect(lambda: self.setSearchState(SearchDialog.SEARCH_TYPES[4], self.lineEdit_11))
         self.checkBox_12.stateChanged.connect(lambda: self.setSearchState(SearchDialog.SEARCH_TYPES[5], self.lineEdit_12))
+        self.checkBox_13.stateChanged.connect(lambda: self.setSearchState(SearchDialog.SEARCH_TYPES[6], self.lineEdit_13))
         self.comboBox.currentIndexChanged.connect(lambda: self.parent().__setattr__('db_type', self.getSearchDb()))
 
     def setSearchState(self, type, text):

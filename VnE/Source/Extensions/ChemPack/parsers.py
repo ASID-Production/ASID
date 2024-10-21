@@ -952,14 +952,16 @@ class FileParser:
     def parsPOSCAR_CONTCAR(self, file_path, bond=False, root=None, *args, **kwargs):
         from pymatgen.core import Structure
 
+
         def pymatgenStructureToMolSys(struct):
             mol_sys = MoleculeClass.MoleculeSystem()
             mol_sys.name = os.path.basename(file_path).split('.')[0]
             mol_sys.file_name = file_path
             mol = MoleculeClass.Molecule(parent=mol_sys)
 
+            args = (*struct.lattice.abc, *struct.lattice.angles)
             types = struct.atomic_numbers
-            coords = struct.cart_coords
+            coords = self.fracToDec(*args, struct.frac_coords)
             names = struct.labels
 
             for i in range(len(types)):
@@ -994,7 +996,7 @@ class FileParser:
         struct = Structure.from_file(file_path)
         mol_sys = pymatgenStructureToMolSys(struct)
         ret = self.parsMolSys(mol_sys, bond, root)
-
+        args = (*struct.lattice.abc, *struct.lattice.angles)
         cell_coords = [[0, 0, 0],
                        [1, 0, 0],
                        [0, 1, 0],
@@ -1003,8 +1005,7 @@ class FileParser:
                        [1, 1, 0],
                        [1, 0, 1],
                        [1, 1, 1]]
-        args = (*struct.lattice.abc, *struct.lattice.angles, cell_coords)
-        cell_dec_coords = self.fracToDec(*args)
+        cell_dec_coords = self.fracToDec(*args, cell_coords)
         self.createCellList(ret[1][0], cell_dec_coords)
         a = 0
 
