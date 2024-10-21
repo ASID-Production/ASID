@@ -470,6 +470,7 @@ namespace cpplib {
 		PointConteinerType& compaq(const DistancesType& distances, std::vector<BondType>& bonds) {
 
 			// 1. Find closest atoms
+			deb_write("FM::compaq Phase 1. Find closest atoms");
 			std::vector<AtomIndex> closest(fs_.sizeUnique, 0);
 			std::iota(closest.begin(), closest.end(), 0);
 			for (AtomIndex i = 0; i < fs_.sizePoints; i++)
@@ -482,6 +483,7 @@ namespace cpplib {
 			}
 
 			// 2. Create Nodes in net
+			deb_write("FM::compaq Phase 2. Create Nodes in net");
 			std::vector<NodeType> net;
 			net.reserve(fs_.sizePoints);
 			for (size_type i = 0; i < fs_.sizePoints; i++) {
@@ -489,23 +491,30 @@ namespace cpplib {
 			}
 
 			// 3. Add bonds to net
+			deb_write("FM::compaq Phase 3. Add bonds to net");
 			auto bond_size = bonds.size();
 			for (decltype(bond_size) i = 0; i < bond_size; i++) {
 				net[bonds[i].first].addBondSimple(net[bonds[i].second]);
 			}
 
 			// 4. Find molecules
+			deb_write("FM::compaq Phase 4. Find molecules");
 			std::vector<bool> seen(fs_.sizeUnique, false); // seen unique atoms
 
 			for (AtomIndex i = 0; i < fs_.sizeUnique; i++) {
 				if (seen[i] == true)
 					continue;
 				seen[i] = true;
+
+				deb_write("FM::compaq Phase 4.0. invoke FM::findNextUniquePart");
 				std::vector<AtomIndex> singleTable = findNextUniquePart(closest[i], net, seen);
+				deb_write("FM::compaq Phase 4.0. FM::findNextUniquePart successful");
 
 				size_type singleTableSize = static_cast<size_type>(singleTable.size());
 
 				// 4.1. Shift Center of Mass
+				deb_write("FM::compaq Phase 4.1. Shift Center of Mass");
+				deb_write("Center of Mass");
 				PointType center(0, 0, 0);
 				for (size_type j = 0; j < singleTableSize; j++)
 				{
@@ -515,14 +524,15 @@ namespace cpplib {
 
 				PointType shift = (PointType(0.5, 0.5, 0.5) - center).round();
 				if (shift.r() > 0.5) {
-					for (size_type j = 0; j < fs_.sizeUnique; j++)
+					for (size_type j = 0; j < singleTableSize; j++)
 					{
 						fs_.points[singleTable[j]] += shift;
 					}
 				}
 
-				// 4.2. Swap each coordinate
-				
+				// 4.2. Swap coordinates
+
+				deb_write("FM::compaq Phase 4.2. Swap coordinates");
 				for (size_type j = 0; j < singleTableSize; j++) {
 					if(singleTable[j] != fs_.parseIndex[singleTable[j]])
 						std::swap(fs_.points[singleTable[j]], fs_.points[fs_.parseIndex[singleTable[j]]]);

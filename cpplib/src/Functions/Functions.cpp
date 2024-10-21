@@ -421,22 +421,30 @@ std::tuple<std::vector<cpplib::currents::PointType>, std::list<std::string>> Com
 												const std::vector<const char*>& symm,
 												cpplib::currents::FAMStructType::AtomContainerType& types,
 												cpplib::currents::FAMStructType::PointConteinerType& points) {
+	deb_write("Compaq invoked");
 	auto& distances = *(p_distances);
 	if (p_distances->isReady() == false) {
 		return std::make_tuple(std::vector<cpplib::currents::PointType>(), std::list<std::string>(1, "Error!Could not open BondLength.ini"));
 	}
+	deb_write("Compaq p_distances prepared");
 	FAMStructType fs;
+	deb_write("Compaq FAMCellType creation start");
 	FAMCellType fc(FAMCellType::base(unit_cell, true));
+	deb_write("Compaq call constructor ParseDataType");
 	ParseDataType(fs, fc, symm, std::move(types), std::move(points));
 
 	const auto su = fs.sizeUnique;
 	std::string errorMsg;
 	std::list<std::string> res_errors;
+	deb_write("Compaq call fs.findBonds");
 	auto res = fs.findBonds(distances, errorMsg, [fc](const PointType& p1, const PointType& p2) {return fc.distanceInCell(p1, p2); });
 	if (!errorMsg.empty()) res_errors.emplace_back(std::move(errorMsg));
 
+	deb_write("Compaq create fm");
 	FindMoleculesType fm(std::move(fs));
+	deb_write("Compaq call fm.compaq");
 	auto & compaqed = fm.compaq(distances, res.first);
 	compaqed.resize(su);
+	deb_write("Compaq return");
 	return std::make_tuple(std::move(compaqed), res_errors);
 }
