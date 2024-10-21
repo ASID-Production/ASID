@@ -31,6 +31,7 @@
 #include "Functions.h"
 #include "../Classes/Interfaces.h"
 #include "../BaseHeaders/DebugMes.h"
+#include <list>
 
 using namespace cpplib::currents;
 
@@ -172,14 +173,21 @@ extern "C" {
 		return ErrorState::OK;
 	}
 	inline static void useDistances(PyObject* self) {
-		if (p_distances != nullptr)
+		deb_write("useDistances check p_dist");
+		if (p_distances != nullptr) {
 			return;
+		}
+		deb_write("useDistances parse __file__");
 		std::string full(PyUnicode_AsUTF8(PyObject_GetAttrString(self, "__file__")));
+
 		auto found = full.find_last_of("\\/");
 		auto bond_filename = full.substr(0, found + 1) + "BondLength.ini";
+
+		deb_write("Create dist");
 		static DistancesType dist(bond_filename);
 		p_distances = &dist;
 	}
+
 	// Python section
 	static PyObject* cpplib_GenBonds(PyObject* self, PyObject* arg) {
 		useDistances(self);
@@ -850,6 +858,54 @@ extern "C" {
 			Py_RETURN_FALSE;
 		}
 	}
+
+	static PyObject* cpplib_compaq(PyObject* self, PyObject* args) {
+		PyObject* ocell = NULL;
+		PyObject* osymm = NULL;
+		PyObject* otuple = NULL;
+
+		deb_write("cpplib_compaq argument parsing start");
+		if (!PyArg_ParseTuple(args, "OOO", &ocell, &osymm, &otuple)) {
+			deb_write("cpplib_compaq! Critic Error: Parse Error - return None");
+			Py_RETURN_NONE;
+		}
+
+		deb_write("cpplib_compaq call useDistances");
+		useDistances(self);
+
+		deb_write("cpplib_compaq call Prepare_IC");
+		Prepare_IC all(ocell, osymm, otuple);
+
+		deb_write("cpplib_compaq call Compaq");
+		auto ret = Compaq(all.cell, all.symm, all.types, all.points);
+		deb_write("cpplib_compaq Compaq successful");
+
+		PyObject* o_xyz_block = PyList_New(0);
+		PyObject* o_errors = PyList_New(0);
+
+		deb_write("cpplib_compaq create List[txyz]");
+		deb_write("cpplib_compaq std::get<0>(ret).size() = ", std::get<0>(ret).size());
+		for (int i = 0; i < std::get<0>(ret).size(); i++)
+		{
+			PyObject* o_atom = Py_BuildValue("(fff)",
+											 static_cast<float>(std::get<0>(ret)[i].get(0)),
+											 static_cast<float>(std::get<0>(ret)[i].get(1)),
+											 static_cast<float>(std::get<0>(ret)[i].get(2)));
+			PyList_Append(o_xyz_block, o_atom);
+		}
+
+		deb_write("cpplib_compaq create List[error_str]");
+		while(std::get<1>(ret).empty() == false)
+		{
+			PyList_Append(o_errors, Py_BuildValue("s", (std::get<1>(ret)).front().c_str()));
+			(std::get<1>(ret)).pop_front();
+		}
+
+		deb_write("cpplib_compaq return Dict {errors, xyz_block}");
+		return Py_BuildValue("{s:O,s:O}",
+							 "errors", o_errors,
+							 "xyz_block", o_xyz_block);
+	}
 }
 
 
@@ -871,6 +927,7 @@ static struct PyMethodDef methods[] = {
 	{ "FindDAT_WC", cpplib_FindDAT_WC, METH_O, "Create dictionary with distances, angles and torsions in xyz"},
 	{ "himp", cpplib_himp, METH_VARARGS, "Moves hydrogens to the nearest atom"},
 	{ "SubSearch", cpplib_SubSearch, METH_VARARGS, "Compare two graphs"},
+	{ "compaq", cpplib_compaq, METH_VARARGS, "Do the same as Olex2 'compaq' function"},
 
 	{ NULL, NULL, 0, NULL }
 };
