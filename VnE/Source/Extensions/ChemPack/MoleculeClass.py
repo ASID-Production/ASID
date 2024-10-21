@@ -149,6 +149,13 @@ class Bond:
     def parents(self):
         return self._parents
 
+    def __eq__(self, other):
+        if type(other) == type(self):
+            if set(self._parents) == set(other.parents()):
+                return True
+        else:
+            return False
+
 
 class Atom(DefaultData):
     def __init__(self, coord, atom_type: int|str|list, parent=None, **kwargs):
@@ -182,7 +189,9 @@ class Atom(DefaultData):
         return self._bonds
 
     def addBond(self, bond):
-        if bond not in self._bonds:
+        if any([bond == x for x in self._bonds]):
+            return
+        else:
             self._bonds.append(bond)
 
     def parent(self):

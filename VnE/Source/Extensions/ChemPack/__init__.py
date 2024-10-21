@@ -318,6 +318,9 @@ def save():
             SAVE_FILE.save(mol_sys, filename, format)
     return
 
+def assemble():
+    from . import assemble_cif
+    assemble_cif.execute()
 
 def setup(menu, model, uniform_model=None, *args, main_widget=None, **kwargs):
     from PySide6.QtGui import QAction
@@ -385,5 +388,9 @@ def setup(menu, model, uniform_model=None, *args, main_widget=None, **kwargs):
     action_symm_poscar.triggered.connect(symmPOSCAR)
     cmenu.addAction(action_symm_poscar)
 
-    actions = [open_action, action_test, action_DB, save_action, action_sym_op, action_export, action_winx, action_aimall, action_2d_export, action_multiwfn, action_symm_poscar]
+    action_assemble = QAction('Assemble molecule')
+    action_assemble.triggered.connect(assemble)
+    cmenu.addAction(action_assemble)
+
+    actions = [open_action, action_test, action_DB, save_action, action_sym_op, action_export, action_winx, action_aimall, action_2d_export, action_multiwfn, action_symm_poscar, action_assemble]
     return actions

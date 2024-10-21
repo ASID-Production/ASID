@@ -395,10 +395,10 @@ class QtPointsTreeModel(QAbstractItemModel):
                     break
             return
 
-    def index(self, row, column, parent=QModelIndex(), *args, **kwargs) -> QModelIndex:
-        if kwargs.get('by_point', None) is not None:
-            point = kwargs['by_point']
-            child = kwargs['by_point']
+    def index(self, row, column, parent=QModelIndex(), *args, by_point=None, **kwargs) -> QModelIndex:
+        if by_point is not None:
+            point = by_point
+            child = by_point
             path = []
             parent = point.parent
             while parent is not self._root:

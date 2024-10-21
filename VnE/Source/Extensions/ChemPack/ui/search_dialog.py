@@ -17,7 +17,7 @@ from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QCursor,
     QPalette, QPixmap, QRadialGradient, QTransform)
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog,
     QFormLayout, QFrame, QHBoxLayout, QLineEdit,
-    QPushButton, QSizePolicy, QVBoxLayout, QWidget)
+    QPushButton, QSizePolicy, QVBoxLayout, QWidget, QLabel)
 
 class Ui_Dialog(object):
     def setupUi(self, Dialog):
@@ -121,6 +121,13 @@ class Ui_Dialog(object):
 
         self.formLayout.setWidget(6, QFormLayout.FieldRole, self.pushButton)
 
+        self.checkBox_13 = QCheckBox(self.frame)
+        self.checkBox_13.setObjectName(u"checkBox_13")
+        self.checkBox_13.setAutoExclusive(True)
+
+        self.lineEdit_13 = QLineEdit(self.frame)
+        self.formLayout.insertRow(3, self.checkBox_13, self.lineEdit_13)
+        self.lineEdit_13.setObjectName(u"lineEdit_13")
 
         self.verticalLayout.addWidget(self.frame)
 
@@ -141,6 +148,7 @@ class Ui_Dialog(object):
         self.checkBox.setText(QCoreApplication.translate("Dialog", u"Refcode", None))
         self.checkBox_8.setText(QCoreApplication.translate("Dialog", u"Name", None))
         self.checkBox_9.setText(QCoreApplication.translate("Dialog", u"Elements", None))
+        self.checkBox_13.setText(QCoreApplication.translate("Dialog", u"Formula", None))
         self.checkBox_10.setText(QCoreApplication.translate("Dialog", u"Doi", None))
         self.checkBox_11.setText(QCoreApplication.translate("Dialog", u"Authors", None))
         self.checkBox_12.setText(QCoreApplication.translate("Dialog", u"Cell", None))
