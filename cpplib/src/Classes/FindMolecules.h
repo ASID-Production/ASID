@@ -503,9 +503,11 @@ namespace cpplib {
 				seen[i] = true;
 				std::vector<AtomIndex> singleTable = findNextUniquePart(closest[i], net, seen);
 
+				size_type singleTableSize = static_cast<size_type>(singleTable.size());
+
 				// 4.1. Shift Center of Mass
 				PointType center(0, 0, 0);
-				for (size_type j = 0; j < fs_.sizeUnique; j++)
+				for (size_type j = 0; j < singleTableSize; j++)
 				{
 					center += fs_.points[singleTable[j]];
 				}
@@ -520,10 +522,9 @@ namespace cpplib {
 				}
 
 				// 4.2. Swap each coordinate
-				size_type singleTableSize = static_cast<size_type>(singleTable.size());
 				
 				for (size_type j = 0; j < singleTableSize; j++) {
-					if(singleTable[i] != fs_.parseIndex[singleTable[j]])
+					if(singleTable[j] != fs_.parseIndex[singleTable[j]])
 						std::swap(fs_.points[singleTable[j]], fs_.points[fs_.parseIndex[singleTable[j]]]);
 				}
 			}
@@ -632,7 +633,7 @@ namespace cpplib {
 					if (is_m == (static_cast<AtomIndex>((size_t)(-1))) && seen[fs_.parseIndex[cur_id]] == false) {
 						res.emplace_back(cur_id);
 						seen[fs_.parseIndex[cur_id]] = true;
-						auto shift = (fs_.points[cur_id] - fs_.points[res[low_pos]]).round();
+						auto shift = (fs_.points[res[low_pos]]- fs_.points[cur_id]).round();
 						if(shift.r() > 0.1) 
 							fs_.points[cur_id] += shift;
 					}
