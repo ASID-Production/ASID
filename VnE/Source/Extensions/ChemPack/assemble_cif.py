@@ -79,20 +79,28 @@ def execute():
         lists = parsers.PARSER.parsMolSys(molsys, root=l)[1]
         moll, atoms, bonds = lists
         MOLECULE_SYSTEMS.pop(moll)
+        ocell = None
         for old_l in list_obj.children:
             if old_l.name == 'Atoms':
                 oatm = old_l
             if old_l.name == 'Bonds':
                 obonds = old_l
+            if old_l.name == 'Cell':
+                ocell = old_l
 
         ind1 = TREE_MODEL.index(0,0, by_point=oatm)
         orow = ind1.row()
         par = ind1.parent()
+        cind = None
+        if ocell is not None:
+            cind = list_obj.children.index(ocell)
         TREE_MODEL.removeRow(ind1.row(), parent=par)
         ind2 = TREE_MODEL.index(0,0, by_point=obonds)
         TREE_MODEL.removeRow(ind2.row(), parent=par)
         list_obj.addChild(atoms)
         list_obj.addChild(bonds)
+        if cind is not None:
+            list_obj.changeOrder(ocell, cind)
         TREE_MODEL.insertRow(orow, parent=par)
         TREE_MODEL.insertRow(orow, parent=par)
         ind1 = TREE_MODEL.index(0, 0, by_point=atoms)
