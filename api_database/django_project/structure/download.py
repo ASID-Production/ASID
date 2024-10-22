@@ -62,7 +62,7 @@ def create_cif_text(structure: classmethod) -> str:
         elif value and not in_commas:
             return f"{cif_parameter} {value}\n"
         elif cif_parameter == '_journal_name_full' and structure.publication.publication.journal.name:
-            return f"'_journal_name_full' {structure.publication.publication.journal.name}\n"
+            return f"_journal_name_full '{structure.publication.publication.journal.name}'\n"
         else:
             return f"{cif_parameter} ?\n"
 
