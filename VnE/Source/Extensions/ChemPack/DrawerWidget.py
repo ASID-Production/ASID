@@ -30,6 +30,8 @@ from abc import ABC, abstractmethod
 from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtCore import *
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
+
+from VnE.Source.Extensions.ChemPack.Db_viewer import DbWindow
 from ..ChemPack import PALETTE
 from OpenGL.GL import *
 import numpy as np
@@ -2106,7 +2108,7 @@ class DrawWidget(Drawer_model_ui.Ui_Dialog, QtWidgets.QDialog):
     def dbSearch(self, draw):
         from . import Db_viewer
         Db_viewer.show()
-        Db_viewer.DB_VIEWER.list_model.populate((draw, 'substructure', Db_viewer.DB_VIEWER.list_model._last_db_type))
+        Db_viewer.DB_VIEWER.list_model.populate((draw, 'substructure', Db_viewer.DB_VIEWER.list_model._last_db_type, DbWindow.DB_VIEWER.search_dialog.getDbString()))
 
     def exportTable(self):
         if self.organizer is not None:

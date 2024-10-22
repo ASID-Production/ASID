@@ -64,7 +64,7 @@ class StructuresListModel(QAbstractListModel):
         self._last_db_type = 'cryst'
 
     def populate(self, request):
-        request, search_type, db_type = request
+        request, search_type, db_type, db_str = request
         self._last_db_type = db_type
         if self._search_proc is None:
             if self.progress_bar:
@@ -77,7 +77,7 @@ class StructuresListModel(QAbstractListModel):
             self._search_proc = QProcess(self)
             self._search_proc.finished.connect(self.searchDone)
             self._search_proc.readyReadStandardOutput.connect(self.appendRes)
-            self._search_proc = Db_bindings.search(request, search_type, db_type, process=self._search_proc)
+            self._search_proc = Db_bindings.search(request, search_type, db_type, process=self._search_proc, **db_str)
         else:
             return
 
@@ -91,7 +91,7 @@ class StructuresListModel(QAbstractListModel):
         self._rows = 0
         self.endResetModel()
         for request in requests:
-            request, search_type, db_type, exact = request
+            request, search_type, db_type, exact, db_str = request
             self._last_db_type = db_type
             if self.progress_bar:
                 self.progress_bar.setValue(0)
@@ -101,7 +101,7 @@ class StructuresListModel(QAbstractListModel):
             search_proc.finished.connect(cb)
             cb = getCallBack(self.appendRes, search_proc)
             search_proc.readyReadStandardOutput.connect(cb)
-            self._iter_search_procs.append(Db_bindings.search(request, search_type, db_type, exact, process=search_proc))
+            self._iter_search_procs.append(Db_bindings.search(request, search_type, db_type, exact, process=search_proc, **db_str))
 
     def searchDone(self, *args, search_proc=None):
         if search_proc is None:
@@ -140,9 +140,11 @@ class StructuresListModel(QAbstractListModel):
     def stopSearch(self):
         if self._search_proc:
             self._search_proc.readyReadStandardOutput.disconnect(self.appendRes)
+            self._search_proc.kill()
             self._search_proc = None
         for search_proc in self._iter_search_procs:
             search_proc.readyReadStandardOutput.disconnect(self.appendRes)
+            self._search_proc.kill()
             self._iter_search_procs = []
 
     def setDisplayTag(self, tag):
@@ -360,6 +362,7 @@ class SearchDialog(search_dialog.Ui_Dialog, QtWidgets.QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setupUi(self)
+        self.db_string = {'CSD': self.CSDchk, 'COD': self.CODchk, 'ICSD': self.ICSDchk, 'user_db': self.user_dbchk}
         self.setWindowTitle('Search parameters')
         self.search_type = SearchDialog.SEARCH_TYPES[0]
         self.text = self.lineEdit
@@ -384,6 +387,10 @@ class SearchDialog(search_dialog.Ui_Dialog, QtWidgets.QDialog):
 
     def getSearchDb(self):
         return self.DB_TYPES.get(self.comboBox.currentIndex(), 'cryst')
+
+    def getDbString(self):
+        db_str = {x: y.isChecked() for x, y in self.db_string.items()}
+        return db_str
 
 
 from .ui import Settings_dialog
@@ -482,7 +489,7 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
         self.tableView.horizontalHeader().setSectionResizeMode(1, QtWidgets.QHeaderView.ResizeToContents)
 
         self.pushButton.pressed.connect(self.search_dialog.show)
-        self.search_dialog.pushButton.pressed.connect(lambda: self.list_model.populate((self.search_dialog.getText(), self.search_dialog.getSearchType(), self.search_dialog.getSearchDb())))
+        self.search_dialog.pushButton.pressed.connect(lambda: self.list_model.populate((self.search_dialog.getText(), self.search_dialog.getSearchType(), self.search_dialog.getSearchDb(), self.search_dialog.getDbString())))
         self.pushButton_2.pressed.connect(self.loadStruct)
 
         self.export_cif_a.triggered.connect(self.saveCif)
@@ -577,7 +584,7 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
         if filename:
             file = open(filename, 'r')
             data = [x for x in file.read().split('\n') if x]
-            self.list_model.iterPopulate(((x, 'refcode', 'cryst', 'refcode') for x in data))
+            self.list_model.iterPopulate(((x, 'refcode', 'cryst', 'refcode', {}) for x in data))
 
 
 DIALOG = None
