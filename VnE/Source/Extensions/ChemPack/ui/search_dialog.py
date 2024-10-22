@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'search_dialogLMfxvM.ui'
+## Form generated from reading UI file 'search_dialogWkXPtU.ui'
 ##
 ## Created by: Qt User Interface Compiler version 6.7.2
 ##
@@ -17,13 +17,13 @@ from PySide6.QtGui import (QBrush, QColor, QConicalGradient, QCursor,
     QPalette, QPixmap, QRadialGradient, QTransform)
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog,
     QFormLayout, QFrame, QHBoxLayout, QLineEdit,
-    QPushButton, QSizePolicy, QVBoxLayout, QWidget, QLabel)
+    QPushButton, QSizePolicy, QVBoxLayout, QWidget)
 
 class Ui_Dialog(object):
     def setupUi(self, Dialog):
         if not Dialog.objectName():
             Dialog.setObjectName(u"Dialog")
-        Dialog.resize(400, 260)
+        Dialog.resize(400, 286)
         self.horizontalLayout = QHBoxLayout(Dialog)
         self.horizontalLayout.setObjectName(u"horizontalLayout")
         self.frame_2 = QFrame(Dialog)
@@ -40,6 +40,41 @@ class Ui_Dialog(object):
         self.comboBox.setObjectName(u"comboBox")
 
         self.verticalLayout.addWidget(self.comboBox)
+
+        self.frame_3 = QFrame(self.frame_2)
+        self.frame_3.setObjectName(u"frame_3")
+        self.frame_3.setFrameShape(QFrame.Shape.StyledPanel)
+        self.frame_3.setFrameShadow(QFrame.Shadow.Raised)
+        self.horizontalLayout_2 = QHBoxLayout(self.frame_3)
+        self.horizontalLayout_2.setSpacing(0)
+        self.horizontalLayout_2.setObjectName(u"horizontalLayout_2")
+        self.horizontalLayout_2.setContentsMargins(0, 0, 0, 0)
+        self.CSDchk = QCheckBox(self.frame_3)
+        self.CSDchk.setObjectName(u"CSDchk")
+        self.CSDchk.setChecked(True)
+
+        self.horizontalLayout_2.addWidget(self.CSDchk)
+
+        self.CODchk = QCheckBox(self.frame_3)
+        self.CODchk.setObjectName(u"CODchk")
+        self.CODchk.setChecked(True)
+
+        self.horizontalLayout_2.addWidget(self.CODchk)
+
+        self.ICSDchk = QCheckBox(self.frame_3)
+        self.ICSDchk.setObjectName(u"ICSDchk")
+        self.ICSDchk.setChecked(True)
+
+        self.horizontalLayout_2.addWidget(self.ICSDchk)
+
+        self.user_dbchk = QCheckBox(self.frame_3)
+        self.user_dbchk.setObjectName(u"user_dbchk")
+        self.user_dbchk.setChecked(True)
+
+        self.horizontalLayout_2.addWidget(self.user_dbchk)
+
+
+        self.verticalLayout.addWidget(self.frame_3)
 
         self.frame = QFrame(self.frame_2)
         self.frame.setObjectName(u"frame")
@@ -86,48 +121,51 @@ class Ui_Dialog(object):
         self.checkBox_10.setObjectName(u"checkBox_10")
         self.checkBox_10.setAutoExclusive(True)
 
-        self.formLayout.setWidget(3, QFormLayout.LabelRole, self.checkBox_10)
+        self.formLayout.setWidget(4, QFormLayout.LabelRole, self.checkBox_10)
 
         self.lineEdit_10 = QLineEdit(self.frame)
         self.lineEdit_10.setObjectName(u"lineEdit_10")
 
-        self.formLayout.setWidget(3, QFormLayout.FieldRole, self.lineEdit_10)
+        self.formLayout.setWidget(4, QFormLayout.FieldRole, self.lineEdit_10)
 
         self.checkBox_11 = QCheckBox(self.frame)
         self.checkBox_11.setObjectName(u"checkBox_11")
         self.checkBox_11.setAutoExclusive(True)
 
-        self.formLayout.setWidget(4, QFormLayout.LabelRole, self.checkBox_11)
+        self.formLayout.setWidget(5, QFormLayout.LabelRole, self.checkBox_11)
 
         self.lineEdit_11 = QLineEdit(self.frame)
         self.lineEdit_11.setObjectName(u"lineEdit_11")
 
-        self.formLayout.setWidget(4, QFormLayout.FieldRole, self.lineEdit_11)
+        self.formLayout.setWidget(5, QFormLayout.FieldRole, self.lineEdit_11)
 
         self.checkBox_12 = QCheckBox(self.frame)
         self.checkBox_12.setObjectName(u"checkBox_12")
         self.checkBox_12.setAutoExclusive(True)
 
-        self.formLayout.setWidget(5, QFormLayout.LabelRole, self.checkBox_12)
+        self.formLayout.setWidget(6, QFormLayout.LabelRole, self.checkBox_12)
 
         self.lineEdit_12 = QLineEdit(self.frame)
         self.lineEdit_12.setObjectName(u"lineEdit_12")
 
-        self.formLayout.setWidget(5, QFormLayout.FieldRole, self.lineEdit_12)
+        self.formLayout.setWidget(6, QFormLayout.FieldRole, self.lineEdit_12)
 
         self.pushButton = QPushButton(self.frame)
         self.pushButton.setObjectName(u"pushButton")
         self.pushButton.setAutoDefault(False)
 
-        self.formLayout.setWidget(6, QFormLayout.FieldRole, self.pushButton)
+        self.formLayout.setWidget(7, QFormLayout.FieldRole, self.pushButton)
 
         self.checkBox_13 = QCheckBox(self.frame)
         self.checkBox_13.setObjectName(u"checkBox_13")
-        self.checkBox_13.setAutoExclusive(True)
+
+        self.formLayout.setWidget(3, QFormLayout.LabelRole, self.checkBox_13)
 
         self.lineEdit_13 = QLineEdit(self.frame)
-        self.formLayout.insertRow(3, self.checkBox_13, self.lineEdit_13)
         self.lineEdit_13.setObjectName(u"lineEdit_13")
+
+        self.formLayout.setWidget(3, QFormLayout.FieldRole, self.lineEdit_13)
+
 
         self.verticalLayout.addWidget(self.frame)
 
@@ -145,13 +183,17 @@ class Ui_Dialog(object):
         self.comboBox.setItemText(0, QCoreApplication.translate("Dialog", u"Crystal structures db", None))
         self.comboBox.setItemText(1, QCoreApplication.translate("Dialog", u"QM structures db", None))
 
+        self.CSDchk.setText(QCoreApplication.translate("Dialog", u"CSD", None))
+        self.CODchk.setText(QCoreApplication.translate("Dialog", u"COD", None))
+        self.ICSDchk.setText(QCoreApplication.translate("Dialog", u"ICSD", None))
+        self.user_dbchk.setText(QCoreApplication.translate("Dialog", u"user_db", None))
         self.checkBox.setText(QCoreApplication.translate("Dialog", u"Refcode", None))
         self.checkBox_8.setText(QCoreApplication.translate("Dialog", u"Name", None))
         self.checkBox_9.setText(QCoreApplication.translate("Dialog", u"Elements", None))
-        self.checkBox_13.setText(QCoreApplication.translate("Dialog", u"Formula", None))
         self.checkBox_10.setText(QCoreApplication.translate("Dialog", u"Doi", None))
         self.checkBox_11.setText(QCoreApplication.translate("Dialog", u"Authors", None))
         self.checkBox_12.setText(QCoreApplication.translate("Dialog", u"Cell", None))
         self.pushButton.setText(QCoreApplication.translate("Dialog", u"Search", None))
+        self.checkBox_13.setText(QCoreApplication.translate("Dialog", u"Formula", None))
     # retranslateUi
 

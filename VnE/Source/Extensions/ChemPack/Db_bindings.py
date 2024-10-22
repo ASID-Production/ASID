@@ -134,9 +134,14 @@ class Session:
 SESSION: Session
 
 
-def search(text, search_type, db_type='cryst', exact=None, process=None):
+def search(text, search_type, db_type='cryst', exact=None, process=None, CSD=True, COD=True, ICSD=True, user_db=True):
     url_mods = {'cryst': 'api/v1/structures',
                 'qm': 'api/v1/qc_structures'}
+    dbs = {'CSD': CSD,
+           'COD': COD,
+           'ICSD': ICSD,
+           'user_db': user_db}
+    db_string = '&'.join([f'{x}=False' for x in dbs if not dbs[x]])
     if process is None:
         process = QProcess()
     if not SESSION.ready:
@@ -144,13 +149,14 @@ def search(text, search_type, db_type='cryst', exact=None, process=None):
         return
     url_mod = url_mods.get(db_type, 'api/v1/structures')
     if search_type == 'substructure':
-        process = structureSearch(text, url_mod, process)
+        process = structureSearch(text, url_mod, process, db_string=db_string)
         return process
     token = SESSION.user_token
     if exact is None:
         req = f'{SESSION.url_base}/{url_mod}/?{search_type}={text}'
     else:
         req = f'{SESSION.url_base}/{url_mod}/?{search_type}={text}&exact={exact}'
+    req = '&'.join([req, db_string])
 
     root = opath.normpath(f'{opath.dirname(__file__)}/../../../..')
     path = opath.normpath(f'{root}/VnE/Source/Extensions/ChemPack/searchProcess.py')
@@ -279,7 +285,7 @@ def uploadFile(file, ext):
             SESSION.error_dialog.show()
 
 
-def structureSearch(struct, url_mod, process=None):
+def structureSearch(struct, url_mod, process=None, db_string=''):
     from .DrawerWidget import Drawing
     struct: Drawing
     if process is None:
@@ -310,6 +316,7 @@ def structureSearch(struct, url_mod, process=None):
     body['iter_num'] = 0
     token = SESSION.user_token
     req = f'{SESSION.url_base}/{url_mod}/search/?limit=10000'
+    req = '&'.join([req, db_string])
     root = opath.normpath(f'{opath.dirname(__file__)}/../../../..')
     path = opath.normpath(f'{root}/VnE/Source/Extensions/ChemPack/searchProcess.py')
     if os.name == 'nt':
