@@ -328,6 +328,9 @@ class FileParser:
 
             atoms = block.find(['_atom_site_label', '_atom_site_type_symbol', '_atom_site_fract_x', '_atom_site_fract_y', '_atom_site_fract_z'])
             atoms = [[x[i] if i < 2 else float(x[i]) if x[i].find('(') == -1 else float(x[i][:x[i].find('(')]) for i in range(len(x))] for x in atoms]
+            for atm in atoms:
+                atype = ''.join([x for x in atm[1] if x.isalpha()])
+                atm[1] = atype
             coords = [x[2:] for x in atoms]
             args = []
             args += cell

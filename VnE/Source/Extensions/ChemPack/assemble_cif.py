@@ -76,6 +76,9 @@ def execute():
             atm.cif_frac_coords = ret[i]
             atm.coord = ncoords[i]
         l = point_class.PointsList()
+        for at in mol.children:
+            bonds = at.bonds()
+            del bonds[:]
         lists = parsers.PARSER.parsMolSys(molsys, root=l)[1]
         moll, atoms, bonds = lists
         MOLECULE_SYSTEMS.pop(moll)

@@ -153,9 +153,9 @@ def search(text, search_type, db_type='cryst', exact=None, process=None, CSD=Tru
         return process
     token = SESSION.user_token
     if exact is None:
-        req = f'{SESSION.url_base}/{url_mod}/?{search_type}={text}'
+        req = f'{SESSION.url_base}/{url_mod}/?{search_type}={text}&limit=10000000'
     else:
-        req = f'{SESSION.url_base}/{url_mod}/?{search_type}={text}&exact={exact}'
+        req = f'{SESSION.url_base}/{url_mod}/?{search_type}={text}&exact={exact}&limit=10000000'
     req = '&'.join([req, db_string])
 
     root = opath.normpath(f'{opath.dirname(__file__)}/../../../..')
