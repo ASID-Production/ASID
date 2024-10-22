@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 ################################################################################
-## Form generated from reading UI file 'search_dialogWkXPtU.ui'
+## Form generated from reading UI file 'search_dialogSLxrCM.ui'
 ##
 ## Created by: Qt User Interface Compiler version 6.7.2
 ##
@@ -158,6 +158,7 @@ class Ui_Dialog(object):
 
         self.checkBox_13 = QCheckBox(self.frame)
         self.checkBox_13.setObjectName(u"checkBox_13")
+        self.checkBox_13.setAutoExclusive(True)
 
         self.formLayout.setWidget(3, QFormLayout.LabelRole, self.checkBox_13)
 

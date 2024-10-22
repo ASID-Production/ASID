@@ -156,7 +156,8 @@ def search(text, search_type, db_type='cryst', exact=None, process=None, CSD=Tru
         req = f'{SESSION.url_base}/{url_mod}/?{search_type}={text}&limit=10000000'
     else:
         req = f'{SESSION.url_base}/{url_mod}/?{search_type}={text}&exact={exact}&limit=10000000'
-    req = '&'.join([req, db_string])
+    if db_string:
+        req = '&'.join([req, db_string])
 
     root = opath.normpath(f'{opath.dirname(__file__)}/../../../..')
     path = opath.normpath(f'{root}/VnE/Source/Extensions/ChemPack/searchProcess.py')
@@ -316,7 +317,8 @@ def structureSearch(struct, url_mod, process=None, db_string=''):
     body['iter_num'] = 0
     token = SESSION.user_token
     req = f'{SESSION.url_base}/{url_mod}/search/?limit=10000'
-    req = '&'.join([req, db_string])
+    if db_string:
+        req = '&'.join([req, db_string])
     root = opath.normpath(f'{opath.dirname(__file__)}/../../../..')
     path = opath.normpath(f'{root}/VnE/Source/Extensions/ChemPack/searchProcess.py')
     if os.name == 'nt':

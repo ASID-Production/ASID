@@ -236,6 +236,9 @@
            <property name="text">
             <string>Formula</string>
            </property>
+           <property name="autoExclusive">
+            <bool>true</bool>
+           </property>
           </widget>
          </item>
          <item row="3" column="1">
