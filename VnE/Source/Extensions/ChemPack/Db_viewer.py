@@ -62,6 +62,7 @@ class StructuresListModel(QAbstractListModel):
         self._search_proc = None
         self._iter_search_procs = []
         self._last_db_type = 'cryst'
+        self.fragmented_data = ''
 
     def populate(self, request):
         request, search_type, db_type, db_str = request
@@ -104,6 +105,7 @@ class StructuresListModel(QAbstractListModel):
             self._iter_search_procs.append(Db_bindings.search(request, search_type, db_type, exact, process=search_proc, **db_str))
 
     def searchDone(self, *args, search_proc=None):
+        self.fragmented_data = ''
         if search_proc is None:
             self._search_proc = None
         else:
@@ -118,6 +120,18 @@ class StructuresListModel(QAbstractListModel):
         else:
             data = search_proc.readAllStandardOutput()
         data = str(data, encoding='utf-8').split('\n')
+        if '{"count' in data[0][:7]:
+            pass
+        else:
+            self.fragmented_data = self.fragmented_data + data[0]
+            if ']}' not in self.fragmented_data[-3:]:
+                data.pop(0)
+            else:
+                data[0] = self.fragmented_data
+                self.fragmented_data = ''
+        if len(data)>0 and ']}' not in data[-1][-3:]:
+            self.fragmented_data = data[-1]
+            data.pop()
         for d in data:
             if d:
                 d = json.loads(d)
