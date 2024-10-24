@@ -844,7 +844,7 @@ class DeleteContactsCommand(ConditionCommand):
     def payload(self, ind, *args, **kwargs):
         cond = self.widget.drawing.removeContact(ind)
         self.__cc_points = [self.widget.drawing.node_point[x].create_command for x in cond.nodes]
-        self.__line_list = self.cc_points[0].point.parent
+        self.__line_list = self.__cc_points[0].point.parent
         self.__model.removeRows(ind, 1)
 
     def removePayload(self, *args, **kwargs):
