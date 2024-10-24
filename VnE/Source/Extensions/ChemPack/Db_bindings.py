@@ -104,8 +104,8 @@ class Session:
                 proc_cmd1 = f'{root}\\venv\\Scripts\\python.exe {path} migrate'.split(' ')
                 proc_cmd2 = f'{root}\\venv\\Scripts\\python.exe {path} runserver'.split(' ')
             elif os.name == 'posix':
-                proc_cmd1 = f'{root}/venv/bin/python3 {path} migrate --noreload'.split(' ')
-                proc_cmd2 = f'{root}/venv/bin/python3 {path} runserver --noreload'.split(' ')
+                proc_cmd1 = f'{root}/venv/bin/python {path} migrate'.split(' ')
+                proc_cmd2 = f'{root}/venv/bin/python {path} runserver'.split(' ')
             print('Starting migrate')
             proc = subprocess.Popen(proc_cmd1)
             print('Migrate done')
