@@ -219,6 +219,7 @@ def gen2d(smiles: str = '', inchis: list = [], sanitize: bool = True, size: Tupl
     '''
     Supported formats:
         img - 2d image
+        svg - svg vector format
         cml - ChemDraw format
     '''
     mol = None
@@ -238,6 +239,11 @@ def gen2d(smiles: str = '', inchis: list = [], sanitize: bool = True, size: Tupl
     # return formats
     if format == 'cml':
         return Chem.MolToCMLBlock(mol)
+    elif format == 'svg':
+        svg = Draw.rdMolDraw2D.MolDraw2DSVG(*size)
+        svg.DrawMolecule(mol)
+        svg.FinishDrawing()
+        return svg.GetDrawingText()
     else:
         return Draw.MolToImage(mol, size=size)
 
@@ -355,13 +361,14 @@ def reduce_radicals(mol: Chem.Mol):
 
 
 def reduce_radicals_with_metalls(mol: Chem.Mol):
-    metals = ['Li', 'Be', 'Na','Mg','Al','K', 'Ca','Sc', 'Ti', 'V','Cr', 'Mn', 'Fe',
-               'Co', 'Ni', 'Cu', 'Zn', 'Ga', 'Rb', 'Sr', 'Y', 'Zr', 'Nb', 'Mo', 'Tc',
-               'Ru', 'Rh', 'Pd', 'Ag', 'Cd', 'In', 'Sn', 'Sb', 'Te', 'Cs', 'Ba', 'La',
-               'Ce', 'Pr', 'Nd', 'Pm', 'Sm', 'Eu', 'Gd', 'Tb', 'Dy', 'Ho', 'Er', 'Tm',
-               'Yb', 'Lu', 'Hf', 'Ta', 'W', 'Re', 'Os', 'Ir', 'Pt', 'Au', 'Hg', 'Tl',
-               'Pb', 'Bi'
-               ]
+    metals = [
+        'Li', 'Be', 'Na', 'Mg', 'Al', 'K', 'Ca', 'Sc', 'Ti', 'V', 'Cr', 'Mn', 'Fe',
+        'Co', 'Ni', 'Cu', 'Zn', 'Ga', 'Rb', 'Sr', 'Y', 'Zr', 'Nb', 'Mo', 'Tc',
+        'Ru', 'Rh', 'Pd', 'Ag', 'Cd', 'In', 'Sn', 'Sb', 'Te', 'Cs', 'Ba', 'La',
+        'Ce', 'Pr', 'Nd', 'Pm', 'Sm', 'Eu', 'Gd', 'Tb', 'Dy', 'Ho', 'Er', 'Tm',
+        'Yb', 'Lu', 'Hf', 'Ta', 'W', 'Re', 'Os', 'Ir', 'Pt', 'Au', 'Hg', 'Tl',
+        'Pb', 'Bi'
+    ]
     atoms: List[Chem.rdchem.Atom] = mol.GetAtoms()
     for atom in atoms:
         if atom.GetNumRadicalElectrons():
