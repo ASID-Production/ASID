@@ -340,7 +340,7 @@ class VaspUploadSerializer(serializers.ModelSerializer):
 
 class Gen2DImgSerializer(serializers.Serializer):
     allowed_file_formats = ['cif', 'vasp', 'xyz']
-    allowed_output_formats = ['gif', 'cml']
+    allowed_output_formats = ['gif', 'cml', 'svg']
     return_type_formats = ['string', 'file']
     # fields
     file = serializers.FileField(required=True)

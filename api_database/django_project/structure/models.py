@@ -85,7 +85,6 @@ class AbstractStructureCode(models.Model):
         abstract = True
 
     def gen_2d_img(self, size=(250, 250), format='gif', f='img'):
-        # TODO: delete this temp function! (keep pregenerated figures in database in base64 format)
         smiles = ''
         if hasattr(self, 'coordinates'):
             smiles = self.coordinates.smiles
@@ -101,7 +100,7 @@ class AbstractStructureCode(models.Model):
                 img.save(buffer, format)
                 img_base64 = f'data:image/{format};base64,' + base64.b64encode(buffer.getvalue()).decode()
                 return img_base64
-            elif f == 'cml':
+            elif f in ['cml', 'svg']:
                 return img
         return 0
 
