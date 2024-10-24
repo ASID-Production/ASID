@@ -45,7 +45,7 @@ def execute(pars):
             return None, None
 
         from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
-        sga = SpacegroupAnalyzer(struct, symprec=1e-5)
+        sga = SpacegroupAnalyzer(struct, symprec=0.02)
         struct_symm_conv = sga.get_refined_structure()
         struct_symm_prim = sga.find_primitive()
 

@@ -34,6 +34,7 @@ from PySide6.QtCore import QProcess
 import os.path as opath
 import os
 import base64
+import atexit
 
 import debug
 
@@ -365,8 +366,12 @@ def setup():
     SESSION = Session()
     return
 
+def term():
+    if SERVER_PROC:
+        SERVER_PROC.kill()
 
 if SETUP is False:
+    atexit.register(term)
     setup()
 
 
