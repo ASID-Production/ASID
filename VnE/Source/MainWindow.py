@@ -47,7 +47,6 @@ from .QtModels import ListView, UniformListModel, TreeView, QtPointsTreeModel, S
 
 import debug
 
-
 class OpenGlWidget(QOpenGLWidget):
 
     def __init__(self, parent, facade=None, scene=None, pipeline=None, model=None, **kwargs):
@@ -254,7 +253,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.points_list = PointsList()
         super().__init__()
-        self.setWindowIcon(QtGui.QIcon('Source/ico.svg'))
+        self.setWindowIcon(QtGui.QIcon('Source/ico.ico'))
         self.setWindowTitle('ASID View & Explore')
         widget = QtWidgets.QWidget()
         self.frame = QtWidgets.QFrame(parent=widget)
@@ -325,6 +324,9 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.about.triggered.connect(self.about_dialog.show)
 
+    def closeEvent(self, event):
+        ret = QtWidgets.QMainWindow.closeEvent(self, event)
+        sys.exit()
 
 def show():
     app = QtWidgets.QApplication(sys.argv)
