@@ -43,6 +43,7 @@ search_types = ['refcode', 'name', 'elements', 'doi', 'authors', 'cell', 'formul
 SETUP = False
 SESSION = None
 SERVER_PROC = None
+TEST = None
 requests.packages.urllib3.util.connection.HAS_IPV6 = False
 
 
@@ -112,6 +113,7 @@ class Session:
             print('Migrate done')
             while proc.poll() is None:
                 pass
+            proc.kill()
             proc = subprocess.Popen(proc_cmd2)
             SERVER_PROC = proc
             try:
@@ -368,7 +370,9 @@ def setup():
 
 def term():
     if SERVER_PROC:
-        SERVER_PROC.kill()
+        import signal
+        SERVER_PROC.send_signal(signal.CTRL_BREAK_EVENT)
+        SERVER_PROC.terminate()
 
 if SETUP is False:
     atexit.register(term)
