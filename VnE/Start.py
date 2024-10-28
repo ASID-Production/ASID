@@ -6,6 +6,11 @@ sys.path.append(base_dir)
 from Source import MainWindow
 import logging
 from datetime import datetime
+import ctypes
+import os
+if os.name == 'nt':
+    myappid = u'ASID-team.ASID.ASID-dev.1' # arbitrary string
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 
 time = datetime.today().strftime('%Y-%m-%d')
 dirs = ['temp', 'logs']

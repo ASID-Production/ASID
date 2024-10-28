@@ -46,23 +46,25 @@ def execute(pars):
 
         from pymatgen.symmetry.analyzer import SpacegroupAnalyzer
         sga = SpacegroupAnalyzer(struct, symprec=0.02)
-        struct_symm_conv = sga.get_refined_structure()
-        struct_symm_prim = sga.find_primitive()
+        symm_struct = sga.get_symmetrized_structure()
+
+        atoms = []
+        coords = []
+        for atm in symm_struct.equivalent_sites:
+            atm = atm[0]
+            atoms.append(atm.specie)
+            coords.append(atm.frac_coords)
+        struct = Structure(symm_struct.lattice, atoms, coords)
 
         from pymatgen.io.vasp import Poscar
 
-        filename_conv, _ = QtWidgets.QFileDialog.getSaveFileName(None, 'POSCAR-conv')
+        filename_conv, _ = QtWidgets.QFileDialog.getSaveFileName(None, 'POSCAR-symm')
         if filename_conv:
-            poscar = Poscar(struct_symm_conv)
+            poscar = Poscar(struct)
             poscar.write_file(filename=filename_conv, significant_figures=16)
             pars(filename_conv, True)
-        filename_prim, _ = QtWidgets.QFileDialog.getSaveFileName(None, 'POSCAR-prim')
-        if filename_prim:
-            poscar = Poscar(struct_symm_prim)
-            poscar.write_file(filename=filename_prim, significant_figures=16)
-            pars(filename_prim, True)
 
-        return filename_conv, filename_prim
+        return filename_conv
 
     global DIALOG
     DIALOG = SelectMolDialog(MOLECULE_SYSTEMS, process)
