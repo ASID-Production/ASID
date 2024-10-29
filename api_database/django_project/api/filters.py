@@ -190,7 +190,7 @@ class StructureFilter(FilterSet):
         if value:
             queryset_temp = queryset
             if value == 'False':
-                queryset_temp = queryset.filter(CCDC_number__isnull=True)
+                queryset_temp = queryset.filter(CCDC_number__isnull=True, refcode__regex=r'^(COD_)|^(ICSD_)|^(user-)')
             return queryset_temp
         return queryset
 

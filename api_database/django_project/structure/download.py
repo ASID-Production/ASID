@@ -104,10 +104,24 @@ def create_cif_text(structure: classmethod) -> str:
     text += check_value_exist('_chemical_name_systematic', structure.name.systematic_name, True)
     text += check_value_exist('_chemical_name_common', structure.name.trivial_name, True)
 
-    volume = structure.cell.a * structure.cell.b * structure.cell.c * sqrt(
-        1 + 2 * cos(radians(structure.cell.al)) * cos(radians(structure.cell.be)) * cos(radians(structure.cell.ga)) -
-        cos(radians(structure.cell.al)) ** 2 - cos(radians(structure.cell.be)) ** 2 - cos(radians(structure.cell.ga))
-    )
+    # volume
+    cell = structure.cell
+    r_cell = structure.reduced_cells.all()
+    if (1 + 2 * cos(radians(cell.al)) * cos(radians(cell.be)) * cos(radians(cell.ga)) -
+        cos(radians(cell.al)) ** 2 - cos(radians(cell.be)) ** 2 - cos(radians(cell.ga))) > 0:
+        volume = cell.a * cell.b * cell.c * sqrt(
+            1 + 2 * cos(radians(cell.al)) * cos(radians(cell.be)) * cos(radians(cell.ga)) -
+            cos(radians(cell.al)) ** 2 - cos(radians(cell.be)) ** 2 - cos(radians(cell.ga))
+        )
+    elif r_cell and (1 + 2 * cos(radians(r_cell[0].al)) * cos(radians(r_cell[0].be)) * cos(radians(r_cell[0].ga)) -
+                     cos(radians(r_cell[0].al)) ** 2 - cos(radians(r_cell[0].be)) ** 2 - cos(
+                radians(r_cell[0].ga))) > 0:
+        volume = r_cell[0].a * r_cell[0].b * r_cell[0].c * sqrt(
+            1 + 2 * cos(radians(r_cell[0].al)) * cos(radians(r_cell[0].be)) * cos(radians(r_cell[0].ga)) -
+            cos(radians(r_cell[0].al)) ** 2 - cos(radians(r_cell[0].be)) ** 2 - cos(radians(r_cell[0].ga))
+        )
+    else:
+        volume = 0
 
     text += check_value_exist('_cell_volume', round(volume, 3), False)
     text += check_value_exist('_exptl_crystal_density_diffrn', structure.experimental_info.calculated_density_value, False)
