@@ -63,10 +63,24 @@ def qc_get_cif_content(qc_structure: classmethod) -> str:
     text += check_value_exist('_chemical_name_systematic', qc_structure.qc_name.systematic_name, True)
     text += check_value_exist('_chemical_name_common', qc_structure.qc_name.trivial_name, True)
 
-    volume = qc_structure.qc_cell.a * qc_structure.qc_cell.b * qc_structure.qc_cell.c * sqrt(
-        1 + 2 * cos(radians(qc_structure.qc_cell.al)) * cos(radians(qc_structure.qc_cell.be)) * cos(radians(qc_structure.qc_cell.ga)) -
-        cos(radians(qc_structure.qc_cell.al)) ** 2 - cos(radians(qc_structure.qc_cell.be)) ** 2 - cos(radians(qc_structure.qc_cell.ga))
-    )
+    # volume
+    r_cell = qc_structure.qc_reduced_cells.all()
+    cell = qc_structure.qc_cell
+    if (1 + 2 * cos(radians(cell.al)) * cos(radians(cell.be)) * cos(radians(cell.ga)) -
+        cos(radians(cell.al)) ** 2 - cos(radians(cell.be)) ** 2 - cos(radians(cell.ga))) > 0:
+        volume = cell.a * cell.b * cell.c * sqrt(
+            1 + 2 * cos(radians(cell.al)) * cos(radians(cell.be)) * cos(radians(cell.ga)) -
+            cos(radians(cell.al)) ** 2 - cos(radians(cell.be)) ** 2 - cos(radians(cell.ga))
+        )
+    elif r_cell and (1 + 2 * cos(radians(r_cell[0].al)) * cos(radians(r_cell[0].be)) * cos(radians(r_cell[0].ga)) -
+                     cos(radians(r_cell[0].al)) ** 2 - cos(radians(r_cell[0].be)) ** 2 - cos(
+                radians(r_cell[0].ga))) > 0:
+        volume = r_cell[0].a * r_cell[0].b * r_cell[0].c * sqrt(
+            1 + 2 * cos(radians(r_cell[0].al)) * cos(radians(r_cell[0].be)) * cos(radians(r_cell[0].ga)) -
+            cos(radians(r_cell[0].al)) ** 2 - cos(radians(r_cell[0].be)) ** 2 - cos(radians(r_cell[0].ga))
+        )
+    else:
+        volume = 0
 
     text += check_value_exist('_cell_volume', round(volume, 3), False)
     text += check_value_exist('_exptl_crystal_density_diffrn', qc_structure.qc_properties.calculated_density, False)
