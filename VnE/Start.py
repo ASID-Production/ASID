@@ -20,7 +20,7 @@ for dir in dirs:
 
 if '--debug' in sys.argv or '-d' in sys.argv:
     path = os.path.normpath(os.path.join(os.path.dirname(__file__), f'{os.path.dirname(__file__)}/logs/{time}-debug.log'))
-    logging.basicConfig(level=logging.INFO, filename=path, filemode='a', format="%(asctime)s - [%(levelname)s] -  %(name)s - (%(filename)s).%(funcName)s(%(lineno)d) - %(message)s")
+    logging.basicConfig(level=logging.DEBUG, filename=path, filemode='a', format="%(asctime)s - [%(levelname)s] -  %(name)s - (%(filename)s).%(funcName)s(%(lineno)d) - %(message)s")
 else:
     path = os.path.normpath(os.path.join(os.path.dirname(__file__), f'{os.path.dirname(__file__)}/logs/{time}-error.log'))
     logging.basicConfig(level=logging.WARNING, filename=path, filemode='a', format="%(asctime)s - [%(levelname)s] -  %(name)s - (%(filename)s).%(funcName)s(%(lineno)d) - %(message)s")
