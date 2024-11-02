@@ -190,7 +190,7 @@ def get_full_info(id, db_type='cryst'):
 def get_image_temp(id, db_type='cryst', w=250, h=250):
     root = opath.normpath(f'{opath.dirname(__file__)}/../../..')
     path = opath.join(root, 'temp')
-    o_file = opath.join(path, f'{id}.gif')
+    o_file = opath.join(path, f'{id}.svg')
     return get_image(id, o_file, db_type, w, h)
 
 
@@ -200,23 +200,23 @@ def get_image(id, o_file_path, db_type='cryst', w=250, h=250):
     url_mod = url_mods.get(db_type, 'api/v1/structures')
     if SESSION.user_token is not None:
         headers = {'Authorization': f'Token {SESSION.user_token}'}
-        data = requests.get(f'{SESSION.url_base}/{url_mod}/{id}/export/2d/?h={h}&w={w}&file=0&f=img', headers=headers)
+        data = requests.get(f'{SESSION.url_base}/{url_mod}/{id}/export/2d/?h={h}&w={w}&file=0&f=svg', headers=headers)
     else:
-        data = requests.get(f'{SESSION.url_base}/{url_mod}/{id}/export/2d/?h={h}&w={w}&file=0&f=img')
+        data = requests.get(f'{SESSION.url_base}/{url_mod}/{id}/export/2d/?h={h}&w={w}&file=0&f=svg')
     data = data.content.decode(data.apparent_encoding)
     if data == '0':
         return None
-    image_str = data.split(',')[1]
-    image_data = base64.b64decode(image_str)
+    image_str = data
+    image_data = image_str
     path = o_file_path
-    image = open(path, 'wb')
+    image = open(path, 'w')
     image.write(image_data)
     image.close()
     return o_file_path
 
 
 def getImageFromFile(file_path, o_file_path, format='gif', w=250, h=250):
-    formats = ['gif', 'cml']
+    formats = ['gif', 'cml', 'svg']
     if format not in formats:
         format = formats[0]
     url_mod = 'api/v1/generate'
