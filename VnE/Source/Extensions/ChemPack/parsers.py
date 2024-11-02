@@ -309,9 +309,7 @@ class FileParser:
             sym_codes = block.find(['_symmetry_equiv_pos_as_xyz'])
             if not sym_codes:
                 sym_codes = block.find(['_space_group_symop_operation_xyz'])
-                sym_codes = [[i, x[0][1:-1]] for i, x in enumerate(sym_codes)]
-            else:
-                sym_codes = [[i, x[0]] for i, x in enumerate(sym_codes)]
+            sym_codes = [[i, x[0][1:-1]] if '"' in x or "'" in x else [i, x[0]] for i, x in enumerate(sym_codes)]
             num = sym_codes[-1][0] + 1
             added = [
                      [num, 'x+1,y,z'],
