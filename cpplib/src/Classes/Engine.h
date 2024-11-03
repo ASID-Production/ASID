@@ -129,6 +129,12 @@ namespace cpplib {
 		inline bool intersect(const Coord other) const noexcept {
 			return first() <= other.second() && other.first() <= second();
 		}
+		inline innerType getLow() const {
+			return first();
+		}
+		inline innerType getHigh() const {
+			return second();
+		}
 	private:
 		inline argumentType first() const {
 			return low;
@@ -244,6 +250,10 @@ namespace cpplib {
 				return hAtoms_ < other.hAtoms_;
 			if (neighbours_.size() != other.neighbours_.size())
 				return neighbours_.size() < other.neighbours_.size();
+			if (coord_.getLow() != other.coord_.getLow())
+				return coord_.getLow() < other.coord_.getLow();
+			if (coord_.getHigh() != other.coord_.getHigh())
+				return coord_.getHigh() < other.coord_.getHigh();
 			return id_ > other.id_;
 		}
 		// simple sorting
@@ -258,6 +268,10 @@ namespace cpplib {
 				return hAtoms_ > other.hAtoms_;
 			if (neighbours_.size() != other.neighbours_.size())
 				return neighbours_.size() > other.neighbours_.size();
+			if (coord_.getLow() != other.coord_.getLow())
+				return coord_.getLow() > other.coord_.getLow();
+			if (coord_.getHigh() != other.coord_.getHigh())
+				return coord_.getHigh() > other.coord_.getHigh();
 			return id_ < other.id_;
 		}
 		inline bool operator>(const Node& other) const noexcept {

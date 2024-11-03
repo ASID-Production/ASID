@@ -124,13 +124,7 @@ namespace cpplib {
 
 		// For Search
 		constexpr AtomIndex findStart() const {
-			const AtomIndex s = size();
-			AtomIndex m = 1;
-			for (AtomIndex i = 2; i < s; i++) {
-				if ((data_[i]).RawMore(data_[m]))
-					m = i;
-			}
-			return m;
+			return 1;
 		}
 		constexpr AtomIndex getNeighbourId(AtomIndex cur, AtomIndex neighbourIt) const noexcept {
 			return data_[cur].getNeighbour(neighbourIt)->getID();

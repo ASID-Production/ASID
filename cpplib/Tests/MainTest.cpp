@@ -66,6 +66,33 @@ struct FMIC_TS {
 	}
 };
 
+TEST(FindMoleculesWithoutCellTest, HO2) {
+	p_distances = &testdistances;
+	std::vector<AtomTypeData>  types{ 1,8,8 };
+
+	std::vector<PointType>  points{
+		{ 0.438335628,  0.000000000, -3.993208195 },
+		{ 0.438335628, -0.987240971, -3.993208195 },
+		{ 0.438335628,  0.987240971, -3.993208195 }
+	};
+
+	auto res = FindMoleculesWithoutCell(types, points);
+}
+
+
+TEST(SearchMainTest, CO2Search) {
+	const char search[]{ "1 3 2 8 0 1 1 6 0 3 3 8 0 2 2 1 2 2 3" };
+
+	
+
+	std::vector<const char*> dat(1, "15 22 22 8 0 8 0 8 0 8 0 8 0 8 0 8 0 8 0 8 0 6 3 6 3 6 3 6 3 6 2 6 1 6 1 6 1 6 1 6 0 6 0 6 0 6 0 1 18 1 21 2 14 2 18 3 17 3 20 4 15 4 19 5 16 5 22 6 21 7 20 8 19 9 22 10 21 11 20 12 19 13 22 14 16 15 16 15 17 17 18");
+
+	std::vector<int> res;
+	ASSERT_NO_THROW({ res = SearchMain(search, std::move(dat), 1, false); });
+	EXPECT_EQ(res.size(), 1);
+}
+
+
 TEST(CompaqTest, AAXTHP) {
 	p_distances = &testdistances;
 	std::array<float, 6> cell{13.966, 12.991, 11.225, 90.0, 100.931, 90.0};
