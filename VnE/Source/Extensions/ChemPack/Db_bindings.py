@@ -26,7 +26,7 @@
 #
 # ******************************************************************************************
 
-
+import sys
 import requests
 import json
 from PySide6.QtWidgets import QDialog, QLabel, QVBoxLayout
@@ -35,6 +35,7 @@ import os.path as opath
 import os
 import base64
 import atexit
+import subprocess
 
 import debug
 
@@ -98,7 +99,6 @@ class Session:
         global SERVER_PROC
         self.last_connect_start_op = lambda: self.startServer(port)
         if SERVER_PROC is None:
-            import subprocess
             root = opath.normpath(f'{opath.dirname(__file__)}/../../../..')
             path = opath.normpath(f'{root}/api_database/django_project/manage.py')
             if os.name == 'nt':
@@ -368,11 +368,37 @@ def setup():
     SESSION = Session()
     return
 
+
 def term():
+    global SERVER_PROC
     if SERVER_PROC:
-        import signal
-        SERVER_PROC.send_signal(signal.CTRL_BREAK_EVENT)
-        SERVER_PROC.terminate()
+        if os.name == 'nt':
+            from signal import CTRL_BREAK_EVENT
+            ret = subprocess.Popen('netstat -ano | findstr 127.0.0.1:8000', shell=True, stdout=subprocess.PIPE).stdout.read()
+            ret = ret.decode()
+            procs = ret.split('\n')
+            pids = [int(x.split(' ')[-1]) for x in procs if x]
+            for pid in pids:
+                try:
+                    os.kill(pid, CTRL_BREAK_EVENT)
+                except SystemError as e:
+                    pass
+            SERVER_PROC = None
+            sys.exit()
+        if os.name == 'posix':
+            from signal import SIGTERM
+            from signal import CTRL_BREAK_EVENT
+            ret = subprocess.Popen('ps ax | grep runserver', shell=True, stdout=subprocess.PIPE).stdout.read()
+            ret = ret.decode()
+            procs = ret.split('\n')
+            pids = [int(x.split(' ')[0]) for x in procs if x]
+            for pid in pids:
+                try:
+                    os.kill(pid, SIGTERM)
+                except SystemError as e:
+                    pass
+            SERVER_PROC = None
+            sys.exit()
 
 if SETUP is False:
     atexit.register(term)
