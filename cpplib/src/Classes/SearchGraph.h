@@ -177,7 +177,7 @@ namespace cpplib {
 
 				}
 			}
-			data_.sortGraph();
+			//data_.sortGraph();
 			inputSize_ = input_.size();
 			dataSize_ = data_.size();
 		}
@@ -303,7 +303,7 @@ namespace cpplib {
 			}
 		}
 		void recursiveSearchHasNeighbours(const AtomIndex curI, const bool exact) {
-			_ASSERT(data_[1].getID() == 1, "");
+			_ASSERT(data_[1].getID() == 1);
 			// Ring check
 			const AtomIndex neiSize = input_[curI].neighboursSize();
 			const AtomIndex curD = comp_[curI];

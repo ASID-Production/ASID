@@ -107,11 +107,12 @@ namespace cpplib {
 		explicit constexpr MoleculeGraph(NodeContainer&& other) noexcept(::std::is_nothrow_move_constructible<NodeContainer>::value)
 			: data_(::std::move(other)) {}
 		
-		static MoleculeGraph ReadData(const char* str, const currents::TypeBitset& multiAtomBits, const TypeMap& map) {
+		static ::std::pair<MoleculeGraph, bool> ReadData(const char* str, const currents::TypeBitset& multiAtomBits, const TypeMap& map) {
 			MoleculeGraph mg;
 			const auto sn = mg.parseMainstringData(str, map);
+			if (sn == 0) return ::std::make_pair<MoleculeGraph, bool>(std::move(mg), false);
 			mg.release_HAtoms(multiAtomBits, sn);
-			return mg;
+			return ::std::make_pair<MoleculeGraph, bool>(std::move(mg), true);
 		}
 
 		static ::std::pair<MoleculeGraph, currents::TypeBitset> ReadInput(const char* str) {
@@ -390,8 +391,10 @@ namespace cpplib {
 				is_used[i] = true;
 				data_.emplace_back(A(a), HType(b), AtomIndex(data_.size()));
 			}
-			if(!map.isFinished())
-				throw false;
+			if (!map.isFinished())
+				is_used[0] = false;
+			else
+				is_used[0] = true;
 			return is_used;
 		}
 		inline void parseAtomsBlockRequest(const char*& str, const AtomIndex sn) {
@@ -421,7 +424,7 @@ namespace cpplib {
 
 			// Atomic loop
 			auto used = parseAtomsBlockData(str, sn, map);
-
+			if (used[0] == false) return 0;
 			std::vector<AtomIndex> reI(sn, 0);
 			AtomIndex reI_last = 1;
 			for (AtomIndex i = 1; i < sn; i++)
