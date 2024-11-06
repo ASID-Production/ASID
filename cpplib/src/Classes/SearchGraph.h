@@ -69,6 +69,7 @@ namespace cpplib {
 
 		// Input and Data should be ready
 		inline void prepareToSearch() {
+			this->prepareHAtoms();
 			comp_.assign(inputSize_, 0);
 			log_.clear();
 			usedInComp_.assign(dataSize_, false);
@@ -134,6 +135,53 @@ namespace cpplib {
 				return inputNode.notExactCompare(dataNode);
 			}
 		}
+
+		void prepareHAtoms() {
+
+			currents::TypeBitset bits;
+
+			for (AtomIndex i = 1; i < inputSize_; i++)
+			{
+				if (input_[i].getType().include(currents::AtomTypeData(1))) {
+					for (AtomIndex j = 0; j < input_[i].neighboursSize(); j++)
+					{
+						auto nei = input_[i].getNeighbour(j);
+						bits |= nei->getType().get_bitset();
+					}
+				}
+			}
+			for (AtomIndex i = 1; i < dataSize_; i++)
+			{
+				if (data_[i].getType() == currents::AtomTypeData(1)) {
+					for (AtomIndex j = 0; j < data_[i].neighboursSize(); j++)
+					{
+						auto nei = data_[i].getNeighbour(j);
+						bits[nei->getType()]= true;
+					}
+				}
+			}
+
+			for (AtomIndex i = 1; i < inputSize_; i++)
+			{
+				if ((input_[i].getType().get_bitset() & bits).any()) {
+					input_.unpackHydrogens(i);
+				}
+			}
+			input_.sortGraph();
+			for (AtomIndex i = 1; i < dataSize_; i++)
+			{
+				if (bits[data_[i].getType()]) {
+					auto hatoms = data_[i].getHAtoms();
+					data_.unpackHydrogens(i);
+					data_[i].setCoord(Coord(data_[i].getCoord().getLow() + hatoms, data_[i].getCoord().getHigh() + hatoms));
+
+				}
+			}
+			data_.sortGraph();
+			inputSize_ = input_.size();
+			dataSize_ = data_.size();
+		}
+
 
 		// Search functions
 		inline void addLog(const AtomIndex i1, const AtomIndex i2, const AtomIndex d1, const AtomIndex d2) {
@@ -218,11 +266,20 @@ namespace cpplib {
 		void recursiveSearchNoNeighbours(const bool exact) {
 			// Find visited atom with neighbours;
 			AtomIndex nextI = findAtomWithNeighbours();
-			// If failed - search completed
+			// If failed - search completed or there is atom without neighbours
 			if (nextI == 0) {
 				bool completed = FinalComparision(exact);
 				if (completed)
 					throw true;
+				else {
+					for (size_t i = 1; i < inputSize_; i++)
+					{
+						if (comp_[i] == 0) {
+							nextI = i;
+							break;
+						}
+					}
+				}
 			}
 
 			// nextI is an atom with neighbours
@@ -246,6 +303,7 @@ namespace cpplib {
 			}
 		}
 		void recursiveSearchHasNeighbours(const AtomIndex curI, const bool exact) {
+			_ASSERT(data_[1].getID() == 1, "");
 			// Ring check
 			const AtomIndex neiSize = input_[curI].neighboursSize();
 			const AtomIndex curD = comp_[curI];

@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <type_traits>
+#include <bitset>
 
 namespace cpplib {
 	class XAtom;
@@ -33,6 +34,7 @@ namespace cpplib {
 		using AtomTypeRequest = XAtom;
 		using AtomTypeData = int_fast8_t;
 		using FloatingPointType = float;
+		using TypeBitset = ::std::bitset<mend_size>;
 
 		using size_type = ::std::conditional<(sizeof(AtomIndex) > sizeof(MoleculeIndex)), AtomIndex, MoleculeIndex>::type;
 		using PointType = geometry::Point<FloatingPointType>;

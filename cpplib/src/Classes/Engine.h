@@ -42,7 +42,7 @@ namespace cpplib {
 		using SimpleAtomType = currents::AtomTypeData;
 	private:
 		SimpleAtomType simple_representation = 0;
-		::std::bitset<mend_size> types = {0};
+		currents::TypeBitset types = {0};
 	public:
 		// Constructors
 		XAtom() = default;
@@ -67,7 +67,7 @@ namespace cpplib {
 		inline bool simple_eq(const SimpleAtomType other) const {
 			return simple_representation == other;
 		}
-		inline const ::std::bitset<mend_size>& get_bitset() const {
+		inline const currents::TypeBitset& get_bitset() const {
 			return types;
 		}
 		inline SimpleAtomType get_simple() const {
@@ -113,11 +113,10 @@ namespace cpplib {
 	public:
 		using argumentType = int8_t;
 		using innerType = int8_t;
+		static constexpr innerType max = 100;
 	private:
 		innerType low = 0;
 		innerType high = 0;
-		// mono <= 14
-		// mono == 15 for internal use
 	public:
 
 		constexpr inline Coord() noexcept {};
@@ -243,7 +242,7 @@ namespace cpplib {
 				(coord_.intersect(other.coord_));
 		}
 		// Raw comparision
-		bool RawLess(const Node& other) const noexcept {
+		inline bool RawLess(const Node& other) const noexcept {
 			if (type_ != other.type_)
 				return type_ < other.type_;
 			if (hAtoms_ != other.hAtoms_)
@@ -256,12 +255,7 @@ namespace cpplib {
 				return coord_.getHigh() < other.coord_.getHigh();
 			return id_ > other.id_;
 		}
-		// simple sorting
-		inline bool operator<(const Node& other) const noexcept {
-			//return id_ > other.id_;
-			return RawLess(other);
-		}
-		bool RawMore(const Node& other) const noexcept {
+		inline bool RawMore(const Node& other) const noexcept {
 			if (type_ != other.type_)
 				return type_ > other.type_;
 			if (hAtoms_ != other.hAtoms_)
@@ -273,6 +267,11 @@ namespace cpplib {
 			if (coord_.getHigh() != other.coord_.getHigh())
 				return coord_.getHigh() > other.coord_.getHigh();
 			return id_ < other.id_;
+		}
+		// simple sorting
+		inline bool operator<(const Node& other) const noexcept {
+			//return id_ > other.id_;
+			return RawLess(other);
 		}
 		inline bool operator>(const Node& other) const noexcept {
 			//return id_ < other.id_;
@@ -328,6 +327,11 @@ namespace cpplib {
 		}
 		inline void setCoord(const Coord& c) {
 			coord_ = c;
+		}
+
+		inline void calculateCoord() {
+			auto n = neighboursSize() + hAtoms_;
+			coord_ = Coord(n, n);
 		}
 
 		// Algorithms

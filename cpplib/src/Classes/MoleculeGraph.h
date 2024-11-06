@@ -34,7 +34,50 @@
 #include <numeric> // for std::iota
 #include <algorithm> // for std::stable_sort
 #include <sstream>
-namespace cpplib {
+namespace cpplib {		
+	class TypeMap {
+	public:
+		using AtomIndex = currents::AtomIndex;
+		using indexType = int8_t;
+	private:
+		std::array<AtomIndex, mend_size> data_;
+	public:
+		static_assert (INT8_MAX >= mend_size, "mend_size chould be less than INT8_MAX");
+		constexpr TypeMap() : data_() {
+			for (indexType i = 0; i < mend_size; i++)
+			{
+				data_[i] = static_cast<AtomIndex>(-1);
+			}
+		}
+		constexpr explicit TypeMap(const AtomIndex value) : data_() {
+			for (indexType i = 0; i < mend_size; i++)
+			{
+				data_[i] = value;
+			}
+		}
+		inline AtomIndex& operator[](const indexType i) {
+			return data_[i];
+		}
+		inline const AtomIndex& operator[](const indexType i) const {
+			return data_[i];
+		}
+		inline void initialize(const currents::TypeBitset& bits) {
+			for (indexType i = 1; i < mend_size; i++)
+			{
+				if (bits[i]) data_[i] = static_cast<AtomIndex>(0);
+			}
+		}
+		inline constexpr indexType size() {
+			return data_.size();
+		}
+		inline bool isFinished() const {
+			for (indexType i = 1; i < mend_size; i++)
+			{
+				if (data_[i] > 0) return false;
+			}
+			return true;
+		}
+	};
 	template<class A> class MoleculeGraph  {
 	public:
 		// Declarations
@@ -44,6 +87,10 @@ namespace cpplib {
 		using AtomIndex = currents::AtomIndex;
 		using MoleculeIndex = currents::MoleculeIndex;
 		using HType = typename NodeType::HType;
+
+
+
+
 
 		template <class OT>
 		friend class MoleculeGraph;
@@ -60,33 +107,71 @@ namespace cpplib {
 		explicit constexpr MoleculeGraph(NodeContainer&& other) noexcept(::std::is_nothrow_move_constructible<NodeContainer>::value)
 			: data_(::std::move(other)) {}
 		
-		static MoleculeGraph ReadData(const char* str, const ::std::bitset<mend_size>& multiAtomBits) {
+		static MoleculeGraph ReadData(const char* str, const currents::TypeBitset& multiAtomBits, const TypeMap& map) {
 			MoleculeGraph mg;
-			//::std::stringstream ss(str);
-			const auto sn = mg.parseMainstring<false>(str);
-			
+			const auto sn = mg.parseMainstringData(str, map);
 			mg.release_HAtoms(multiAtomBits, sn);
-			//mg.sortGraph();
 			return mg;
 		}
 
-		static ::std::pair<MoleculeGraph, ::std::bitset<mend_size>> ReadInput(const char* str) {
+		static ::std::pair<MoleculeGraph, currents::TypeBitset> ReadInput(const char* str) {
 			MoleculeGraph mg;
-			const auto sn = mg.parseMainstring<true>(str);
+			const auto sn = mg.parseMainstringRequest(str);
 			auto multiAtomBits = mg.parseMultiatom(str, sn);
 			mg.release_HAtoms(multiAtomBits, sn);
 			mg.sortGraph();
 			return ::std::make_pair(std::move(mg), ::std::move(multiAtomBits));
 		}
+		
+		void unpackHydrogens(AtomIndex index) {
+			auto s = data_[index].getHAtoms();
+			for (AtomIndex i = 0; i < s; i++)
+			{
+				auto last = data_.size();
+				data_.emplace_back(1, 0, last);
+				addBond(index, last);
+				data_[last].setCoord(Coord(1,Coord::max));
+			}
+			data_[index].setHAtoms(0);
+		}
 
+		TypeMap getTypeMap() const {
+			TypeMap map;
+			static_assert(map.size() == mend_size);
+			AtomIndex s = size();
+			for (AtomIndex i = 1; i < s; i++)
+			{
+				const auto t = static_cast<currents::AtomTypeData>(data_[i].getType());
+				const auto h = static_cast<currents::AtomTypeData>(data_[i].getHAtoms());
 
-		constexpr AtomIndex size() const noexcept {
+				if (map[1] == AtomIndex(-1))
+					map[1] = AtomIndex(h);
+				else
+					map[1]+=h;
+				if (t > 0) {
+					if (map[t] == AtomIndex(-1))
+						map[t] = AtomIndex(1);
+					else
+						map[t]++;
+				}
+				else {
+					for (TypeMap::indexType j = 1; j < map.size(); j++)
+					{
+						if (data_[i].getType().include(j) && map[j] == AtomIndex(-1))
+							map[j] = AtomIndex(0);
+					}
+				}
+			}
+			return map;
+		}
+
+		inline AtomIndex size() const noexcept {
 			return static_cast<AtomIndex>(data_.size());
 		}
 
 		// Bond functions
 		::std::vector<BondType> getBonds() const {
-			std::vector<BondType> ret;
+			::std::vector<BondType> ret;
 
 			AtomIndex s = size();
 			for (AtomIndex i = 1; i < s; i++) {
@@ -247,7 +332,7 @@ namespace cpplib {
 
 		static std::string ResortString(const char* str) {
 			MoleculeGraph mg;
-			mg.parseMainstring<false>(str);
+			mg.parseMainstringData(str,TypeMap(0));
 			mg.sortGraph();
 			
 			return mg.writeDataString();
@@ -281,18 +366,44 @@ namespace cpplib {
 			else
 				return res;
 		}
-		template<bool is_request> inline void parseAtomsBlock(const char *& str, const AtomIndex sn) {
+		inline ::std::vector<bool> parseAtomsBlockData(const char *& str, const AtomIndex sn, const TypeMap& argMap) {
+			data_.reserve(sn);
+			TypeMap map(argMap);
+			data_.emplace_back(A(0), HType(0), AtomIndex(0));
+			::std::vector<bool> is_used(sn, false);
+			for (AtomIndex i = 1; i < sn; i++) {
+				int a = readSingleInt(str);
+				int b = readSingleInt(str);
+				if (a > 0) {
+					if (map[a] == -1)
+						continue;
+					if (map[a] > 0)
+						map[a]--;
+				}
+				if (b > 0) {
+					if (map[1] > 0) {
+						map[1] -= b;
+						if (map[1] < 0)
+							map[1] = 0;
+					}
+				}
+				is_used[i] = true;
+				data_.emplace_back(A(a), HType(b), AtomIndex(data_.size()));
+			}
+			if(!map.isFinished())
+				throw false;
+			return is_used;
+		}
+		inline void parseAtomsBlockRequest(const char*& str, const AtomIndex sn) {
 			data_.reserve(sn);
 			data_.emplace_back(A(0), HType(0), AtomIndex(0));
 			for (AtomIndex i = 1; i < sn; i++) {
 				int a = readSingleInt(str);
 				int b = readSingleInt(str);
 				data_.emplace_back(A(a), HType(b), AtomIndex(i));
-				if (is_request) {
-					int first = readSingleInt(str);
-					int second = readSingleInt(str);
-					data_.back().setCoord(Coord(static_cast<Coord::argumentType>(first), static_cast<Coord::argumentType>(second)));
-				}
+				int first = readSingleInt(str);
+				int second = readSingleInt(str);
+				data_.back().setCoord(Coord(static_cast<Coord::argumentType>(first), static_cast<Coord::argumentType>(second)));
 			}
 		}
 		::std::pair<AtomIndex, AtomIndex> parseInit(const char*& str) {
@@ -303,27 +414,64 @@ namespace cpplib {
 			r.first++;
 			return r;
 		}
-		template <bool is_request> inline AtomIndex parseMainstring(const char*& str) {
+		inline AtomIndex parseMainstringData(const char*& str, const TypeMap& map) {
 			::std::pair<AtomIndex, AtomIndex>&& sn_sb = parseInit(str);
 			AtomIndex& sn = sn_sb.first;
 			AtomIndex& sb = sn_sb.second;
 
 			// Atomic loop
-			parseAtomsBlock<is_request>(str, sn);
+			auto used = parseAtomsBlockData(str, sn, map);
+
+			std::vector<AtomIndex> reI(sn, 0);
+			AtomIndex reI_last = 1;
+			for (AtomIndex i = 1; i < sn; i++)
+			{
+				if (used[i]) {
+					reI[i] = reI_last;
+					reI_last++;
+				}
+			}
+
+			std::vector<Coord::innerType> coord_counters(sn, 0);
+
+			// Bond loop
+			for (AtomIndex i = 0; i < sb; i++) {
+				int a = readSingleInt(str);
+				int b = readSingleInt(str);
+				bool b_reIa = reI[a] != 0;
+				bool b_reIb = reI[b] != 0;
+				if(b_reIa && b_reIb)
+					data_[reI[a]].addBondSimple(data_[reI[b]]);
+				else {
+					if (b_reIa)
+						coord_counters[reI[a]]++;
+					if (b_reIb)
+						coord_counters[reI[b]]++;
+				}
+			}
+			for (AtomIndex i = 1; i < reI_last; i++) {
+				Coord c = Coord(static_cast<Coord::argumentType>(data_[i].getHAtoms() + data_[i].neighboursSize() + coord_counters[i]));
+				data_[i].setCoord(::std::move(c));
+			}
+			for (AtomIndex i = 0; i < reI_last; i++) {
+				data_[i].sortNeighbours();
+			}
+
+			return sn;
+		}
+		inline AtomIndex parseMainstringRequest(const char*& str) {
+			::std::pair<AtomIndex, AtomIndex>&& sn_sb = parseInit(str);
+			AtomIndex& sn = sn_sb.first;
+			AtomIndex& sb = sn_sb.second;
+
+			// Atomic loop
+			parseAtomsBlockRequest(str, sn);
 
 			// Bond loop
 			for (AtomIndex i = 0; i < sb; i++) {
 				int a = readSingleInt(str);
 				int b = readSingleInt(str);
 				data_[a].addBondSimple(data_[b]);
-
-				//data_[a].addBondWithSort(data_[b]);
-			}
-			if (is_request == false) {
-				for (AtomIndex i = 1; i < sn; i++) {
-					Coord c = Coord(static_cast<Coord::argumentType>(data_[i].getHAtoms() + data_[i].neighboursSize()));
-					data_[i].setCoord(::std::move(c));
-				}
 			}
 			for (AtomIndex i = 0; i < sn; i++) {
 				data_[i].sortNeighbours();
@@ -331,9 +479,9 @@ namespace cpplib {
 
 			return sn;
 		}
-		::std::bitset<mend_size> parseMultiatom(const char* str, const AtomIndex sn) {
+		currents::TypeBitset parseMultiatom(const char* str, const AtomIndex sn) {
 			AtomIndex xty;
-			::std::bitset<mend_size> multiAtomBits;
+			currents::TypeBitset multiAtomBits;
 			if(readToNext(str))
 				xty = readSingleInt(str);
 			else {
@@ -370,7 +518,7 @@ namespace cpplib {
 
 			return multiAtomBits;
 		}
-		void release_HAtoms(const ::std::bitset<mend_size>& bits, const AtomIndex sn) {
+		void release_HAtoms(const currents::TypeBitset& bits, const AtomIndex sn) {
 			if (bits.none()) return;
 			size_t hs = this->size();
 			//::std::list< NodeType> hydrogenAtoms;
@@ -390,6 +538,7 @@ namespace cpplib {
 					{
 						data_.emplace_back(A(1), 0, hs);
 						data_[i].addBondWithSort(data_.back());
+						data_.back().setCoord(Coord(1, Coord::max));
 						hs++;
 					}
 					data_[i].setHAtoms(0);

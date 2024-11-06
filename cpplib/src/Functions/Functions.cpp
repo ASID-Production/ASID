@@ -47,9 +47,10 @@ bool CompareGraph(const char* search1, const char* search2, const bool exact) {
 
 	deb_write("CompareGraph CurrentSearchGraph start ReadInput");
 	auto&& inputpair = SearchGraphType::RequestGraphType::ReadInput(search1);
+	auto map = inputpair.first.getTypeMap();
 	graph.setupInput(std::move(inputpair.first));
 	deb_write("CompareGraph CurrentSearchGraph start ReadData");
-	graph.setupData(SearchGraphType::DatabaseGraphType::ReadData(search2, inputpair.second));
+	graph.setupData(SearchGraphType::DatabaseGraphType::ReadData(search2, inputpair.second, map));
 	deb_write("CompareGraph CurrentSearchGraph start prepareSearch");
 	graph.prepareToSearch();
 	deb_write("CompareGraph CurrentSearchGraph start FullSearch");
@@ -324,8 +325,16 @@ static void ChildThreadFunc(const SearchGraphType::RequestGraphType& input, cons
 		if (next == nullptr) {
 			return;
 		}
-		graph.setupInput(input.makeCopy());
-		SearchGraphType::DatabaseGraphType molData = SearchGraphType::DatabaseGraphType::ReadData(next, dataInterface.getMulty());
+		auto multi = dataInterface.getMulty();
+		auto map = input.getTypeMap();
+		graph.setupInput(input.makeCopy()); 
+		SearchGraphType::DatabaseGraphType molData;
+		try {
+			molData = SearchGraphType::DatabaseGraphType::ReadData(next, multi, map);
+		}
+		catch (bool) {
+			continue;
+		}
 		auto id = molData.getID();
 		graph.setupData(std::move(molData));
 		graph.prepareToSearch();
