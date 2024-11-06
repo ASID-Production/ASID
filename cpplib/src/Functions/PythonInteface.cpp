@@ -906,6 +906,10 @@ extern "C" {
 							 "errors", o_errors,
 							 "xyz_block", o_xyz_block);
 	}
+	static PyObject* cpplib_SortDatabase(PyObject* self, PyObject* arg) {
+		const auto ret = cpplib::currents::SearchGraphType::DatabaseGraphType::ResortString(PyUnicode_AsUTF8(arg));
+		return PyUnicode_FromString(ret.c_str());
+	}
 }
 
 
@@ -928,6 +932,7 @@ static struct PyMethodDef methods[] = {
 	{ "himp", cpplib_himp, METH_VARARGS, "Moves hydrogens to the nearest atom"},
 	{ "SubSearch", cpplib_SubSearch, METH_VARARGS, "Compare two graphs"},
 	{ "compaq", cpplib_compaq, METH_VARARGS, "Do the same as Olex2 'compaq' function"},
+	{ "SortDatabase", cpplib_SortDatabase, METH_O, "Sort graph"},
 
 	{ NULL, NULL, 0, NULL }
 };
