@@ -245,10 +245,8 @@ namespace cpplib {
 		inline bool RawLess(const Node& other) const noexcept {
 			if (type_ != other.type_)
 				return type_ < other.type_;
-			if (hAtoms_ != other.hAtoms_)
-				return hAtoms_ < other.hAtoms_;
-			if (neighbours_.size() != other.neighbours_.size())
-				return neighbours_.size() < other.neighbours_.size();
+			if (hAtoms_ + neighbours_.size() != other.hAtoms_ + other.neighbours_.size())
+				return hAtoms_ + neighbours_.size() < other.hAtoms_ + other.neighbours_.size();
 			if (coord_.getLow() != other.coord_.getLow())
 				return coord_.getLow() < other.coord_.getLow();
 			if (coord_.getHigh() != other.coord_.getHigh())
@@ -258,10 +256,8 @@ namespace cpplib {
 		inline bool RawMore(const Node& other) const noexcept {
 			if (type_ != other.type_)
 				return type_ > other.type_;
-			if (hAtoms_ != other.hAtoms_)
-				return hAtoms_ > other.hAtoms_;
-			if (neighbours_.size() != other.neighbours_.size())
-				return neighbours_.size() > other.neighbours_.size();
+			if (hAtoms_ + neighbours_.size() != other.hAtoms_ + other.neighbours_.size())
+				return hAtoms_ + neighbours_.size() > other.hAtoms_ + other.neighbours_.size();
 			if (coord_.getLow() != other.coord_.getLow())
 				return coord_.getLow() > other.coord_.getLow();
 			if (coord_.getHigh() != other.coord_.getHigh())
