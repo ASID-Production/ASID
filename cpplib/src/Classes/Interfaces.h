@@ -33,9 +33,6 @@
 #include "../Classes/FindMolecules.h"
 #include "../Functions/AllInOneAndCurrent.h"
 namespace cpplib {
-	enum class ErrorStates {
-		dataIsEmpty
-	};
 	class SearchDataInterface {
 	public:
 		using MoleculeIndex = currents::MoleculeIndex;
@@ -67,16 +64,13 @@ namespace cpplib {
 		}
 		const char* getNext() {
 			size_type iter;
-			try {
-				do {
-					iter = getNextIterator();
-				} while (rawdata_[iter][0] == '\0');
+			do {
+				iter = getNextIterator();
+				if (iter == size_type(-1))
+					return nullptr;
+			} while (rawdata_[iter][0] == '\0');
 
-				return rawdata_[iter];
-			}
-			catch (ErrorStates) {
-				return nullptr;
-			}
+			return rawdata_[iter];
 		}
 		inline const MultiflagType& getMulty() const noexcept {
 			return multiflag_;
@@ -93,7 +87,7 @@ namespace cpplib {
 		size_type getNextIterator() {
 			std::lock_guard<std::mutex> lock(mutexIN_);
 			if (iterator_ == size_)
-				throw ErrorStates::dataIsEmpty;
+				return size_type(-1);
 			size_type i = iterator_;
 			iterator_++;
 			return i;
