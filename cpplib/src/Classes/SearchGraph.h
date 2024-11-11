@@ -171,9 +171,7 @@ namespace cpplib {
 			for (AtomIndex i = 1; i < dataSize_; i++)
 			{
 				if (bits[data_[i].getType()]) {
-					auto hatoms = data_[i].getHAtoms();
 					data_.unpackHydrogens(i);
-					data_[i].setCoord(Coord(data_[i].getCoord().getLow() + hatoms, data_[i].getCoord().getHigh() + hatoms));
 
 				}
 			}
