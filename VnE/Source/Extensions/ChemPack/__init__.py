@@ -54,12 +54,12 @@ def loadMolSys(molsys, points_lists):
     if TREE_MODEL is not None:
         uniform_model = UNIFORM_MODEL
         model = TREE_MODEL
-
-        coords = np.array([a.coord for a in points_lists[1].children])
-        cent = np.sum(coords, axis=0) / len(coords)
-        if uniform_model is not None:
-            root = uniform_model.root()
-            root.rotation_point = cent.copy()
+        if len(points_lists[1].children) > 0:
+            coords = np.array([a.coord for a in points_lists[1].children])
+            cent = np.sum(coords, axis=0) / len(coords)
+            if uniform_model is not None:
+                root = uniform_model.root()
+                root.rotation_point = cent.copy()
         if molsys is not None:
             model.insertRow(model.rowCount())
             if points_lists is not None:
@@ -242,6 +242,9 @@ def parseWinxpro():
         molsys, _ = PARSER.parsWinxproPaths(filename)
     return molsys, points_lists
 
+def applyClsf():
+    from . import applyCls
+    applyCls.execute()
 
 def parsAIMALLsumviz():
     from PySide6.QtWidgets import QFileDialog
@@ -368,9 +371,13 @@ def setup(menu, model, uniform_model=None, *args, main_widget=None, **kwargs):
 
     qtaim = cmenu.addMenu('QTAIM tools')
 
-    action_winx = QAction('Parse Winxpro')
+    action_winx = QAction('Parse WinXPRO')
     action_winx.triggered.connect(parseWinxpro)
     qtaim.addAction(action_winx)
+
+    action_cls = QAction('Apply WinXPRO .cls')
+    action_cls.triggered.connect(applyClsf)
+    qtaim.addAction(action_cls)
 
     action_aimall = QAction('Parse AIMALL sumviz')
     action_aimall.triggered.connect(parsAIMALLsumviz)
@@ -392,5 +399,5 @@ def setup(menu, model, uniform_model=None, *args, main_widget=None, **kwargs):
     action_assemble.triggered.connect(assemble)
     cmenu.addAction(action_assemble)
 
-    actions = [open_action, action_test, action_DB, save_action, action_sym_op, action_export, action_winx, action_aimall, action_2d_export, action_multiwfn, action_symm_poscar, action_assemble]
+    actions = [open_action, action_test, action_DB, save_action, action_sym_op, action_export, action_winx, action_cls, action_aimall, action_2d_export, action_multiwfn, action_symm_poscar, action_assemble]
     return actions
