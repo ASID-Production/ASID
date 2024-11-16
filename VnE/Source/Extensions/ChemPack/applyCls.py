@@ -1,5 +1,3 @@
-from VnE.Source.Extensions.ChemPack.searchProcess import parser
-
 DIALOG = None
 
 def execute():
