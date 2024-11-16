@@ -29,7 +29,7 @@
 import sys
 import requests
 import json
-from PySide6.QtWidgets import QDialog, QLabel, QVBoxLayout
+from PySide6.QtWidgets import QDialog, QLabel, QVBoxLayout, QTextEdit
 from PySide6.QtCore import QProcess
 import os.path as opath
 import os
@@ -50,13 +50,16 @@ requests.packages.urllib3.util.connection.HAS_IPV6 = False
 
 class ErrorDialog(QDialog):
 
-    def __init__(self, label, title='Error'):
+    def __init__(self, error, title='Error'):
         QDialog.__init__(self)
         self.setWindowTitle(title)
-        self.label = QLabel(label)
+        text = [f'{x}: {str(y)}' for x, y in error.items()]
+        text = '\n'.join(text)
+        self.label = QTextEdit(text)
         self.vblayout = QVBoxLayout()
         self.vblayout.addWidget(self.label)
         self.setLayout(self.vblayout)
+        self.finished.connect(lambda x: SESSION.deleteErrorDialog(self))
 
 
 class Session:
@@ -67,6 +70,7 @@ class Session:
         self.usr_pass = None
         self.ready = False
         self.last_connect_start_op = lambda: True
+        self.error_dialog = []
 
     def connectServer(self, address, port):
         self.last_connect_start_op = lambda: self.connectServer(address, port)
@@ -83,16 +87,25 @@ class Session:
             if self.url_base is not None:
                 self.usr_login, self.usr_pass = name, passwd
                 b = requests.post(f'{self.url_base}/api/auth/users/', data={
-                    "email": "user@example.com",
+                    "email": f"{self.usr_login}@example.com",
                     "username": f"{name}",
                     "first_name": "none",
                     "last_name": "none",
                     "password": f"{passwd}"
                 })
+                if not b.ok:
+                    error = json.loads(b.text)
+                    SESSION.error_dialog.append(ErrorDialog(error))
+                    SESSION.error_dialog[-1].show()
                 token = requests.post(f'{self.url_base}/api/auth/token/login/', data={
                     "username": f"{name}",
                     "password": f"{passwd}"
                 })
+                if not token.ok:
+                    error = json.loads(token.text)
+                    SESSION.error_dialog.append(ErrorDialog(error))
+                    SESSION.error_dialog[-1].show()
+                    return
                 self.user_token = json.loads(token.text)['auth_token']
 
     def startServer(self, port):
@@ -133,6 +146,8 @@ class Session:
     def triggerLastConnectOp(self):
         self.last_connect_start_op()
 
+    def deleteErrorDialog(self, dialog):
+        self.error_dialog.remove(dialog)
 
 SESSION: Session
 
@@ -182,6 +197,11 @@ def get_full_info(id, db_type='cryst'):
         data = requests.get(f'{SESSION.url_base}/{url_mod}/{id}', headers=headers)
     else:
         data = requests.get(f'{SESSION.url_base}/{url_mod}/{id}')
+    if not data.ok:
+        error = json.loads(data.text)
+        SESSION.error_dialog.append(ErrorDialog(error))
+        SESSION.error_dialog[-1].show()
+        return {}
     data = data.content.decode(data.apparent_encoding)
     data_out = json.loads(data)
     return data_out
@@ -203,6 +223,11 @@ def get_image(id, o_file_path, db_type='cryst', w=250, h=250):
         data = requests.get(f'{SESSION.url_base}/{url_mod}/{id}/export/2d/?h={h}&w={w}&file=0&f=svg', headers=headers)
     else:
         data = requests.get(f'{SESSION.url_base}/{url_mod}/{id}/export/2d/?h={h}&w={w}&file=0&f=svg')
+    if not data.ok:
+        error = json.loads(data.text)
+        SESSION.error_dialog.append(ErrorDialog(error))
+        SESSION.error_dialog[-1].show()
+        return None
     data = data.content.decode(data.apparent_encoding)
     if data == '0':
         return None
@@ -252,6 +277,11 @@ def getCif(id, db_type='cryst'):
         data = requests.get(f'{SESSION.url_base}/{url_mod}/{id}/export/cif')
     else:
         data = requests.get(f'{SESSION.url_base}/{url_mod}/{id}/download/')
+    if not data.ok:
+        error = json.loads(data.text)
+        SESSION.error_dialog.append(ErrorDialog(error))
+        SESSION.error_dialog[-1].show()
+        return b''
     return data.content
 
 
@@ -279,14 +309,14 @@ def uploadFile(file, ext):
             resp = method(files, headers)
             if not resp.ok:
                 error = json.loads(resp.text)
-                SESSION.error_dialog = ErrorDialog(error['errors'])
-                SESSION.error_dialog.show()
+                SESSION.error_dialog.append(ErrorDialog(error))
+                SESSION.error_dialog[-1].show()
             else:
                 dialog = ErrorDialog('Successful', 'Info')
                 dialog.show()
         else:
             SESSION.error_dialog = ErrorDialog('Unsupported file format')
-            SESSION.error_dialog.show()
+            SESSION.error_dialog[-1].show()
 
 
 def structureSearch(struct, url_mod, process=None, db_string=''):
@@ -361,6 +391,10 @@ def deleteEntry(id, db_type='cryst'):
         data = requests.request('DELETE', f'{SESSION.url_base}/{url_mod}/{id}/', headers=headers)
     else:
         data = requests.request('DELETE', f'{SESSION.url_base}/{url_mod}/{id}')
+    if not data.ok:
+        error = json.loads(data.text)
+        SESSION.error_dialog.append(ErrorDialog(error))
+        SESSION.error_dialog[-1].show()
 
 
 def setup():
