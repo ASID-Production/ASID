@@ -93,8 +93,16 @@ class Session:
                     "last_name": "none",
                     "password": f"{passwd}"
                 })
+                sh = b.ok
                 if not b.ok:
                     error = json.loads(b.text)
+                    try:
+                        err = error['username']
+                        if 'A user with that username already exists.' in err:
+                            sh = True
+                    except KeyError:
+                        pass
+                if not sh:
                     SESSION.error_dialog.append(ErrorDialog(error))
                     SESSION.error_dialog[-1].show()
                 token = requests.post(f'{self.url_base}/api/auth/token/login/', data={

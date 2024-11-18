@@ -415,7 +415,6 @@ def angle(atoms, rad=True, split=-1):
         else:
             plane1 = plane_eq(*atoms[:3])
             plane2 = plane_eq(*atoms[-3:])
-            np.sqrt(sum([x**2 for x in plane1[:3]])) * np.sqrt(sum([x**2 for x in plane2[:3]]))
             cos = (sum([x ** 2 for x in plane1[:3]]) + sum([x**2 for x in plane2[:3]]) - sum([x**2 for x in plane1[:3] - plane2[:3]])) /\
                   (2 * np.sqrt(sum([x ** 2 for x in plane1[:3]])) * np.sqrt(sum([x**2 for x in plane2[:3]])))
             angle = np.arccos(cos)
@@ -432,6 +431,24 @@ def angle(atoms, rad=True, split=-1):
             return angleC
         else:
             return (angleC / np.pi) * 180
+
+
+def tors(atoms, rad=True):
+    p0, p1, p2, p3 = [x.coord for x in atoms[:4]]
+
+    b0 = -1.0 * (p1 - p0)
+    b1 = p2 - p1
+    b2 = p3 - p2
+
+    b0xb1 = np.cross(b0, b1)
+    b1xb2 = np.cross(b2, b1)
+
+    b0xb1_x_b1xb2 = np.cross(b0xb1, b1xb2)
+
+    y = np.dot(b0xb1_x_b1xb2, b1) * (1.0 / np.linalg.norm(b1))
+    x = np.dot(b0xb1, b1xb2)
+
+    return np.degrees(np.arctan2(y, x))
 
 
 def findSubGraph(pack: Pack, sub_pack: Pack):

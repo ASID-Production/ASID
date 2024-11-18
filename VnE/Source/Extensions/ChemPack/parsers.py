@@ -98,14 +98,15 @@ class FileParser:
 
         ret = self.parsMolSys(mol_sys, bond, root)
 
-        mol_list = ret[1][0]
-        if mol_list.additional_context_actions is None:
-            mol_list.addProperty('additional_context_actions',
-                                 [('Export 2d diagram', lambda: Db_viewer.exportGif(file=mol_sys.file_name))],
-                                 observed=False)
-        else:
-            mol_list.additional_context_actions.append(
-                ('Export 2d diagram', lambda: Db_viewer.exportGif(file=mol_sys.file_name)))
+        if root:
+            mol_list = ret[1][0]
+            if mol_list.additional_context_actions is None:
+                mol_list.addProperty('additional_context_actions',
+                                     [('Export 2d diagram', lambda: Db_viewer.exportGif(file=mol_sys.file_name))],
+                                     observed=False)
+            else:
+                mol_list.additional_context_actions.append(
+                    ('Export 2d diagram', lambda: Db_viewer.exportGif(file=mol_sys.file_name)))
 
         return ret
 
@@ -586,23 +587,23 @@ class FileParser:
                     prop_d['conn'] = conn
                     line = file.__next__()
                     data = [x for x in line[:-1].split(' ') if x]
-                    prop_d['rho'] = float(data[2])
-                    prop_d['lambda_1'] = float(data[6])
+                    prop_d['\u03C1(r)'] = float(data[2])
+                    prop_d['\u2207\u2081\u00B2(r)'] = float(data[6])
                     line = file.__next__()
                     data = [x for x in line[:-1].split(' ') if x]
-                    prop_d['d2rho'] = float(data[2])
-                    prop_d['lambda_2'] = float(data[6])
+                    prop_d['\u0394\u00B2\u03C1(r)'] = float(data[2])
+                    prop_d['\u2207\u2082\u00B2(r)'] = float(data[6])
                     line = file.__next__()
                     data = [x for x in line[:-1].split(' ') if x]
-                    prop_d['g'] = float(data[2])
-                    prop_d['lambda_3'] = float(data[6])
+                    prop_d['G(r)'] = float(data[2])
+                    prop_d['\u2207\u2083\u00B2(r)'] = float(data[6])
                     line = file.__next__()
                     data = [x for x in line[:-1].split(' ') if x]
-                    prop_d['v'] = float(data[2])
+                    prop_d['V(r)'] = float(data[2])
                     prop_d['ellipticity'] = float(data[6])
                     line = file.__next__()
                     data = [x for x in line[:-1].split(' ') if x]
-                    prop_d['h'] = float(data[2])
+                    prop_d['H(r)'] = float(data[2])
                     cp = MoleculeClass.Atom(coords, types.get(type, 999), **prop_d)
                     cps.append(cp)
                     line = file.__next__()
@@ -674,6 +675,16 @@ class FileParser:
         yield mol_sys, list_tuple
 
         def cppCreation(atom_list, atom):
+            props = ['\u03C1(r)',
+            '\u2207\u2081\u00B2(r)',
+            '\u0394\u00B2\u03C1(r)',
+            '\u2207\u2082\u00B2(r)',
+            'G(r)',
+            '\u2207\u2083\u00B2(r)',
+            'V(r)',
+            'ellipticity',
+            'H(r)']
+            props = {p: getattr(atom, p) for p in props}
             coord = atom.coord.copy()
             point = point_class.Point(parent=atom_list, coord=coord, rad=atom_list,
                                       color=PALETTE.point_dict[PALETTE.getName(atom.atom_type)],
@@ -681,15 +692,7 @@ class FileParser:
                                       name=atom.name,
                                       connectivity=atom.conn,
                                       label=atom.name,
-                                      rho=atom.rho,
-                                      d2rho=atom.d2rho,
-                                      g=atom.g,
-                                      v=atom.v,
-                                      h=atom.h,
-                                      lambda_1=atom.lambda_1,
-                                      lambda_2=atom.lambda_2,
-                                      lambda_3=atom.lambda_3,
-                                      ellipticity=atom.ellipticity)
+                                      **props)
             return point
 
         cps_sys, list_tuple = self.parsMolSys(cps_sys, False, root, point_func=cppCreation)
