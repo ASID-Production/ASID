@@ -476,6 +476,8 @@ class QtPointsTreeModel(QAbstractItemModel):
 
     def setData(self, index: QModelIndex, value, role: int = ...) -> bool:
         if role == 99:
+            if index.internalPointer() is None:
+                return
             property, value = value
             if property == 'pick':
                 self.selection_changed.emit(index)

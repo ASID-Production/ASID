@@ -52,10 +52,11 @@ class DefaultData:
         'pdb_occupancy': 1.00,
         'pdb_tempFactor': 0.00,
         'pdb_charge': '  ',
+        'cif_space_group': 'P 1',
         'cif_sym_codes': [[0, 'x,y,z']],
-        'cif_cell_a': 1,
-        'cif_cell_b': 1,
-        'cif_cell_c': 1,
+        'cif_cell_a': -1,
+        'cif_cell_b': -1,
+        'cif_cell_c': -1,
         'cif_cell_al': 90,
         'cif_cell_be': 90,
         'cif_cell_ga': 90,
@@ -136,6 +137,7 @@ class aEntity(ABC):
 class Bond:
     def __init__(self, atom1, atom2):
         self._parents = [atom1, atom2]
+        self._parents.sort(key=id)
 
     def __contains__(self, item):
         return self._parents.__contains__(item)
@@ -143,15 +145,16 @@ class Bond:
     def get(self, atom):
         return self._parents[self._parents.index(atom)-1]
 
-    def changeParent(self, pos, parent):
-        self._parents[pos] = parent
+    def changeParent(self, old_parent, parent):
+        self._parents[self._parents.index(old_parent)] = parent
+        self._parents.sort(key=id)
 
     def parents(self):
         return self._parents
 
     def __eq__(self, other):
-        if type(other) == type(self):
-            if set(self._parents) == set(other.parents()):
+        if isinstance(other, Bond):
+            if self._parents == other.parents():
                 return True
         else:
             return False
