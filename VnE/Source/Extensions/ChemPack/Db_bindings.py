@@ -319,9 +319,6 @@ def uploadFile(file, ext):
                 error = json.loads(resp.text)
                 SESSION.error_dialog.append(ErrorDialog(error))
                 SESSION.error_dialog[-1].show()
-            else:
-                dialog = ErrorDialog('Successful', 'Info')
-                dialog.show()
         else:
             SESSION.error_dialog = ErrorDialog('Unsupported file format')
             SESSION.error_dialog[-1].show()

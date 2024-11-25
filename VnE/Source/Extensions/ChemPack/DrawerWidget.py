@@ -1114,14 +1114,17 @@ class Drag(aDrawWidgetEvent):
     def assertEvent(self, event: QtCore.QEvent, widget):
         if event.type() == QtCore.QEvent.MouseButtonPress and event.buttons() == QtCore.Qt.LeftButton:
             self.drag_point = widget.select(event.localPos())
+            logging.debug(f'{self} Mouse click, self.pos: {self.pos}')
             if self.drag_point is not None:
                 self.old_pos = self.drag_point.coord
+                self.pos = self.drag_point.coord
                 self.timer.start()
 
         if event.type() == QtCore.QEvent.MouseMove and event.buttons() == QtCore.Qt.LeftButton:
             if self.timer.run():
                 self.timer.stop()
             if event.modifiers() == QtCore.Qt.NoModifier and self.timer.time() > self.tol:
+                logging.debug(f'{self} Mouse move, self.pos: {self.pos}')
                 if self.drag_point is not None:
                     self.pos = np.array([((event.localPos().x() / self.widget.width()) * 2 - 1),
                                                       ((event.localPos().y() / self.widget.height()) * (-2) + 1) / (
@@ -1130,6 +1133,7 @@ class Drag(aDrawWidgetEvent):
                     self.drag_point.coord = self.pos
 
         if event.type() == QtCore.QEvent.MouseButtonRelease:
+            logging.debug(f'{self} Mouse release, self.pos: {self.pos}')
             if self.drag_point is not None:
                 com = DragCommand()
                 com.apply(self.drag_point.create_command, self.old_pos, self.pos)
@@ -1144,6 +1148,8 @@ class Drag(aDrawWidgetEvent):
         self.drag_point = None
         self.old_pos = None
         self.pos = None
+        self.timer.stop()
+        logging.debug(f'{self} Drag detach, self.pos: {self.pos}')
 
 
 class HighLight(aDrawWidgetEvent):
