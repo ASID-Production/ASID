@@ -104,7 +104,7 @@ def get_files(args):
                 files.append(arg)
             else:
                 # we get a list of cif files in the directory
-                all_files = os.listdir(arg)
+                all_files = sorted(os.listdir(arg))
                 for file in all_files:
                     if file.endswith('.cif'):
                         files.append(os.path.join(arg, file))

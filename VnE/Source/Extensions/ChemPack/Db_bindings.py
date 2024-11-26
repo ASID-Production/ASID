@@ -26,15 +26,16 @@
 #
 # ******************************************************************************************
 
-
+import sys
 import requests
 import json
-from PySide6.QtWidgets import QDialog, QLabel, QVBoxLayout
+from PySide6.QtWidgets import QDialog, QLabel, QVBoxLayout, QTextEdit
 from PySide6.QtCore import QProcess
 import os.path as opath
 import os
 import base64
 import atexit
+import subprocess
 
 import debug
 
@@ -49,13 +50,16 @@ requests.packages.urllib3.util.connection.HAS_IPV6 = False
 
 class ErrorDialog(QDialog):
 
-    def __init__(self, label, title='Error'):
+    def __init__(self, error, title='Error'):
         QDialog.__init__(self)
         self.setWindowTitle(title)
-        self.label = QLabel(label)
+        text = [f'{x}: {str(y)}' for x, y in error.items()]
+        text = '\n'.join(text)
+        self.label = QTextEdit(text)
         self.vblayout = QVBoxLayout()
         self.vblayout.addWidget(self.label)
         self.setLayout(self.vblayout)
+        self.finished.connect(lambda x: SESSION.deleteErrorDialog(self))
 
 
 class Session:
@@ -66,6 +70,7 @@ class Session:
         self.usr_pass = None
         self.ready = False
         self.last_connect_start_op = lambda: True
+        self.error_dialog = []
 
     def connectServer(self, address, port):
         self.last_connect_start_op = lambda: self.connectServer(address, port)
@@ -82,23 +87,39 @@ class Session:
             if self.url_base is not None:
                 self.usr_login, self.usr_pass = name, passwd
                 b = requests.post(f'{self.url_base}/api/auth/users/', data={
-                    "email": "user@example.com",
+                    "email": f"{self.usr_login}@example.com",
                     "username": f"{name}",
                     "first_name": "none",
                     "last_name": "none",
                     "password": f"{passwd}"
                 })
+                sh = b.ok
+                if not b.ok:
+                    error = json.loads(b.text)
+                    try:
+                        err = error['username']
+                        if 'A user with that username already exists.' in err:
+                            sh = True
+                    except KeyError:
+                        pass
+                if not sh:
+                    SESSION.error_dialog.append(ErrorDialog(error))
+                    SESSION.error_dialog[-1].show()
                 token = requests.post(f'{self.url_base}/api/auth/token/login/', data={
                     "username": f"{name}",
                     "password": f"{passwd}"
                 })
+                if not token.ok:
+                    error = json.loads(token.text)
+                    SESSION.error_dialog.append(ErrorDialog(error))
+                    SESSION.error_dialog[-1].show()
+                    return
                 self.user_token = json.loads(token.text)['auth_token']
 
     def startServer(self, port):
         global SERVER_PROC
         self.last_connect_start_op = lambda: self.startServer(port)
         if SERVER_PROC is None:
-            import subprocess
             root = opath.normpath(f'{opath.dirname(__file__)}/../../../..')
             path = opath.normpath(f'{root}/api_database/django_project/manage.py')
             if os.name == 'nt':
@@ -133,6 +154,8 @@ class Session:
     def triggerLastConnectOp(self):
         self.last_connect_start_op()
 
+    def deleteErrorDialog(self, dialog):
+        self.error_dialog.remove(dialog)
 
 SESSION: Session
 
@@ -182,6 +205,11 @@ def get_full_info(id, db_type='cryst'):
         data = requests.get(f'{SESSION.url_base}/{url_mod}/{id}', headers=headers)
     else:
         data = requests.get(f'{SESSION.url_base}/{url_mod}/{id}')
+    if not data.ok:
+        error = json.loads(data.text)
+        SESSION.error_dialog.append(ErrorDialog(error))
+        SESSION.error_dialog[-1].show()
+        return {}
     data = data.content.decode(data.apparent_encoding)
     data_out = json.loads(data)
     return data_out
@@ -190,7 +218,7 @@ def get_full_info(id, db_type='cryst'):
 def get_image_temp(id, db_type='cryst', w=250, h=250):
     root = opath.normpath(f'{opath.dirname(__file__)}/../../..')
     path = opath.join(root, 'temp')
-    o_file = opath.join(path, f'{id}.gif')
+    o_file = opath.join(path, f'{id}.svg')
     return get_image(id, o_file, db_type, w, h)
 
 
@@ -200,23 +228,28 @@ def get_image(id, o_file_path, db_type='cryst', w=250, h=250):
     url_mod = url_mods.get(db_type, 'api/v1/structures')
     if SESSION.user_token is not None:
         headers = {'Authorization': f'Token {SESSION.user_token}'}
-        data = requests.get(f'{SESSION.url_base}/{url_mod}/{id}/export/2d/?h={h}&w={w}&file=0&f=img', headers=headers)
+        data = requests.get(f'{SESSION.url_base}/{url_mod}/{id}/export/2d/?h={h}&w={w}&file=0&f=svg', headers=headers)
     else:
-        data = requests.get(f'{SESSION.url_base}/{url_mod}/{id}/export/2d/?h={h}&w={w}&file=0&f=img')
+        data = requests.get(f'{SESSION.url_base}/{url_mod}/{id}/export/2d/?h={h}&w={w}&file=0&f=svg')
+    if not data.ok:
+        error = json.loads(data.text)
+        SESSION.error_dialog.append(ErrorDialog(error))
+        SESSION.error_dialog[-1].show()
+        return None
     data = data.content.decode(data.apparent_encoding)
     if data == '0':
         return None
-    image_str = data.split(',')[1]
-    image_data = base64.b64decode(image_str)
+    image_str = data
+    image_data = image_str
     path = o_file_path
-    image = open(path, 'wb')
+    image = open(path, 'w')
     image.write(image_data)
     image.close()
     return o_file_path
 
 
 def getImageFromFile(file_path, o_file_path, format='gif', w=250, h=250):
-    formats = ['gif', 'cml']
+    formats = ['gif', 'cml', 'svg']
     if format not in formats:
         format = formats[0]
     url_mod = 'api/v1/generate'
@@ -252,6 +285,11 @@ def getCif(id, db_type='cryst'):
         data = requests.get(f'{SESSION.url_base}/{url_mod}/{id}/export/cif')
     else:
         data = requests.get(f'{SESSION.url_base}/{url_mod}/{id}/download/')
+    if not data.ok:
+        error = json.loads(data.text)
+        SESSION.error_dialog.append(ErrorDialog(error))
+        SESSION.error_dialog[-1].show()
+        return b''
     return data.content
 
 
@@ -279,14 +317,11 @@ def uploadFile(file, ext):
             resp = method(files, headers)
             if not resp.ok:
                 error = json.loads(resp.text)
-                SESSION.error_dialog = ErrorDialog(error['errors'])
-                SESSION.error_dialog.show()
-            else:
-                dialog = ErrorDialog('Successful', 'Info')
-                dialog.show()
+                SESSION.error_dialog.append(ErrorDialog(error))
+                SESSION.error_dialog[-1].show()
         else:
             SESSION.error_dialog = ErrorDialog('Unsupported file format')
-            SESSION.error_dialog.show()
+            SESSION.error_dialog[-1].show()
 
 
 def structureSearch(struct, url_mod, process=None, db_string=''):
@@ -361,6 +396,10 @@ def deleteEntry(id, db_type='cryst'):
         data = requests.request('DELETE', f'{SESSION.url_base}/{url_mod}/{id}/', headers=headers)
     else:
         data = requests.request('DELETE', f'{SESSION.url_base}/{url_mod}/{id}')
+    if not data.ok:
+        error = json.loads(data.text)
+        SESSION.error_dialog.append(ErrorDialog(error))
+        SESSION.error_dialog[-1].show()
 
 
 def setup():
@@ -368,11 +407,37 @@ def setup():
     SESSION = Session()
     return
 
+
 def term():
+    global SERVER_PROC
     if SERVER_PROC:
-        import signal
-        SERVER_PROC.send_signal(signal.CTRL_BREAK_EVENT)
-        SERVER_PROC.terminate()
+        if os.name == 'nt':
+            from signal import CTRL_BREAK_EVENT
+            ret = subprocess.Popen('netstat -ano | findstr 127.0.0.1:8000', shell=True, stdout=subprocess.PIPE).stdout.read()
+            ret = ret.decode()
+            procs = ret.split('\n')
+            pids = [int(x.split(' ')[-1]) for x in procs if x]
+            for pid in pids:
+                try:
+                    os.kill(pid, CTRL_BREAK_EVENT)
+                except SystemError as e:
+                    pass
+            SERVER_PROC = None
+            sys.exit()
+        if os.name == 'posix':
+            from signal import SIGTERM
+            from signal import CTRL_BREAK_EVENT
+            ret = subprocess.Popen('ps ax | grep runserver', shell=True, stdout=subprocess.PIPE).stdout.read()
+            ret = ret.decode()
+            procs = ret.split('\n')
+            pids = [int(x.split(' ')[0]) for x in procs if x]
+            for pid in pids:
+                try:
+                    os.kill(pid, SIGTERM)
+                except SystemError as e:
+                    pass
+            SERVER_PROC = None
+            sys.exit()
 
 if SETUP is False:
     atexit.register(term)

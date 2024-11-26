@@ -27,7 +27,7 @@
 # ******************************************************************************************
 import os.path
 
-from PySide6 import QtWidgets, QtGui
+from PySide6 import QtWidgets, QtGui, QtSvg
 from PySide6.QtCore import *
 from . import Db_bindings
 import typing
@@ -335,8 +335,11 @@ class InfoTableModel(QAbstractTableModel):
         else:
             if index.row() == 0 and index.column() == 1 and role == Qt.ItemDataRole.DecorationRole:
                 if self._image is not None:
-                    image = QtGui.QImage(self._image)
-                    pixmap = QtGui.QPixmap.fromImage(image)
+                    renderer = QtSvg.QSvgRenderer(self._image)
+                    pixmap = QtGui.QPixmap(250, 250)
+                    pixmap.fill(QtGui.QColorConstants.Red)
+                    painter = QtGui.QPainter(pixmap)
+                    renderer.render(painter, pixmap.rect())
                     return pixmap
 
     def headerData(self, section: int, orientation: Qt.Orientation, role: int = ...) -> typing.Any:
@@ -567,7 +570,7 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
         data = self.table_model.selected()
         if data is None:
             return
-        id = data['id']
+        id = data.get('refcode', data['id'])
         db_type = self.search_dialog.getSearchDb()
         cif = Db_bindings.getCif(id, db_type)
         filename = opath.normpath(f'{opath.dirname(__file__)}/../../../temp/{id}.cif')
@@ -643,7 +646,7 @@ def exportGif(file=None):
             self.accepted.connect(self.exportImg)
 
         def setFile(self):
-            filename, _ = QtWidgets.QFileDialog.getSaveFileName(filter='*.gif *.cml')
+            filename, _ = QtWidgets.QFileDialog.getSaveFileName(filter='*.gif *.cml *.svg')
             self.lineEd.setText(filename)
 
         def valRes(self, text):

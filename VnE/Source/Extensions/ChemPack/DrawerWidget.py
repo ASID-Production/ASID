@@ -43,6 +43,7 @@ from ...Facade import RenderFacade
 from ...Scenes import Scene
 from ...UniformBuffers import SceneUniformBuffer
 from ... import Observers
+import logging
 
 import debug
 
@@ -570,6 +571,7 @@ class DragCommand(Command):
 
     def apply(self, cc_point, old_pos, pos, *args, **kwargs):
         Command.apply(self)
+        logging.debug(f'Applied {self}, atom: {cc_point.point.label}')
         self.apply = lambda *args, **kwargs: self.payload(cc_point, pos, *args, **kwargs)
         self.apply()
         self.cc_point = cc_point
@@ -614,6 +616,7 @@ class CreateAtomCommand(Command):
         self.kwargs = kwargs
         self.apply = lambda *args, **kwargs: self.payload(*args,  create_command=self, **self.kwargs)
         self.apply()
+        logging.debug(f'Applied {self}, atom: {self.point.label}')
         return self.point
 
     def undo(self):
@@ -643,6 +646,7 @@ class DeleteAtomCommand(Command):
     def apply(self, cc_point, *args, **kwargs):
         Command.apply(self)
         point = cc_point.point
+        logging.debug(f'Applied {self}, atom: {point.label}')
         self.kwargs = {'coord': point.coord.copy(),
                        'label': ''.join([x for x in point.label if x.isalpha()]),
                        'id': point.id,
@@ -681,6 +685,7 @@ class CreateBondCommand(Command):
         Command.apply(self)
         self.cc_point1 = cc_point1
         self.cc_point2 = cc_point2
+        logging.debug(f'Applied {self}, atoms: {self.cc_point1.point.label}, {self.cc_point2.point.label}')
         self.apply = lambda *args, **kwargs: self.payload(cc_point1, cc_point2)
         self.apply()
 
@@ -709,6 +714,7 @@ class DeleteBondCommand(Command):
         Command.apply(self)
         self.cc_point1 = cc_point1
         self.cc_point2 = cc_point2
+        logging.debug(f'Applied {self}, atoms: {self.cc_point1.point.label}, {self.cc_point2.point.label}')
         self.apply = lambda *args, **kwargs: self.payload(cc_point1, cc_point2)
         self.apply()
 
@@ -739,6 +745,7 @@ class ChangeTypeCommand(Command):
         self.old_type = cc_point.point.atom_type
         self.old_label = cc_point.point.label
         self.old_color = cc_point.point.color
+        logging.debug(f'Applied {self}, atoms: {self.cc_point.point.label}')
         self.apply = lambda *args, **kwargs: self.payload(self.cc_point, atom_type, label, color)
         self.apply()
 
@@ -756,6 +763,7 @@ class CompositeCommand(Command):
 
     def apply(self, *args, **kwargs):
         Command.apply(self)
+        logging.debug(f'Applied {self}')
         for command in self.commands:
             if command.applied:
                 command.apply()
@@ -774,6 +782,7 @@ class ReverseCompositeCommand(Command):
 
     def apply(self, *args, **kwargs):
         Command.apply(self)
+        logging.debug(f'Applied {self}')
         for command in self.commands[::-1]:
             if command.applied:
                 command.undo()
@@ -1105,14 +1114,17 @@ class Drag(aDrawWidgetEvent):
     def assertEvent(self, event: QtCore.QEvent, widget):
         if event.type() == QtCore.QEvent.MouseButtonPress and event.buttons() == QtCore.Qt.LeftButton:
             self.drag_point = widget.select(event.localPos())
+            logging.debug(f'{self} Mouse click, self.pos: {self.pos}')
             if self.drag_point is not None:
                 self.old_pos = self.drag_point.coord
+                self.pos = self.drag_point.coord
                 self.timer.start()
 
         if event.type() == QtCore.QEvent.MouseMove and event.buttons() == QtCore.Qt.LeftButton:
             if self.timer.run():
                 self.timer.stop()
             if event.modifiers() == QtCore.Qt.NoModifier and self.timer.time() > self.tol:
+                logging.debug(f'{self} Mouse move, self.pos: {self.pos}')
                 if self.drag_point is not None:
                     self.pos = np.array([((event.localPos().x() / self.widget.width()) * 2 - 1),
                                                       ((event.localPos().y() / self.widget.height()) * (-2) + 1) / (
@@ -1121,6 +1133,7 @@ class Drag(aDrawWidgetEvent):
                     self.drag_point.coord = self.pos
 
         if event.type() == QtCore.QEvent.MouseButtonRelease:
+            logging.debug(f'{self} Mouse release, self.pos: {self.pos}')
             if self.drag_point is not None:
                 com = DragCommand()
                 com.apply(self.drag_point.create_command, self.old_pos, self.pos)
@@ -1135,6 +1148,8 @@ class Drag(aDrawWidgetEvent):
         self.drag_point = None
         self.old_pos = None
         self.pos = None
+        self.timer.stop()
+        logging.debug(f'{self} Drag detach, self.pos: {self.pos}')
 
 
 class HighLight(aDrawWidgetEvent):
@@ -1279,6 +1294,7 @@ class Draw(aDrawWidgetEvent):
                 self.create_atom2_command = None
                 self.create_bond_command = None
                 self.change_type_command = None
+                self.drag_command = None
 
     def setType(self, atom_type):
         if type(atom_type) is list:
@@ -1705,12 +1721,8 @@ class DrawerGL(QOpenGLWidget):
         return super().eventFilter(obj, event)
 
     def clearDraw(self):
-        commands = []
-        for com in Command.stack:
-            commands.append(com)
-        com = ReverseCompositeCommand(*commands)
-        com.apply()
-        com.appendStack(com)
+        while len(Command.stack) != 0:
+            Command.popStack()
 
 
 from .ui import Drawer_model_ui

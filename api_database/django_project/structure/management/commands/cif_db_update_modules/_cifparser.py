@@ -29,6 +29,7 @@
 from structure.models import StructureCode, CoordinatesBlock, Other, Cell
 from ._element_numbers import element_numbers
 import re
+from typing import Tuple, List
 
 
 def add_coords(cif_block: dict, structure: classmethod):
@@ -81,13 +82,13 @@ def add_cell_parms_with_error(cif_block, structure: classmethod):
     return 0
 
 
-def get_coords(cif_block) -> str:
+def get_coords(cif_block) -> Tuple[str, List]:
     atomic_sites = ''
     atoms = []
     coords = cif_block[1].GetLoop('_atom_site_label')
     order: list = coords.GetItemOrder()
     idxs = {
-        'lable': order.index('_atom_site_label'),
+        'label': order.index('_atom_site_label'),
         'atom_type_idx': '',
         'x_idx': order.index('_atom_site_fract_x'),
         'y_idx': order.index('_atom_site_fract_y'),
@@ -102,11 +103,11 @@ def get_coords(cif_block) -> str:
             idxs['occup'] = 1
         idxs['b_iso'] = order.index('_atom_site_b_iso_or_equiv')
     for site in coords:
-        atoms.append(site[idxs['lable']])
+        atoms.append(site[idxs['label']])
         temp = list()
         for key, value in idxs.items():
             if not value and key == 'atom_type_idx':
-                value = re.findall(r'(^[a-zA-Z]{1,3})', site[idxs['lable']])
+                value = re.findall(r'(^[a-zA-Z]{1,3})', site[idxs['label']])
                 if value:
                     value = value[0]
                     temp.append(value)

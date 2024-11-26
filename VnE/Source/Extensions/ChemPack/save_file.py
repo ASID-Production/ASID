@@ -79,8 +79,75 @@ class SaveFile:
         out.close()
         return
 
+    def save_cif(self, molecule, filename):
+        from pymatgen.core import Structure
+        from pymatgen.io import cif
+        import numpy as np
+        from .MoleculeClass import DefaultData
+
+        def cell_to_vec(cell):
+
+            a, b, c, al, be, ga = cell
+            cos = lambda x: np.cos(x/180*np.pi)
+            sin = lambda x: np.sin(x/180*np.pi)
+            tg = lambda x: np.tan(x/180*np.pi)
+            cot = lambda x: 1/np.tan(x/180*np.pi)
+            csc = lambda x: 1/np.sin(x/180*np.pi)
+
+            mat = np.array([[a*sin(be)*np.sqrt(1-(cot(al)*cot(be)-csc(al)*csc(be)*cos(ga))**2), 0, 0],
+                            [a*csc(al)*cos(ga)-a*cot(al)*cos(be), b*sin(al), 0],
+                            [a*cos(be), b*cos(al), c]])
+            return mat
+
+        mol = molecule
+        while not isinstance(mol.children[0], MoleculeClass.Atom):
+            mol = molecule.children[0]
+
+        atm = mol.children[0]
+        cell_st = [DefaultData.__getattr__(DefaultData, 'cif_cell_a'),
+                   DefaultData.__getattr__(DefaultData, 'cif_cell_b'),
+                   DefaultData.__getattr__(DefaultData, 'cif_cell_c'),
+                   DefaultData.__getattr__(DefaultData, 'cif_cell_al'),
+                   DefaultData.__getattr__(DefaultData, 'cif_cell_be'),
+                   DefaultData.__getattr__(DefaultData, 'cif_cell_ga')]
+        cell = [atm.cif_cell_a, atm.cif_cell_b, atm.cif_cell_c,
+                atm.cif_cell_al, atm.cif_cell_be, atm.cif_cell_ga]
+        coords = np.array([x.coord.copy() for x in mol])
+        sym_codes =atm.cif_sym_codes
+        exclude = ['x+1,y,z',
+                   'x-1,y,z',
+                   'x,y+1,z',
+                   'x,y-1,z',
+                   'x,y,z+1',
+                   'x,y,z-1']
+        sym_codes = [x for x in atm.cif_sym_codes if x[1] not in exclude]
+        space_group = atm.cif_space_group
+        if cell == cell_st:
+            minimum = np.array([min([x[i] for x in coords]) for i in range(3)])
+            coords -= minimum
+            maximum = np.array([max([x[i] for x in coords]) for i in range(3)])
+            cell[0] = maximum[0] + 6
+            cell[1] = maximum[1] + 6
+            cell[2] = maximum[2] + 6
+            coords += 3
+
+        lattice = cell_to_vec(cell)
+        species = [x.atom_type for x in mol]
+        coords = coords@np.linalg.inv(lattice)
+        labels = [x.name for x in mol]
+        struct = Structure(lattice, species, coords, to_unit_cell=False, coords_are_cartesian=False, labels=labels)
+        writer = cif.CifWriter(struct)
+        cif_file = writer.cif_file.data
+        f_mol = list(cif_file.keys())[0]
+        data = cif_file[f_mol].data
+        data['_symmetry_space_group_name_H-M'] = space_group
+        data['_symmetry_equiv_pos_site_id'] = [str(x[0]) for x in sym_codes]
+        data['_symmetry_equiv_pos_as_xyz'] = [x[1] for x in sym_codes]
+        writer.write_file(filename)
+
     __formats = {'pdb': save_pdb,
                  'xyz': save_xyz,
+                 'cif': save_cif,
                  }
 
 

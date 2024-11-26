@@ -69,24 +69,25 @@ namespace cpplib {
 
 		// Input and Data should be ready
 		inline void prepareToSearch() {
+			this->prepareHAtoms();
 			comp_.assign(inputSize_, 0);
 			log_.clear();
 			usedInComp_.assign(dataSize_, false);
 		}
 		bool searchTry(AtomIndex startI, AtomIndex startD, bool exact) {
 			addComp(startI, startD);
-			try {
+			bool result;
 				if (input_[startI].hasNeighbours()) {
-					recursiveSearchHasNeighbours(startI, exact);
+					result = recursiveSearchHasNeighbours(startI, exact);
 				}
 				else {
-					recursiveSearchNoNeighbours(exact);
+					result = recursiveSearchNoNeighbours(exact);
 				}
-			}
-			catch (bool) {
+			
+			if(result)
 				return true;
-			}
-			deleteComp(startI);
+			else
+				deleteComp(startI);
 			return false;
 		}
 		// destroys all data, need reinitialization!
@@ -134,6 +135,51 @@ namespace cpplib {
 				return inputNode.notExactCompare(dataNode);
 			}
 		}
+
+		void prepareHAtoms() {
+
+			currents::TypeBitset bits;
+
+			for (AtomIndex i = 1; i < inputSize_; i++)
+			{
+				if (input_[i].getType().include(currents::AtomTypeData(1))) {
+					for (AtomIndex j = 0; j < input_[i].neighboursSize(); j++)
+					{
+						auto nei = input_[i].getNeighbour(j);
+						bits |= nei->getType().get_bitset();
+					}
+				}
+			}
+			for (AtomIndex i = 1; i < dataSize_; i++)
+			{
+				if (data_[i].getType() == currents::AtomTypeData(1)) {
+					for (AtomIndex j = 0; j < data_[i].neighboursSize(); j++)
+					{
+						auto nei = data_[i].getNeighbour(j);
+						bits[nei->getType()]= true;
+					}
+				}
+			}
+
+			for (AtomIndex i = 1; i < inputSize_; i++)
+			{
+				if ((input_[i].getType().get_bitset() & bits).any()) {
+					input_.unpackHydrogens(i);
+				}
+			}
+			input_.sortGraph();
+			for (AtomIndex i = 1; i < dataSize_; i++)
+			{
+				if (bits[data_[i].getType()]) {
+					data_.unpackHydrogens(i);
+
+				}
+			}
+			//data_.sortGraph();
+			inputSize_ = input_.size();
+			dataSize_ = data_.size();
+		}
+
 
 		// Search functions
 		inline void addLog(const AtomIndex i1, const AtomIndex i2, const AtomIndex d1, const AtomIndex d2) {
@@ -215,20 +261,28 @@ namespace cpplib {
 			}
 			return true;
 		}
-		void recursiveSearchNoNeighbours(const bool exact) {
+		bool recursiveSearchNoNeighbours(const bool exact) {
 			// Find visited atom with neighbours;
 			AtomIndex nextI = findAtomWithNeighbours();
-			// If failed - search completed
+			// If failed - search completed or there is atom without neighbours
 			if (nextI == 0) {
 				bool completed = FinalComparision(exact);
 				if (completed)
-					throw true;
+					return true;
+				else {
+					for (size_t i = 1; i < inputSize_; i++)
+					{
+						if (comp_[i] == 0) {
+							nextI = i;
+							break;
+						}
+					}
+				}
 			}
 
 			// nextI is an atom with neighbours
 			if (comp_[nextI] != 0) {
-				recursiveSearchHasNeighbours(nextI, exact);
-				return;
+				return recursiveSearchHasNeighbours(nextI, exact);
 			}
 			// need to find Twin for nextI
 			for (AtomIndex i = 1; i < dataSize_; i++) {
@@ -236,16 +290,20 @@ namespace cpplib {
 					continue;
 
 				addComp(nextI, i);
+				bool result;
 				if (input_[nextI].hasNeighbours()) {
-					recursiveSearchHasNeighbours(nextI, exact);
+					result = recursiveSearchHasNeighbours(nextI, exact);
 				}
 				else {
-					recursiveSearchNoNeighbours(exact);
+					result = recursiveSearchNoNeighbours(exact);
 				}
+				if (result) return true;
 				deleteComp(nextI);
 			}
+			return false;
 		}
-		void recursiveSearchHasNeighbours(const AtomIndex curI, const bool exact) {
+		bool recursiveSearchHasNeighbours(const AtomIndex curI, const bool exact) {
+			_ASSERT(data_[1].getID() == 1);
 			// Ring check
 			const AtomIndex neiSize = input_[curI].neighboursSize();
 			const AtomIndex curD = comp_[curI];
@@ -256,15 +314,17 @@ namespace cpplib {
 					continue;
 				if (data_[curD].isNeighbour(data_[comp_[neiID]])) {
 					prepareLogAndNodes(curI, neiID);
+					bool result;
 					if (input_[curI].hasNeighbours()) {
-						recursiveSearchHasNeighbours(curI, exact);
+						result = recursiveSearchHasNeighbours(curI, exact);
 					}
 					else {
-						recursiveSearchNoNeighbours(exact);
+						result = recursiveSearchNoNeighbours(exact);
 					}
+					if (result) return true;
 					reverseLogAndNodes(curI, neiID);
 				}
-				return;
+				return false;
 			}
 
 			// Check neighbours
@@ -279,15 +339,18 @@ namespace cpplib {
 					continue;
 				addComp(nextI, neiID);
 				prepareLogAndNodes(curI, nextI);
+				bool result;
 				if (input_[nextI].hasNeighbours()) {
-					recursiveSearchHasNeighbours(nextI, exact);
+					result = recursiveSearchHasNeighbours(nextI, exact);
 				}
 				else {
-					recursiveSearchNoNeighbours(exact);
+					result = recursiveSearchNoNeighbours(exact);
 				}
+				if (result) return true;
 				reverseLogAndNodes(curI, nextI);
 				deleteComp(nextI);
 			}
+			return false;
 		}
 	};
 }

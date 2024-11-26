@@ -620,7 +620,7 @@ namespace cpplib {
 						continue;
 					}
 					else {
-						bonds.emplace_back(low_pos, res.size());
+						bonds.emplace_back(low_pos, static_cast<AtomIndex>(res.size()));
 					}
 					res.emplace_back(cur_id);
 				}

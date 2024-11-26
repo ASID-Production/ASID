@@ -98,14 +98,15 @@ class FileParser:
 
         ret = self.parsMolSys(mol_sys, bond, root)
 
-        mol_list = ret[1][0]
-        if mol_list.additional_context_actions is None:
-            mol_list.addProperty('additional_context_actions',
-                                 [('Export 2d diagram', lambda: Db_viewer.exportGif(file=mol_sys.file_name))],
-                                 observed=False)
-        else:
-            mol_list.additional_context_actions.append(
-                ('Export 2d diagram', lambda: Db_viewer.exportGif(file=mol_sys.file_name)))
+        if root:
+            mol_list = ret[1][0]
+            if mol_list.additional_context_actions is None:
+                mol_list.addProperty('additional_context_actions',
+                                     [('Export 2d diagram', lambda: Db_viewer.exportGif(file=mol_sys.file_name))],
+                                     observed=False)
+            else:
+                mol_list.additional_context_actions.append(
+                    ('Export 2d diagram', lambda: Db_viewer.exportGif(file=mol_sys.file_name)))
 
         return ret
 
@@ -309,9 +310,7 @@ class FileParser:
             sym_codes = block.find(['_symmetry_equiv_pos_as_xyz'])
             if not sym_codes:
                 sym_codes = block.find(['_space_group_symop_operation_xyz'])
-                sym_codes = [[i, x[0][1:-1]] for i, x in enumerate(sym_codes)]
-            else:
-                sym_codes = [[i, x[0]] for i, x in enumerate(sym_codes)]
+            sym_codes = [[i, x[0][1:-1]] if '"' in x or "'" in x else [i, x[0]] for i, x in enumerate(sym_codes)]
             num = sym_codes[-1][0] + 1
             added = [
                      [num, 'x+1,y,z'],
@@ -326,6 +325,12 @@ class FileParser:
             cell = block.find(['_cell_length_a', '_cell_length_b', '_cell_length_c', '_cell_angle_alpha', '_cell_angle_beta', '_cell_angle_gamma'])[0]
             cell = [float(cell[x][:cell[x].find('(')]) if cell[x].find('(') != -1 else float(cell[x]) for x in range(len(cell))]
 
+            space_group = block.find(['_symmetry_space_group_name_H-M'])
+            if not space_group:
+                space_group = block.find(['_space_group_name_H-M_alt'])[0][0]
+            else:
+                space_group = space_group[0][0]
+
             atoms = block.find(['_atom_site_label', '_atom_site_type_symbol', '_atom_site_fract_x', '_atom_site_fract_y', '_atom_site_fract_z'])
             atoms = [[x[i] if i < 2 else float(x[i]) if x[i].find('(') == -1 else float(x[i][:x[i].find('(')]) for i in range(len(x))] for x in atoms]
             for atm in atoms:
@@ -337,7 +342,8 @@ class FileParser:
             args.append(coords)
             dec_coords = self.fracToDec(*args)
             for i, atom in enumerate(atoms):
-                cif_data = {'cif_sym_codes': sym_codes,
+                cif_data = {'cif_space_group': space_group,
+                            'cif_sym_codes': sym_codes,
                             'cif_cell_a': cell[0],
                             'cif_cell_b': cell[1],
                             'cif_cell_c': cell[2],
@@ -445,10 +451,11 @@ class FileParser:
                 i += 1
             if bond:
                 bonds_l = point_class.PointsList(parent=mol_list, rad=0.1, name='Bonds')
-                bonds = []
+                bond_atm = []
                 for atom in mol:
                     for bond in atom.bonds():
-                        if bond not in bonds:
+                        atm = bond.get(atom)
+                        if atm not in bond_atm:
                             bond_l = point_class.PointsList(parent=bonds_l, name=f'{bond.parents()[0].point().name}_{bond.parents()[1].point().name}', rad=bonds_l)
                             b1 = point_class.Point(coord=bond.parents()[0].point(), color=bond.parents()[0].point(),
                                                    rad=bond_l,
@@ -456,7 +463,7 @@ class FileParser:
                             b2 = point_class.Point(coord=bond.parents()[1].point(), color=bond.parents()[1].point(),
                                                    rad=bond_l,
                                                    parent=bond_l)
-                            bonds.append(bond)
+                    bond_atm.append(atom)
         return mol_sys, (mol_list, atom_list, bonds_l)
 
     def parsDict(self, dict, root=None, point_func=None, name='None', *args, **kwargs):
@@ -588,23 +595,23 @@ class FileParser:
                     prop_d['conn'] = conn
                     line = file.__next__()
                     data = [x for x in line[:-1].split(' ') if x]
-                    prop_d['rho'] = float(data[2])
-                    prop_d['lambda_1'] = float(data[6])
+                    prop_d['\u03C1(r)'] = float(data[2])
+                    prop_d['\u2207\u2081\u00B2(r)'] = float(data[6])
                     line = file.__next__()
                     data = [x for x in line[:-1].split(' ') if x]
-                    prop_d['d2rho'] = float(data[2])
-                    prop_d['lambda_2'] = float(data[6])
+                    prop_d['\u0394\u00B2\u03C1(r)'] = float(data[2])
+                    prop_d['\u2207\u2082\u00B2(r)'] = float(data[6])
                     line = file.__next__()
                     data = [x for x in line[:-1].split(' ') if x]
-                    prop_d['g'] = float(data[2])
-                    prop_d['lambda_3'] = float(data[6])
+                    prop_d['G(r)'] = float(data[2])
+                    prop_d['\u2207\u2083\u00B2(r)'] = float(data[6])
                     line = file.__next__()
                     data = [x for x in line[:-1].split(' ') if x]
-                    prop_d['v'] = float(data[2])
+                    prop_d['V(r)'] = float(data[2])
                     prop_d['ellipticity'] = float(data[6])
                     line = file.__next__()
                     data = [x for x in line[:-1].split(' ') if x]
-                    prop_d['h'] = float(data[2])
+                    prop_d['H(r)'] = float(data[2])
                     cp = MoleculeClass.Atom(coords, types.get(type, 999), **prop_d)
                     cps.append(cp)
                     line = file.__next__()
@@ -676,6 +683,16 @@ class FileParser:
         yield mol_sys, list_tuple
 
         def cppCreation(atom_list, atom):
+            props = ['\u03C1(r)',
+            '\u2207\u2081\u00B2(r)',
+            '\u0394\u00B2\u03C1(r)',
+            '\u2207\u2082\u00B2(r)',
+            'G(r)',
+            '\u2207\u2083\u00B2(r)',
+            'V(r)',
+            'ellipticity',
+            'H(r)']
+            props = {p: getattr(atom, p) for p in props}
             coord = atom.coord.copy()
             point = point_class.Point(parent=atom_list, coord=coord, rad=atom_list,
                                       color=PALETTE.point_dict[PALETTE.getName(atom.atom_type)],
@@ -683,15 +700,7 @@ class FileParser:
                                       name=atom.name,
                                       connectivity=atom.conn,
                                       label=atom.name,
-                                      rho=atom.rho,
-                                      d2rho=atom.d2rho,
-                                      g=atom.g,
-                                      v=atom.v,
-                                      h=atom.h,
-                                      lambda_1=atom.lambda_1,
-                                      lambda_2=atom.lambda_2,
-                                      lambda_3=atom.lambda_3,
-                                      ellipticity=atom.ellipticity)
+                                      **props)
             return point
 
         cps_sys, list_tuple = self.parsMolSys(cps_sys, False, root, point_func=cppCreation)
@@ -955,7 +964,6 @@ class FileParser:
     def parsPOSCAR_CONTCAR(self, file_path, bond=False, root=None, *args, **kwargs):
         from pymatgen.core import Structure
 
-
         def pymatgenStructureToMolSys(struct):
             mol_sys = MoleculeClass.MoleculeSystem()
             mol_sys.name = os.path.basename(file_path).split('.')[0]
@@ -987,15 +995,6 @@ class FileParser:
                 atom = MoleculeClass.Atom(coord, type, parent=mol, name=names[i], **add_data)
             return mol_sys
 
-        def savePOSCAR_ToCif(molsys):
-            from pymatgen.io.cif import CifWriter
-            from PySide6 import QtWidgets
-            file = molsys.file_name
-            filename, _ = QtWidgets.QFileDialog.getSaveFileName(None, 'POSCAR to cif', filter='*.cif, *')
-            w = CifWriter(Structure.from_file(file))
-            w.write_file(filename)
-
-
         struct = Structure.from_file(file_path)
         mol_sys = pymatgenStructureToMolSys(struct)
         ret = self.parsMolSys(mol_sys, bond, root)
@@ -1010,14 +1009,7 @@ class FileParser:
                        [1, 1, 1]]
         cell_dec_coords = self.fracToDec(*args, cell_coords)
         self.createCellList(ret[1][0], cell_dec_coords)
-        a = 0
-
         mol_list = ret[1][0]
-        if mol_list.additional_context_actions is None:
-            mol_list.addProperty('additional_context_actions', [('Save to cif', lambda: savePOSCAR_ToCif(mol_sys))], observed=False)
-        else:
-            mol_list.additional_context_action.append([('Save to cif', lambda: savePOSCAR_ToCif(mol_sys))])
-        a = 0
         return ret
 
     @staticmethod

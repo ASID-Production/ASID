@@ -33,6 +33,7 @@ from typing import List, Tuple, Dict
 from collections import defaultdict
 import multiprocessing
 import time
+from rdkit import RDLogger
 
 METAL_IONS = {
     'Li': 1,
@@ -92,6 +93,10 @@ def define_connect_from_graph(mol: Chem.Mol, bonds: List[Tuple]) -> Chem.Mol:
 
 
 def run_process(mol_copy, mol_charge, return_dict):
+    RDLogger.DisableLog('rdApp.*')
+    lg = RDLogger.logger()
+    lg.setLevel(RDLogger.CRITICAL)
+
     return_dict['error'] = ''
     try:
         rdDetermineBonds.DetermineBonds(mol_copy, charge=mol_charge, allowChargedFragments=True)
@@ -400,6 +405,10 @@ def validate_mol(mol: Chem.Mol):
 
 
 def main_v2(xyz_mols, element_numbers: Dict[str, int], types: List[int]):
+    RDLogger.DisableLog('rdApp.*')
+    lg = RDLogger.logger()
+    lg.setLevel(RDLogger.CRITICAL)
+
     structure_charge = 0
     xyz_blocks = []
     # make xyz format block

@@ -58,11 +58,31 @@ def execute(pars):
 
         from pymatgen.io.vasp import Poscar
 
-        filename_conv, _ = QtWidgets.QFileDialog.getSaveFileName(None, 'POSCAR-symm')
+        filename_conv, _ = QtWidgets.QFileDialog.getSaveFileName(None, 'POSCAR symm')
+        sym_codes = []
+        for i, op in enumerate(symm_struct.spacegroup):
+            sym_codes.append([i, op.as_xyz_str()])
+        added_sym_codes = ['x+1,y,z',
+                           'x-1,y,z',
+                           'x,y+1,z',
+                           'x,y-1,z',
+                           'x,y,z+1',
+                           'x,y,z-1']
+        a = i + 1
+        for i, op in enumerate(added_sym_codes):
+            sym_codes.append([a+i, op])
+        cif_data = {'cif_sym_codes': sym_codes,
+                    'cif_space_group': symm_struct.spacegroup.int_symbol}
+
         if filename_conv:
             poscar = Poscar(struct)
             poscar.write_file(filename=filename_conv, significant_figures=16)
-            pars(filename_conv, True)
+            mol_sys, lists_tuple = pars(filename_conv, True)
+            mol = mol_sys.children[0]
+            for atom in mol:
+                for key, val in cif_data.items():
+                    atom.__setattr__(key, val)
+
 
         return filename_conv
 
