@@ -110,7 +110,7 @@ WSGI_APPLICATION = 'django_project.wsgi.application'
 ASGI_APPLICATION = 'myproject.asgi.application'
 
 # Tests
-TEST_RUNNER = 'csd_web.test_runner.UseDBTestRunner'
+TEST_RUNNER = 'django_project.test_runner.UseDBTestRunner'
 
 # Database
 
