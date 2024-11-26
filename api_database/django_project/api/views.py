@@ -127,6 +127,33 @@ async def structure_search_view(request):
     return response
 
 
+def start_SearchMain(template_data, analyse_data_split, partial, iter_num, exact):
+    out_refcode_ids = []
+    for analyse_data in analyse_data_split:
+        # if partial return is needed
+        if partial and iter_num < len(analyse_data_split):
+            analyse_data = analyse_data_split[iter_num]
+        output = cpplib.SearchMain(template_data, list(analyse_data), NUM_OF_PROC, exact)
+        out_refcode_ids.extend(output)
+        # break if partial
+        if partial:
+            return out_refcode_ids
+    return out_refcode_ids
+
+
+def get_queryset_from_ids(out_refcode_ids, structure_code_model):
+    refcodes = structure_code_model.objects.none()
+    if len(out_refcode_ids) > MAX_STRS_SIZE:
+        for i in range(0, len(out_refcode_ids), MAX_STRS_SIZE):
+            qset = structure_code_model.objects.filter(id__in=out_refcode_ids[i:i + MAX_STRS_SIZE])
+            refcodes = sorted(
+                chain(refcodes, qset),
+                key=lambda structure: structure.refcode, reverse=False)
+    else:
+        refcodes = structure_code_model.objects.filter(id__in=out_refcode_ids).order_by('refcode')
+    return refcodes
+
+
 @sync_to_async(thread_sensitive=False)
 def structure_search(
         request,
@@ -181,26 +208,11 @@ def structure_search(
                 'template_data': template_data,
                 'chunk_size': chunk_size
             })
-    out_refcode_ids = []
-    for analyse_data in analyse_data_split:
-        # if partial return is needed
-        if partial and iter_num < len(analyse_data_split):
-            analyse_data = analyse_data_split[iter_num]
-        output = cpplib.SearchMain(template_data, list(analyse_data), NUM_OF_PROC, exact)
-        out_refcode_ids.extend(output)
-        # break if partial
-        if partial:
-            break
+    # run search
+    out_refcode_ids = start_SearchMain(template_data, analyse_data_split, partial, iter_num, exact)
     # get queryset on search result
-    refcodes = structure_code_model.objects.none()
-    if len(out_refcode_ids) > MAX_STRS_SIZE:
-        for i in range(0, len(out_refcode_ids), MAX_STRS_SIZE):
-            qset = structure_code_model.objects.filter(id__in=out_refcode_ids[i:i + MAX_STRS_SIZE])
-            refcodes = sorted(
-                chain(refcodes, qset),
-                key=lambda structure: structure.refcode, reverse=False)
-    else:
-        refcodes = structure_code_model.objects.filter(id__in=out_refcode_ids).order_by('refcode')
+    refcodes = get_queryset_from_ids(out_refcode_ids, structure_code_model)
+    # pagination
     paginator = LimitPagination()
     pages = paginator.paginate_queryset(refcodes, request)
     out_serializer = out_serializer_model(pages, many=True)
@@ -507,14 +519,15 @@ class QCStructureViewSet(StructureModelViewSet):
         )
 
 
-def get_search_queryset_with_filtration(template, queryset, qc=''):
+def get_search_queryset_with_filtration(template, queryset, qc='', enable_substr_filtr=True, enable_elem_filtr=True):
     graphs = queryset.filter(**{f'{qc}coordinates__graph__isnull': False})
-    filters = set_filter(template)
     filtrs = dict()
-    for filtr, data in filters.items():
-        is_true, obj_name = data
-        if is_true:
-            filtrs[f'{qc}{obj_name.lower()}__{filtr}'] = is_true
+    if enable_substr_filtr or enable_elem_filtr:
+        filters = set_filter(template, enable_substr_filtr, enable_elem_filtr)
+        for filtr, data in filters.items():
+            is_true, obj_name = data
+            if is_true:
+                filtrs[f'{qc}{obj_name.lower()}__{filtr}'] = is_true
     structures = graphs.filter(**filtrs)
     analyse_data = structures.values_list(f'{qc}coordinates__graph', flat=True)
     return analyse_data

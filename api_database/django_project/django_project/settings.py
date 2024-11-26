@@ -109,6 +109,8 @@ TEMPLATES = [
 WSGI_APPLICATION = 'django_project.wsgi.application'
 ASGI_APPLICATION = 'myproject.asgi.application'
 
+# Tests
+TEST_RUNNER = 'csd_web.test_runner.UseDBTestRunner'
 
 # Database
 
@@ -117,6 +119,9 @@ DATABASES = {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
         'OPTIONS': {'timeout': 1000}
+    },
+    'TEST': {
+        'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
     }
 }
 

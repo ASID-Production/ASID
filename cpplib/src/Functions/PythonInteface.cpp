@@ -319,7 +319,7 @@ extern "C" {
 													 "atoms", o_molecule,
 													 "bonds", o_bonds));
 		}
-		// List[Tuple(atom1, atom2), ...] под ключом 'bonds' 
+		// List[Tuple(atom1, atom2), ...] пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ 'bonds' 
 		return Py_BuildValue("{s:s,s:s,s:O}",
 							 "graph_str", std::get<0>(ret).c_str(),
 							 "error_str", std::get<1>(ret).c_str(),
@@ -357,7 +357,7 @@ extern "C" {
 													 "atoms", o_molecule,
 													 "bonds", o_bonds));
 		}
-		// List[Tuple(atom1, atom2), ...] под ключом 'bonds' 
+		// List[Tuple(atom1, atom2), ...] пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ 'bonds' 
 		return Py_BuildValue("{s:s,s:s,s:O}",
 							 "graph_str", std::get<0>(ret).c_str(),
 							 "error_str", std::get<1>(ret).c_str(),
@@ -822,7 +822,7 @@ extern "C" {
 											 static_cast<float>(all.points[i].get(2)));
 			PyList_Append(o_xyz_block, o_atom);
 		}
-		// List[Tuple(atom1, atom2), ...] под ключом 'bonds' 
+		// List[Tuple(atom1, atom2), ...] пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ 'bonds' 
 		return Py_BuildValue("{s:O}",
 							 "atoms", o_xyz_block);
 	}

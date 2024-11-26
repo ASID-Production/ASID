@@ -37,6 +37,7 @@ import re
 from api.filters import get_reduced_cell
 from math import cos, sqrt, radians
 from ._cifparser import add_cell_parms_with_error
+from ._cifparser import get_coords as get_cif_composition
 import json
 import os
 
@@ -164,14 +165,22 @@ def add_author(cif_block, struct_obj, authors=None):
             author = author[:-1]
         author_split = re.findall('[^, .]+', author)
         if len(author) == 1:
-            author_obj, created = Author.objects.get_or_create(family_name=author_split[0])
+            check_author_in_db = Author.objects.filter(family_name=author_split[0])
+            if check_author_in_db.count() <= 1:
+                author_obj, created = Author.objects.get_or_create(family_name=author_split[0])
+            else:
+                author_obj = check_author_in_db[0]
         elif len(author) == 2:
             if ',' in author:
                 family, initials = author_split
             else:
                 family = author_split[-1]
                 initials = author.replace(family, '')
-            author_obj, created = Author.objects.get_or_create(family_name=family, initials=initials)
+            check_author_in_db = Author.objects.filter(family_name=family, initials=initials)
+            if check_author_in_db.count() <= 1:
+                author_obj, created = Author.objects.get_or_create(family_name=family, initials=initials)
+            else:
+                author_obj = check_author_in_db[0]
         else:
             if ',' in author:
                 family = author.split(',')[0]
@@ -179,7 +188,11 @@ def add_author(cif_block, struct_obj, authors=None):
             else:
                 family = author_split[-1]
                 initials = author.replace(family, '')
-            author_obj, created = Author.objects.get_or_create(family_name=family, initials=initials)
+            check_author_in_db = Author.objects.filter(family_name=family, initials=initials)
+            if check_author_in_db.count() <= 1:
+                author_obj, created = Author.objects.get_or_create(family_name=family, initials=initials)
+            else:
+                author_obj = check_author_in_db[0]
         logger_1.info(f'Author: {author_obj}')
         struct_obj.authors.add(author_obj)
         return author_obj
@@ -680,29 +693,53 @@ def add_all_cif_data(cifs: dict):
         logger_1.info(f'{refcode} in progres...')
         struct_obj = add_refcode(cif_block[1], refcode)
         try:
-            logger_1.info(f'Add authors')
-            add_author(cif_block[1], struct_obj)
-            logger_1.info(f'Check space group')
-            space_group = get_or_create_space_group(cif_block[1])
-            logger_1.info(f'Space group: {space_group}')
-            logger_1.info(f'Add unit cell')
-            add_cell(cif_block[1], space_group, struct_obj)
-            logger_1.info(f'Add reduced cell')
-            add_reduced_cell(struct_obj)
-            logger_1.info(f'Add compound name')
-            add_universal(CompoundName, struct_obj, cif_block, compound_names)
-            logger_1.info(f'Add experimental info')
-            add_universal(ExperimentalInfo, struct_obj, cif_block, experimental_info)
-            logger_1.info(f'Add refinement info')
-            add_universal(RefinementInfo, struct_obj, cif_block, refinement_info)
-            logger_1.info(f'Add crystal and structure info')
-            add_universal(CrystalAndStructureInfo, struct_obj, cif_block, crystal_and_structure_info)
-            logger_1.info(f'Add formula')
-            add_universal(Formula, struct_obj, cif_block, formula)
-            logger_1.info(f'Add journal and publication')
-            add_journal_and_publication(cif_block, struct_obj)
-            logger_1.info(f'Add element composition')
-            add_element_composition(cif_block, struct_obj)
+            try:
+                logger_1.info(f'Add authors')
+                add_author(cif_block[1], struct_obj)
+            except Exception:
+                pass
+            try:
+                logger_1.info(f'Check space group')
+                space_group = get_or_create_space_group(cif_block[1])
+                logger_1.info(f'Space group: {space_group}')
+                logger_1.info(f'Add unit cell')
+                add_cell(cif_block[1], space_group, struct_obj)
+                logger_1.info(f'Add reduced cell')
+                add_reduced_cell(struct_obj)
+            except Exception as err:
+                raise Exception(str(err))
+            try:
+                logger_1.info(f'Add compound name')
+                add_universal(CompoundName, struct_obj, cif_block, compound_names)
+            except Exception:
+                pass
+            try:
+                logger_1.info(f'Add experimental info')
+                add_universal(ExperimentalInfo, struct_obj, cif_block, experimental_info)
+            except Exception:
+                pass
+                logger_1.info(f'Add refinement info')
+                add_universal(RefinementInfo, struct_obj, cif_block, refinement_info)
+            try:
+                logger_1.info(f'Add crystal and structure info')
+                add_universal(CrystalAndStructureInfo, struct_obj, cif_block, crystal_and_structure_info)
+            except Exception:
+                pass
+            try:
+                logger_1.info(f'Add formula')
+                add_universal(Formula, struct_obj, cif_block, formula)
+            except Exception:
+                pass
+            try:
+                logger_1.info(f'Add journal and publication')
+                add_journal_and_publication(cif_block, struct_obj)
+            except Exception:
+                pass
+            try:
+                logger_1.info(f'Add element composition')
+                add_element_composition(cif_block, struct_obj)
+            except Exception as err:
+                raise Exception(str(err))
             logger_1.info(f'Information addition from {refcode} is completed successfully!')
         except Exception as err:
             message = f'Caught an exception for structure {refcode}\n{err}'
