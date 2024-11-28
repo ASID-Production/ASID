@@ -103,7 +103,7 @@ class Ui_Dialog(object):
         self.label_2.setText(QCoreApplication.translate("Dialog", u"Port", None))
         self.lineEdit_2.setText(QCoreApplication.translate("Dialog", u"8000", None))
         self.label_3.setText(QCoreApplication.translate("Dialog", u"User name", None))
-        self.lineEdit_3.setText(QCoreApplication.translate("Dialog", u"VnE", None))
+        self.lineEdit_3.setText(QCoreApplication.translate("Dialog", u"VnE_user", None))
         self.label_4.setText(QCoreApplication.translate("Dialog", u"Password", None))
         self.lineEdit_4.setText(QCoreApplication.translate("Dialog", u"12345678AsD", None))
         self.pushButton.setText(QCoreApplication.translate("Dialog", u"Connect", None))

@@ -570,10 +570,11 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
         data = self.table_model.selected()
         if data is None:
             return
-        id = data.get('refcode', data['id'])
+        id = data.get('id', data['id'])
+        name = data.get('refcode', data['id'])
         db_type = self.search_dialog.getSearchDb()
         cif = Db_bindings.getCif(id, db_type)
-        filename = opath.normpath(f'{opath.dirname(__file__)}/../../../temp/{id}.cif')
+        filename = opath.normpath(f'{opath.dirname(__file__)}/../../../temp/{name}.cif')
         out = open(filename, 'wb')
         out.write(cif)
         out.close()
