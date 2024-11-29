@@ -123,15 +123,12 @@ class Session:
             root = opath.normpath(f'{opath.dirname(__file__)}/../../../..')
             path = opath.normpath(f'{root}/api_database/django_project/manage.py')
             if os.name == 'nt':
-                print(path)
-                proc_cmd1 = f'{root}\\venv\\Scripts\\python.exe {path} migrate'.split(' ')
-                proc_cmd2 = f'{root}\\venv\\Scripts\\python.exe {path} runserver'.split(' ')
+                proc_cmd1 = (f'{root}\\venv\\Scripts\\python.exe', f'{path}', 'migrate')
+                proc_cmd2 = (f'{root}\\venv\\Scripts\\python.exe', f'{path}', 'runserver')
             elif os.name == 'posix':
-                proc_cmd1 = f'{root}/venv/bin/python {path} migrate'.split(' ')
-                proc_cmd2 = f'{root}/venv/bin/python {path} runserver'.split(' ')
-            print('Starting migrate')
+                proc_cmd1 = (f'{root}/venv/bin/python', f'{path}', 'migrate')
+                proc_cmd2 = (f'{root}/venv/bin/python', f'{path}', 'runserver')
             proc = subprocess.Popen(proc_cmd1)
-            print('Migrate done')
             while proc.poll() is None:
                 pass
             proc.kill()
