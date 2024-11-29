@@ -348,7 +348,7 @@ class InfoTableModel(QAbstractTableModel):
     def fieldDecorator(self, field):
         change = {'al': f'{chr(0x03B1)}, {chr(0x00B0)}', 'be': f'{chr(0x03B2)}, {chr(0x00B0)}', 'ga': f'{chr(0x03B3)}, {chr(0x00B0)}', 'r_factor': 'R-factor', 'id': None, 'zvalue': 'Z',
                   'symops': 'Symmetry operations', 'number': 'Space group number', 'CCDC_number': 'CCDC number', 'a': f'a, {chr(0x212B)}', 'b': f'b, {chr(0x212B)}',
-                  'c': f'c, {chr(0x212B)}'}
+                  'c': f'c, {chr(0x212B)}', 'wR_factor': 'wR factor', 'gof': 'GOF', 'doi': 'DOI', 'smiles': 'SMILES', 'inchi': 'INCHI'}
         if field:
             text = change.get(field, -1)
             if text != -1:
