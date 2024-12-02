@@ -534,6 +534,7 @@ TEST(databaseSearch10k, d10k) {
 	for (size_t i = 0; i < s; i++)
 	{
 		std::getline(db, datstr[i]);
+		datstr[i] = cpplib::SearchGraph::DatabaseGraphType::ResortString(datstr[i].c_str());
 		dat[i] = datstr[i].c_str();
 	}
 
@@ -650,6 +651,7 @@ TEST(Benchmark, d10k) {
 	for (size_t i = 0; i < s; i++)
 	{
 		std::getline(db, datstr[i]);
+		datstr[i] = cpplib::SearchGraph::DatabaseGraphType::ResortString(datstr[i].c_str());
 		dat[i] = datstr[i].c_str();
 	}
 
