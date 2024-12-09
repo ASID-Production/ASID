@@ -306,7 +306,6 @@ namespace cpplib {
 			}
 			return ret;
 		}
-
 		void sortGraph() {
 			// Seclection sort
 
@@ -327,10 +326,11 @@ namespace cpplib {
 			}
 			for (AtomIndex i = 1; i < s; i++)
 			{
-				data_[i].sortNeighboursSimple();
+				data_[i].sortNeighbours();
 			}
 		}
 
+		// Static Functions
 		static std::string ResortString(const char* str) {
 			MoleculeGraph mg;
 			mg.parseMainstringData(str,TypeMap(0));

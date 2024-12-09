@@ -34,6 +34,8 @@ using namespace cpplib::currents;
 
 // XAtom section
 TEST(EngineTest, XAtomType) {
+	static_assert(std::is_same_v<AtomTypeData, XAtom::SimpleAtomType>, "XAtom::SimpleAtomType != AtomTypeData");
+
 	ASSERT_NO_THROW({ XAtom atom; });
 	ASSERT_NO_THROW({
 		XAtom::SimpleAtomType a(6);
@@ -56,15 +58,36 @@ TEST(EngineTest, XAtomType) {
 	auto simple3 = static_cast<AtomTypeData>(atom);
 
 	EXPECT_EQ(simple, -1);
+	EXPECT_EQ(simple, simple2);
 	EXPECT_EQ(simple2, simple3);
 	EXPECT_TRUE(atom.simple_eq(-1));
 	EXPECT_TRUE(atom == XAtom::SimpleAtomType(9));
-	EXPECT_TRUE(atom == XAtom::SimpleAtomType(1));
+	EXPECT_TRUE(atom == AtomTypeData(1));
 	EXPECT_FALSE(atom == XAtom::SimpleAtomType(6));
+
+	EXPECT_TRUE(atom.include(AtomTypeData(1)));
+	EXPECT_FALSE(atom.include(AtomTypeData(2)));
+	EXPECT_FALSE(atom.include(AtomTypeData(6)));
+	EXPECT_TRUE(atom.include(AtomTypeData(9)));
+
+
+	XAtom atom2(-2);
+	atom2.AddType(9);
+	atom2.AddType(5);
+	XAtom atom3(-3);
+	atom3.AddType(6);
+	atom3.AddType(5);
+
+	EXPECT_TRUE(atom.intersect(atom2));
+	EXPECT_FALSE(atom.intersect(atom3));
 }
 
 // Coord section
 TEST(EngineTest, CoordType) {
+	// test argument_type
+	static_assert(Coord::innerType(-1) < Coord::innerType(0), "Coord::innerType should be signed");
+	static_assert(Coord::argumentType(-1) < Coord::argumentType(0), "Coord::argumentType should be signed");
+
 	ASSERT_NO_THROW({ Coord c; });
 	ASSERT_NO_THROW({ Coord c(0); });
 	ASSERT_NO_THROW({ Coord c(1,2); Coord c2(0,14); });
@@ -79,6 +102,13 @@ TEST(EngineTest, CoordType) {
 	EXPECT_TRUE(duo3.intersect(mono));
 	EXPECT_TRUE(duo4.intersect(mono));
 	EXPECT_FALSE(duo5.intersect(mono));
+
+
+	EXPECT_FALSE(duo1.intersect(duo4));
+	EXPECT_TRUE(duo4.intersect(duo2));
+	EXPECT_TRUE(duo3.intersect(duo5));
+	EXPECT_TRUE(duo4.intersect(duo3));
+	EXPECT_FALSE(duo5.intersect(duo2));
 }
 
 

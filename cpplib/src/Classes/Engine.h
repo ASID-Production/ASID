@@ -58,7 +58,7 @@ namespace cpplib {
 			types.set(t);
 		}
 		inline bool include(const SimpleAtomType t) const {
-			_ASSERT(t > 0);
+			_ASSERT(t > 0 && t < types.size());
 			return types.test(t);
 		}
 		//inline bool include(const XAtom& t) const {
@@ -67,78 +67,68 @@ namespace cpplib {
 		inline bool simple_eq(const SimpleAtomType other) const {
 			return simple_representation == other;
 		}
+		inline bool simple_eq(const XAtom& other) const {
+			return simple_representation == other.simple_representation;
+		}
 		inline const currents::TypeBitset& get_bitset() const {
 			return types;
 		}
 		inline SimpleAtomType get_simple() const {
 			return simple_representation;
 		}
+		inline bool intersect(const XAtom& other) const {
+			return (types & other.types).any();
+		}
+
 		// operators
 		inline bool operator==(const currents::AtomTypeData other) const noexcept {
 			return include(other);
 		}
-		//inline bool operator!=(const currents::AtomTypeData other) const noexcept {
-		//	return !include(other);
-		//}
-
-
 		// operator for sorting
 		inline bool operator<(const XAtom& other) const noexcept {
 			return simple_representation < other.simple_representation;
-		}
-		// operator for sorting
-		inline bool operator<=(const XAtom& other) const noexcept {
-			return simple_representation <= other.simple_representation;
 		}
 		// operator for sorting
 		inline bool operator>(const XAtom& other) const noexcept {
 			return simple_representation > other.simple_representation;
 		}
 		// operator for sorting
-		inline bool operator>=(const XAtom& other) const noexcept {
-			return simple_representation >= other.simple_representation;
-		}
-		// operator for sorting
 		inline bool operator==(const XAtom& other) const noexcept {
-			return simple_representation == other.simple_representation;
+			return simple_eq(other);
 		}
 		// operator for sorting
 		inline bool operator!=(const XAtom& other) const noexcept {
-			return simple_representation != other.simple_representation;
+			return !simple_eq(other);
 		}
 		inline explicit operator SimpleAtomType() const { return simple_representation; }
 	};
 
 	class Coord {
 	public:
-		using argumentType = int8_t;
-		using innerType = int8_t;
+		using innerType = int_fast8_t;
+		using argumentType = innerType;
 		static constexpr innerType max = 100;
 	private:
 		innerType low = 0;
 		innerType high = 0;
 	public:
-
 		constexpr inline Coord() noexcept {};
 		constexpr inline Coord(argumentType mono) noexcept { low = mono; high = mono; };
 		constexpr inline Coord(argumentType first, argumentType second) noexcept { low = first; high = second; };
-		//bool right_in_left(const Coord duo) const {
-		//	return duo.number_[0] >= first() && duo.number_[0] <= second();
-		//}
 		inline bool intersect(const Coord other) const noexcept {
 			return first() <= other.second() && other.first() <= second();
 		}
-		inline innerType getLow() const {
+		inline argumentType getLow() const {
 			return first();
 		}
-		inline innerType getHigh() const {
+		inline argumentType getHigh() const {
 			return second();
 		}
 	private:
-		inline argumentType first() const {
+		inline innerType first() const {
 			return low;
 		}
-		inline argumentType second() const {
+		inline innerType second() const {
 			return high;
 		}
 	};
@@ -184,20 +174,6 @@ namespace cpplib {
 				}
 			}
 			return false;
-		}
-		template <class T>
-		inline void sort() {
-			for (size_t j = 1; j < size_; j++)
-			{
-				auto& n = *(reinterpret_cast<Node<T>*const>(this) + data_[j]);
-				for (int8_t i = j - 1; i >= (int8_t)(0); i--)
-				{
-					if (n > (*(reinterpret_cast<Node<T>*const>(this) + data_[i]))) {
-						::std::swap(data_[i], data_[i + 1]);
-					}
-					else break;
-				}
-			}
 		}
 		inline void simpleSort() {
 			std::sort(&(data_[0]), &(data_[size_]));
@@ -300,41 +276,37 @@ namespace cpplib {
 			return const_cast<NeighbourValueType>(this + neighbours_[neighbour_iterator]);
 		}
 
-		inline const AtomIndex& getID() const noexcept {
+		inline AtomIndex getID() const noexcept {
 			return id_;
 		}
 		inline void setID(const AtomIndex& id) noexcept {
 			id_ = id;
 		}
-		inline const A& getType() const noexcept {
+		inline A getType() const noexcept {
 			return this->type_;
 		}
 		inline void setType(const A& type) noexcept {
 			this->type_ = type;
 		}
-		inline const HType& getHAtoms() const noexcept {
+		inline HType getHAtoms() const noexcept {
 			return this->hAtoms_;
 		}
 		inline void setHAtoms(const HType& hAtoms) noexcept {
 			this->hAtoms_ = hAtoms;
 		}
-		inline const Coord& getCoord() const noexcept {
+		inline Coord getCoord() const noexcept {
 			return this->coord_;
 		}
 		inline void setCoord(const Coord& c) {
 			coord_ = c;
 		}
 
+		// Algorithms
 		inline void calculateCoord() {
 			auto n = neighboursSize() + hAtoms_;
 			coord_ = Coord(n, n);
 		}
-
-		// Algorithms
 		inline void sortNeighbours() {
-			neighbours_.sort<A>();
-		}
-		inline void sortNeighboursSimple() {
 			neighbours_.simpleSort();
 		}
 		constexpr void addBondWithSort(Node& other) {
@@ -428,13 +400,11 @@ namespace cpplib {
 				}
 			}
 		}
-
-
 	};
 
 	struct Bond {
 	public:
-		//Declarations
+		// Declarations
 		using AtomIndex = currents::AtomIndex;
 
 		// Data
@@ -475,16 +445,20 @@ namespace cpplib {
 		}
 	};
 	struct BondEx : public Bond {
-		using LengthType = currents::FloatingPointType;
-		LengthType length = 0.0;
-		using base = Bond;
+	public:
+		// Declarations
+		using LengthType = currents::FloatingPointType; // Float or Double
+		using base = Bond; // Bond
+
+		// Data
+		LengthType length = 0.0; // Bond Length 
+
+		// Constructors
 
 		constexpr BondEx() = default;
-
 		constexpr BondEx(const base& bond, float len) noexcept : base(bond), length(len) {
 			base::validate();
 		}
-
 		constexpr BondEx(AtomIndex a1, AtomIndex a2, LengthType l) noexcept
 			: length(l) {
 			if (a1 < a2) {
@@ -497,15 +471,21 @@ namespace cpplib {
 			}
 		}
 
+		// Compares only "base". Ignores length.
 		constexpr bool operator==(const BondEx& other) const noexcept {
 			return base::operator==(other);
 		}
+
+		// Compares in next order:
+		// 1. "base" 
+		// 2. length
 		constexpr bool operator<(const BondEx& other) const noexcept {
 			if (base::operator!=(other))
 				return base::operator<(other);
 			return length < other.length;
 		}
 
+		// to_string constant function
 		::std::string ToStr() const {
 			::std::string res("(");
 			res += ::std::to_string(first);
@@ -521,6 +501,7 @@ namespace cpplib {
 }
 
 namespace std {
+	// std::swap extention for Node class
 	template<class A>
 	constexpr void swap(cpplib::Node<A>& n1, cpplib::Node<A>& n2) noexcept {
 		n1.swap(n2);
