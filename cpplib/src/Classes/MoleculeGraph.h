@@ -111,7 +111,7 @@ namespace cpplib {
 			MoleculeGraph mg;
 			const auto sn = mg.parseMainstringData(str, map);
 			if (sn == 0) return ::std::make_pair<MoleculeGraph, bool>(std::move(mg), false);
-			mg.release_HAtoms(multiAtomBits, sn);
+			mg.release_HAtoms(multiAtomBits);
 			return ::std::make_pair<MoleculeGraph, bool>(std::move(mg), true);
 		}
 
@@ -119,7 +119,7 @@ namespace cpplib {
 			MoleculeGraph mg;
 			const auto sn = mg.parseMainstringRequest(str);
 			auto multiAtomBits = mg.parseMultiatom(str, sn);
-			mg.release_HAtoms(multiAtomBits, sn);
+			mg.release_HAtoms(multiAtomBits);
 			mg.sortGraph();
 			return ::std::make_pair(std::move(mg), ::std::move(multiAtomBits));
 		}
@@ -521,9 +521,10 @@ namespace cpplib {
 
 			return multiAtomBits;
 		}
-		void release_HAtoms(const currents::TypeBitset& bits, const AtomIndex sn) {
+		void release_HAtoms(const currents::TypeBitset& bits) {
 			if (bits.none()) return;
 			size_t hs = this->size();
+			const AtomIndex sn = hs;
 			//::std::list< NodeType> hydrogenAtoms;
 
 			for (AtomIndex i = 1; i < sn; i++)
