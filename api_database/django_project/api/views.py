@@ -119,10 +119,15 @@ async def structure_search_view(request):
     serializer = SearchSerializer(data=request.data)
     queryset = await get_queryset(request, False)
     if not serializer.is_valid():
-        return Response(
+        response = Response(
             serializer.errors,
             status=status.HTTP_400_BAD_REQUEST
         )
+        response.accepted_renderer = JSONRenderer()
+        response.accepted_media_type = "application/json"
+        response.renderer_context = {}
+        response.render()
+        return response
     response = await structure_search(request, serializer, queryset)
     return response
 
