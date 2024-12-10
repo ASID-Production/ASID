@@ -34,7 +34,7 @@ using namespace cpplib::currents;
 
 // XAtom section
 TEST(EngineTest, XAtomType) {
-	static_assert(std::is_same_v<AtomTypeData, XAtom::SimpleAtomType>, "XAtom::SimpleAtomType != AtomTypeData");
+	static_assert(std::is_same<AtomTypeData, XAtom::SimpleAtomType>::value, "XAtom::SimpleAtomType != AtomTypeData");
 
 	ASSERT_NO_THROW({ XAtom atom; });
 	ASSERT_NO_THROW({
