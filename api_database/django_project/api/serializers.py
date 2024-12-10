@@ -28,18 +28,25 @@
 
 from rest_framework import serializers
 from rest_framework.fields import SerializerMethodField
-from django.shortcuts import get_object_or_404
 from structure.models import (StructureCode, Author, Spacegroup, Cell,
                               CompoundName, Formula, Publication,
                               RefcodePublicationConnection, ExperimentalInfo,
                               ReducedCell, ExperimentalInfo, RefinementInfo,
                               CoordinatesBlock, CrystalAndStructureInfo,
-                              CifFile)
+                              CifFile, Journal, InChI)
+from qc_structure.models import (QCStructureCode, QCCell, QCCompoundName, QCFormula,
+                                 QCReducedCell, QCCoordinatesBlock, QCProgram,
+                                 QCProperties, VaspFile, QCInChI)
 from djoser.serializers import UserSerializer, UserCreateSerializer
 from django.contrib.auth import get_user_model
 from .fields import NodesListField, EdgesListField
 
 User = get_user_model()
+
+
+#########################################################################
+#                    Structure Serializers                            #
+#########################################################################
 
 
 class AuthorSerializer(serializers.ModelSerializer):
@@ -89,7 +96,19 @@ class FormulaSerializer(serializers.ModelSerializer):
         fields = ('id', 'formula_moiety', 'formula_sum')
 
 
+class JournalSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Journal
+        fields = (
+            'id', 'name', 'international_coden', 'fullname',
+            'translated_name', 'abbreviated_translated_name',
+            'discontinued'
+        )
+
+
 class PublicationSerializer(serializers.ModelSerializer):
+    journal = JournalSerializer(read_only=True)
+
     class Meta:
         model = Publication
         fields = ('id', 'journal', 'page', 'volume', 'year', 'doi')
@@ -124,24 +143,9 @@ class CrystalInfoSerializer(serializers.ModelSerializer):
 
 
 class RefcodeShortSerializer(serializers.ModelSerializer):
-    formula = SerializerMethodField(read_only=True)
-    temperature = SerializerMethodField(read_only=True)
-
     class Meta:
         model = StructureCode
-        fields = (
-            'id', 'refcode', 'CCDC_number', 'formula', 'temperature'
-        )
-
-    def get_formula(self, obj):
-        formula = get_object_or_404(Formula, refcode=obj)
-        if formula.formula_moiety:
-            return formula.formula_moiety
-        return formula.formula_sum
-
-    def get_temperature(self, obj):
-        exp_info = get_object_or_404(ExperimentalInfo, refcode=obj)
-        return exp_info.structure_determination_temperature
+        fields = ('id', 'refcode')
 
 
 class RefcodeFullSerializer(serializers.ModelSerializer):
@@ -154,6 +158,7 @@ class RefcodeFullSerializer(serializers.ModelSerializer):
     experiment = ExperimentalInfoSerializer(read_only=True, source='experimental_info')
     refinement_info = RefinementInfoSerializer(read_only=True)
     coordinates = CoordinatesSerializer(read_only=True)
+    inchi = SerializerMethodField(read_only=True)
     crystal_info = CrystalInfoSerializer(read_only=True, source='crystal_and_structure_info')
 
     class Meta:
@@ -162,12 +167,22 @@ class RefcodeFullSerializer(serializers.ModelSerializer):
             'id', 'refcode', 'CCDC_number', 'cell',
             'reduced_cells', 'compound_name', 'formula', 'authors',
             'publication', 'experiment', 'refinement_info', 'coordinates',
-            'crystal_info'
+            'inchi', 'crystal_info'
         )
 
     def get_publication(self, obj):
-        publication = get_object_or_404(RefcodePublicationConnection, refcode=obj).publication
-        return PublicationSerializer(publication).data
+        try:
+            publication = RefcodePublicationConnection.objects.get(refcode=obj).publication
+            return PublicationSerializer(publication).data
+        except Exception:
+            pass
+
+    def get_inchi(self, obj):
+        try:
+            inchi = InChI.objects.get(refcode=obj).get_inchi_string()
+            return inchi
+        except Exception:
+            pass
 
 
 class CifUploadSerializer(serializers.ModelSerializer):
@@ -205,3 +220,147 @@ class SearchSerializer(serializers.Serializer):
     nodes = NodesListField(child=serializers.CharField(max_length=100), allow_empty=False, required=True)
     # edges input: ['(1, 2, {"distance": "1.250",})', '(2, 3, {"distance": "1.340",})', ...]
     edges = EdgesListField(child=serializers.CharField(max_length=100), allow_empty=True)
+    chunk_size = serializers.IntegerField(required=False, default=0, min_value=0)
+    iter_num = serializers.IntegerField(required=False, default=0, min_value=0)
+
+
+#########################################################################
+#                    QCStructure Serializers                            #
+#########################################################################
+
+
+def get_fields_list(model):
+    return [field.name for field in model._meta.get_fields()]
+
+
+class QCCellSerializer(serializers.ModelSerializer):
+    spacegroup = SpacegroupSerializer(read_only=True)
+    centring = SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = QCCell
+        fields = ('id', 'spacegroup', 'centring', 'a', 'b', 'c', 'al', 'be', 'ga', 'zvalue')
+
+    def get_centring(self, obj):
+        return obj.get_centring_display()
+
+
+class QCReducedCellSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QCReducedCell
+        fields = ('id', 'a', 'b', 'c', 'al', 'be', 'ga', 'volume')
+
+
+class QCCompoundNameSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QCCompoundName
+        fields = ('id', 'systematic_name', 'trivial_name')
+
+
+class QCFormulaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QCFormula
+        fields = ('id', 'formula_moiety', 'formula_sum')
+
+
+class QCCoordinatesSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QCCoordinatesBlock
+        fields = ('id', 'coordinates', 'smiles', 'graph')
+
+
+class QCProgramSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QCProgram
+        fields = ('id', 'orca', 'vasp', 'qchem', 'gaussian',
+                  'nwchem', 'abinit', 'crystal', 'gamess',
+                  'mopac', 'quantum_espresso')
+
+
+class QCPropertiesSerializer(serializers.ModelSerializer):
+    energy = SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = QCProperties
+        fields = ('id', 'energy')
+
+    def get_energy(self, obj):
+        try:
+            energy = obj.energy
+            if energy:
+                return str(energy) + ' eV'
+        except Exception:
+            pass
+
+
+class QCRefcodeFullSerializer(serializers.ModelSerializer):
+    formula = QCFormulaSerializer(read_only=True, source='qc_formula')
+    cell = QCCellSerializer(read_only=True, source='qc_cell')
+    reduced_cells = QCReducedCellSerializer(many=True, read_only=True, source='qc_reduced_cells')
+    compound_name = QCCompoundNameSerializer(read_only=True, source='qc_name')
+    coordinates = QCCoordinatesSerializer(read_only=True, source='qc_coordinates')
+    properties = QCPropertiesSerializer(read_only=True, source='qc_properties')
+    programs = QCProgramSerializer(read_only=True, source='qc_prog')
+    inchi = SerializerMethodField(read_only=True)
+
+    class Meta:
+        model = QCStructureCode
+        fields = (
+            'id', 'refcode', 'cell', 'reduced_cells', 'compound_name',
+            'formula', 'coordinates', 'properties', 'programs', 'inchi'
+        )
+
+    def get_inchi(self, obj):
+        try:
+            inchi = QCInChI.objects.get(refcode=obj).get_inchi_string()
+            return inchi
+        except Exception:
+            pass
+
+
+class QCRefcodeShortSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QCStructureCode
+        fields = ('id', 'refcode')
+
+
+class VaspUploadSerializer(serializers.ModelSerializer):
+    systematic_name = serializers.CharField(max_length=200, required=False, default='')
+    trivial_name = serializers.CharField(max_length=200, required=False, default='')
+
+    class Meta:
+        model = VaspFile
+        fields = ('file', 'systematic_name', 'trivial_name')
+
+
+#########################################################################
+#                    Generate 2D images Serializer                      #
+#########################################################################
+
+
+class Gen2DImgSerializer(serializers.Serializer):
+    allowed_file_formats = ['cif', 'vasp', 'xyz']
+    allowed_output_formats = ['gif', 'cml', 'svg']
+    return_type_formats = ['string', 'file']
+    # fields
+    file = serializers.FileField(required=True)
+    file_format = serializers.ChoiceField(
+        choices=allowed_file_formats,
+        required=True,
+        error_messages={"invalid_choice": f"Unsupported value: use {'/'.join(allowed_file_formats)} keywords"}
+    )
+    output_format = serializers.ChoiceField(
+        choices=allowed_output_formats,
+        required=False,
+        default=allowed_output_formats[0],
+        error_messages={"invalid_choice": f"Unsupported value: use {'/'.join(allowed_output_formats)} keywords"}
+    )
+    return_type = serializers.ChoiceField(
+        choices=return_type_formats,
+        required=False,
+        default=return_type_formats[0],
+        error_messages={"invalid_choice": f"Unsupported value: use {'/'.join(return_type_formats)} keywords"}
+    )
+    h_size = serializers.IntegerField(required=False, default=250, min_value=10, max_value=10000)
+    w_size = serializers.IntegerField(required=False, default=250, min_value=10, max_value=10000)
+    name = serializers.CharField(max_length=150, required=False, default='img2d')

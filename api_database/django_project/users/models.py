@@ -41,8 +41,8 @@ STATUSES = [
 class User(AbstractUser):
     # phone number validator
     phone_regex = RegexValidator(regex=r'^\+{1}?\d{9,15}$',
-                                 message="Incorrect phone number format! Example: '+71234567890'")
+                                 message="Incorrect phone number format! Example: '+11234567890'")
 
     phone_number = models.CharField(verbose_name='Phone Number', validators=[phone_regex], max_length=17, blank=True)
-    status = models.CharField(verbose_name='Status', choices=STATUSES, max_length=50, blank=True)
     laboratory = models.CharField(verbose_name='Laboratory', max_length=250, blank=True)
+    email = models.EmailField(unique=True)

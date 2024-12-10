@@ -29,8 +29,7 @@
 from structure.models import (StructureCode, Author, Spacegroup, SYSTEMS,
                               Cell, CENTRINGS, ReducedCell, Journal,
                               Publication, RefcodePublicationConnection, Formula,
-                              ElementsSet1, ElementsSet2, ElementsSet3, ElementsSet4,
-                              ElementsSet5, ElementsSet6, ElementsSet7, ElementsSet8,
+                              get_elements_list, ElementsManager,
                               CompoundName, ExperimentalInfo, RefinementInfo,
                               CrystalAndStructureInfo)
 from django_project.loggers import all_cif_data_logger as logger_1
@@ -38,6 +37,9 @@ import re
 from api.filters import get_reduced_cell
 from math import cos, sqrt, radians
 from ._cifparser import add_cell_parms_with_error
+from ._cifparser import get_coords as get_cif_composition
+import json
+import os
 
 compound_names = {
     'systematic_name': ['_chemical_name_systematic'],
@@ -76,8 +78,8 @@ experimental_info = {
     'radiation_source': ['_diffrn_radiation_source'],
 }
 refinement_info = {
-    'r_factor': ['_refine_ls_R_factor_gt'],
-    'wR_factor': ['_refine_ls_wR_factor_ref'],
+    'r_factor': ['_refine_ls_r_factor_gt'],
+    'wR_factor': ['_refine_ls_wr_factor_ref'],
     'gof': ['_refine_ls_goodness_of_fit_ref'],
     'diff_density_max': ['_refine_diff_density_max'],
     'diff_density_min': ['_refine_diff_density_min'],
@@ -112,22 +114,18 @@ crystal_and_structure_info = {
     'size_mid': ['_exptl_crystal_size_mid'],
 }
 formula = {
-        'formula_moiety': [
-            '_chemical_formula_moiety',
-            '_chemical_formula_structural',
-            '_chemical_formula_iupac'
-        ],
-        'formula_sum': ['_chemical_formula_sum']
-    }
+    'formula_moiety': [
+        '_chemical_formula_moiety',
+        '_chemical_formula_structural',
+        '_chemical_formula_iupac'
+    ],
+    'formula_sum': ['_chemical_formula_sum']
+}
 journal = {
     'international_coden': ['_journal_coden_cambridge'],
     'name': ['_citation_journal_abbrev'],
     'fullname': ['_journal_name_full'],
 }
-
-
-def get_fields_list(model):
-    return [field.name for field in model._meta.get_fields()]
 
 
 def add_refcode(cif_block, refcode):
@@ -159,20 +157,30 @@ def add_author(cif_block, struct_obj, authors=None):
                 return 0
     # add to database
     for author in authors:
+        author = str(author).replace('\n', '')
+        author = author.replace('\r', '')
         if author[0] in ['\'', '"']:
             author = author[1:]
         if author[-1] in ['\'', '"']:
             author = author[:-1]
         author_split = re.findall('[^, .]+', author)
         if len(author) == 1:
-            author_obj, created = Author.objects.get_or_create(family_name=author_split[0])
+            check_author_in_db = Author.objects.filter(family_name=author_split[0])
+            if check_author_in_db.count() <= 1:
+                author_obj, created = Author.objects.get_or_create(family_name=author_split[0])
+            else:
+                author_obj = check_author_in_db[0]
         elif len(author) == 2:
             if ',' in author:
                 family, initials = author_split
             else:
                 family = author_split[-1]
                 initials = author.replace(family, '')
-            author_obj, created = Author.objects.get_or_create(family_name=family, initials=initials)
+            check_author_in_db = Author.objects.filter(family_name=family, initials=initials)
+            if check_author_in_db.count() <= 1:
+                author_obj, created = Author.objects.get_or_create(family_name=family, initials=initials)
+            else:
+                author_obj = check_author_in_db[0]
         else:
             if ',' in author:
                 family = author.split(',')[0]
@@ -180,69 +188,140 @@ def add_author(cif_block, struct_obj, authors=None):
             else:
                 family = author_split[-1]
                 initials = author.replace(family, '')
-            author_obj, created = Author.objects.get_or_create(family_name=family, initials=initials)
+            check_author_in_db = Author.objects.filter(family_name=family, initials=initials)
+            if check_author_in_db.count() <= 1:
+                author_obj, created = Author.objects.get_or_create(family_name=family, initials=initials)
+            else:
+                author_obj = check_author_in_db[0]
         logger_1.info(f'Author: {author_obj}')
         struct_obj.authors.add(author_obj)
         return author_obj
+    return 0
 
 
-def get_or_create_space_group(cif_block):
+def get_or_create_space_group(cif_block, return_only_symops=False):
+    """return_only_symops:
+            if True:  returns only symmetry operations without changing data in database;
+            if False: get or create space group object and return it.
+    """
+
+    def get_sg_number_by_h_m_name(h_m_name: str):
+        file = open(os.path.join(os.path.dirname(__file__), '../symops.json'))
+        symops_list = json.load(file)
+        for i, symops in enumerate(symops_list):
+            if i > 0:
+                if symops['crystal_class'] == 'monoclinic' and symops['hermann_mauguin'].split()[1] == '1' and symops['hermann_mauguin'].split()[3] == '1':
+                    if ' '.join([symops['hermann_mauguin'].split()[0], symops['hermann_mauguin'].split()[2]]) == h_m_name:
+                        return symops['number']
+                if symops['hermann_mauguin'] == h_m_name:
+                    return symops['number']
+
+    def get_symops_by_number(sg_number: int):
+        file = open(os.path.join(os.path.dirname(__file__), '../symops.json'))
+        symops_list = json.load(file)
+        for i, symops in enumerate(symops_list):
+            if i > 0:
+                if symops['number'] == sg_number:
+                    return symops['symops']
+
+    def get_system_from_numb(sg_number: int):
+        file = open(os.path.join(os.path.dirname(__file__), '../symops.json'))
+        symops_list = json.load(file)
+        for i, symops in enumerate(symops_list):
+            if i > 0:
+                if symops['number'] == sg_number:
+                    return symops['crystal_class']
+
     data_in_cif = cif_block.keys()
-    if '_symmetry_space_group_name_h-m' in data_in_cif:
-        space_group_name = cif_block['_symmetry_space_group_name_h-m'].split()
-        system = None
-        if '_space_group_crystal_system' in data_in_cif:
-            system = cif_block['_space_group_crystal_system']
-        elif '_symmetry_cell_setting' in data_in_cif:
-            system = cif_block['_symmetry_cell_setting']
-        logger_1.info(f'Crystal system: {system}')
-        if system == 'monoclinic':
+    # sg number
+    if '_space_group_it_number' in data_in_cif:
+        sg_number = int(cif_block['_space_group_it_number'])
+    elif '_symmetry_int_tables_number' in data_in_cif:
+        sg_number = int(cif_block['_symmetry_int_tables_number'])
+    elif '_symmetry_space_group_name_h-m' in data_in_cif:
+        sg_number = get_sg_number_by_h_m_name(cif_block['_symmetry_space_group_name_h-m'])
+    else:
+        raise Exception('No space group number found in cif!')
+    logger_1.info(f'Space group number: {sg_number}')
+    # system
+    if '_space_group_crystal_system' in data_in_cif:
+        system = cif_block['_space_group_crystal_system']
+    elif '_symmetry_cell_setting' in data_in_cif:
+        system = cif_block['_symmetry_cell_setting']
+    else:
+        system = get_system_from_numb(sg_number)
+    logger_1.info(f'Crystal system: {system}')
+    # get system number in db choices
+    if not system.isalpha():
+        system = get_system_from_numb(sg_number)
+    if system:
+        system_id = 0
+        for syst in SYSTEMS:
+            if system.lower() in syst:
+                system_id = syst[0]
+        if system_id:
+            logger_1.info(f'Space group system number: {system_id}')
+        else:
+            raise Exception('No space group system found in cif!')
+    else:
+        raise Exception('No space group system found in cif!')
+    # check if space group has already existed in db
+    if '_symmetry_space_group_name_h-m' in data_in_cif or '_space_group_name_h-m_alt' in data_in_cif:
+        if '_symmetry_space_group_name_h-m' in data_in_cif:
+            space_group_name = cif_block['_symmetry_space_group_name_h-m'].split()
+        else:
+            space_group_name = cif_block['_space_group_name_h-m_alt'].split()
+        if system == 'monoclinic' and len(space_group_name) == 4:
             if space_group_name[1] == '1' and space_group_name[3] == '1':
                 space_group_name = [space_group_name[0], space_group_name[2]]
         space_group_name = ''.join(space_group_name)
         logger_1.info(f'Space group name: {space_group_name}')
     else:
         raise Exception('No space group found in cif!')
-
-    create = False
     hall = ''
-    if '_symmetry_space_group_name_hall' in data_in_cif:
-        hall = cif_block['_symmetry_space_group_name_hall']
+    if '_symmetry_space_group_name_hall' in data_in_cif or '_space_group_name_hall' in data_in_cif:
+        if '_symmetry_space_group_name_hall' in data_in_cif:
+            hall = cif_block['_symmetry_space_group_name_hall']
+        else:
+            hall = cif_block['_space_group_name_hall']
         logger_1.info(f'Hall name: {hall}')
-        space_group, create = Spacegroup.objects.get_or_create(name=space_group_name, hall_name=hall)
-        if not create:
+        if Spacegroup.objects.filter(name=space_group_name, hall_name=hall).exists():
+            space_group = Spacegroup.objects.get(name=space_group_name, hall_name=hall)
+            if return_only_symops:
+                return space_group.symops
             return space_group
     else:
-        if not create:
-            space_group = Spacegroup.objects.filter(name=space_group_name)
-            if space_group.count() == 1:
-                return space_group
-            elif space_group.count() > 1:
-                raise Exception('No space group found in cif!')
-            elif space_group.count() == 0:
-                # if such a group is not in the database, then add it
-                logger_1.info(f'Creating new space group object...')
-
-    # sg number
-    if '_space_group_it_number' in data_in_cif:
-        sg_number = cif_block['_space_group_it_number']
-    elif '_symmetry_int_tables_number' in data_in_cif:
-        sg_number = cif_block['_symmetry_int_tables_number']
-    else:
-        raise Exception('No space group number found in cif!')
-    logger_1.info(f'Space group number: {sg_number}')
-    # system
-    if system:
-        system_id = 0
-        for syst in SYSTEMS:
-            if system in syst:
-                system_id = syst[0]
-        if system_id:
-            logger_1.info(f'Space group system number: {system_id}')
-        else:
-            raise Exception('No space group number found in cif!')
-    else:
-        raise Exception('No space group number found in cif!')
+        space_group = Spacegroup.objects.filter(name=space_group_name)
+        if space_group.count() == 1:
+            if return_only_symops:
+                return space_group[0].symops
+            return space_group[0]
+        elif space_group.count() > 1:
+            raise Exception('No space group found in cif!')
+        elif space_group.count() == 0:
+            # if such a group is not in the database, then add it
+            logger_1.info(f'Creating new space group object...')
+    # symops
+    get_symops_from_json = False
+    try:
+        symops = cif_block.GetLoop('_symmetry_equiv_pos_as_xyz')
+        key = '_symmetry_equiv_pos_as_xyz'
+    except:
+        try:
+            symops = cif_block.GetLoop('_space_group_symop_operation_xyz')
+            key = '_space_group_symop_operation_xyz'
+        except:
+            symops_list = get_symops_by_number(sg_number)
+            get_symops_from_json = True
+    if not get_symops_from_json:
+        keys: list = symops.GetItemOrder()
+        symops_list = []
+        for item in symops:
+            symop = item[keys.index(key)].replace(' ', '')
+            symops_list.append(symop)
+    operations = ";".join(symops_list)
+    if return_only_symops:
+        return operations
     # create a space group object
     space_group, create = Spacegroup.objects.get_or_create(
         name=space_group_name,
@@ -252,23 +331,7 @@ def get_or_create_space_group(cif_block):
     # hall name
     if hall:
         space_group.hall_name = hall
-    # symops
-    try:
-        symops = cif_block.GetLoop('_symmetry_equiv_pos_as_xyz')
-        key = '_symmetry_equiv_pos_as_xyz'
-    except:
-        try:
-            symops = cif_block.GetLoop('_space_group_symop_operation_xyz')
-            key = '_space_group_symop_operation_xyz'
-        except:
-            space_group.delete()
-            raise Exception('No symops found in cif!')
-    keys: list = symops.GetItemOrder()
-    symops_list = []
-    for item in symops:
-        symop = item[keys.index(key)].replace(' ', '')
-        symops_list.append(symop)
-    operations = ";".join(symops_list)
+    # save symops
     space_group.symops = operations
     space_group.save()
     return space_group
@@ -288,28 +351,38 @@ def add_cell(cif_block, space_group, struct_obj):
                                cif_block['_cell_angle_gamma'].split('(')[0])
     else:
         raise Exception('No unit cell parameters were found!')
-    centring = cif_block['_symmetry_space_group_name_h-m'].split()[0]
+    if space_group.name[0].upper() in ['P', 'I', 'A', 'B', 'C', 'F', 'R']:
+        centring = space_group.name[0]
+    elif space_group.name[1].upper() in ['P', 'I', 'A', 'B', 'C', 'F', 'R']:
+        centring = space_group.name[1]
+    else:
+        raise Exception('Invalid space group name: could not find centring in space group name!')
     centring_id = 0
     for item in CENTRINGS:
-        if centring in item:
+        if centring.replace('-', '') in item:
             centring_id = item[0]
     if not centring_id:
         raise Exception('Invalid unit cell centring!')
     if '_cell_formula_units_z' in data_in_cif:
-        z_val = int(cif_block['_cell_formula_units_z'])
+        z_val = float(cif_block['_cell_formula_units_z'])
     else:
-        raise Exception('No Z value was found!')
+        logger_1.error('No Z value was found!')
+        z_val = len(space_group.symops.split(';'))
     cell, created = Cell.objects.get_or_create(
         a=float(a), b=float(b), c=float(c),
         al=float(al), be=float(be), ga=float(ga),
-        spacegroup=space_group[0], refcode=struct_obj,
+        spacegroup=space_group, refcode=struct_obj,
         centring=centring_id, zvalue=z_val
     )
+    if '_cell_formula_units_Z_prime' in data_in_cif:
+        z_prime = float(cif_block['_cell_formula_units_Z_prime'])
+        cell.zprime = z_prime
+        cell.save()
     if created:
         add_cell_parms_with_error([1, cif_block], struct_obj)
 
 
-def add_reduced_cell(cif_block, struct_obj):
+def add_reduced_cell(struct_obj):
     centrings = dict((v, k) for v, k in CENTRINGS)
     centring = centrings[struct_obj.cell.centring]
     params = [struct_obj.cell.a, struct_obj.cell.b, struct_obj.cell.c,
@@ -366,9 +439,19 @@ def add_journal_and_publication(cif_block, struct_obj):
         filtr['journal'] = journal_obj
     # publication
     year = 0
+    doi = ''
     if '_journal_year' in cif_block[1].keys():
         year = int(cif_block[1]['_journal_year'])
         filtr['year'] = year
+    if '_journal_page_first' in cif_block[1].keys():
+        page = cif_block[1]['_journal_page_first']
+        filtr['page'] = page
+    if '_journal_volume' in cif_block[1].keys():
+        volume = cif_block[1]['_journal_volume']
+        filtr['volume'] = volume
+    if '_journal_doi' in cif_block[1].keys():
+        doi = cif_block[1]['_journal_doi']
+        filtr['doi'] = doi
     if '_citation_year' in cif_block[1].keys():
         citation = cif_block[1].GetLoop('_citation_year')
         citation_keys = citation.GetItemOrder()
@@ -383,12 +466,21 @@ def add_journal_and_publication(cif_block, struct_obj):
         if '_citation_page_first' in citation_keys:
             page = citation['_citation_page_first'][0]
             filtr['page'] = page
-    if year:
-        pub_obj, created = Publication.objects.get_or_create(**filtr)
+    # filter is_null
+    filtr_is_null = dict()
+    for key in ['journal', 'page', 'volume', 'doi']:
+        if key not in filtr.keys():
+            filtr_is_null[f'{key}__isnull'] = True
+    if doi and Publication.objects.filter(doi=doi).exists():
+        pub_obj = Publication.objects.get(doi=doi)
+        if year:
+            for key, value in filtr.items():
+                setattr(pub_obj, key, value)
+    elif year:
+        pub_obj, created = Publication.objects.filter(**filtr_is_null).get_or_create(**filtr)
     else:
         return 0
     # authors
-    flag = False
     authors = []
     if '_publ_author_name' in cif_block[1].keys():
         try:
@@ -397,16 +489,17 @@ def add_journal_and_publication(cif_block, struct_obj):
                 authors.append(author[0])
         except:
             authors = cif_block[1]['_publ_author_name'].split(';')
-        flag = add_authors_and_get_flag()
+        add_authors_and_get_flag()
     if '_citation_author_name' in cif_block[1].keys():
         try:
             authors = cif_block[1].GetLoop('_citation_author_name')
         except:
             authors = cif_block[1]['_citation_author_name'].split(';')
-        flag = add_authors_and_get_flag()
+        add_authors_and_get_flag()
     # refcode connection
-    if flag:
-        RefcodePublicationConnection.objects.get_or_create(refcode=struct_obj, publication=pub_obj)
+    ref_pub_obj, created = RefcodePublicationConnection.objects.get_or_create(refcode=struct_obj)
+    ref_pub_obj.publication = pub_obj
+    ref_pub_obj.save()
 
 
 def add_element_composition(cif_block, struct_obj):
@@ -414,6 +507,7 @@ def add_element_composition(cif_block, struct_obj):
     if Formula.objects.filter(refcode=struct_obj).exists():
         formula_sum = struct_obj.formula.formula_sum
         formula_moiety = struct_obj.formula.formula_moiety
+        elements_from_formula = dict()
         if formula_sum:
             elements = formula_sum.split()
             for element in elements:
@@ -423,15 +517,9 @@ def add_element_composition(cif_block, struct_obj):
                     count = float(count[0])
                 else:
                     count = 1
-                # we look for which model this atom is in and save the result
-                for model in [ElementsSet1, ElementsSet2,
-                              ElementsSet3, ElementsSet4, ElementsSet5,
-                              ElementsSet6, ElementsSet7, ElementsSet8]:
-                    if atom_type in get_fields_list(model):
-                        elem_obj, created = model.objects.get_or_create(refcode=struct_obj)
-                        setattr(elem_obj, atom_type, count)
-                        elem_obj.save()
-                        break
+                elements_from_formula[atom_type] = count
+            el_manager, created = ElementsManager.objects.get_or_create(refcode=struct_obj)
+            el_manager.save_elements(elements_from_formula)
             return 0
         elif formula_moiety:
             moiety_formula = dict()
@@ -521,18 +609,10 @@ def add_element_composition(cif_block, struct_obj):
                                 else:
                                     moiety_formula[atom_type] = count
             if moiety_formula:
-                for atom, count in moiety_formula.items():
-                    # we look for which model this atom is in and save the result
-                    for model in [ElementsSet1, ElementsSet2,
-                                  ElementsSet3, ElementsSet4, ElementsSet5,
-                                  ElementsSet6, ElementsSet7, ElementsSet8]:
-                        if atom in get_fields_list(model):
-                            elem_obj, created = model.objects.get_or_create(refcode=struct_obj)
-                            setattr(elem_obj, atom, count)
-                            elem_obj.save()
-                            break
+                el_manager, created = ElementsManager.objects.get_or_create(refcode=struct_obj)
+                el_manager.save_elements(moiety_formula)
                 return 0
-    logger_1.warring(
+    logger_1.warning(
         f'Any chemcal composition was not found\n'
         f'or formula sum and formula moiety have invalid format\n'
         f'and can not be parsed!'
@@ -544,41 +624,62 @@ def add_universal(model, refcode_obj, cif_block, iucr_dict):
     obj_obj, created = model.objects.get_or_create(refcode=refcode_obj)
     for key, values in iucr_dict.items():
         for data_key in values:
-            if data_key in cif_block[1].keys():
-                value = cif_block[1][data_key]
-                if data_key == '_exptl_special_details':
-                    for line in value.split('\n'):
-                        if key == 'bioactivity' and 'drug' in line:
-                            value = line
-                            break
-                        elif key == 'phase_transitions' and 'phase' in line:
-                            value = line
-                            break
-                        elif key == 'polymorph' and 'polymorph' in line:
-                            value = line
-                            break
-                        elif key == 'sensitivity' and {'decomposition', 'sensitve', 'oxidant', 'stable', 'chromic', 'ygroscopic', 'thermolabile'}.intersection(set(line.split())):
-                            value = line
-                            break
-                        elif key == 'pressure' and ('pressure' in line or re.search(r'[KkGgMmPa]{3}', line)):
-                            value = line
-                            break
-                        elif key == 'disorder' and 'disorder' in line:
-                            value = line
-                            break
-                        elif key == 'melting_point' and {'sublimes', 'above'}.intersection(set(line.split())):
-                            value = line
-                            break
-                        else:
-                            value = ''
-                if key == 'systematic_name':
-                    value = ' '.join(value.split())
-                if key == 'extinction_coef':
-                    value = float(value.split('(')[0])
-                if value and value != '?':
-                    setattr(obj_obj, key, value)
-                    break
-    obj_obj.save()
+            # try to set values
+            try:
+                if data_key in cif_block[1].keys():
+                    value = cif_block[1][data_key]
+                    if value == '?':
+                        break
+                    if '(' in value and ')' in value and re.search(r'\d', value) and not re.search(r'[a-zA-Z]', value):
+                        value = float(value.split('(')[0])
+                    if data_key == '_exptl_special_details':
+                        for line in value.split('\n'):
+                            if key == 'bioactivity' and 'drug' in line:
+                                value = line
+                                break
+                            elif key == 'phase_transitions' and 'phase' in line:
+                                value = line
+                                break
+                            elif key == 'polymorph' and 'polymorph' in line:
+                                value = line
+                                break
+                            elif key == 'sensitivity' and {'decomposition', 'sensitve', 'oxidant', 'stable', 'chromic', 'hygroscopic', 'thermolabile'}.intersection(set(line.split())):
+                                value = line
+                                break
+                            elif key == 'pressure' and ('pressure' in line or re.search(r'[KkGgMmPa]{3}', line)):
+                                value = line
+                                break
+                            elif key == 'disorder' and 'disorder' in line:
+                                value = line
+                                break
+                            elif key == 'melting_point' and {'sublimes', 'above'}.intersection(set(line.split())):
+                                value = line
+                                break
+                            else:
+                                value = ''
+                    if key == 'systematic_name':
+                        value = ' '.join(value.split())
+                    if key == 'wavelength' and type(value) == list:
+                        value = float(value[0].split(',')[0])
+                    if key == 'extinction_coef':
+                        value = float(str(value).split('(')[0])
+                    if key == 'formula_moiety' or key == 'formula_sum':
+                        value = value.replace('\n', '')
+                        value = value.replace('\r', '')
+                    if key in ['r_factor', 'wR_factor', 'gof']:
+                        value = float(value) * 100
+                    if value and value not in ['?', 'none']:
+                        setattr(obj_obj, key, value)
+                        break
+            except Exception:
+                continue
+    # if problems with attr values (first of all for COD structures)
+    try:
+        obj_obj.save()
+    except Exception as err:
+        key = str(err).split()[1].replace("'", '')
+        delattr(obj_obj, key)
+        obj_obj.save()
     return obj_obj
 
 
@@ -587,30 +688,66 @@ def add_all_cif_data(cifs: dict):
     Website https://xstar.sourceforge.net/astar/sf/output/cif_core.htm
     was used to parse the cif file codes
     """
+    cif_blocks = cifs.copy()
     for refcode, cif_block in cifs.items():
         logger_1.info(f'{refcode} in progres...')
         struct_obj = add_refcode(cif_block[1], refcode)
-        logger_1.info(f'Add authors')
-        add_author(cif_block[1], struct_obj)
-        logger_1.info(f'Check space group')
-        space_group = get_or_create_space_group(cif_block[1])
-        logger_1.info(f'Space group: {space_group}')
-        logger_1.info(f'Add unit cell')
-        add_cell(cif_block[1], space_group, struct_obj)
-        logger_1.info(f'Add reduced cell')
-        add_reduced_cell(cif_block[1], struct_obj)
-        logger_1.info(f'Add compound name')
-        add_universal(CompoundName, struct_obj, cif_block, compound_names)
-        logger_1.info(f'Add experimental info')
-        add_universal(ExperimentalInfo, struct_obj, cif_block, experimental_info)
-        logger_1.info(f'Add refinement info')
-        add_universal(RefinementInfo, struct_obj, cif_block, refinement_info)
-        logger_1.info(f'Add crystal and structure info')
-        add_universal(CrystalAndStructureInfo, struct_obj, cif_block, crystal_and_structure_info)
-        logger_1.info(f'Add formula')
-        add_universal(Formula, struct_obj, cif_block, formula)
-        logger_1.info(f'Add journal and publication')
-        add_journal_and_publication(cif_block, struct_obj)
-        logger_1.info(f'Add element composition')
-        add_element_composition(cif_block, struct_obj)
-        logger_1.info(f'Information addition from {refcode} is completed successfully!')
+        try:
+            try:
+                logger_1.info(f'Add authors')
+                add_author(cif_block[1], struct_obj)
+            except Exception:
+                pass
+            try:
+                logger_1.info(f'Check space group')
+                space_group = get_or_create_space_group(cif_block[1])
+                logger_1.info(f'Space group: {space_group}')
+                logger_1.info(f'Add unit cell')
+                add_cell(cif_block[1], space_group, struct_obj)
+                logger_1.info(f'Add reduced cell')
+                add_reduced_cell(struct_obj)
+            except Exception as err:
+                raise Exception(str(err))
+            try:
+                logger_1.info(f'Add compound name')
+                add_universal(CompoundName, struct_obj, cif_block, compound_names)
+            except Exception:
+                pass
+            try:
+                logger_1.info(f'Add experimental info')
+                add_universal(ExperimentalInfo, struct_obj, cif_block, experimental_info)
+            except Exception:
+                pass
+                logger_1.info(f'Add refinement info')
+                add_universal(RefinementInfo, struct_obj, cif_block, refinement_info)
+            try:
+                logger_1.info(f'Add crystal and structure info')
+                add_universal(CrystalAndStructureInfo, struct_obj, cif_block, crystal_and_structure_info)
+            except Exception:
+                pass
+            try:
+                logger_1.info(f'Add formula')
+                add_universal(Formula, struct_obj, cif_block, formula)
+            except Exception:
+                pass
+            try:
+                logger_1.info(f'Add journal and publication')
+                add_journal_and_publication(cif_block, struct_obj)
+            except Exception:
+                pass
+            try:
+                logger_1.info(f'Add element composition')
+                add_element_composition(cif_block, struct_obj)
+            except Exception as err:
+                raise Exception(str(err))
+            logger_1.info(f'Information addition from {refcode} is completed successfully!')
+        except Exception as err:
+            message = f'Caught an exception for structure {refcode}\n{err}'
+            logger_1.error(message)
+            # delete object if something went wrong
+            struct_obj.delete()
+            cif_blocks.pop(refcode)
+            # if only 1 structure was upload raise error
+            if len(cifs) == 1:
+                raise Exception(err)
+    return cif_blocks

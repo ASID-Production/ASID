@@ -30,21 +30,6 @@
 #include "../Classes/SearchGraph.h"
 #include "../Classes/FindMolecules.h"
 #include "../Classes/Distances.h"
+#include "../Classes/FindGeometry.h"
 
-using AtomType = uint8_t;
-using HType = uint8_t;
-using AtomicIDType = uint32_t;
-using MolecularIDType = uint32_t;
-
-using size_type = uint32_t;
-using FloatingPointType = float;
-
-using CurrentBaseNode = BaseNode<AtomType, HType>;
-using CurrentNode = Node<AtomType, HType, AtomicIDType>;
-using CurrentMoleculeGraph = MoleculeGraph<AtomType, HType, AtomicIDType, MolecularIDType>;
-using CurrentSearchGraph = SearchGraph<AtomType, HType, AtomicIDType, MolecularIDType>;
-
-using CurrentPoint = geometry::Point<FloatingPointType>;
-using CurrentCell = geometry::Cell<FloatingPointType>;
-using CurrentFindMolecules = FindMolecules<AtomType, HType, AtomicIDType, FloatingPointType>;
-using CurrentDistances = Distances<AtomType, FloatingPointType, AtomicIDType>;
+extern const cpplib::Distances* p_distances;

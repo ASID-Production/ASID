@@ -34,6 +34,9 @@ from .point_class import aPoint, Point, PointsList
 from . import Observers
 import typing
 import numpy as np
+import logging
+
+import debug
 
 SINGLE_OBSERVER = None
 
@@ -104,6 +107,7 @@ class SimpleDelegate(QtWidgets.QStyledItemDelegate):
             value = np.array(color.getRgbF(), dtype=np.float32)
             model.setData(index, value, role=99)
 
+
 class UniformListModel(QAbstractListModel):
 
     def __init__(self, parent=None, data=None):
@@ -111,6 +115,9 @@ class UniformListModel(QAbstractListModel):
         self.rows = 0
         self._root = None
         self.setModelData(data)
+
+    def root(self):
+        return self._root
 
     def setModelData(self, data):
         self.beginResetModel()
@@ -345,6 +352,10 @@ class QtPointsPropertyModel(QAbstractListModel):
 
 class QtPointsTreeModel(QAbstractItemModel):
 
+    item_selected = Signal(QModelIndex)
+    item_deselected = Signal(QModelIndex)
+    selection_changed = Signal(QModelIndex)
+
     def __init__(self, parent=None, data=None):
         if data is None:
             data = PointsList()
@@ -385,10 +396,10 @@ class QtPointsTreeModel(QAbstractItemModel):
                     break
             return
 
-    def index(self, row, column, parent=QModelIndex(), *args, **kwargs) -> QModelIndex:
-        if kwargs.get('by_point', None) is not None:
-            point = kwargs['by_point']
-            child = kwargs['by_point']
+    def index(self, row, column, parent=QModelIndex(), *args, by_point=None, **kwargs) -> QModelIndex:
+        if by_point is not None:
+            point = by_point
+            child = by_point
             path = []
             parent = point.parent
             while parent is not self._root:
@@ -465,7 +476,17 @@ class QtPointsTreeModel(QAbstractItemModel):
 
     def setData(self, index: QModelIndex, value, role: int = ...) -> bool:
         if role == 99:
+            if index.internalPointer() is None:
+                return
             property, value = value
+            if property == 'pick':
+                self.selection_changed.emit(index)
+                if value == 0.0 and index.internalPointer().pick == 1.0:
+                    logging.debug(f'item_deselected.emit({index})')
+                    self.item_deselected.emit(index)
+                elif value == 1.0 and (index.internalPointer().pick == 0.0 or index.internalPointer().pick is None):
+                    self.item_selected.emit(index)
+                    logging.debug(f'item_selected.emit({index})')
             point = index.internalPointer()
             point.__setattr__(property, value)
             return True
@@ -617,41 +638,89 @@ class TreeView(QtWidgets.QTreeView):
         menu = QtWidgets.QMenu('Context Menu', self)
 
         if selected.internalPointer() is not None:
-            def save_state(func, *args):
-                return lambda: func(*args)
+            def save_state(func, key):
+                def for_selection(func, key):
+                    for ind in self.selectedIndexes():
+                        func(ind, key)
+                return lambda: for_selection(func, key)
             menu_attach = QtWidgets.QMenu('Attach representation')
             menu_detach = QtWidgets.QMenu('Detach representation')
             menu.addMenu(menu_attach)
             menu.addMenu(menu_detach)
             actions = []
+            added = []
             for i, observer_key in enumerate(Observers.observers):
-                f = False
-                for observer in selected.internalPointer().observers:
-                    if type(observer) is Observers.observers[observer_key]:
-                        action = QtGui.QAction(f'Detach {observer_key}')
-                        func = save_state(self.model().detachObserver, selected, observer_key)
-                        action.triggered.connect(func)
-                        menu_detach.addAction(action)
-                        actions.append(action)
-                        f = True
-                if f:
-                    continue
-                else:
-                    action = QtGui.QAction(f'Attach {observer_key}')
-                    func = save_state(self.model().attachObserver, selected, observer_key)
-                    action.triggered.connect(func)
-                    menu_attach.addAction(action)
-                    actions.append(action)
+                for ind in self.selectedIndexes():
+                    f = False
+                    for observer in ind.internalPointer().observers:
+                        if type(observer) is Observers.observers[observer_key]:
+                            if f'Detach {observer_key}' not in added:
+                                action = QtGui.QAction(f'Detach {observer_key}')
+                                func = save_state(self.model().detachObserver, observer_key)
+                                action.triggered.connect(func)
+                                menu_detach.addAction(action)
+                                actions.append(action)
+                                added.append(f'Detach {observer_key}')
+                            f = True
+                    if f:
+                        continue
+                    else:
+                        if f'Attach {observer_key}' not in added:
+                            action = QtGui.QAction(f'Attach {observer_key}')
+                            func = save_state(self.model().attachObserver, observer_key)
+                            action.triggered.connect(func)
+                            menu_attach.addAction(action)
+                            actions.append(action)
+                            added.append(f'Attach {observer_key}')
 
-        def delete(row, parent):
-            self.model().removeRow(row=selected.row(), parent=selected.parent())
-            self.selectionModel().clearSelection()
+            additional_context_actions = selected.internalPointer().additional_context_actions
+            if additional_context_actions is not None:
+                add_actions = []
+                for action in additional_context_actions:
+                    action_o = QtGui.QAction(action[0], self)
+                    action_o.triggered.connect(action[1])
+                    add_actions.append(action_o)
+                    menu.addAction(action_o)
+
+        def delete():
+            def find(pl):
+                ret_i = None
+                def rec(parent, pl, i):
+                    for child in parent.children:
+                        if child is pl:
+                            nonlocal ret_i
+                            ret_i = i
+                            return True
+                        else:
+                            if rec(child, pl, i+1):
+                                return True
+                    return False
+                rec(self.model().getRoot(), pl, 0)
+                return ret_i
+            selected = self.selectionModel().selectedIndexes()
+            selected = [x.internalPointer() for x in selected]
+            first_for_delete = []
+            second_for_delete = []
+
+            for p in selected:
+                if p is not None:
+                    if type(p) is Point:
+                        first_for_delete.append(p)
+                    else:
+                        second_for_delete.append((find(p), p))
+            second_for_delete.sort(key=lambda x: x[0], reverse=True)
+            for p in first_for_delete:
+                ind = self.model().index(0, 0, by_point=p)
+                self.model().removeRow(row=ind.row(), parent=ind.parent())
+            for p in second_for_delete:
+                ind = self.model().index(0, 0, by_point=p[1])
+                self.model().removeRow(row=ind.row(), parent=ind.parent())
         action1 = QtGui.QAction('Add list', self)
         action2 = QtGui.QAction('Add point', self)
         action3 = QtGui.QAction('Delete', self)
         action1.triggered.connect(lambda: self.model().insertRow(row=-1, parent=selected, type='list'))
         action2.triggered.connect(lambda: self.model().insertRow(row=-1, parent=selected, type='point'))
-        action3.triggered.connect(lambda: delete(row=selected.row(), parent=selected.parent()))
+        action3.triggered.connect(delete)
         menu.addAction(action1)
         menu.addAction(action2)
         menu.addAction(action3)
@@ -689,7 +758,6 @@ class ListView(QtWidgets.QListView):
         dialog.accepted.connect(lambda: addProp(self, lineEdit.text()))
         layout.addWidget(lineEdit)
         dialog.open()
-        print(lineEdit.text())
 
     def showContextMenu(self, pos: QPoint):
         menu = QtWidgets.QMenu('Context Menu', self)
@@ -699,7 +767,6 @@ class ListView(QtWidgets.QListView):
 
         action1.triggered.connect(self.addProperty)
         action2.triggered.connect(lambda: self.model().removeProperty(index=selected))
-        print
         menu.addAction(action1)
         menu.addAction(action2)
         menu.exec(self.mapToGlobal(pos))
@@ -709,30 +776,67 @@ class ListView(QtWidgets.QListView):
 class SelectionModel(QItemSelectionModel):
 
     newSelection = Signal(tuple, name='newSelection') # Tuple[QModelIndex | QItemSelection, QItemSelectionModel.SelectionFlags]
-    
+
     def __init__(self, model=None):
         super(SelectionModel, self).__init__(model=model)
+        self.resp = {QItemSelectionModel.NoUpdate: self.noUpdateResp,
+                     QItemSelectionModel.Clear: self.clearResp,
+                     QItemSelectionModel.Select: self.selectResp,
+                     QItemSelectionModel.Deselect: self.deselectResp,
+                     QItemSelectionModel.Toggle: self.toggleResp,
+                     QItemSelectionModel.Current: self.currentResp,
+                     QItemSelectionModel.Rows: self.rowsResp,
+                     QItemSelectionModel.Columns: self.columnsResp}
 
     def select(self, index, command: QItemSelectionModel.SelectionFlags):
+        if command & QItemSelectionModel.Current == QItemSelectionModel.Current:
+            command = command ^ QItemSelectionModel.Current
+
+        if command & QItemSelectionModel.Toggle == QItemSelectionModel.Toggle:
+            command = command ^ QItemSelectionModel.Toggle
+            command = command | QItemSelectionModel.Select
+        logging.debug(command)
         if isinstance(self.model(), QtPointsTreeModel):
             if isinstance(index, QItemSelection):
                 index_l = index.indexes()
             elif isinstance(index, QModelIndex):
                 index_l = [index]
-            for index_m in index_l:
-                if index_m.internalPointer() is not None:
-                    if index_m.internalPointer().pick is None:
-                        index_m.internalPointer().addProperty('pick', 0.0)
-                    if (command & QItemSelectionModel.Clear) == QItemSelectionModel.Clear:
-                        for ind in self.selectedIndexes():
-                            self.model().setData(ind, ('pick', 0.0), role=99)
-                            pass
-                    if (command & QItemSelectionModel.Deselect) == QItemSelectionModel.Deselect:
-                        self.model().setData(index_m, ('pick', 0.0), role=99)
-                    if (command & QItemSelectionModel.Select) == QItemSelectionModel.Select:
-                        self.model().setData(index_m, ('pick', 1.0), role=99)
-                    self.newSelection.emit((index, command))
+            for com in self.resp:
+                if com & command == com:
+                    logging.debug(f'\t{com}')
+                    self.resp[com](index_l)
+            self.newSelection.emit((index, command))
         return super().select(index, command)
+
+    def noUpdateResp(self, index):
+        return
+
+    def clearResp(self, index):
+        for ind in self.selectedIndexes():
+            self.model().setData(ind, ('pick', 0.0), role=99)
+
+
+    def selectResp(self, index):
+        for ind in index:
+            self.model().setData(ind, ('pick', 1.0), role=99)
+
+    def deselectResp(self, index):
+        for ind in index:
+            self.model().setData(ind, ('pick', 0.0), role=99)
+
+    def toggleResp(self, index):
+        for ind in index:
+            val = abs(ind.internalPointer().pick - 1)
+            self.model().setData(ind, ('pick', val), role=99)
+
+    def currentResp(self, index):
+        return
+
+    def rowsResp(self, index):
+        return
+
+    def columnsResp(self, index):
+        return
 
     def clearSelection(self) -> None:
         if isinstance(self.model(), QtPointsTreeModel):

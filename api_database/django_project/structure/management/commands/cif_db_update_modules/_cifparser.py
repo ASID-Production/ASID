@@ -29,13 +29,15 @@
 from structure.models import StructureCode, CoordinatesBlock, Other, Cell
 from ._element_numbers import element_numbers
 import re
+from typing import Tuple, List
 
 
 def add_coords(cif_block: dict, structure: classmethod):
     # if there are coordinates in the file, then add them to the database
-    if {'_atom_site_label', '_atom_site_type_symbol',
-            '_atom_site_fract_x', '_atom_site_fract_y',
-            '_atom_site_fract_z'}.issubset(cif_block[1].keys()):
+    if {
+        '_atom_site_label', '_atom_site_fract_x',
+        '_atom_site_fract_y', '_atom_site_fract_z'
+    }.issubset(cif_block[1].keys()):
         coords, atoms = get_coords(cif_block)
         cb_obj, created = CoordinatesBlock.objects.get_or_create(refcode=structure)
         cb_obj.coordinates = coords
@@ -49,9 +51,9 @@ def add_other_info(atoms, structure):
     max_atom_num = 0
     if atoms:
         for atom in atoms:
-            atom_type = re.findall(r'[A-Za-z]{1,3}', atom)[0]
-            if atom_type in element_numbers.keys():
-                num = element_numbers[atom_type]
+            atom_type = re.findall(r'[A-Za-z]{1,3}', atom)
+            if atom_type and atom_type[0] in element_numbers.keys():
+                num = element_numbers[atom_type[0]]
                 if num > max_atom_num:
                     max_atom_num = num
         other_obj.number_atoms_with_sites = len(atoms)
@@ -80,15 +82,39 @@ def add_cell_parms_with_error(cif_block, structure: classmethod):
     return 0
 
 
-def get_coords(cif_block) -> str:
+def get_coords(cif_block) -> Tuple[str, List]:
     atomic_sites = ''
     atoms = []
     coords = cif_block[1].GetLoop('_atom_site_label')
-    # i - atom
-    for i, site in enumerate(coords, start=0):
-        atoms.append(site[0])
-        # j - element in atom list
-        temp = site.copy()
+    order: list = coords.GetItemOrder()
+    idxs = {
+        'label': order.index('_atom_site_label'),
+        'atom_type_idx': '',
+        'x_idx': order.index('_atom_site_fract_x'),
+        'y_idx': order.index('_atom_site_fract_y'),
+        'z_idx': order.index('_atom_site_fract_z')
+    }
+    if '_atom_site_type_symbol' in order:
+        idxs['atom_type_idx'] = order.index('_atom_site_type_symbol')
+    if '_atom_site_occupancy' in order:
+        idxs['occup'] = order.index('_atom_site_occupancy')
+    if '_atom_site_b_iso_or_equiv' in order:
+        if 'occup' not in idxs.keys():
+            idxs['occup'] = 1
+        idxs['b_iso'] = order.index('_atom_site_b_iso_or_equiv')
+    for site in coords:
+        atoms.append(site[idxs['label']])
+        temp = list()
+        for key, value in idxs.items():
+            if not value and key == 'atom_type_idx':
+                value = re.findall(r'(^[a-zA-Z]{1,3})', site[idxs['label']])
+                if value:
+                    value = value[0]
+                    temp.append(value)
+                else:
+                    raise Exception('No "_atom_site_type_symbol" key was found in cif file!')
+            else:
+                temp.append(site[value])
         for j, element in enumerate(temp, start=0):
             # remove question marks
             if j == 0:
@@ -98,9 +124,6 @@ def get_coords(cif_block) -> str:
                 idx = element.index('(')
                 # rewrite the atomic element without parentheses
                 temp[j] = element[:idx]
-            # interrupt if there is any more information about atoms (thermal, for example)
-            if j > 4:
-                break
         atomic_sites += ' '.join(temp)
-        atomic_sites += ' '
+        atomic_sites += '\n'
     return atomic_sites, atoms

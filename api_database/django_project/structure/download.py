@@ -30,16 +30,16 @@ from math import cos, sqrt, radians
 
 CIF_HEAD = '''
 #######################################################################
-#
-#             Atomistic Simulation Instruments and Database
-#                                ASID
-#
+#                                                                     #
+#             Atomistic Simulation Instruments and Database           #
+#                                ASID                                 #
+#                                                                     #
 #######################################################################
-#
-# This CIF file has been generated from the Atomistic Simulation 
-# Instruments and Database and include bibliographic, chemical, 
-# crystal, experimental, refinement and atomic coordinate data.
-#
+#                                                                     #
+# This CIF file has been generated from the Atomistic Simulation      # 
+# Instruments and Database and include bibliographic, chemical,       #
+# crystal, experimental, refinement and atomic coordinate data.       #
+#                                                                     #
 #######################################################################
 
 '''
@@ -48,12 +48,21 @@ CIF_HEAD = '''
 def create_cif_text(structure: classmethod) -> str:
 
     def check_value_exist(cif_parameter: str, value, in_commas: bool, percent: bool = False) -> str:
+        # check commas need
+        if not in_commas and value and type(value) is str and len(value.split()) > 1:
+            try:
+                float(value)
+            except ValueError:
+                in_commas = True
+        # check exists
         if percent and value:
             value = float(value) / 100
         if value and in_commas:
             return f"{cif_parameter} '{value}'\n"
         elif value and not in_commas:
             return f"{cif_parameter} {value}\n"
+        elif cif_parameter == '_journal_name_full' and structure.publication.publication.journal.name:
+            return f"_journal_name_full '{structure.publication.publication.journal.name}'\n"
         else:
             return f"{cif_parameter} ?\n"
 
@@ -61,7 +70,7 @@ def create_cif_text(structure: classmethod) -> str:
         unit_cell_params = {'_cell_length_a': cell.a, '_cell_length_b': cell.b,
                             '_cell_length_c': cell.c, '_cell_angle_alpha': cell.al,
                             '_cell_angle_beta': cell.be, '_cell_angle_gamma': cell.ga}
-        # if there is no data of paramaters' diviations, wright  parameters as is
+        # if there is no data of paramaters' diviations, write  parameters as is
         if value:
             return check_value_exist(cif_parameter, value, in_commas)
         return check_value_exist(cif_parameter, unit_cell_params[cif_parameter], in_commas)
@@ -72,12 +81,17 @@ def create_cif_text(structure: classmethod) -> str:
     text += check_value_exist('_database_code_depnum_ccdc_archive', structure.CCDC_number, True)
     text += check_value_exist('_chemical_formula_sum', structure.formula.formula_sum, True)
     text += check_value_exist('_chemical_formula_moiety', structure.formula.formula_moiety, True)
-    text += check_value_exist('_journal_coden_Cambridge', structure.publication.publication.journal.international_coden, False)
-    text += check_value_exist('_journal_volume', structure.publication.publication.volume, False)
-    text += check_value_exist('_journal_year', structure.publication.publication.year, False)
-    text += check_value_exist('_journal_page_first', structure.publication.publication.page, False)
-    text += check_value_exist('_journal_name_full', structure.publication.publication.journal.fullname, True)
-    text += check_value_exist('_journal_DOI', structure.publication.publication.doi, True)
+    text += check_value_exist('_chemical_melting_point', structure.crystal_and_structure_info.melting_point, False)
+    if hasattr(structure, "publication"):
+        # text += check_value_exist('_journal_coden_Cambridge', structure.publication.publication.journal.international_coden, False)
+        text += check_value_exist('_journal_volume', structure.publication.publication.volume, False)
+        text += check_value_exist('_journal_year', structure.publication.publication.year, False)
+        text += check_value_exist('_journal_page_first', structure.publication.publication.page, False)
+        if structure.publication.publication.journal:
+            text += check_value_exist('_journal_name_full', structure.publication.publication.journal.fullname, True)
+        else:
+            text += f"_journal_name_full ?\n"
+        text += check_value_exist('_journal_DOI', structure.publication.publication.doi, True)
 
     if structure.authors.count() > 0:
         text += 'loop_\n_publ_author_name\n'
@@ -90,13 +104,29 @@ def create_cif_text(structure: classmethod) -> str:
     text += check_value_exist('_chemical_name_systematic', structure.name.systematic_name, True)
     text += check_value_exist('_chemical_name_common', structure.name.trivial_name, True)
 
-    volume = structure.cell.a * structure.cell.b * structure.cell.c * sqrt(
-        1 + 2 * cos(radians(structure.cell.al)) * cos(radians(structure.cell.be)) * cos(radians(structure.cell.ga)) -
-        cos(radians(structure.cell.al)) ** 2 - cos(radians(structure.cell.be)) ** 2 - cos(radians(structure.cell.ga))
-    )
+    # volume
+    cell = structure.cell
+    r_cell = structure.reduced_cells.all()
+    if (1 + 2 * cos(radians(cell.al)) * cos(radians(cell.be)) * cos(radians(cell.ga)) -
+        cos(radians(cell.al)) ** 2 - cos(radians(cell.be)) ** 2 - cos(radians(cell.ga))) > 0:
+        volume = cell.a * cell.b * cell.c * sqrt(
+            1 + 2 * cos(radians(cell.al)) * cos(radians(cell.be)) * cos(radians(cell.ga)) -
+            cos(radians(cell.al)) ** 2 - cos(radians(cell.be)) ** 2 - cos(radians(cell.ga))
+        )
+    elif r_cell and (1 + 2 * cos(radians(r_cell[0].al)) * cos(radians(r_cell[0].be)) * cos(radians(r_cell[0].ga)) -
+                     cos(radians(r_cell[0].al)) ** 2 - cos(radians(r_cell[0].be)) ** 2 - cos(
+                radians(r_cell[0].ga))) > 0:
+        volume = r_cell[0].a * r_cell[0].b * r_cell[0].c * sqrt(
+            1 + 2 * cos(radians(r_cell[0].al)) * cos(radians(r_cell[0].be)) * cos(radians(r_cell[0].ga)) -
+            cos(radians(r_cell[0].al)) ** 2 - cos(radians(r_cell[0].be)) ** 2 - cos(radians(r_cell[0].ga))
+        )
+    else:
+        volume = 0
 
-    text += check_value_exist('_cell_volume', volume, False)
+    text += check_value_exist('_cell_volume', round(volume, 3), False)
     text += check_value_exist('_exptl_crystal_density_diffrn', structure.experimental_info.calculated_density_value, False)
+    text += check_value_exist('_exptl_crystal_colour', structure.crystal_and_structure_info.color, True)
+    text += check_value_exist('_exptl_crystal_description', structure.crystal_and_structure_info.crystal_shape, True)
 
     if (structure.crystal_and_structure_info.bioactivity or
             structure.crystal_and_structure_info.phase_transitions or
@@ -104,8 +134,7 @@ def create_cif_text(structure: classmethod) -> str:
             structure.crystal_and_structure_info.sensitivity or
             structure.crystal_and_structure_info.pressure or
             structure.crystal_and_structure_info.disorder or
-            structure.crystal_and_structure_info.recrystallisation_solvent or
-            structure.crystal_and_structure_info.melting_point):
+            structure.crystal_and_structure_info.recrystallisation_solvent):
         text += '_exptl_special_details\n;\n'
         for param, value in {
             'bioactivity': structure.crystal_and_structure_info.bioactivity,
@@ -115,9 +144,17 @@ def create_cif_text(structure: classmethod) -> str:
             'pressure': structure.crystal_and_structure_info.pressure,
             'disorder': structure.crystal_and_structure_info.disorder,
             'recrystallisation solvent': structure.crystal_and_structure_info.recrystallisation_solvent,
-            'melting point': structure.crystal_and_structure_info.melting_point
         }.items():
-            text += f'{param}: {value}\n'
+            if (
+                    (param == 'bioactivity' and structure.crystal_and_structure_info.bioactivity) or
+                    (param == 'phase transitions' and structure.crystal_and_structure_info.phase_transitions) or
+                    (param == 'polymorph' and structure.crystal_and_structure_info.polymorph) or
+                    (param == 'sensitivity' and structure.crystal_and_structure_info.sensitivity) or
+                    (param == 'pressure' and structure.crystal_and_structure_info.pressure) or
+                    (param == 'disorder' and structure.crystal_and_structure_info.disorder) or
+                    (param == 'recrystallisation solvent' and structure.crystal_and_structure_info.recrystallisation_solvent)
+            ):
+                text += f'{param}: {value}\n'
         text += ';\n'
     else:
         text += '_exptl_special_details ?\n'
@@ -127,7 +164,8 @@ def create_cif_text(structure: classmethod) -> str:
     text += check_value_exist('_refine_ls_wR_factor_gt', structure.refinement_info.wR_factor, False, True)
     text += check_value_exist('_refine_ls_goodness_of_fit_ref', structure.refinement_info.gof, False, True)
     text += check_value_exist('_symmetry_cell_setting', structure.cell.spacegroup.get_system_display(), False)
-    text += check_value_exist('_symmetry_space_group_name_H-M', structure.cell.spacegroup.hall_name, True)
+    text += check_value_exist('_symmetry_space_group_name_H-M', structure.cell.spacegroup.name, True)
+    text += check_value_exist('_symmetry_space_group_name_Hall', structure.cell.spacegroup.hall_name, True)
     text += check_value_exist('_symmetry_Int_Tables_number', structure.cell.spacegroup.number, False)
 
     text += 'loop_\n_symmetry_equiv_pos_site_id\n_symmetry_equiv_pos_as_xyz\n'
@@ -143,9 +181,16 @@ def create_cif_text(structure: classmethod) -> str:
     text += check_value_exist('_cell_formula_units_Z', structure.cell.zvalue, False)
     text += check_value_exist('_cell_formula_units_Z_prime', structure.cell.zprime, False)
 
-    if structure.characteristics.has_3d_structure and structure.coordinates.coordinates:
-        text += 'loop_\n_atom_site_label\n_atom_site_type_symbol\n_atom_site_fract_x\n_atom_site_fract_y\n_atom_site_fract_z\n'
-        text += structure.coordinates.coordinates
+    if hasattr(structure, "coordinates"):
+        if structure.characteristics.has_3d_structure and structure.coordinates.coordinates:
+            # TODO: after dump loading leave only 5 values in coordinates strings!!!
+            parms_num = len(structure.coordinates.coordinates.split('\n')[0].split())
+            text += 'loop_\n_atom_site_label\n_atom_site_type_symbol\n_atom_site_fract_x\n_atom_site_fract_y\n_atom_site_fract_z\n'
+            if parms_num >= 6:
+                text += '_atom_site_occupancy\n'
+            if parms_num >= 7:
+                text += '_atom_site_B_iso_or_equiv\n'
+            text += structure.coordinates.coordinates
 
-    text += '#END\n'
+    text += '\n#END\n'
     return text

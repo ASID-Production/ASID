@@ -31,89 +31,84 @@
 #include <cassert>
 #include <vector>
 #include <cstdint>
+namespace cpplib {
+	template<class A> class Hash {
+	public:
+		// Current settings
+		using hash_single = uint16_t;
+		using hash_full = uint64_t;
 
-template<class A, class H, class AI>
-class Hash {
-public:
-	// Definitions
-	using hash8 = uint8_t;
-	using hash16 = uint16_t;
-	using hash32 = uint32_t;
-	using hash64 = uint64_t;
+		using NodeType = Node<A>;
+		using AtomIndex = currents::AtomIndex;
+		using MoleculeGraphType = MoleculeGraph<A>;
+		using size_type = currents::AtomIndex;
 
-	// Current settings
-	using hash_single = hash16;
-	using hash_full = hash64;
+	private:
+		// Data
+		::std::vector<hash_full> hash;
+		template <class MI>
+		explicit constexpr Hash(const MoleculeGraphType& nodes) = delete;
 
-	using NodeType = Node<A, H, AI>;
-	using size_type = AI;
-
-private:
-	// Data
-	std::vector<hash_full> hash;
-	template <class MI>
-	explicit constexpr Hash(const MoleculeGraph<A, H, AI, MI>& nodes) = delete;
-
-public:
-	// Constructors
-	explicit constexpr Hash(const std::vector<NodeType>& nodes) {
-		AI s = nodes.size();
-		hash.resize(s, 0);
-		const std::vector<hash_single> monohash = createMonohash(nodes, s);
-		// Second-Fourth levels
-		for (AI i = 0; i < s; i++) {
-			const auto& t = i;
-			hash[t] = hash_recursive(t, nodes[t], monohash, 3);
+	public:
+		// Constructors
+		explicit Hash(const ::std::vector<NodeType>& nodes) {
+			size_type s = nodes.size();
+			hash.resize(s, 0);
+			const ::std::vector<hash_single> monohash = createMonohash(nodes);
+			// Second-Fourth levels
+			for (size_type i = 0; i < s; i++) {
+				const size_type& t = i;
+				hash[t] = hash_recursive(t, nodes[t], monohash, 3);
+			}
+			std::sort(hash.begin(), hash.end());
 		}
-		std::sort(hash.begin(), hash.end());
-	}
-	explicit constexpr Hash(const std::vector<AI>& ai, const std::vector<NodeType>& nodes) {
-		AI s = ai.size();
-		hash.resize(s, 0);
-		const std::vector<hash_single> monohash = createMonohash(nodes);
-		// Second-Fourth levels
-		for (AI i = 0; i < s; i++) {
-			hash.operator[](i) = hash_recursive(ai[i], nodes[ai[i]], monohash, 3);
+		explicit Hash(const ::std::vector<AtomIndex>& ai, const ::std::vector<NodeType>& nodes) {
+			size_type s = ai.size();
+			hash.resize(s, 0);
+			const ::std::vector<hash_single> monohash = createMonohash(nodes);
+			// Second-Fourth levels
+			for (size_type i = 0; i < s; i++) {
+				hash.operator[](i) = hash_recursive(ai[i], nodes[ai[i]], monohash, 3);
+			}
+			::std::sort(hash.begin(), hash.end());
 		}
-		std::sort(hash.begin(), hash.end());
-	}
+		bool operator==(const Hash& other) const {
+			size_type s = hash.size();
+			for (size_type i = 0; i < s; i++) {
+				if (hash[i] != other.hash[i])
+					return false;
+			}
+			return true;
+		}
+	private:
+		::std::vector<hash_single> createMonohash(const ::std::vector<NodeType>& nodes) const {
+			auto size = nodes.size();
+			std::vector<hash_single> monohash(size);
+			for (size_type i = 0; i < size; i++) {
+				monohash[i] = static_cast<hash_single>(nodes[i].getType()) + static_cast<hash_single>(static_cast<hash_single>(nodes[i].getHAtoms()) << 8) + static_cast<hash_single>(nodes[i].neighboursSize() << 12);
+			}
+			return monohash;
+		}
+		std::vector<hash_single> createMonohash(const std::vector<AtomIndex>& ai, const std::vector<NodeType>& nodes) const {
 
-	bool operator==(const Hash<A, H, AI>& other) {
-		size_type s = hash.size();
-		for (size_type i = 0; i < s; i++) {
-			if (hash[i] != other.hash[i])
-				return false;
+			auto size = nodes.size();
+			std::vector<hash_single> monohash(size);
+			for (size_type i = 0; i < size; i++) {
+				monohash[i] = static_cast<hash_single>(nodes[ai[i]].getType()) + static_cast<hash_single>(static_cast<hash_single>(nodes[ai[i]].getHAtoms()) << 8) + static_cast<hash_single>(nodes[ai[i]].neighboursSize() << 12);
+			}
+			return monohash;
 		}
-		return true;
-	}
-private:
-	constexpr std::vector<hash_single> createMonohash(const std::vector<NodeType>& nodes) const {
-		auto size = nodes.size();
-		std::vector<hash_single> monohash(size);
-		for (size_type i = 0; i < size; i++) {
-			monohash[i] = static_cast<hash_single>(nodes[i].getType()) + static_cast<hash_single>(static_cast<hash_single>(nodes[i].getHAtoms()) << 8) + static_cast<hash_single>(nodes[i].neighboursSize() << 12);
-		}
-		return monohash;
-	}
-	constexpr std::vector<hash_single> createMonohash(const std::vector<AI>& ai, const std::vector<NodeType>& nodes) const {
 
-		auto size = nodes.size(); 
-		std::vector<hash_single> monohash(size);
-		for (size_type i = 0; i < size; i++) {
-			monohash[i] = static_cast<hash_single>(nodes[ai[i]].getType()) + static_cast<hash_single>(static_cast<hash_single>(nodes[ai[i]].getHAtoms()) << 8) + static_cast<hash_single>(nodes[ai[i]].neighboursSize() << 12);
-		}
-		return monohash;
-	}
+		hash_full hash_recursive(const AtomIndex cur, const NodeType& node, const std::vector<hash_single>& mono, const char depth) {
+			if (depth == 0)
+				return mono[cur];
+			hash_full res = mono[cur];
+			auto size = node.neighboursSize();
 
-	hash_full hash_recursive(const AI cur, const NodeType& node, const std::vector<hash_single>& mono, const char depth) {
-		if (depth == 0)
-			return mono[cur];
-		hash_full res = mono[cur];
-		auto size = node.neighboursSize();
-
-		for (decltype(size) i = 0; i < size; i++) {
-			res += hash_recursive(node.getNeighbour(i)->getID(), *(node.getNeighbour(i)), mono, depth - 1) << 16;
+			for (decltype(size) i = 0; i < size; i++) {
+				res += hash_recursive(node.getNeighbour(i)->getID(), *(node.getNeighbour(i)), mono, depth - 1) << 16;
+			}
+			return res;
 		}
-		return res;
-	}
-};
+	};
+}

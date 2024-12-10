@@ -36,30 +36,40 @@ from .cif_db_update_modules._add_graphs_to_db import upload_graphs_to_db
 from .cif_db_update_modules._add_substructure_filtration import add_substructure_filters
 from .cif_db_update_modules._add_all_cif_data import add_all_cif_data
 from CifFile import ReadCif
-from structure.models import StructureCode
+from structure.models import StructureCode, InChI, CoordinatesBlock
 import multiprocessing
 from django_project.loggers import cif_db_update_main_logger as logger_main
-import codecs
+import chardet
+from typing import Dict
 
 NUM_OF_PROC = int(multiprocessing.cpu_count() / 2)  # number of physical processors
 MAX_TIME_WAIT = 600  # maximum time to wait for process completion (sec)
-CHUNK_SIZE = 1000  # size of the processed part of the array
+CHUNK_SIZE = 5000  # size of the processed part of the array
 
 
-def collect_cif_data(file: str, cif_blocks: dict, user_refcode=''):
+def collect_cif_data(file: str, cif_blocks: dict, user_refcode='', use_db=True):
     # read cif file
     try:
         cif = ReadCif(file)
     except:
-        with codecs.open(file, 'r', encoding='ansi') as f1:
-            lines = f1.read()
-        with codecs.open(file, 'w', encoding='utf8') as f2:
-            f2.write(lines)
+        with open(file, 'rb') as fl:
+            result = chardet.detect(fl.read())
+            encoding = result['encoding']
+        with open(file, 'r', encoding=encoding) as f1:
+            lines = f1.readlines()
+            # correct data name to except any forbidden symbols like spaces, points and others
+            for idx, line in enumerate(lines):
+                if line.startswith('data_'):
+                    lines[idx] = 'data_structure\n'
+        with open(file, 'w', encoding='utf8') as f2:
+            f2.writelines(lines)
         try:
             cif = ReadCif(file)
         except Exception as err:
-            logger_main.error(f"Exception: Failed to read cif file!", exc_info=True)
-            return cif_blocks
+            logger_main.error(f"Exception: Failed to read cif file {file}!", exc_info=True)
+            raise Exception(f"Exception: Failed to read cif file {file}:\n"
+                            f"Please ensure that all cif values with space symbols are in quotes!\n"
+                            f"{err}")
     # look through each structural block in cif file
     for block in cif.items():
         db = ''
@@ -76,12 +86,12 @@ def collect_cif_data(file: str, cif_blocks: dict, user_refcode=''):
         else:
             raise Exception(f'No refcode was found in cif file or in input parameters!')
         # if it belongs to another database, then we record the information
-        if db:
+        if db and use_db:
             str_obj, created = StructureCode.objects.get_or_create(refcode=refcode)
             setattr(str_obj, db, True)
             str_obj.save()
         cif_blocks[refcode] = block
-        return cif_blocks
+    return cif_blocks
 
 
 def get_files(args):
@@ -94,7 +104,7 @@ def get_files(args):
                 files.append(arg)
             else:
                 # we get a list of cif files in the directory
-                all_files = os.listdir(arg)
+                all_files = sorted(os.listdir(arg))
                 for file in all_files:
                     if file.endswith('.cif'):
                         files.append(os.path.join(arg, file))
@@ -117,7 +127,11 @@ def manager_collect_cifs(files, user_refcodes: dict):
 def manager_add_coords_and_params_to_db(cif_blocks):
     for refcode, cif_block in cif_blocks.items():
         structure, created = StructureCode.objects.get_or_create(refcode=refcode)
-        atoms = add_coords(cif_block, structure)
+        try:
+            atoms = add_coords(cif_block, structure)
+        except Exception as err:
+            structure.delete()
+            raise Exception(f'There is a problem with coordinates in {refcode} structure:\n{err}')
         add_cell_parms_with_error(cif_block, structure)
         add_other_info(atoms, structure)
 
@@ -126,11 +140,10 @@ def create_queue(cif_blocks: dict):
     queue = multiprocessing.Queue()
     refcodes_to_graph = []
     for refcode, cif_block in cif_blocks.items():
-        if {'_atom_site_label', '_atom_site_type_symbol',
-            '_atom_site_fract_x', '_atom_site_fract_y',
-            '_atom_site_fract_z'}.issubset(cif_block[1].keys()
-                                           ):
-            queue.put([refcode, cif_block])
+        if StructureCode.objects.filter(refcode=refcode).exists():
+            struct_obj = StructureCode.objects.get(refcode=refcode)
+            symops = struct_obj.cell.spacegroup.symops
+            queue.put([refcode, cif_block, symops])
             refcodes_to_graph.append(refcode)
     return queue, refcodes_to_graph
 
@@ -178,11 +191,43 @@ def create_graph_c(queue):
     return return_dict
 
 
-def manager_upload_graphs_to_db(graphs):
-    for refcode, graphs in graphs.items():
-        graphs_in_cif, bonds, angles = graphs
+def manager_upload_graphs_to_db(graphs: Dict[str, Dict]):
+    for refcode, graph in graphs.items():
         structure = StructureCode.objects.get(refcode=refcode)
-        upload_graphs_to_db(graphs_in_cif, structure, bonds, angles)
+        upload_graphs_to_db(graph, structure)
+
+
+def manager_upload_smiles_and_inchi_to_db(graphs: Dict[str, Dict]):
+    for refcode, graph in graphs.items():
+        structure = StructureCode.objects.get(refcode=refcode)
+        coord_block = CoordinatesBlock.objects.get(refcode=structure)
+        if graph['smiles'] and not coord_block.smiles:
+            coord_block.smiles = graph['smiles']
+            coord_block.save()
+        if graph['inchi'] and not InChI.objects.filter(refcode=structure).exists():
+            inchi = graph['inchi'].split('=')[1].split('/')
+            # print(inchi)
+            inchi_block = InChI.objects.create(refcode=structure, version=inchi[0], formula=inchi[1])
+            for item in inchi[2:]:
+                if item.startswith('c'):
+                    inchi_block.connectivity = item
+                elif item.startswith('h'):
+                    inchi_block.hydrogens = item
+                elif item.startswith('q'):
+                    inchi_block.q_charge = item
+                elif item.startswith('p'):
+                    inchi_block.p_charge = item
+                elif item.startswith('b'):
+                    inchi_block.b_stereo = item
+                elif item.startswith('t'):
+                    inchi_block.t_stereo = item
+                elif item.startswith('m'):
+                    inchi_block.m_stereo = item
+                elif item.startswith('s'):
+                    inchi_block.s_stereo = item
+                elif item.startswith('i'):
+                    inchi_block.i_isotopic = item
+            inchi_block.save()
 
 
 def main(args, all_data=False, user_refcodes=''):
@@ -203,7 +248,7 @@ def main(args, all_data=False, user_refcodes=''):
         # Add all data from cif file
         if all_data:
             logger_main.info(f"Start adding all information from the cif to the database")
-            add_all_cif_data(cif_blocks)
+            cif_blocks = add_all_cif_data(cif_blocks)
         # Adding coordinates and parameters with deviations
         logger_main.info(f"Start adding coordinates and cell parameters with deviations")
         manager_add_coords_and_params_to_db(cif_blocks)
@@ -215,16 +260,20 @@ def main(args, all_data=False, user_refcodes=''):
         graphs: dict = create_graph_c(queue)
         # Checking which structures were not processed
         not_added_structures = set(refcodes_to_graph).difference(set(graphs.keys()))
-        logger_main.info(f"Graph Generation Results:\n"
-                         f"\tTotal structures: {len(cif_blocks)}\n"
-                         f"\tStructures without coordinates: {len(cif_blocks) - len(refcodes_to_graph)}\n"
-                         f"\tAdded {len(graphs.keys())} structures of {len(refcodes_to_graph)}\n"
-                         f"\tNot added {len(not_added_structures)} structures (addition error in {round(len(not_added_structures) / len(refcodes_to_graph) * 100, 2)} % cases)\n"
-                         f"\tList of unadded structures:\n"
-                         f"\t\t{', '.join(not_added_structures)}")
+        if len(refcodes_to_graph):
+            logger_main.info(f"Graph Generation Results:\n"
+                             f"\tTotal structures: {len(cif_blocks)}\n"
+                             f"\tStructures without coordinates: {len(cif_blocks) - len(refcodes_to_graph)}\n"
+                             f"\tAdded {len(graphs.keys())} structures of {len(refcodes_to_graph)}\n"
+                             f"\tNot added {len(not_added_structures)} structures (addition error in {round(len(not_added_structures) / len(refcodes_to_graph) * 100, 2)} % cases)\n"
+                             f"\tList of unadded structures:\n"
+                             f"\t\t{', '.join(not_added_structures)}")
         # Adding graphs to the database
         logger_main.info(f"Start adding graphs into the database")
         manager_upload_graphs_to_db(graphs)
+        # Adding smiles and inchi
+        logger_main.info(f"Start adding smiles and inchi")
+        manager_upload_smiles_and_inchi_to_db(graphs)
         # Adding substructure info
         logger_main.info(f"Start adding substructure information")
         add_substructure_filters(graphs.keys(), NUM_OF_PROC)

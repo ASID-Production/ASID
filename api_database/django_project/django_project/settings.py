@@ -26,55 +26,20 @@
 #
 # *****************************************************************************************
 
-
 import os
-import ctypes
-from sys import platform
+import sys
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-# cpplib module version
-CPPLIB = 'cpplib'
+# add path to cpplib module
+sys.path.append(os.path.abspath(os.path.join(BASE_DIR, '../../module/')))
 
 # check logs directory exists
 if not os.path.exists(os.path.join(BASE_DIR, 'logs')):
     os.mkdir(os.path.join(BASE_DIR, 'logs'))
-
-
-def GET_DLL():
-    if 'linux' in platform:
-        dll = ctypes.CDLL(os.path.join(BASE_DIR, 'modules', 'c_modules', CPPLIB + '.so'))
-    else:
-        dll = ctypes.WinDLL(os.path.join(BASE_DIR, 'modules', 'c_modules', CPPLIB + '.dll'))
-    dll.SearchMain.restype = ctypes.POINTER(ctypes.c_int)
-    dll.SearchMain.argtypes = [
-        ctypes.c_char_p,
-        ctypes.POINTER(ctypes.c_char_p),
-        ctypes.c_int,
-        ctypes.c_int,
-        ctypes.c_bool
-    ]
-    dll.CompareGraph.restype = ctypes.c_bool
-    dll.CompareGraph.argtypes = [
-        ctypes.c_char_p,
-        ctypes.c_char_p,
-        ctypes.c_bool
-    ]
-    dll.FindMoleculesInCell.restype = ctypes.c_char_p
-    dll.FindMoleculesInCell.argtypes = [
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.POINTER(ctypes.c_char_p),
-        ctypes.c_int,
-        ctypes.POINTER(ctypes.c_int),
-        ctypes.POINTER(ctypes.c_float),
-        ctypes.c_int
-    ]
-    return dll
-
-
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/3.2/howto/deployment/checklist/
+if not os.path.exists(os.path.join(BASE_DIR, 'static')):
+    os.mkdir(os.path.join(BASE_DIR, 'static'))
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-%v12=ty4+&c--ynk514n^3gg*_*q+6kb4=34vw@abxi4*cl2lj'
@@ -97,9 +62,9 @@ DJANGO_CPROFILE_MIDDLEWARE_REQUIRE_STAFF = False
 
 INSTALLED_APPS = [
     'structure.apps.StructureConfig',
+    'qc_structure.apps.QCStructureConfig',
     'users.apps.UsersConfig',
     'api.apps.ApiConfig',
-    'modules.apps.ModulesConfig',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -142,7 +107,10 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'django_project.wsgi.application'
+ASGI_APPLICATION = 'myproject.asgi.application'
 
+# Tests
+TEST_RUNNER = 'django_project.test_runner.UseDBTestRunner'
 
 # Database
 
@@ -151,6 +119,18 @@ DATABASES = {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
         'OPTIONS': {'timeout': 1000}
+    },
+    'TEST': {
+        'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+    }
+}
+
+# CACHES dictionary, which contains caching configurations.
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "unique-snowflake",
+        "TIMEOUT": 60 * 5,
     }
 }
 
@@ -224,9 +204,11 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 
 STATIC_URL = '/static/'
-STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
+STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+# to serve static with django
+FORCE_SERVE_STATIC = True
 
 # Default primary key field type
 

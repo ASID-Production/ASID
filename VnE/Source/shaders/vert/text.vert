@@ -55,8 +55,8 @@ uniform float const_scale;
 void main()
     {
         vec4 pos = translation * perspective * aspect_ratio * scale * rotation * scene_shift * vec4(vertex, 1.0);
-        pos.x = pos.x + (size.x + shifts.x) / (wh.x) * const_scale * pos.w;
-        pos.y = pos.y + shifts.y/wh.y + (size.y/wh.y) * const_scale * pos.w;
+        pos.x = pos.x + (size.x + shifts.x) * pos.w;
+        pos.y = pos.y + shifts.y + size.y * pos.w;
         pos.z = -pos.w;
         gl_Position = pos;
         TexCoords = tex_cords;

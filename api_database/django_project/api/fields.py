@@ -33,9 +33,9 @@ import ast
 class NodesListField(serializers.ListField):
     """
     Serialize such lists:
-    ["(1, {'type': 'C', 'Hnum': 0,})", "(2, {'type': 'Br', 'Hnum': 0, })", "..."]
+    ["(1, {'type': 'C', 'Hnum': 0, 'cord_min': 1, 'cord_max': 4})", "(2, {'type': 'Br', 'Hnum': 0, 'cord_min': 1, 'cord_max': 4})", "..."]
     to
-    [(1, {'type': 'C', 'Hnum': 2,}), (2, {'type': 'N', 'Hnum': 1,}), ...]
+    [(1, {'type': 'C', 'Hnum': 2, 'cord_min': 1, 'cord_max': 4}), (2, {'type': 'N', 'Hnum': 1, 'cord_min': 1, 'cord_max': 4}), ...]
     """
     def to_representation(self, data):
         """
@@ -47,7 +47,7 @@ class NodesListField(serializers.ListField):
             element[0] = int(element[0])
             element[1] = ast.literal_eval(str(element[1]))
             for v_key, v_value in element[1].items():
-                if v_key == 'Hnum':
+                if v_key in ['Hnum', 'cord_min', 'cord_max']:
                     element[1][v_key] = int(v_value)
             temp_data.append(tuple(element))
         data = temp_data.copy()

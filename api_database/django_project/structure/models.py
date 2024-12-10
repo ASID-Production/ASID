@@ -30,6 +30,11 @@ import os.path
 
 from django.db import models
 from django.contrib.auth import get_user_model
+from io import BytesIO
+import base64
+
+from modules.gen2d.gen2d import gen2d
+
 
 User = get_user_model()
 
@@ -45,12 +50,12 @@ CENTRINGS = [
 SYSTEMS = [
     (1, 'triclinic'),
     (2, 'monoclinic'),
-    (3, 'orthorombic'),
+    (3, 'orthorhombic'),
     (4, 'tetragonal'),
     (5, 'trigonal'),
     (6, 'hexagonal'),
     (7, 'cubic'),
-    (8, 'rhombohedron'),
+    (8, 'rhombohedral'),
 ]
 SHAPES = [
     ('block', 'block'),
@@ -68,6 +73,290 @@ SHAPES = [
 ]
 
 
+def get_fields_list(model):
+    return [field.name for field in model._meta.get_fields()]
+
+
+class AbstractStructureCode(models.Model):
+    '''(Abstract table) Table with structure codes.'''
+    refcode = models.CharField(verbose_name='Refcode', max_length=17, unique=True)
+
+    class Meta:
+        abstract = True
+
+    def gen_2d_img(self, size=(250, 250), format='gif', f='img'):
+        smiles = ''
+        if hasattr(self, 'coordinates'):
+            smiles = self.coordinates.smiles
+        inchis_list = []
+        if hasattr(self, 'inchi') and self.inchi:
+            inchis = self.inchi.all()
+            for inchi in inchis:
+                inchis_list.append(inchi.get_inchi_string())
+        img = gen2d(smiles=smiles, inchis=inchis_list, sanitize=False, size=size, format=f)
+        if img:
+            if f == 'img':
+                buffer = BytesIO()
+                img.save(buffer, format)
+                img_base64 = f'data:image/{format};base64,' + base64.b64encode(buffer.getvalue()).decode()
+                return img_base64
+            elif f in ['cml', 'svg']:
+                return img
+        return 0
+
+
+class AbstractCell(models.Model):
+    '''(Abstract table) Table with refcode-cell correspondence.'''
+    centring = models.SmallIntegerField(choices=CENTRINGS, default=1)
+    a = models.FloatField(db_column='LengthA', verbose_name='a')
+    b = models.FloatField(db_column='LengthB', verbose_name='b')
+    c = models.FloatField(db_column='LengthC', verbose_name='c')
+    al = models.FloatField(db_column='AngleAlpha', verbose_name='alpha')
+    be = models.FloatField(db_column='AngleBeta', verbose_name='betta')
+    ga = models.FloatField(db_column='AngleGamma', verbose_name='gamma')
+    zvalue = models.FloatField(verbose_name='Z')
+    zprime = models.FloatField(verbose_name="Z'", null=True, blank=True)
+
+    class Meta:
+        abstract = True
+
+
+class AbstractReducedCell(models.Model):
+    '''(Abstract table) Niggli cell.'''
+    a = models.FloatField(db_column='LengthA', verbose_name='a')
+    b = models.FloatField(db_column='LengthB', verbose_name='b')
+    c = models.FloatField(db_column='LengthC', verbose_name='c')
+    al = models.FloatField(db_column='AngleAlpha', verbose_name='alpha')
+    be = models.FloatField(db_column='AngleBeta', verbose_name='betta')
+    ga = models.FloatField(db_column='AngleGamma', verbose_name='gamma')
+    volume = models.FloatField(db_column='Volume', verbose_name='Volume')
+
+    class Meta:
+        abstract = True
+
+
+class AbstractCompoundName(models.Model):
+    '''(Abstract table) Compound names.'''
+    systematic_name = models.CharField(
+        blank=True,
+        null=True,
+        max_length=1500,
+        verbose_name='Compound name'
+    )
+    trivial_name = models.CharField(
+        blank=True,
+        null=True,
+        max_length=1000,
+        verbose_name='Trivial name'
+    )
+
+    def __str__(self):
+        if self.trivial_name:
+            return self.trivial_name
+        return self.systematic_name
+
+    class Meta:
+        abstract = True
+
+
+class AbstractCoordinatesBlock(models.Model):
+    '''(Abstract table) Block of coordinates and other structural information.'''
+    coordinates = models.TextField(
+        verbose_name='Coordinates'
+    )
+    smiles = models.TextField(
+        verbose_name='Smiles',
+        blank=True,
+        null=True,
+    )
+    graph = models.TextField(
+        verbose_name='Graph',
+        help_text='string graph for structure search',
+        blank=True,
+        null=True,
+        editable=False
+    )
+
+    class Meta:
+        abstract = True
+
+
+class AbstractInChI(models.Model):
+    '''(Abstract table) InChI graph.'''
+    version = models.CharField(
+        verbose_name='InChI version',
+        max_length=5
+    )
+    formula = models.CharField(
+        verbose_name='InChI formula',
+        max_length=200
+    )
+    connectivity = models.TextField(
+        verbose_name='InChI "c"',
+        blank=True,
+        null=True
+    )
+    hydrogens = models.TextField(
+        verbose_name='InChI "h"',
+        blank=True,
+        null=True
+    )
+    q_charge = models.CharField(
+        verbose_name='InChI "q"',
+        blank=True,
+        null=True,
+        max_length=200
+    )
+    p_charge = models.CharField(
+        verbose_name='InChI "p"',
+        blank=True,
+        null=True,
+        max_length=200
+    )
+    b_stereo = models.CharField(
+        verbose_name='InChI "b"',
+        blank=True,
+        null=True,
+        max_length=1000
+    )
+    t_stereo = models.CharField(
+        verbose_name='InChI "t"',
+        blank=True,
+        null=True,
+        max_length=1000
+    )
+    m_stereo = models.CharField(
+        verbose_name='InChI "m"',
+        blank=True,
+        null=True,
+        max_length=200
+    )
+    s_stereo = models.CharField(
+        verbose_name='InChI "s"',
+        blank=True,
+        null=True,
+        max_length=100
+    )
+    i_isotopic = models.CharField(
+        verbose_name='InChI "i"',
+        blank=True,
+        null=True,
+        max_length=500
+    )
+
+    class Meta:
+        abstract = True
+
+    def get_inchi_string(self):
+        inchi_parts = ['version', 'formula', 'connectivity', 'hydrogens',
+                 'q_charge', 'p_charge', 'b_stereo', 't_stereo',
+                 'm_stereo', 's_stereo', 'i_isotopic']
+        inchi = 'InChI='
+        for inchi_part in inchi_parts:
+            value = getattr(self, inchi_part)
+            if value is not None:
+                inchi += value + '/'
+        return inchi[:-1]
+
+
+class AbstractSubstructure1(models.Model):
+    '''(Abstract table) Substructure information.'''
+    only_CHNO = models.BooleanField(verbose_name='Only CHNO atoms', default=False)
+    no_C = models.BooleanField(verbose_name='No C atoms', default=False)
+    hetero = models.BooleanField(verbose_name='Heteroatoms (B, Si, P, S, As, Se, Ge, Sb, Te)', default=False)
+    d_Me4 = models.BooleanField(verbose_name='d-Metalls 4 group', default=False)
+    d_Me5 = models.BooleanField(verbose_name='d-Metalls 5 group', default=False)
+    d_Me67 = models.BooleanField(verbose_name='d-Metalls 6 group', default=False)
+    f_Me = models.BooleanField(verbose_name='f-Metalls', default=False)
+    AEMet = models.BooleanField(verbose_name='Alkali earth metalls', default=False)
+    AMet = models.BooleanField(verbose_name='Alkali metalls', default=False)
+    halogens = models.BooleanField(verbose_name='Halogen atoms', default=False)
+    other_met = models.BooleanField(verbose_name='Other metalls (Al, Ga, In, Sn, Tl, Pb, Bi)', default=False)
+    NO2 = models.BooleanField(verbose_name='N-(O)2 group', default=False)
+    SO2 = models.BooleanField(verbose_name='S-(O)2 group', default=False)
+    CS = models.BooleanField(verbose_name='C-S bond', default=False)
+    # C_Met = models.BooleanField(verbose_name='C-Metall bond', default=False)
+    # N_Met = models.BooleanField(verbose_name='N-Metall bond', default=False)
+
+    class Meta:
+        verbose_name_plural = 'Substructures'
+        abstract = True
+
+
+class AbstractSubstructure2(models.Model):
+    '''(Abstract table) Substructure information.'''
+    Ph = models.BooleanField(verbose_name='Ph group', default=False)
+    ring6 = models.BooleanField(verbose_name='6 atoms ring', default=False)
+    ring5 = models.BooleanField(verbose_name='5 atoms ring', default=False)
+    ring6N1 = models.BooleanField(verbose_name='6 atoms ring with one N', default=False)
+    ring6N2 = models.BooleanField(verbose_name='6 atoms ring with two N', default=False)
+    ring5N1 = models.BooleanField(verbose_name='5 atoms ring with one N', default=False)
+    ring5N2 = models.BooleanField(verbose_name='5 atoms ring with two N', default=False)
+    iPr = models.BooleanField(verbose_name='i-Pr group', default=False)
+    tBu = models.BooleanField(verbose_name='t-Bu group', default=False)
+    C3N = models.BooleanField(verbose_name='(C)3-N group', default=False)
+    C2O = models.BooleanField(verbose_name='(C)2-O group', default=False)
+    CNO = models.BooleanField(verbose_name='C-N-O group', default=False)
+    C3P = models.BooleanField(verbose_name='(C)3-P group', default=False)
+    CO2 = models.BooleanField(verbose_name='C-(O)2 group', default=False)
+    # C_Hal = models.BooleanField(verbose_name='C-Halogen bond', default=False)
+
+    class Meta:
+        verbose_name_plural = 'Substructures'
+        abstract = True
+
+
+class AbstractFormula(models.Model):
+    '''(Abstract table) Formula.'''
+    formula_moiety = models.CharField(
+        max_length=500,
+        verbose_name='Moiety Formula',
+        blank=True,
+        null=True,
+    )
+    formula_sum = models.CharField(
+        max_length=500,
+        verbose_name='Sum Formula',
+        blank=True,
+        null=True,
+    )
+
+    class Meta:
+        abstract = True
+
+
+class AbstractElementsManager(models.Model):
+    '''(Abstract table) Refcode to ElementsSets relations.'''
+
+    def save_elements(self, elements: dict):
+        # elements = {'elem': count, ...}
+        elem_query = {0: {}, 1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}}
+        isnull_elem_query = {0: {}, 1: {}, 2: {}, 3: {}, 4: {}, 5: {}, 6: {}, 7: {}}
+        # fill isnull_elem_query by default values
+        for i, elem_model in enumerate(elem_models):
+            model_elements = get_elements_list_for_model(elem_model)
+            for element_name in model_elements:
+                isnull_elem_query[i][f'{element_name}__isnull'] = True
+        # fill elem_query by number of elements
+        for element, count in elements.items():
+            for i, elem_model in enumerate(elem_models):
+                model_elements = get_elements_list_for_model(elem_model)
+                if element in model_elements:
+                    elem_query[i][element] = float(count)
+                    isnull_elem_query[i][f'{element}__isnull'] = False
+                    break
+        # save attribute values
+        for key, value in elem_query.items():
+            if value:
+                isnull_filter = isnull_elem_query[key]
+                elem_set_obj, created = elem_models[key].objects.filter(**isnull_filter).get_or_create(**value)
+                setattr(self, f'element_set_{key + 1}', elem_set_obj)
+        self.save()
+
+    class Meta:
+        abstract = True
+
+
 class Author(models.Model):
     '''Table with authors.'''
     family_name = models.CharField(blank=True, null=True, verbose_name='author', max_length=250)
@@ -79,7 +368,7 @@ class Author(models.Model):
         return self.family_name
 
 
-class StructureCode(models.Model):
+class StructureCode(AbstractStructureCode):
     '''Table with codes.'''
     refcode = models.CharField(verbose_name='Refcode', max_length=17, unique=True)
     CCDC_number = models.CharField(verbose_name='CCDC number', max_length=10, blank=True, null=True)
@@ -100,27 +389,11 @@ class StructureCode(models.Model):
         verbose_name='Authors'
     )
 
+    class Meta:
+        ordering = ['refcode']
+
     def __str__(self):
         return self.refcode
-
-
-class CalculationProgram(models.Model):
-    '''Table with caclulation types.'''
-    refcode = models.OneToOneField(
-        StructureCode,
-        related_name='calc_prog',
-        on_delete=models.CASCADE
-    )
-    orca = models.BooleanField(verbose_name='Orca calculation', blank=True, null=True)
-    vasp = models.BooleanField(verbose_name='VASP calculation', blank=True, null=True)
-    qchem = models.BooleanField(verbose_name='QChem calculation', blank=True, null=True)
-    gaussian = models.BooleanField(verbose_name='Gaussian calculation', blank=True, null=True)
-    nwchem = models.BooleanField(verbose_name='NWChem calculation', blank=True, null=True)
-    abinit = models.BooleanField(verbose_name='ABINIT calculation', blank=True, null=True)
-    crystal = models.BooleanField(verbose_name='CRYSTAL calculation', blank=True, null=True)
-    gamess = models.BooleanField(verbose_name='GAMESS calculation', blank=True, null=True)
-    mopac = models.BooleanField(verbose_name='MOPAC calculation', blank=True, null=True)
-    quantum_espresso = models.BooleanField(verbose_name='Quantum ESPRESSO calculation', blank=True, null=True)
 
 
 def user_directory_path(instance, filename):
@@ -139,6 +412,12 @@ class CifFile(models.Model):
         max_length=200,
         verbose_name='Cif file'
     )
+    old_file_name = models.CharField(
+        verbose_name='File name when upload',
+        max_length=200,
+        blank=True,
+        null=True
+    )
 
 
 class Spacegroup(models.Model):
@@ -156,35 +435,25 @@ class Spacegroup(models.Model):
         unique_together = (('name', 'hall_name'),)
 
 
-class Cell(models.Model):
+class Cell(AbstractCell):
     '''Table with refcode-cell correspondence.'''
     refcode = models.OneToOneField(
         StructureCode,
         related_name='cell',
         on_delete=models.CASCADE
     )
-    centring = models.SmallIntegerField(choices=CENTRINGS, default=1)
-    a = models.FloatField(db_column='LengthA', verbose_name='a')
-    b = models.FloatField(db_column='LengthB', verbose_name='b')
-    c = models.FloatField(db_column='LengthC', verbose_name='c')
-    al = models.FloatField(db_column='AngleAlpha', verbose_name='alpha')
-    be = models.FloatField(db_column='AngleBeta', verbose_name='betta')
-    ga = models.FloatField(db_column='AngleGamma', verbose_name='gamma')
-    a_err = models.CharField(db_column='LengthAErr', verbose_name='a', max_length=50, null=True)
-    b_err = models.CharField(db_column='LengthBErr', verbose_name='b', max_length=50, null=True)
-    c_err = models.CharField(db_column='LengthCErr', verbose_name='c', max_length=50, null=True)
-    al_err = models.CharField(db_column='AngleAlphaErr', verbose_name='alpha', max_length=50, null=True)
-    be_err = models.CharField(db_column='AngleBetaErr', verbose_name='betta', max_length=50, null=True)
-    ga_err = models.CharField(db_column='AngleGammaErr', verbose_name='gamma', max_length=50, null=True)
-
     spacegroup = models.ForeignKey(
         Spacegroup,
         related_name='cell',
         on_delete=models.PROTECT,
         verbose_name='space group'
     )
-    zvalue = models.FloatField(verbose_name='Z')
-    zprime = models.FloatField(verbose_name="Z'", null=True, blank=True)
+    a_err = models.CharField(db_column='LengthAErr', verbose_name='a', max_length=50, null=True)
+    b_err = models.CharField(db_column='LengthBErr', verbose_name='b', max_length=50, null=True)
+    c_err = models.CharField(db_column='LengthCErr', verbose_name='c', max_length=50, null=True)
+    al_err = models.CharField(db_column='AngleAlphaErr', verbose_name='alpha', max_length=50, null=True)
+    be_err = models.CharField(db_column='AngleBetaErr', verbose_name='betta', max_length=50, null=True)
+    ga_err = models.CharField(db_column='AngleGammaErr', verbose_name='gamma', max_length=50, null=True)
 
 
 class NormalisedReducedCell(models.Model):
@@ -207,7 +476,7 @@ class NormalisedReducedCell(models.Model):
         unique_together = (('refcode', 'a', 'b', 'c', 'al', 'be', 'ga'),)
 
 
-class ReducedCell(models.Model):
+class ReducedCell(AbstractReducedCell):
     '''Niggli cell.'''
     refcode = models.ForeignKey(
         StructureCode,
@@ -215,41 +484,17 @@ class ReducedCell(models.Model):
         on_delete=models.CASCADE,
         verbose_name='Refcode'
     )
-    a = models.FloatField(db_column='LengthA', verbose_name='a')
-    b = models.FloatField(db_column='LengthB', verbose_name='b')
-    c = models.FloatField(db_column='LengthC', verbose_name='c')
-    al = models.FloatField(db_column='AngleAlpha', verbose_name='alpha')
-    be = models.FloatField(db_column='AngleBeta', verbose_name='betta')
-    ga = models.FloatField(db_column='AngleGamma', verbose_name='gamma')
-    volume = models.FloatField(db_column='Volume', verbose_name='Volume')
 
     class Meta:
         unique_together = (('refcode', 'a', 'b', 'c', 'al', 'be', 'ga'),)
 
 
-class CompoundName(models.Model):
+class CompoundName(AbstractCompoundName):
     '''Compound names.'''
     refcode = models.OneToOneField(
         StructureCode,
         related_name='name',
         on_delete=models.CASCADE)
-    systematic_name = models.CharField(
-        blank=True,
-        null=True,
-        max_length=1500,
-        verbose_name='Compound name'
-    )
-    trivial_name = models.CharField(
-        blank=True,
-        null=True,
-        max_length=1000,
-        verbose_name='Trivial name'
-    )
-
-    def __str__(self):
-        if self.trivial_name:
-            return self.trivial_name
-        return self.systematic_name
 
 
 class ExperimentalInfo(models.Model):
@@ -385,83 +630,43 @@ class RefinementInfo(models.Model):
         verbose_name_plural = 'Refinement info'
 
 
-class CoordinatesBlock(models.Model):
+class CoordinatesBlock(AbstractCoordinatesBlock):
     '''Block of coordinates and other structural information.'''
     refcode = models.OneToOneField(
         StructureCode,
         related_name='coordinates',
         on_delete=models.CASCADE
     )
-    coordinates = models.TextField(
-        verbose_name='Coordinates'
-    )
-    smiles = models.TextField(
-        verbose_name='Smiles',
-        blank=True,
-        null=True,
-    )
-    graph = models.TextField(
-        verbose_name='Graph',
-        help_text='string graph for structure search',
-        blank=True,
-        null=True,
-        editable=False
-    )
 
 
-class Substructure1(models.Model):
+class InChI(AbstractInChI):
+    '''Block of InChI.'''
+    refcode = models.ForeignKey(
+        StructureCode,
+        related_name='inchi',
+        on_delete=models.CASCADE
+    )
+
+    class Meta:
+        verbose_name_plural = 'InChI graphs'
+
+
+class Substructure1(AbstractSubstructure1):
     '''Substructure information.'''
     refcode = models.OneToOneField(
         StructureCode,
         related_name='substructure1',
         on_delete=models.CASCADE
     )
-    only_CHNO = models.BooleanField(verbose_name='Only CHNO atoms', default=False)
-    no_C = models.BooleanField(verbose_name='No C atoms', default=False)
-    hetero = models.BooleanField(verbose_name='Heteroatoms (B, Si, P, S, As, Se, Ge, Sb, Te)', default=False)
-    d_Me4 = models.BooleanField(verbose_name='d-Metalls 4 group', default=False)
-    d_Me5 = models.BooleanField(verbose_name='d-Metalls 5 group', default=False)
-    d_Me67 = models.BooleanField(verbose_name='d-Metalls 6 group', default=False)
-    f_Me = models.BooleanField(verbose_name='f-Metalls', default=False)
-    AEMet = models.BooleanField(verbose_name='Alkali earth metalls', default=False)
-    AMet = models.BooleanField(verbose_name='Alkali metalls', default=False)
-    halogens = models.BooleanField(verbose_name='Halogen atoms', default=False)
-    other_met = models.BooleanField(verbose_name='Other metalls (Al, Ga, In, Sn, Tl, Pb, Bi)', default=False)
-    NO2 = models.BooleanField(verbose_name='N-(O)2 group', default=False)
-    SO2 = models.BooleanField(verbose_name='S-(O)2 group', default=False)
-    CS = models.BooleanField(verbose_name='C-S bond', default=False)
-    # C_Met = models.BooleanField(verbose_name='C-Metall bond', default=False)
-    # N_Met = models.BooleanField(verbose_name='N-Metall bond', default=False)
-
-    class Meta:
-        verbose_name_plural = 'Substructures'
 
 
-class Substructure2(models.Model):
+class Substructure2(AbstractSubstructure2):
     '''Substructure information.'''
     refcode = models.OneToOneField(
         StructureCode,
         related_name='substructure2',
         on_delete=models.CASCADE
     )
-    Ph = models.BooleanField(verbose_name='Ph group', default=False)
-    ring6 = models.BooleanField(verbose_name='6 atoms ring', default=False)
-    ring5 = models.BooleanField(verbose_name='5 atoms ring', default=False)
-    ring6N1 = models.BooleanField(verbose_name='6 atoms ring with one N', default=False)
-    ring6N2 = models.BooleanField(verbose_name='6 atoms ring with two N', default=False)
-    ring5N1 = models.BooleanField(verbose_name='5 atoms ring with one N', default=False)
-    ring5N2 = models.BooleanField(verbose_name='5 atoms ring with two N', default=False)
-    iPr = models.BooleanField(verbose_name='i-Pr group', default=False)
-    tBu = models.BooleanField(verbose_name='t-Bu group', default=False)
-    C3N = models.BooleanField(verbose_name='(C)3-N group', default=False)
-    C2O = models.BooleanField(verbose_name='(C)2-O group', default=False)
-    CNO = models.BooleanField(verbose_name='C-N-O group', default=False)
-    C3P = models.BooleanField(verbose_name='(C)3-P group', default=False)
-    CO2 = models.BooleanField(verbose_name='C-(O)2 group', default=False)
-    # C_Hal = models.BooleanField(verbose_name='C-Halogen bond', default=False)
-
-    class Meta:
-        verbose_name_plural = 'Substructures'
 
 
 class CrystalAndStructureInfo(models.Model):
@@ -512,7 +717,7 @@ class CrystalAndStructureInfo(models.Model):
         blank=True,
         null=True,
         verbose_name='Sensitivity',
-        max_length=500
+        max_length=1000
     )
     pressure = models.CharField(
         blank=True,
@@ -535,34 +740,17 @@ class CrystalAndStructureInfo(models.Model):
         verbose_name_plural = 'Crystal and structure info'
 
 
-class Formula(models.Model):
+class Formula(AbstractFormula):
     '''Formula.'''
     refcode = models.OneToOneField(
         StructureCode,
         related_name='formula',
         on_delete=models.CASCADE
     )
-    formula_moiety = models.CharField(
-        max_length=500,
-        verbose_name='Moiety Formula',
-        blank=True,
-        null=True,
-    )
-    formula_sum = models.CharField(
-        max_length=500,
-        verbose_name='Sum Formula',
-        blank=True,
-        null=True,
-    )
 
 
 class ElementsSet1(models.Model):
     '''First set of elements with quantity of each atom in structure.'''
-    refcode = models.OneToOneField(
-        StructureCode,
-        related_name='element_set_1',
-        on_delete=models.CASCADE
-    )
     H = models.FloatField(blank=True, null=True)
     C = models.FloatField(blank=True, null=True)
     N = models.FloatField(blank=True, null=True)
@@ -574,14 +762,12 @@ class ElementsSet1(models.Model):
     D = models.FloatField(blank=True, null=True)
     T = models.FloatField(blank=True, null=True)
 
+    class Meta:
+        unique_together = (('H', 'C', 'N', 'O', 'Cl', 'F', 'S', 'P', 'D', 'T'),)
+
 
 class ElementsSet2(models.Model):
     '''Second set of elements with quantity of each atom in structure.'''
-    refcode = models.OneToOneField(
-        StructureCode,
-        related_name='element_set_2',
-        on_delete=models.CASCADE
-    )
     Pt = models.FloatField(blank=True, null=True)
     Zn = models.FloatField(blank=True, null=True)
     Mo = models.FloatField(blank=True, null=True)
@@ -599,14 +785,13 @@ class ElementsSet2(models.Model):
     Mn = models.FloatField(blank=True, null=True)
     Pd = models.FloatField(blank=True, null=True)
 
+    class Meta:
+        unique_together = (('Pt', 'Zn', 'Mo', 'I', 'Ru', 'Ni', 'Co', 'Br',
+                            'Si', 'Fe', 'B', 'Cu', 'Sn', 'W', 'Mn', 'Pd'),)
+
 
 class ElementsSet3(models.Model):
     '''Third set of elements with quantity of each atom in structure.'''
-    refcode = models.OneToOneField(
-        StructureCode,
-        related_name='element_set_3',
-        on_delete=models.CASCADE
-    )
     Os = models.FloatField(blank=True, null=True)
     Zr = models.FloatField(blank=True, null=True)
     V = models.FloatField(blank=True, null=True)
@@ -624,14 +809,13 @@ class ElementsSet3(models.Model):
     Ag = models.FloatField(blank=True, null=True)
     Rh = models.FloatField(blank=True, null=True)
 
+    class Meta:
+        unique_together = (('Os', 'Zr', 'V', 'Ir', 'Al', 'Au', 'K', 'Cd',
+                            'Ti', 'Na', 'Li', 'Cr', 'Se', 'Re', 'Ag', 'Rh'),)
+
 
 class ElementsSet4(models.Model):
     '''Fourth set of elements with quantity of each atom in structure.'''
-    refcode = models.OneToOneField(
-        StructureCode,
-        related_name='element_set_4',
-        on_delete=models.CASCADE
-    )
     Nb = models.FloatField(blank=True, null=True)
     Bi = models.FloatField(blank=True, null=True)
     Nd = models.FloatField(blank=True, null=True)
@@ -649,14 +833,13 @@ class ElementsSet4(models.Model):
     Sb = models.FloatField(blank=True, null=True)
     La = models.FloatField(blank=True, null=True)
 
+    class Meta:
+        unique_together = (('Nb', 'Bi', 'Nd', 'Yb', 'Sm', 'In', 'Mg', 'Pb',
+                            'U', 'Ge', 'Te', 'Ga', 'Hg', 'As', 'Sb', 'La'),)
+
 
 class ElementsSet5(models.Model):
     '''Fifth set of elements with quantity of each atom in structure.'''
-    refcode = models.OneToOneField(
-        StructureCode,
-        related_name='element_set_5',
-        on_delete=models.CASCADE
-    )
     Dy = models.FloatField(blank=True, null=True)
     Sr = models.FloatField(blank=True, null=True)
     Rb = models.FloatField(blank=True, null=True)
@@ -674,14 +857,13 @@ class ElementsSet5(models.Model):
     Eu = models.FloatField(blank=True, null=True)
     Ta = models.FloatField(blank=True, null=True)
 
+    class Meta:
+        unique_together = (('Dy', 'Sr', 'Rb', 'Hf', 'Tb', 'Pr', 'Ce', 'Er',
+                            'Tl', 'Cs', 'Ba', 'Gd', 'Y', 'Ca', 'Eu', 'Ta'),)
+
 
 class ElementsSet6(models.Model):
     '''Sixth set of elements with quantity of each atom in structure.'''
-    refcode = models.OneToOneField(
-        StructureCode,
-        related_name='element_set_6',
-        on_delete=models.CASCADE
-    )
     Pm = models.FloatField(blank=True, null=True)
     Cm = models.FloatField(blank=True, null=True)
     Pa = models.FloatField(blank=True, null=True)
@@ -699,14 +881,13 @@ class ElementsSet6(models.Model):
     Lu = models.FloatField(blank=True, null=True)
     Tc = models.FloatField(blank=True, null=True)
 
+    class Meta:
+        unique_together = (('Pm', 'Cm', 'Pa', 'Kr', 'Am', 'Ar', 'Xe', 'Pu',
+                            'Np', 'Tm', 'Be', 'Th', 'Ho', 'Sc', 'Lu', 'Tc'),)
+
 
 class ElementsSet7(models.Model):
     '''Seventh set of elements with quantity of each atom in structure.'''
-    refcode = models.OneToOneField(
-        StructureCode,
-        related_name='element_set_7',
-        on_delete=models.CASCADE
-    )
     At = models.FloatField(blank=True, null=True)
     Es = models.FloatField(blank=True, null=True)
     Fm = models.FloatField(blank=True, null=True)
@@ -724,14 +905,13 @@ class ElementsSet7(models.Model):
     Cf = models.FloatField(blank=True, null=True)
     Rf = models.FloatField(blank=True, null=True)
 
+    class Meta:
+        unique_together = (('At', 'Es', 'Fm', 'Fr', 'He', 'Lr', 'Md', 'Ne',
+                            'No', 'Po', 'Ra', 'Rn', 'Ac', 'Bk', 'Cf', 'Rf'),)
+
 
 class ElementsSet8(models.Model):
     '''Eighth set of elements with quantity of each atom in structure.'''
-    refcode = models.OneToOneField(
-        StructureCode,
-        related_name='element_set_8',
-        on_delete=models.CASCADE
-    )
     Db = models.FloatField(blank=True, null=True)
     Sg = models.FloatField(blank=True, null=True)
     Bh = models.FloatField(blank=True, null=True)
@@ -747,6 +927,99 @@ class ElementsSet8(models.Model):
     Ts = models.FloatField(blank=True, null=True)
     Og = models.FloatField(blank=True, null=True)
 
+    class Meta:
+        unique_together = (('Db', 'Sg', 'Bh', 'Hs', 'Mt', 'Ds', 'Rg', 'Cn',
+                            'Nh', 'Fl', 'Mc', 'Lv', 'Ts', 'Og'),)
+
+
+elem_models = [ElementsSet1, ElementsSet2,
+               ElementsSet3, ElementsSet4, ElementsSet5,
+               ElementsSet6, ElementsSet7, ElementsSet8]
+
+
+def get_elements_list_for_model(elem_model):
+    if elem_model in elem_models:
+        elements = get_fields_list(elem_model)
+        result_elements = list()
+        for element in elements:
+            if element not in ['id'] and len(element) <= 3:
+                result_elements.append(element)
+        return result_elements
+    return 0
+
+
+def get_elements_list():
+    all_elements = list()
+    for elem_model in elem_models:
+        elements = get_elements_list_for_model(elem_model)
+        all_elements.extend(elements)
+    return all_elements
+
+
+class ElementsManager(AbstractElementsManager):
+    '''Refcode to ElementsSets relations.'''
+    refcode = models.OneToOneField(
+        StructureCode,
+        related_name='elements',
+        on_delete=models.CASCADE
+    )
+    element_set_1 = models.ForeignKey(
+        ElementsSet1,
+        related_name='element_set_1',
+        on_delete=models.PROTECT,
+        verbose_name='element set 1',
+        null=True
+    )
+    element_set_2 = models.ForeignKey(
+        ElementsSet2,
+        related_name='element_set_2',
+        on_delete=models.PROTECT,
+        verbose_name='element set 2',
+        null=True
+    )
+    element_set_3 = models.ForeignKey(
+        ElementsSet3,
+        related_name='element_set_3',
+        on_delete=models.PROTECT,
+        verbose_name='element set 3',
+        null=True
+    )
+    element_set_4 = models.ForeignKey(
+        ElementsSet4,
+        related_name='element_set_4',
+        on_delete=models.PROTECT,
+        verbose_name='element set 4',
+        null=True
+    )
+    element_set_5 = models.ForeignKey(
+        ElementsSet5,
+        related_name='element_set_5',
+        on_delete=models.PROTECT,
+        verbose_name='element set 5',
+        null=True
+    )
+    element_set_6 = models.ForeignKey(
+        ElementsSet6,
+        related_name='element_set_6',
+        on_delete=models.PROTECT,
+        verbose_name='element set 6',
+        null=True
+    )
+    element_set_7 = models.ForeignKey(
+        ElementsSet7,
+        related_name='element_set_7',
+        on_delete=models.PROTECT,
+        verbose_name='element set 7',
+        null=True
+    )
+    element_set_8 = models.ForeignKey(
+        ElementsSet8,
+        related_name='element_set_8',
+        on_delete=models.PROTECT,
+        verbose_name='element set 8',
+        null=True
+    )
+
 
 class Journal(models.Model):
     '''Information about journal.'''
@@ -758,7 +1031,7 @@ class Journal(models.Model):
     )
     name = models.CharField(max_length=500, verbose_name='Journal')
     discontinued = models.BooleanField(verbose_name='Discontinued', blank=True, null=True,)
-    fullname = models.CharField(max_length=1000, verbose_name='Journal')
+    fullname = models.CharField(max_length=1000, verbose_name='Journal', blank=True, null=True)
     translated_name = models.CharField(max_length=500, blank=True, null=True, verbose_name='Journal')
     abbreviated_translated_name = models.CharField(
         max_length=500,
@@ -771,7 +1044,7 @@ class Journal(models.Model):
         return self.name
 
     class Meta:
-        unique_together = (('name', 'fullname'),)
+        unique_together = (('international_coden', 'name', 'fullname'),)
 
 
 class Publication(models.Model):

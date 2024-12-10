@@ -32,6 +32,8 @@ import numpy as np
 from . import text_render
 from .point_class import Point, PointsList
 
+import debug
+
 
 class SingleObserver:
 
@@ -252,7 +254,7 @@ class LabelObserver(aObserver):
         self._properties_list = ['coord', 'label_color', 'label_size', 'label']
         self._properties = {'coord': np.array([0, 0, 0], dtype=np.float32),
                             'label_color': np.array([0, 0, 0, 1], dtype=np.float32),
-                            'label_size': np.array([1], dtype=np.float32),
+                            'label_size': np.array([6], dtype=np.float32),
                             'label': None}
         self._point = None
 
@@ -283,7 +285,10 @@ class LabelObserver(aObserver):
                 coord = object.coord
                 word = object.label
 
-                word_obj = text_render.Word(coord, self._wh, self._font, word)
+                size = object.label_size
+                if size is None:
+                    size = int(self._properties['label_size'][0])
+                word_obj = text_render.Word(coord, self._wh, self._font, word, size)
                 data = word_obj.gen_buffer()
                 textures = word_obj.get_textures()
                 self._textures += textures
@@ -334,6 +339,8 @@ class LabelObserver(aObserver):
             value = self._properties[property]
         if isinstance(value, float) or isinstance(value, int):
             value = np.array([value], dtype=np.float32)
+        if property == 'label_size':
+            self._font.change_size(int(value[0]))
         self.remove(object)
         self.add(object)
 

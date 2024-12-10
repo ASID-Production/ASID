@@ -31,15 +31,17 @@ from os.path import dirname, basename, isfile, join
 import glob
 modules = glob.glob(join(dirname(__file__), "*.py"))
 __all__ = [basename(f)[:-3] for f in modules if isfile(f) and not f.endswith('__init__.py')]
+packages = glob.glob(join(dirname(__file__), "*/__init__.py"))
+__all__ += [basename(dirname(x)) for x in packages]
 from PySide6.QtWidgets import *
 from . import *
 actions = []
 
 
-def getMenu(root_item):
+def getMenu(root_item, uniform_model, *args, **kwargs):
     menu = QMenu('Extensions')
     for extension in __all__:
         global actions
         module = globals()[extension]
-        actions += module.setup(menu, root_item)
+        actions += module.setup(menu, root_item, uniform_model, **kwargs)
     return menu

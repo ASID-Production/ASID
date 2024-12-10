@@ -28,56 +28,120 @@
 #pragma once
 #include <mutex>
 #include <vector>
+#include <bitset>
+#include "../Classes/Geometry.h"
+#include "../Classes/FindMolecules.h"
+#include "../Functions/AllInOneAndCurrent.h"
+namespace cpplib {
+	class SearchDataInterface {
+	public:
+		using MoleculeIndex = currents::MoleculeIndex;
+		using RawVector = std::vector<const char*>;
+		using MultiflagType = std::bitset<mend_size>;
+		using size_type = RawVector::size_type;
+	private:
+		size_type iterator_ = 0;
+		const size_type size_;
+		const RawVector rawdata_;
+		const MultiflagType multiflag_;
 
-enum class ErrorStates {
-	dataIsEmpty
-};
-template<class MI, class size_type>
-class SearchDataInterface {
-	size_type iterator_ = 0;
-	size_type size_;
-	const char** rawdata_;
+		std::mutex mutexIN_;
+		std::mutex mutexOUT_;
 
-	std::mutex mutexIN_;
-	std::mutex mutexOUT_;
+		std::vector<int> ret_;
 
-	std::vector<int> ret_;
+	public:
+		SearchDataInterface() = delete;
+		explicit SearchDataInterface(std::vector<const char*>&& rawdata, MultiflagType&& multiflag) noexcept
+			: rawdata_(rawdata), size_(rawdata.size()), multiflag_(multiflag) {
+			if (size_ >= 1024)
+				ret_.reserve(1024);
+			else
+				ret_.reserve(static_cast<size_t>(size_));
+		};
+		inline size_type size() const noexcept {
+			return size_;
+		}
+		const char* getNext() {
+			size_type iter;
+			do {
+				iter = getNextIterator();
+				if (iter == size_type(-1))
+					return nullptr;
+			} while (rawdata_[iter][0] == '\0');
 
-public:
-	SearchDataInterface() = delete;
-	explicit SearchDataInterface(const char** rawdata, size_type size) noexcept
-		: rawdata_(rawdata), size_(size) {
-		if (size > 1024)
-			ret_.reserve(1024);
-		else
-			ret_.reserve(static_cast<size_t>(size) + 1);
-		ret_.push_back(0);
-	};
-	const char* getNext() {
-		try {
-			auto iter = getNextIterator();
 			return rawdata_[iter];
 		}
-		catch (ErrorStates) {
-			return nullptr;
+		inline const MultiflagType& getMulty() const noexcept {
+			return multiflag_;
 		}
-	}
-	void push_result(const MI molecularID) {
-		std::lock_guard<std::mutex> lock(mutexOUT_);
-		ret_.push_back(molecularID);
-		ret_[0]++;
-	}
-	std::vector<int>&& getAllResults() noexcept {
-		std::lock_guard<std::mutex> lock(mutexOUT_);
-		return std::move(ret_);
-	}
-private:
-	size_type getNextIterator() {
-		std::lock_guard<std::mutex> lock(mutexIN_);
-		if (iterator_ == size_)
-			throw ErrorStates::dataIsEmpty;
-		size_type i = iterator_;
-		iterator_++;
-		return i;
-	}
-};
+		void push_result(const MoleculeIndex molecularID) {
+			std::lock_guard<std::mutex> lock(mutexOUT_);
+			ret_.push_back(molecularID);
+		}
+		std::vector<int>&& getAllResults() noexcept {
+			std::lock_guard<std::mutex> lock(mutexOUT_);
+			return std::move(ret_);
+		}
+	private:
+		size_type getNextIterator() {
+			std::lock_guard<std::mutex> lock(mutexIN_);
+			if (iterator_ == size_)
+				return size_type(-1);
+			size_type i = iterator_;
+			iterator_++;
+			return i;
+		}
+	};
+
+	struct ParseData {
+		using FAMStructType = FAM_Struct;
+		using FAMCellType = FAM_Cell;
+
+		using AtomType = FAMStructType::AtomType;
+		using PointType = FAMStructType::PointType;
+		using SymmType = FAMCellType::SymmType;
+
+		ParseData(FAMStructType& fs, const std::vector<int>& types, const std::vector<float>& xyz) {
+			const auto types_s = types.size();
+			fs.points.reserve(types_s);
+			fs.types.reserve(types_s);
+			fs.sizePoints = types_s;
+			fs.sizeUnique = types_s;
+			for (int i = 0, i3 = 0; i < types_s; i++, i3 += 3) {
+				fs.types.emplace_back(types[i]);
+				fs.points.emplace_back(xyz[i3], xyz[i3 + 1], xyz[i3 + 2]);
+			}
+			fs.parseIndex.resize(types_s);
+			std::iota(fs.parseIndex.begin(), fs.parseIndex.end(), 0); // Fill with 0, 1...
+		}
+		ParseData(FAMStructType& fs, FAMStructType::AtomContainerType && types, FAMStructType::PointConteinerType && points) {
+			const auto types_s = types.size();
+			fs.types = std::move(types);
+			fs.points = std::move(points);
+			fs.sizePoints = types_s;
+			fs.sizeUnique = types_s;
+
+			fs.parseIndex.resize(types_s);
+			std::iota(fs.parseIndex.begin(), fs.parseIndex.end(), 0); // Fill with 0, 1...
+		}
+
+		ParseData(FAMStructType& fs, FAMCellType& fc, const std::vector<const char*>& symm, FAMStructType::AtomContainerType&& types, FAMStructType::PointConteinerType&& points)
+			: ParseData(fs, std::move(types), std::move(points))
+		{
+			const int symm_s = symm.size();
+			std::vector<SymmType> symmv;
+			symmv.reserve(symm_s - 1);
+			for (int i = 1; i < symm_s; i++) {
+				symmv.emplace_back(symm[i]);
+			}
+
+			fc.GenerateSymm(fs, symmv, true);
+			fs.sizePoints = fs.points.size();
+			fs.types.reserve(fs.sizePoints);
+			for (decltype(fs.sizeUnique) i = fs.sizeUnique; i < fs.sizePoints; i++) {
+				fs.types.emplace_back(fs.types[fs.parseIndex[i]]);
+			}
+		}
+	};
+}
