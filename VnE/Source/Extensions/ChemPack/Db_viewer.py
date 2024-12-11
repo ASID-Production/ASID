@@ -138,6 +138,7 @@ class StructuresListModel(QAbstractListModel):
                 if self.progress_bar:
                     if d.get('max_iter_num', None):
                         self.progress = self.progress + 1 / d['max_iter_num']
+                        self.progress_bar.setValue(int(round(self.progress * 100)))
                     else:
                         if d['count'] != 0:
                             self.progress = self.progress + len(d['results'])/d['count']

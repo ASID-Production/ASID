@@ -106,7 +106,6 @@ class ShaderProgramsCreator:
                     else:
                         log = glGetShaderInfoLog(shader_id)
                         glDeleteShader(shader_id)
-                        print(log)
                         raise SystemExit('Failed to compile shader')
                 else:
                     raise SystemExit('Failed to create program')

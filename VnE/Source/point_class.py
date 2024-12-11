@@ -409,7 +409,7 @@ class Point(aPoint):
             rad = np.array([rad], dtype=np.float32)
 
         self._rad = rad
-        
+
 
 class PointsList(aPoint):
     
