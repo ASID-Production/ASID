@@ -80,17 +80,18 @@ You can use, redistribute it and/or modify it under the terms of the License.
 | `djangorestframework` | 3.14.0   | [BSD 3-Clause License](https://github.com/encode/django-rest-framework/blob/master/LICENSE.md) |
 |       `djoser`        | 2.1.0    | [MIT License](https://github.com/sunscrapers/djoser/blob/master/LICENSE) |
 |      `drf-yasg`       | 1.21.4   | [BSD 3-Clause License](https://github.com/axnsan12/drf-yasg/blob/master/LICENSE.rst) |
-|     `freetype-py`     | 2.4.0    | [BSD 3-Clause License](https://github.com/rougier/freetype-py/blob/master/LICENSE.txt) |
+|     `freetype-py`     | latest   | [BSD 3-Clause License](https://github.com/rougier/freetype-py/blob/master/LICENSE.txt) |
 |        `gemmi`        | 0.5.8    | [Mozilla Public License 2.0](https://github.com/project-gemmi/gemmi/blob/master/LICENSE.txt) |
 |        `numpy`        | 1.26.0   | [BSD 3-Clause License](https://github.com/numpy/numpy/blob/main/LICENSE.txt) |
 |      `networkx`       | 2.8.8    | [BSD 3-Clause License](https://github.com/networkx/networkx/blob/main/LICENSE.txt) |
 |       `pycifrw`       | 4.4.5    | [PSF License, Version 2](https://github.com/jamesrhester/pycifrw/blob/development/LICENSE) |
 |      `pymatgen`       | 2024.3.1 | [MIT License](https://github.com/materialsproject/pymatgen/blob/master/LICENSE) |
-|      `pyopengl`       | 3.1.7    | [Custom License (based on BSD-3)](https://github.com/Distrotech/PyOpenGL/blob/master/license.txt) |
-|       `PySide6`       | 6.7.2    | [GNU LGPL v.3](https://doc.qt.io/qt-6/lgpl.html) |
+|      `pyopengl`       | latest   | [Custom License (based on BSD-3)](https://github.com/Distrotech/PyOpenGL/blob/master/license.txt) |
+|       `PySide6`       | latest   | [GNU LGPL v.3](https://doc.qt.io/qt-6/lgpl.html) |
 |        `rdkit`        | 2023.9.6 | [BSD 3-Clause License](https://github.com/rdkit/rdkit/blob/master/license.txt) |
-|      `requests`       | 2.32.0   | [Apache License 2.0](https://github.com/psf/requests/blob/main/LICENSE) |
+|      `requests`       | latest   | [Apache License 2.0](https://github.com/psf/requests/blob/main/LICENSE) |
 |      `progress`       | latest   | [ISC License](https://github.com/verigak/progress/blob/master/LICENSE) |
 |     `setuptools`      | latest   | [MIT License](https://github.com/pypa/setuptools/blob/main/LICENSE) |
+|      `psycopg2`       | latest   | [GNU LGPL v.3](https://github.com/psycopg/psycopg2/blob/master/LICENSE) |
 
 </details>
