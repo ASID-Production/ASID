@@ -203,7 +203,7 @@ def structure_search(
         if not qc:
             analyse_data = get_search_queryset_with_filtration(template_data, queryset)
         else:
-            analyse_data = get_search_queryset_with_filtration_qc(template_data, queryset, 'qc_')
+            analyse_data = get_search_queryset_with_filtration(template_data, queryset, 'qc_')
         # split search for chunk_size structures parts and then merge the result
         analyse_data_split = list(zip_longest(*[iter(analyse_data)] * chunk_size, fillvalue=''))
         if partial and request.user.is_authenticated:

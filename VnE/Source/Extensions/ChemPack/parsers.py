@@ -135,7 +135,7 @@ class FileParser:
                                       pdb_occupancy=atom.pdb_occupancy,
                                       pdb_tempFactor=atom.tempFactor,
                                       pdb_charge=atom.pdb_charge,
-                                      label=atom.pdb_name)
+                                      label=atom.pdb_name.replace(' ', '_'))
             return point
 
         for line in file:
@@ -1022,7 +1022,7 @@ class FileParser:
                                       color=PALETTE.point_dict[PALETTE.getName(atom.atom_type)],
                                       atom_type=atom.atom_type,
                                       name=atom.name,
-                                      label=atom.name)
+                                      label=atom.name.replace(' ', '_'))
         else:
             point = point_class.Point(parent=atom_list, coord=coord, rad=atom_list,
                                       color=PALETTE.point_dict[PALETTE.getName(atom.atom_type)],
