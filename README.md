@@ -37,9 +37,8 @@ click [^](#top) to return here
 ----
 <a name="InstallationW"></a>
 ## Installation on Windows<sup>[^](#top)</sup>
-1. Download Windows-based packege `ASID-install-windows.zip` or `ASID-installer.exe` of [latest stable version](https://github.com/ASID-Production/ASID/releases/latest).
+1. Download Windows-based packege `ASID-windows.zip` or `ASID-installer.exe` of [latest stable version](https://github.com/ASID-Production/ASID/releases/latest).
 2. Unpack archive or intrall via installer in any sutable dirrectory.
-3. Run `install-windows.bat` in the ASID directory.
 
 ----
 <a name="InstallationL"></a>
