@@ -24,7 +24,7 @@ click [^](#top) to return here
 * [System requirements](#SystemRequirements)
 * [Installation on Windows](#InstallationW)
 * [Installation on Linux](#InstallationL)
-* [License](#License)
+* [Licenses](#Licenses)
 
 <a name="SystemRequirements"></a>
 ## System Requirements <sup>[^](#top)</sup>
@@ -32,7 +32,7 @@ click [^](#top) to return here
 * Processor: 2 or more cores, AMD Piledriver / Intel Haswell (2012) or newer are strongly recommended
 * RAM: 4 GB
 * Graphics Card: Compatible with OpenGL 4.6
-* HDD or SSD: 1.4 GB
+* SSD: 1.4 GB
 
 ----
 <a name="InstallationW"></a>
