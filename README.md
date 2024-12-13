@@ -91,7 +91,7 @@ You can use, redistribute it and/or modify it under the terms of the License.
 |        `rdkit`        | 2023.9.6 | [BSD 3-Clause License](https://github.com/rdkit/rdkit/blob/master/license.txt) |
 |      `requests`       | latest   | [Apache License 2.0](https://github.com/psf/requests/blob/main/LICENSE) |
 |      `progress`       | latest   | [ISC License](https://github.com/verigak/progress/blob/master/LICENSE) |
-|     `setuptools`      | latest   | [MIT License](https://github.com/pypa/setuptools/blob/main/LICENSE) |
 |      `psycopg2`       | latest   | [GNU LGPL v.3](https://github.com/psycopg/psycopg2/blob/master/LICENSE) |
+|     `setuptools`      | latest   | [MIT License](https://github.com/pypa/setuptools/blob/main/LICENSE) |
 
 </details>
