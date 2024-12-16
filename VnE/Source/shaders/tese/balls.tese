@@ -37,7 +37,12 @@ in gl_PerVertex
   float gl_ClipDistance[];
 } gl_in[gl_MaxPatchVertices];
 
-out gl_PerVertex { vec4 gl_Position; };
+out gl_PerVertex
+{
+    vec4 gl_Position;
+    float gl_PointSize;
+    float gl_ClipDistance[];
+};
 
 layout(quads, equal_spacing, ccw) in;
 

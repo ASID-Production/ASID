@@ -30,12 +30,14 @@
 import sys
 from PySide6 import QtCore
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
+from PySide6.QtOpenGL import QOpenGLDebugLogger, QOpenGLDebugMessage
 import sys
 from OpenGL.GL import *
 import numpy as np
 from . import Scenes, UniformBuffers
 from .Facade import RenderFacade
 import time
+import logging
 
 from .point_class import PointsList
 
@@ -53,6 +55,11 @@ class OpenGlWidget(QOpenGLWidget):
         super().__init__(parent)
         self.surface_format = QtGui.QSurfaceFormat()
         self.surface_format.setSamples(4)
+        self.surface_format.setOption(QtGui.QSurfaceFormat.DebugContext)
+        self.surface_format.setRenderableType(QtGui.QSurfaceFormat.OpenGL)
+        self.surface_format.setProfile(QtGui.QSurfaceFormat.CoreProfile)
+        self.surface_format.setMajorVersion(4)
+        self.surface_format.setMinorVersion(6)
         self.setFormat(self.surface_format)
         self.timer = QtCore.QTimer()
         self.timer.timeout.connect(self.update)
@@ -64,11 +71,15 @@ class OpenGlWidget(QOpenGLWidget):
         self.installEventFilter(self)
         self.selection_model = None
         self.model = None
-
+        self.debug_logger = QOpenGLDebugLogger()
+        self.debug_logger.messageLogged.connect(self.log)
         self.button = None
         self.timer_pressed = 0
         self.pressed = False
         self.pos = [0, 0]
+
+    def log(self, msg):
+        logging.debug(f'{msg.severity()} {msg.type()} {msg.id()} {msg.source()}\n{msg.message()}')
 
     def setSelectionModel(self, selection_model: QItemSelectionModel):
         self.selection_model = selection_model
@@ -80,6 +91,12 @@ class OpenGlWidget(QOpenGLWidget):
 
     def initializeGL(self) -> None:
         super().initializeGL()
+        logging.debug(f'OpenGL context profile: {self.surface_format.profile()} {self.surface_format.renderableType()} {self.surface_format.majorVersion()}.{self.surface_format.minorVersion()}')
+        if self.context().hasExtension(QByteArray("GL_KHR_debug".encode())):
+            logging.debug('GL_KHR_debug supported')
+            self.debug_logger.initialize()
+            self.debug_logger.enableMessages(QOpenGLDebugMessage.AnySource, QOpenGLDebugMessage.AnyType, QOpenGLDebugMessage.AnySeverity)
+            self.debug_logger.startLogging(QOpenGLDebugLogger.SynchronousLogging)
         self.delta_time = 0
         self.it = 100
         if self.facade is None:

@@ -35,7 +35,12 @@ in gl_PerVertex
   float gl_PointSize;
   float gl_ClipDistance[];
 } gl_in[gl_MaxPatchVertices];
-out gl_PerVertex { vec4 gl_Position;} gl_out[];
+out gl_PerVertex
+{
+    vec4 gl_Position;
+    float gl_PointSize;
+    float gl_ClipDistance[];
+} gl_out[];
 
 layout(vertices = 2) out;
 
