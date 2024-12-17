@@ -37,7 +37,7 @@ click [^](#top) to return here
 ----
 <a name="InstallationW"></a>
 ## Installation on Windows<sup>[^](#top)</sup>
-1. Download Windows-based packege `ASID_v1.0.0_win.zip` or `ASID_v1.0.0_win_installer.exe` of [latest stable version](https://github.com/ASID-Production/ASID/releases/latest).
+1. Download Windows-based packege `ASID_v###_win.zip` or `ASID_v###_win_installer.exe` of [latest stable version](https://github.com/ASID-Production/ASID/releases/latest).
 2. Unpack archive or intrall via installer in any sutable dirrectory.
 4. Run the program using the `<ASID_ROOT>/VnE/Start.bat`
 
