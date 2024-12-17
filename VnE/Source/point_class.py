@@ -287,7 +287,7 @@ class aPoint(ABC):
         super().__delattr__(item)
 
     def __setattr__(self, key, value):
-        if issubclass(type(value), aPoint) and key != 'parent':
+        if isinstance(value, aPoint) and key != 'parent':
             if self._dependent_properties.get(key, None) is value:
                 pass
             elif self._dependent_properties.get(key, None) is None:
@@ -318,7 +318,7 @@ class aPoint(ABC):
             value = super().__getattribute__(item)
         except AttributeError:
             value = None
-        if issubclass(type(value), aPoint) and item != 'parent':
+        if isinstance(value, aPoint) and item != 'parent':
             value = value.__getattribute__(item)
         return value
 

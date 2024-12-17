@@ -36,7 +36,12 @@ in gl_PerVertex
   float gl_PointSize;
   float gl_ClipDistance[];
 } gl_in[gl_MaxPatchVertices];
-out gl_PerVertex { vec4 gl_Position;} gl_out[];
+out gl_PerVertex
+{
+    vec4 gl_Position;
+    float gl_PointSize;
+    float gl_ClipDistance[];
+} gl_out[];
 
 layout(vertices = 1) out;
 
@@ -52,7 +57,7 @@ layout(std140, binding = 0) uniform Matrices
         mat4 aspect_ratio;
         mat4 clip_distance;
         mat4 perspective;
-        mat4 schene_shift;
+        mat4 scene_shift;
     };
 
 uniform float shift = 0;

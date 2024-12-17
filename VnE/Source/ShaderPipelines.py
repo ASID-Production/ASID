@@ -33,6 +33,7 @@ from abc import ABC, abstractmethod
 from typing import List
 import ctypes
 import os.path as opath
+import logging
 
 from .ShaderDataObjects import ShaderData, ShaderDataCreator, ShaderDataText
 
@@ -104,10 +105,11 @@ class ShaderProgramsCreator:
                         glLinkProgram(program)
                         glDetachShader(program, shader_id)
                     else:
-                        log = glGetShaderInfoLog(shader_id)
-                        glDeleteShader(shader_id)
+                        logging.error('Shader compilation failed')
+                        logging.error(glGetShaderInfoLog(shader_id))
                         raise SystemExit('Failed to compile shader')
                 else:
+                    logging.error('Failed to create shader program')
                     raise SystemExit('Failed to create program')
                 glDeleteShader(shader_id)
                 return (program, shader)
