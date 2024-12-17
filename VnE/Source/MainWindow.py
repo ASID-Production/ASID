@@ -337,11 +337,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.about_dialog = QtWidgets.QDialog(self)
         self.about_dialog.setWindowTitle('About')
         self.about_dialog.setLayout(QtWidgets.QVBoxLayout())
-        self.about_dialog.layout().addWidget(QtWidgets.QLabel("ASID 1.0\nAuthors:\nAlexander A. Korlyukov (head),\nAlexander D. Volodin (author of cpplib),\nPetr A. Buikin (author of api_database),\nAlexander R. Romanenko (author of VnE)"))
+        self.about_dialog.layout().addWidget(QtWidgets.QLabel("ASID 1.0.1\nAuthors:\nAlexander A. Korlyukov (head),\nAlexander D. Volodin (author of cpplib),\nPetr A. Buikin (author of api_database),\nAlexander R. Romanenko (author of VnE)"))
 
         self.about.triggered.connect(self.about_dialog.show)
 
-    def closeEvent(self, event):
+    def closeEvent(self, event, *args, **kwargs):
         ret = QtWidgets.QMainWindow.closeEvent(self, event)
         sys.exit()
 

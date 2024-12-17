@@ -9,7 +9,7 @@ from datetime import datetime
 import ctypes
 import os
 if os.name == 'nt':
-    myappid = u'ASID-team.ASID.ASID-dev.1' # arbitrary string
+    myappid = u'ASID-team.ASID.ASID.1.0.1' # arbitrary string
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(myappid)
 
 time = datetime.today().strftime('%Y-%m-%d')
