@@ -910,6 +910,22 @@ extern "C" {
 		const auto ret = cpplib::currents::SearchGraphType::DatabaseGraphType::ResortString(PyUnicode_AsUTF8(arg));
 		return PyUnicode_FromString(ret.c_str());
 	}
+
+	// Args: [cell,symm,tuples,radius]
+	static PyObject* cpplib_ClusterCreate(PyObject* self, PyObject* args) {
+		PyObject* ocell = NULL;
+		PyObject* osymm = NULL;
+		PyObject* otuples = NULL;
+		float radius = 0;
+		if (!PyArg_ParseTuple(args, "OOOf", &ocell, &osymm, &otuples, &radius)) {
+			deb_write("! Critic Error: Parse Error - return None");
+			Py_RETURN_NONE;
+		}
+		Prepare_IC all(ocell, osymm, otuples);
+
+		// TODO
+
+	}
 }
 
 
