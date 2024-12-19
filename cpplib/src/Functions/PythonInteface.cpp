@@ -52,14 +52,14 @@ struct Prepare_WC {
 		for (Py_ssize_t i = 0; i < s; i++) {
 			PyObject* o_tuple = PyList_GetItem(otuples, i);
 			types.push_back(static_cast<AtomTypeData>(PyLong_AsLong(PyTuple_GetItem(o_tuple, 0))));
-			points.emplace_back(static_cast<float>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 1))),
-								static_cast<float>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 2))),
-								static_cast<float>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 3))));
+			points.emplace_back(static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 1))),
+								static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 2))),
+								static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 3))));
 		}
 	}
 };
 struct Prepare_IC : public Prepare_WC {
-	std::array<float, 6> cell;
+	std::array<cpplib::currents::FloatingPointType, 6> cell;
 	std::vector<const char*> symm;
 	Prepare_IC(PyObject* ocell, PyObject* osymm, PyObject* otuples) : Prepare_WC(otuples) {
 		for (Py_ssize_t i = 0; i < 6; i++) {
@@ -911,20 +911,48 @@ extern "C" {
 		return PyUnicode_FromString(ret.c_str());
 	}
 
-	// Args: [cell,symm,tuples,radius]
+	// Args: [cell,symm,tuples,anchors,radius]
 	static PyObject* cpplib_ClusterCreate(PyObject* self, PyObject* args) {
 		PyObject* ocell = NULL;
 		PyObject* osymm = NULL;
 		PyObject* otuples = NULL;
-		float radius = 0;
-		if (!PyArg_ParseTuple(args, "OOOf", &ocell, &osymm, &otuples, &radius)) {
+		PyObject* ocoords = NULL;
+		float over_radius = 0;
+		if (!PyArg_ParseTuple(args, "OOOf", &ocell, &osymm, &otuples, &ocoords, &over_radius)) {
 			deb_write("! Critic Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
 		Prepare_IC all(ocell, osymm, otuples);
 
-		// TODO
+		Py_ssize_t s = PyList_Size(ocoords);
+		std::vector<std::pair<cpplib::currents::PointType, cpplib::currents::FloatingPointType> > anchors;
+		anchors.reserve(static_cast<size_t>(s));
 
+		for (Py_ssize_t i = 0; i < s; i++) {
+			PyObject* o_tuple = PyList_GetItem(ocoords, i);
+			anchors.emplace_back(cpplib::currents::PointType(static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 0))),
+								 static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 1))),
+								 static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 2)))),
+								 static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 3))));
+		}
+
+		all.cell,all.symm,all.types,all.points,
+		auto ret = ClusterCreate();
+		PyObject* o_ret = PyList_New(0);
+		auto ret_s = ret.size();
+		if(ret_s == 0) return Py_BuildValue("{s:s}",
+											"error", "Infinite structure (MoF/Polymer)");
+		for (size_t i = 0; i < ret_s; i++)
+		{
+			PyList_Append(o_ret, Py_BuildValue("(lllll)",
+													static_cast<long>(std::get<0>(ret[i])),
+													std::get<1>(ret[i]),
+													std::get<2>(ret[i]),
+													std::get<3>(ret[i]),
+													std::get<4>(ret[i])));
+		}
+		return Py_BuildValue("{s:O}",
+							 "return", o_ret);
 	}
 }
 
