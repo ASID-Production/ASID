@@ -33,11 +33,13 @@
 #include "SearchGraph.h"
 #include "Engine.h"
 #include <array>
+#include <tuple>
 #include <cassert>
 #include <string>
 #include <vector>
 #include <functional>
 #include <numeric>
+#include <map>
 
 namespace cpplib {
 	struct FAM_Struct {
@@ -53,13 +55,17 @@ namespace cpplib {
 		using BondExType = BondEx;
 		using AtomIndex = NodeType::AtomIndex;
 		using AtomContainerType = ::std::vector<AtomType>;
-		using ParseIndexType = ::std::vector<size_type>;
 		using PointConteinerType = ::std::vector<PointType>;
 		using DistanceFunction = ::std::function<currents::FloatingPointType(const PointType& p1, const PointType& p2)>;
+		using ShiftType = geometry::Point<char>;
+		using SymmRef = unsigned char;
+		using ParseIndexType = ::std::vector<std::tuple<AtomIndex, SymmRef, ShiftType>>;
+
 		// Data
 		AtomContainerType types;
 		PointConteinerType points;
 		ParseIndexType parseIndex;
+
 
 		size_type sizeUnique = 0;
 		size_type sizePoints = 0;
@@ -70,7 +76,12 @@ namespace cpplib {
 			sizeUnique = types.size();
 			sizePoints = points.size();
 			parseIndex.resize(sizeUnique);
-			::std::iota(parseIndex.begin(), parseIndex.end(), 0); // Fill with 0, 1...
+			for (decltype(sizeUnique) i = 0; i < sizeUnique; i++)
+			{
+				std::get<0>(parseIndex[i]) = i;
+				std::get<1>(parseIndex[i]) = static_cast<SymmRef>(0);
+				std::get<2>(parseIndex[i]) = ShiftType(0,0,0);
+			}
 		};
 
 		// Methods
@@ -78,10 +89,10 @@ namespace cpplib {
 			::std::vector<BondType> res;
 			::std::vector<AtomIndex> invalidAtoms;
 			for (size_type i = 0; i < sizePoints; i++) {
-				const auto indexI = parseIndex[i];
+				const auto indexI = std::get<0>(parseIndex[i]);
 				const auto type_i = types[indexI];
 				for (size_type j = i + 1; j < sizePoints; j++) {
-					const auto indexJ = parseIndex[j];
+					const auto indexJ = std::get<0>(parseIndex[j]);
 					const auto type_j = types[indexJ];
 					auto dist = distance_f(points[i], points[j]);
 					char isbond = distances.isBond(type_i, type_j, dist);
@@ -120,10 +131,10 @@ namespace cpplib {
 			std::vector<BondExType> res;
 			std::vector<AtomIndex> invalidAtoms;
 			for (size_type i = 0; i < sizePoints; i++) {
-				const auto indexI = parseIndex[i];
+				const auto indexI = std::get<0>(parseIndex[i]);
 				const auto type_i = types[indexI];
 				for (size_type j = i + 1; j < sizePoints; j++) {
-					const auto indexJ = parseIndex[j];
+					const auto indexJ = std::get<0>(parseIndex[j]);
 					const auto type_j = types[indexJ];
 					FloatingPointType dist = distance_f(points[i], points[j]);
 					char isbond = distances.isBond(type_i, type_j, dist);
@@ -167,6 +178,7 @@ namespace cpplib {
 			return std::fma(ret, static_cast<FloatingPointType>(2), static_cast<FloatingPointType>(0.0001));
 		}
 
+
 		// Debug Method
 		void writeXYZ(const std::string& name) {
 			std::ofstream out;
@@ -187,33 +199,43 @@ namespace cpplib {
 		using SuperCellCounter = uint_fast8_t;
 		using DimmentionType = uint_fast8_t;
 		using SymmType = geometry::Symm<FloatingPointType>;
+		using DistancesType = Distances;
+		using AtomIndex = currents::AtomIndex;
 
 		explicit FAM_Cell(base&& cell) : base(::std::move(cell)) {}
-		void GenerateSymm(FAM_Struct& fs, const std::vector<SymmType>& symm, const bool intoCell = true) const {
+		void GenerateSymm(FAM_Struct& fs, const std::vector<SymmType>& symm, const bool intoCell, const bool force_unique) const {
 			const size_t p_s = fs.points.size();
 			const size_t s_s = symm.size();
 
 			// Find all translated atoms in "unique" atoms
-			std::vector<bool> unique = this->FindUnique(fs, p_s, intoCell);
+			std::vector<bool> unique(p_s, true);
+			if (force_unique) unique = this->FindUnique(fs, p_s, intoCell);
 
-			for (size_t p = 0; p < p_s; p++) {
-				if (unique[p] == false) // skip non unique atoms
-					continue;
-				const size_t p_start = fs.points.size();
-				for (size_t s = 0; s < s_s; s++) {
-					PointType newpoint = (intoCell ? symm[s].GenSymmNorm(fs.points[p]) : symm[s].GenSymm(fs.points[p]));
+			for (size_t s = 0; s < s_s; s++) {
+				if (symm[s].is_Eq()) continue;
+				for (size_t p = 0; p < p_s; p++) {
+					if (unique[p] == false) // skip non unique atoms
+						continue;
+					const size_t p_start = fs.points.size();
+					PointType newpoint = symm[s].GenSymm(fs.points[p]);
+					PointType shift = (PointType(0.5, 0.5, 0.5) - newpoint).round();
+					if (intoCell) newpoint += shift;
+
 					if (isTheSame_(fs.points, newpoint, intoCell)) {
 						continue;
 					}
-					const size_t au = isAnotherUnique(fs.points, newpoint, p, fs.sizeUnique, intoCell);
-					if (au != static_cast<size_t>(-1)) {
-						unique[au] = false;
+					if (force_unique) {
+						const size_t au = isAnotherUnique(fs.points, newpoint, p, fs.sizeUnique, intoCell);
+						if (au != static_cast<size_t>(-1)) {
+							unique[au] = false;
+						}
 					}
-					if (intoCell) fs.points.push_back(newpoint.MoveToCell());
-					else fs.points.push_back(newpoint);
-					fs.parseIndex.push_back(p);
+					fs.points.push_back(newpoint);
+					fs.parseIndex.emplace_back(p, s, FAM_Struct::ShiftType(static_cast<int>(shift.get(0)),															   static_cast<int>(shift.get(1)),																	   static_cast<int>(shift.get(2))));
 				}
 			}
+			fs.sizePoints = fs.points.size();
+			if (force_unique == false) return;
 			// sort and recount unique atoms
 			// 1. Recount unique atoms and create shifting vector
 			size_t new_count = 0;
@@ -242,7 +264,7 @@ namespace cpplib {
 			for (size_t i = p_s; i < fps; i++)
 			{
 				fs.points[i - ds] = fs.points[i];
-				fs.parseIndex[i - ds] = shift[fs.parseIndex[i]];
+				fs.parseIndex[i - ds] = fs.parseIndex[shift[std::get<0>(fs.parseIndex[i])]];
 			}
 			fs.points.resize(fps - ds);
 			fs.types.resize(new_count);
@@ -307,7 +329,112 @@ namespace cpplib {
 			}
 			return (base::fracToCart() * dp).r();
 		}
+		auto findBondsAndMolecules(const FAM_Struct& fs, const DistancesType& distances) const {
+			using ShiftType = FAM_Struct::ShiftType;
+			using MolType = std::vector<std::vector<ShiftType>>; // mol[atomIndex][0-...?]
+			std::vector<std::pair<Bond,ShiftType>> bonds; // Shift-type bond container
+			std::list<AtomIndex> polis;
+
+			std::vector<AtomIndex> ref(fs.sizePoints, 0);
+			std::vector<std::pair<MolType,bool>> allMolecules(1, std::make_pair(std::vector<std::vector<ShiftType>>(fs.sizePoints),false)); // Molecules start from [1]. Value [0] is always empty
+
+			for (AtomIndex i = 0; i < fs.sizePoints; i++) {
+				const auto type_i = fs.types[std::get<0>(fs.parseIndex[i])];
+				for (AtomIndex j = i + 1; j < fs.sizePoints; j++) {
+					const auto type_j = fs.types[std::get<0>(fs.parseIndex[j])];
+					FloatingPointType dist = distanceInCell(fs.points[i], fs.points[j]);
+					char isbond = distances.isBond(type_i, type_j, dist);
+					switch (isbond) {
+					case -1:
+						//[[fallthrough]]
+					case  1:
+					{
+						bonds.emplace_back(Bond(i, j), toShift((fs.points[i] - fs.points[j]).round()));
+						AtomIndex k1 = 0;
+						for (; k1 < allMolecules.size(); k1++)
+						{
+							if (!allMolecules[k1].first[i].empty()) break;
+						}
+						bool k1f = k1 != allMolecules.size(); // k1 found
+						AtomIndex k2 = 0;
+						for (; k2 < allMolecules.size(); k2++)
+						{
+							if (!allMolecules[k2].first[j].empty()) break;
+						}
+						bool k2f = k2 != allMolecules.size(); // k2 found
+
+						switch ((k1f ? 1 : 0) + (k2f ? 2 : 0))
+						{
+						case 0: // None
+							allMolecules.emplace_back(std::vector<std::vector<ShiftType>>(fs.sizePoints), false);
+							allMolecules.back().first[i].push_back(std::get<2>(fs.parseIndex[i]));
+							allMolecules.back().first[j].push_back(std::get<2>(fs.parseIndex[j]) + bonds.back().second);
+							break;
+						case 1: // Only k1 found
+							_ASSERT(!allMolecules[k1].first[i].empty());
+							allMolecules[k1].first[j].push_back(allMolecules[k1].first[i][0] + bonds.back().second);
+							_ASSERT(allMolecules[k1].first[j].size() == 1);
+							break;
+						case 2: // Only k2 found
+							_ASSERT(!allMolecules[k2].first[j].empty());
+							allMolecules[k2].first[i].push_back(allMolecules[k2].first[j][0] - bonds.back().second);
+							_ASSERT(allMolecules[k2].first[i].size() == 1);
+							break;
+						case 3: // Both found
+							if (k1 != k2) { // different molecules
+								Merge(fs, allMolecules[k1].first, allMolecules[k2].first, bonds.back());
+								allMolecules.erase(allMolecules.begin() + k1);
+							}
+							else {
+								if (!(allMolecules[k1].first[i][0] + bonds.back().second == allMolecules[k2].first[j][0])) { // It's a polymer!
+									allMolecules[k1].first[j].push_back(allMolecules[k1].first[i][0] + bonds.back().second);
+									allMolecules[k1].second = true;
+								}
+							}
+							break;
+						}
+					}
+						break;
+					default:
+						break;
+					}
+				}
+			}
+			return allMolecules;
+		}
+
 	private:
+
+		inline void Merge(const FAM_Struct& fs, 
+						  const std::vector<std::vector<FAM_Struct::ShiftType>>& molO /*i*/,
+						  std::vector<std::vector<FAM_Struct::ShiftType>>& molN /*j*/,
+						  const std::pair<Bond, FAM_Struct::ShiftType>& bond) const {
+			for (AtomIndex i = 0; i < fs.sizePoints; i++)
+			{
+				for (AtomIndex j = 0; j < molO[i].size(); j++)
+				{
+					molN[i].emplace_back(molO[i][j] - bond.second);
+				}
+			}
+		}
+
+		inline currents::FAMStructType::ShiftType toShift(const PointType& a1) const {
+			using namespace currents;
+			return FAMStructType::ShiftType(static_cast<FAMStructType::ShiftType::value_type>((a1.get(0))),
+											static_cast<FAMStructType::ShiftType::value_type>((a1.get(1))),
+											static_cast<FAMStructType::ShiftType::value_type>((a1.get(2))));
+		}
+
+		std::pair<FloatingPointType, currents::FAMStructType::ShiftType> distanceWithShift(const PointType& p1, const PointType& p2) const noexcept {
+			auto dp = (p1 - p2).MoveToCell();
+			FloatingPointType ret = 0;
+			for (DimmentionType i = 0; i < static_cast<DimmentionType>(3); i++) {
+				FloatingPointType val = dp.get(i);
+				if (val > 0.5)
+					dp.set(i, val - 1);
+			}
+
+		}
 		inline std::vector<bool> FindUnique(const FAM_Struct& fs, const size_t p_s, const bool intoCell) const {
 			std::vector<bool> unique(p_s, true);
 
@@ -349,6 +476,7 @@ namespace cpplib {
 			return static_cast<size_t>(-1);
 		}
 	};
+	
 
 	class FindMolecules {
 	public:
@@ -367,6 +495,7 @@ namespace cpplib {
 		using HType = NodeType::HType;
 		using HashType = Hash<AtomType>;
 		using RightType = std::vector<std::tuple<std::vector<std::tuple<PointType, AtomIndex>>, int, std::vector<BondType>>>;
+		using MoleculeType = std::pair<std::vector<AtomIndex>, std::vector<BondType>>;
 	private:
 		FAMSType fs_;
 
@@ -459,13 +588,40 @@ namespace cpplib {
 				for (size_t j = 0; j < mis; j++)
 				{
 					auto realID = std::get<0>(molecules[i])[j];
-					oneMol.emplace_back(fs_.points[std::get<0>(molecules[i]).operator[](j)], fs_.parseIndex[realID]);
+					oneMol.emplace_back(fs_.points[std::get<0>(molecules[i]).operator[](j)], std::get<0>(fs_.parseIndex[realID]));
 				}
 				right.emplace_back(std::move(oneMol), std::get<1>(molecules[i]), std::move(std::get<2>(molecules[i])));
 			}
 			auto outputStr = output(molecules, net);
 			auto res = cpplib::currents::SearchGraphType::DatabaseGraphType::ResortString(outputStr.c_str()).substr(2);
 			return std::make_tuple(res, errorMsg, std::move(right));
+		}
+		std::tuple<std::vector<AtomIndex>, std::vector<MoleculeType>> separateGraphs(std::vector<BondType>& bonds) {
+			std::vector<AtomIndex> refs(fs_.sizeUnique, 0);
+			std::vector<MoleculeType> molecules(1);
+			std::vector<Node<currents::AtomTypeData>> nodes;
+			nodes.reserve(fs_.sizePoints);
+
+			for (AtomIndex i = 0; i < fs_.sizePoints; i++)
+			{
+				nodes.emplace_back(fs_.types[std::get<0>(fs_.parseIndex[i])], 0, i);
+			}
+			for (AtomIndex i = 0; i < bonds.size(); i++)
+			{
+				nodes[bonds[i].first].addBondSimple(nodes[bonds[i].second]);
+			}
+			std::vector<bool> seen(fs_.sizeUnique, false);
+			
+			for (AtomIndex i = 0; i < fs_.sizeUnique; i++)
+			{
+				if (seen[i]) continue;
+				molecules.emplace_back(findNextMolecule(i, nodes, seen));
+				for (AtomIndex j = 0; j < molecules.back().first.size(); j++)
+				{
+					refs[molecules.back().first[j]] = molecules.size() - 1;
+				}
+			}
+			return std::make_tuple(refs, molecules);
 		}
 		PointConteinerType& compaq(const DistancesType& distances, std::vector<BondType>& bonds) {
 
@@ -476,7 +632,7 @@ namespace cpplib {
 			for (AtomIndex i = 0; i < fs_.sizePoints; i++)
 			{
 				constexpr PointType m(0.5, 0.5, 0.5);
-				auto& cur = closest[fs_.parseIndex[i]];
+				auto& cur = closest[std::get<0>(fs_.parseIndex[i])];
 				if ((fs_.points[i] - m).r() < (fs_.points[cur] - m).r()) {
 					cur = i;
 				}
@@ -515,7 +671,7 @@ namespace cpplib {
 				// 4.1. Shift Center of Mass
 				deb_write("FM::compaq Phase 4.1. Shift Center of Mass");
 				deb_write("Center of Mass");
-				PointType center(0, 0, 0);
+				PointType center(0., 0., 0.);
 				for (size_type j = 0; j < singleTableSize; j++)
 				{
 					center += fs_.points[singleTable[j]];
@@ -534,8 +690,8 @@ namespace cpplib {
 
 				deb_write("FM::compaq Phase 4.2. Swap coordinates");
 				for (size_type j = 0; j < singleTableSize; j++) {
-					if(singleTable[j] != fs_.parseIndex[singleTable[j]])
-						std::swap(fs_.points[singleTable[j]], fs_.points[fs_.parseIndex[singleTable[j]]]);
+					if(singleTable[j] != std::get<0>(fs_.parseIndex[singleTable[j]]))
+						std::swap(fs_.points[singleTable[j]], fs_.points[std::get<0>(fs_.parseIndex[singleTable[j]])]);
 				}
 			}
 
@@ -597,8 +753,7 @@ namespace cpplib {
 				}
 			}
 			return res;
-		}
-
+		}	
 		std::pair<std::vector<AtomIndex>, std::vector<BondType>> findNextMolecule(const AtomIndex start, const std::vector<NodeType>& net, std::vector<bool>& seen) const {
 			// 1. Create vector with single element and define limitators
 			std::vector<AtomIndex> res(1, start);
@@ -624,7 +779,7 @@ namespace cpplib {
 					}
 					res.emplace_back(cur_id);
 				}
-				seen[fs_.parseIndex[res[low_pos]]] = true;
+				seen[std::get<0>(fs_.parseIndex[res[low_pos]])] = true;
 				low_pos++;
 			}
 			return std::make_pair(res, bonds);
@@ -640,9 +795,9 @@ namespace cpplib {
 				for (AtomIndex j = 0; j < nei_size; j++) {
 					const auto cur_id = net[res[low_pos]].getNeighbour(j)->getID();
 					auto is_m = static_cast<AtomIndex>(is_member(cur_id, res));
-					if (is_m == (static_cast<AtomIndex>((size_t)(-1))) && seen[fs_.parseIndex[cur_id]] == false) {
+					if (is_m == (static_cast<AtomIndex>((size_t)(-1))) && seen[std::get<0>(fs_.parseIndex[cur_id])] == false) {
 						res.emplace_back(cur_id);
-						seen[fs_.parseIndex[cur_id]] = true;
+						seen[std::get<0>(fs_.parseIndex[cur_id])] = true;
 						auto shift = (fs_.points[res[low_pos]]- fs_.points[cur_id]).round();
 						if(shift.r() > 0.1) 
 							fs_.points[cur_id] += shift;

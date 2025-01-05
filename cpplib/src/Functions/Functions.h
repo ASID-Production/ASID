@@ -59,7 +59,7 @@ std::vector<cpplib::currents::FindGeometryType::tupleAngle>
 std::vector<cpplib::currents::FindGeometryType::tupleTorsion> 
 	FindTorsionWC(cpplib::currents::FAMStructType::AtomContainerType& types,
 				  cpplib::currents::FAMStructType::PointConteinerType& points,
-						                                  const std::array<int, 4>& type,
+	              const std::array<int, 4>& type,
 				  const std::array<std::pair<float, float>, 3>& value_d,
 				  const std::array<std::pair<float, float>, 2>& value_a,
 				  const std::pair<float, float>& value_t);
@@ -74,7 +74,6 @@ std::vector<cpplib::currents::FindGeometryType::tupleTorsion>
 				  const std::array<std::pair<float, float>, 2>& value_a,
 				  const std::pair<float, float>& value_t);
 
-
 cpplib::DATTuple FindDAT_IC(const std::array<float, 6>& unit_cell,
 							std::vector<const char*>& symm,
 							cpplib::currents::FAMStructType::AtomContainerType& types,
@@ -82,7 +81,15 @@ cpplib::DATTuple FindDAT_IC(const std::array<float, 6>& unit_cell,
 cpplib::DATTuple FindDAT_WC(cpplib::currents::FAMStructType::AtomContainerType& types,
 							cpplib::currents::FAMStructType::PointConteinerType& points);
 
-std::tuple<std::vector<cpplib::currents::PointType>, std::list<std::string>>  Compaq(const std::array<float, 6>& unit_cell,
+std::tuple<std::vector<cpplib::currents::PointType>, std::list<std::string>> Compaq(const std::array<float, 6>& unit_cell,
 												const std::vector<const char*>& symm,
 												cpplib::currents::FAMStructType::AtomContainerType& types,
 												cpplib::currents::FAMStructType::PointConteinerType& points);
+
+std::vector<std::tuple<cpplib::currents::PointType, cpplib::currents::AtomIndex, long, cpplib::FAM_Struct::ShiftType>>
+	ClusterCreate(std::array<cpplib::currents::FloatingPointType, 6> cell,
+				  std::vector<const char*> symm,
+				  cpplib::currents::FAMStructType::AtomContainerType& types,
+				  cpplib::currents::FAMStructType::PointConteinerType& points,
+				  std::vector<std::pair<cpplib::currents::PointType, cpplib::currents::FloatingPointType>>& anchors,
+				  cpplib::currents::FloatingPointType over_radius);

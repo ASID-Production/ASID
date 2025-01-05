@@ -128,7 +128,7 @@ namespace cpplib {
 			auto s = data_[index].getHAtoms();
 			for (AtomIndex i = 0; i < s; i++)
 			{
-				auto last = data_.size();
+				AtomIndex last = data_.size();
 				data_.emplace_back(1, 0, last);
 				addBond(index, last);
 				data_[last].setCoord(Coord(1,Coord::max));
@@ -523,7 +523,7 @@ namespace cpplib {
 		}
 		void release_HAtoms(const currents::TypeBitset& bits) {
 			if (bits.none()) return;
-			size_t hs = this->size();
+			AtomIndex hs = this->size();
 			const AtomIndex sn = hs;
 			//::std::list< NodeType> hydrogenAtoms;
 

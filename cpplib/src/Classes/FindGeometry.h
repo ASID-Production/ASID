@@ -157,7 +157,7 @@ namespace cpplib {
 				for (size_type j = i + 1; j < fs.sizePoints; j++)
 				{
 					auto R = (fs.points[i] - fs.points[j]).r();
-					if (R < dist.maxDistance(fs.types[fs.parseIndex[i]], fs.types[fs.parseIndex[j]]))
+					if (R < dist.maxDistance(fs.types[std::get<0>(fs.parseIndex[i])], fs.types[std::get<0>(fs.parseIndex[j])]))
 						res.emplace_back(i, j, R);
 				}
 			}

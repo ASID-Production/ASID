@@ -102,45 +102,25 @@ namespace cpplib {
 		using PointType = FAMStructType::PointType;
 		using SymmType = FAMCellType::SymmType;
 
-		ParseData(FAMStructType& fs, const std::vector<int>& types, const std::vector<float>& xyz) {
-			const auto types_s = types.size();
-			fs.points.reserve(types_s);
-			fs.types.reserve(types_s);
-			fs.sizePoints = types_s;
-			fs.sizeUnique = types_s;
-			for (int i = 0, i3 = 0; i < types_s; i++, i3 += 3) {
-				fs.types.emplace_back(types[i]);
-				fs.points.emplace_back(xyz[i3], xyz[i3 + 1], xyz[i3 + 2]);
-			}
-			fs.parseIndex.resize(types_s);
-			std::iota(fs.parseIndex.begin(), fs.parseIndex.end(), 0); // Fill with 0, 1...
-		}
 		ParseData(FAMStructType& fs, FAMStructType::AtomContainerType && types, FAMStructType::PointConteinerType && points) {
-			const auto types_s = types.size();
-			fs.types = std::move(types);
-			fs.points = std::move(points);
-			fs.sizePoints = types_s;
-			fs.sizeUnique = types_s;
-
-			fs.parseIndex.resize(types_s);
-			std::iota(fs.parseIndex.begin(), fs.parseIndex.end(), 0); // Fill with 0, 1...
+			fs = FAMStructType(std::move(types), std::move(points));
 		}
 
-		ParseData(FAMStructType& fs, FAMCellType& fc, const std::vector<const char*>& symm, FAMStructType::AtomContainerType&& types, FAMStructType::PointConteinerType&& points)
+		ParseData(FAMStructType& fs, FAMCellType& fc, const std::vector<const char*>& symm, FAMStructType::AtomContainerType&& types, FAMStructType::PointConteinerType&& points, bool check_unique = true)
 			: ParseData(fs, std::move(types), std::move(points))
 		{
 			const int symm_s = symm.size();
 			std::vector<SymmType> symmv;
-			symmv.reserve(symm_s - 1);
-			for (int i = 1; i < symm_s; i++) {
+			symmv.reserve(symm_s);
+			for (int i = 0; i < symm_s; i++) {
 				symmv.emplace_back(symm[i]);
 			}
 
-			fc.GenerateSymm(fs, symmv, true);
+			fc.GenerateSymm(fs, symmv, true, check_unique);
 			fs.sizePoints = fs.points.size();
 			fs.types.reserve(fs.sizePoints);
 			for (decltype(fs.sizeUnique) i = fs.sizeUnique; i < fs.sizePoints; i++) {
-				fs.types.emplace_back(fs.types[fs.parseIndex[i]]);
+				fs.types.emplace_back(fs.types[std::get<0>(fs.parseIndex[i])]);
 			}
 		}
 	};

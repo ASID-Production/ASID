@@ -52,14 +52,14 @@ struct Prepare_WC {
 		for (Py_ssize_t i = 0; i < s; i++) {
 			PyObject* o_tuple = PyList_GetItem(otuples, i);
 			types.push_back(static_cast<AtomTypeData>(PyLong_AsLong(PyTuple_GetItem(o_tuple, 0))));
-			points.emplace_back(static_cast<float>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 1))),
-								static_cast<float>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 2))),
-								static_cast<float>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 3))));
+			points.emplace_back(static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 1))),
+								static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 2))),
+								static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 3))));
 		}
 	}
 };
 struct Prepare_IC : public Prepare_WC {
-	std::array<float, 6> cell;
+	std::array<cpplib::currents::FloatingPointType, 6> cell;
 	std::vector<const char*> symm;
 	Prepare_IC(PyObject* ocell, PyObject* osymm, PyObject* otuples) : Prepare_WC(otuples) {
 		for (Py_ssize_t i = 0; i < 6; i++) {
@@ -319,7 +319,6 @@ extern "C" {
 													 "atoms", o_molecule,
 													 "bonds", o_bonds));
 		}
-		// List[Tuple(atom1, atom2), ...] ��� ������ 'bonds' 
 		return Py_BuildValue("{s:s,s:s,s:O}",
 							 "graph_str", std::get<0>(ret).c_str(),
 							 "error_str", std::get<1>(ret).c_str(),
@@ -357,7 +356,6 @@ extern "C" {
 													 "atoms", o_molecule,
 													 "bonds", o_bonds));
 		}
-		// List[Tuple(atom1, atom2), ...] ��� ������ 'bonds' 
 		return Py_BuildValue("{s:s,s:s,s:O}",
 							 "graph_str", std::get<0>(ret).c_str(),
 							 "error_str", std::get<1>(ret).c_str(),
@@ -421,7 +419,7 @@ extern "C" {
 
 		FAMStructType famstr(std::move(all.types), std::move(all.points));
 		FAMCellType fcell(FAMCellType::base(32, 32, 32, 90, 90, 90, true));
-		fcell.GenerateSymm(famstr, symm, movetocell);
+		fcell.GenerateSymm(famstr, symm, movetocell, true);
 
 		deb_write("cpplib_GenSymm: famstr.types.size() = ", famstr.types.size());
 		deb_write("cpplib_GenSymm: famstr.points.size() = ", famstr.points.size());
@@ -431,7 +429,7 @@ extern "C" {
 		for (Py_ssize_t i = s_points; i < famstr.sizePoints; i++)
 		{
 			PyList_Append(otuples, Py_BuildValue("(Ifff)",
-												 static_cast<unsigned int>(famstr.types[famstr.parseIndex[i]]),
+												 static_cast<unsigned int>(famstr.types[std::get<0>(famstr.parseIndex[i])]),
 												 static_cast<float>(famstr.points[i].get(0)),
 												 static_cast<float>(famstr.points[i].get(1)),
 												 static_cast<float>(famstr.points[i].get(2))));
@@ -910,6 +908,51 @@ extern "C" {
 		const auto ret = cpplib::currents::SearchGraphType::DatabaseGraphType::ResortString(PyUnicode_AsUTF8(arg));
 		return PyUnicode_FromString(ret.c_str());
 	}
+
+	// Args: [cell,symm,tuples,anchors,radius]
+	static PyObject* cpplib_ClusterCreate(PyObject* self, PyObject* args) {
+		PyObject* ocell = NULL;
+		PyObject* osymm = NULL;
+		PyObject* otuples = NULL;
+		PyObject* ocoords = NULL;
+		float over_radius = 0;
+		if (!PyArg_ParseTuple(args, "OOOOf", &ocell, &osymm, &otuples, &ocoords, &over_radius)) {
+			deb_write("! Critic Error: Parse Error - return None");
+			Py_RETURN_NONE;
+		}
+		Prepare_IC all(ocell, osymm, otuples);
+
+		Py_ssize_t s = PyList_Size(ocoords);
+		std::vector<std::pair<cpplib::currents::PointType, cpplib::currents::FloatingPointType> > anchors;
+		anchors.reserve(static_cast<size_t>(s));
+
+		for (Py_ssize_t i = 0; i < s; i++) {
+			PyObject* o_tuple = PyList_GetItem(ocoords, i);
+			anchors.emplace_back(cpplib::currents::PointType(static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 0))),
+															 static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 1))),
+															 static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 2)))),
+								 static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 3))));
+		}
+
+		all.cell, all.symm, all.types, all.points;
+		auto ret = ClusterCreate(all.cell, all.symm, all.types, all.points, anchors, over_radius);
+		PyObject* o_ret = PyList_New(0);
+		auto ret_s = ret.size();
+		for (size_t i = 0; i < ret_s; i++)
+		{
+			PyList_Append(o_ret, Py_BuildValue("(ffflllll)",
+											   static_cast<float>(std::get<0>(ret[i]).get(0)), // px
+											   static_cast<float>(std::get<0>(ret[i]).get(1)), // py
+											   static_cast<float>(std::get<0>(ret[i]).get(2)), // pz
+											   static_cast<long>(std::get<1>(ret[i])),         // index
+											   static_cast<long>(std::get<2>(ret[i])),         // symmref
+											   static_cast<long>(std::get<3>(ret[i]).get(0)),  // sx
+											   static_cast<long>(std::get<3>(ret[i]).get(1)),  // sy
+											   static_cast<long>(std::get<3>(ret[i]).get(2))));// sz
+		}
+		return Py_BuildValue("{s:O}",
+							 "return", o_ret);
+	}
 }
 
 
@@ -933,6 +976,8 @@ static struct PyMethodDef methods[] = {
 	{ "SubSearch", cpplib_SubSearch, METH_VARARGS, "Compare two graphs"},
 	{ "compaq", cpplib_compaq, METH_VARARGS, "Do the same as Olex2 'compaq' function"},
 	{ "SortDatabase", cpplib_SortDatabase, METH_O, "Sort graph"},
+	{ "Cluster", cpplib_ClusterCreate, METH_O, "Create cluster"},
+	
 
 	{ NULL, NULL, 0, NULL }
 };
