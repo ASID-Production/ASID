@@ -409,11 +409,28 @@ namespace cpplib {
 						  const std::vector<std::vector<FAM_Struct::ShiftType>>& molO /*i*/,
 						  std::vector<std::vector<FAM_Struct::ShiftType>>& molN /*j*/,
 						  const std::pair<Bond, FAM_Struct::ShiftType>& bond) const {
+			// calculate shift
+
+			FAM_Struct::ShiftType s_f, s_s, s;
+			if (molO[bond.first.first].empty()) {
+				s_f = molN[bond.first.first][0];
+			}
+			else {
+				s_f = molO[bond.first.first][0];
+			}
+			if (molN[bond.first.second].empty()) {
+				s_s = molO[bond.first.second][0];
+			}
+			else {
+				s_s = molN[bond.first.second][0];
+			}
+			s = s_s - s_f;
+
 			for (AtomIndex i = 0; i < fs.sizePoints; i++)
 			{
 				for (AtomIndex j = 0; j < molO[i].size(); j++)
 				{
-					molN[i].emplace_back(molO[i][j] - bond.second);
+					molN[i].emplace_back(molO[i][j] - bond.second + s);
 				}
 			}
 		}

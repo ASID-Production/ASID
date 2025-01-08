@@ -976,7 +976,7 @@ static struct PyMethodDef methods[] = {
 	{ "SubSearch", cpplib_SubSearch, METH_VARARGS, "Compare two graphs"},
 	{ "compaq", cpplib_compaq, METH_VARARGS, "Do the same as Olex2 'compaq' function"},
 	{ "SortDatabase", cpplib_SortDatabase, METH_O, "Sort graph"},
-	{ "Cluster", cpplib_ClusterCreate, METH_O, "Create cluster"},
+	{ "Cluster", cpplib_ClusterCreate, METH_VARARGS, "Create cluster"},
 	
 
 	{ NULL, NULL, 0, NULL }
