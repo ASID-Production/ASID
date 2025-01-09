@@ -40,16 +40,16 @@ namespace cpplib {
 		using AtomIndex = currents::AtomIndex;
 		using indexType = int8_t;
 	private:
-		std::array<AtomIndex, mend_size> data_;
+		std::array<AtomIndex, mend_size> data_{};
 	public:
 		static_assert (INT8_MAX >= mend_size, "mend_size chould be less than INT8_MAX");
-		constexpr TypeMap() : data_() {
+		constexpr TypeMap() {
 			for (indexType i = 0; i < mend_size; i++)
 			{
 				data_[i] = static_cast<AtomIndex>(-1);
 			}
 		}
-		constexpr explicit TypeMap(const AtomIndex value) : data_() {
+		constexpr explicit TypeMap(const AtomIndex value) {
 			for (indexType i = 0; i < mend_size; i++)
 			{
 				data_[i] = value;
@@ -67,7 +67,7 @@ namespace cpplib {
 				if (bits[i]) data_[i] = static_cast<AtomIndex>(0);
 			}
 		}
-		inline constexpr indexType size() {
+		inline constexpr indexType size() const {
 			return data_.size();
 		}
 		inline bool isFinished() const {
@@ -87,10 +87,6 @@ namespace cpplib {
 		using AtomIndex = currents::AtomIndex;
 		using MoleculeIndex = currents::MoleculeIndex;
 		using HType = typename NodeType::HType;
-
-
-
-
 
 		template <class OT>
 		friend class MoleculeGraph;
@@ -200,12 +196,6 @@ namespace cpplib {
 		}
 		constexpr void deleteBond(const AtomIndex a, const AtomIndex b) {
 			data_[a].deleteBond(data_[b]);
-		}
-		constexpr void addBondsFromVector(const ::std::vector<BondType>& bond) {
-			auto bs = bond.size();
-			for (decltype(bs) i = 0; i < bs; i++) {
-				addBond(bond[i].first, bond[i].second);
-			}
 		}
 
 		// For Search
@@ -525,7 +515,6 @@ namespace cpplib {
 			if (bits.none()) return;
 			AtomIndex hs = this->size();
 			const AtomIndex sn = hs;
-			//::std::list< NodeType> hydrogenAtoms;
 
 			for (AtomIndex i = 1; i < sn; i++)
 			{

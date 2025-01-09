@@ -331,9 +331,10 @@ namespace cpplib {
 			}
 			return (base::fracToCart() * dp).r();
 		}
-		auto findBondsAndMolecules(const FAM_Struct& fs, const DistancesType& distances) const {
+		auto findMoleculesForCluster(const FAM_Struct& fs, const DistancesType& distances, bool& hasPoymer) const {
 			using ShiftType = FAM_Struct::ShiftType;
 			using MolType = std::vector<std::vector<ShiftType>>; // mol[atomIndex][0-...?]
+			hasPoymer = false;
 			std::vector<std::pair<Bond,ShiftType>> bonds; // Shift-type bond container
 			std::list<AtomIndex> polis;
 
@@ -391,6 +392,7 @@ namespace cpplib {
 								if (!(allMolecules[k1].first[i][0] + bonds.back().second == allMolecules[k2].first[j][0])) { // It's a polymer!
 									allMolecules[k1].first[j].push_back(allMolecules[k1].first[i][0] + bonds.back().second);
 									allMolecules[k1].second = true;
+									hasPoymer = true;
 								}
 							}
 							break;

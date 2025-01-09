@@ -88,8 +88,9 @@ std::tuple<std::vector<cpplib::currents::PointType>, std::list<std::string>> Com
 
 std::vector<std::tuple<cpplib::currents::PointType, cpplib::currents::AtomIndex, long, cpplib::FAM_Struct::ShiftType>>
 	ClusterCreate(std::array<cpplib::currents::FloatingPointType, 6> cell,
-				  std::vector<const char*> symm,
+				  const std::vector<const char*>& symm,
 				  cpplib::currents::FAMStructType::AtomContainerType& types,
 				  cpplib::currents::FAMStructType::PointConteinerType& points,
-				  std::vector<std::pair<cpplib::currents::PointType, cpplib::currents::FloatingPointType>>& anchors,
-				  cpplib::currents::FloatingPointType over_radius);
+				  const std::vector<std::pair<cpplib::currents::PointType, cpplib::currents::FloatingPointType>>& anchors,
+				  cpplib::currents::FloatingPointType over_radius,
+				  bool& hasPolymer);
