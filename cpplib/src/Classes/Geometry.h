@@ -117,19 +117,19 @@ namespace cpplib {
 				return Point(a_[0] + right.a_[0], a_[1] + right.a_[1], a_[2] + right.a_[2]);
 			}
 			template<class OT> constexpr auto operator+(const Point<OT>& right) const noexcept {
-				using RT = std::conditional<std::is_same<T,OT>::value, T, decltype(a_[0] + right.a_[0])>::type;
+				using RT = typename std::conditional<std::is_same<T,OT>::value, T, decltype(a_[0] + right.a_[0])>::type;
 				return Point<RT>(a_[0] + right.a_[0], a_[1] + right.a_[1], a_[2] + right.a_[2]);
 			}
 			template<class OT> constexpr auto operator+(const OT b) const noexcept {
-				using RT = std::conditional<std::is_same<T, OT>::value, T, decltype(a_[0] + b)>::type;
+				using RT = typename std::conditional<std::is_same<T, OT>::value, T, decltype(a_[0] + b)>::type;
 				return Point<RT>(a_[0] + b, a_[1] + b, a_[2] + b);
 			}
 			template<class OT> constexpr auto operator-(const Point<OT>& right) const noexcept {
-				using RT = std::conditional<std::is_same<T, OT>::value, T, decltype(a_[0] - right.a_[0])>::type;
+				using RT = typename std::conditional<std::is_same<T, OT>::value, T, decltype(a_[0] - right.a_[0])>::type;
 				return Point<RT>(a_[0] - right.a_[0], a_[1] - right.a_[1], a_[2] - right.a_[2]);
 			}
 			template<class OT> constexpr auto operator-(const OT b) const noexcept {
-				using RT = std::conditional<std::is_same<T, OT>::value, T, decltype(a_[0] - b)>::type;
+				using RT = typename std::conditional<std::is_same<T, OT>::value, T, decltype(a_[0] - b)>::type;
 				return Point<RT>(a_[0] - b, a_[1] - b, a_[2] - b);
 			}
 

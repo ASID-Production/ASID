@@ -35,6 +35,11 @@ if (POLICY CMP0141)
     set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<IF:$<AND:$<C_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:MSVC>>,$<$<CONFIG:Debug,RelWithDebInfo>:EditAndContinue>,$<$<CONFIG:Debug,RelWithDebInfo>:ProgramDatabase>>")
 endif()
 
+set(COMPILE_TESTS FALSE)
+if (WIN32)
+    set(COMPILE_TESTS TRUE)
+endif(WIN32)
+
 project(cpplibLib)
     if (UNIX)
         find_package(Python COMPONENTS Interpreter Development)
@@ -126,7 +131,7 @@ project(cpplib)
                     ${CMAKE_SOURCE_DIR}/module/cpplib.pyd)
         endif (WIN32)
     endif(CMAKE_BUILD_TYPE MATCHES Release)
-    
-if(IS_DIRECTORY ${CMAKE_SOURCE_DIR}/cpplib/Tests)
+
+if((IS_DIRECTORY ${CMAKE_SOURCE_DIR}/cpplib/Tests) AND COMPILE_TESTS)
     add_subdirectory ("cpplib/Tests")
-endif(IS_DIRECTORY ${CMAKE_SOURCE_DIR}/cpplib/Tests)
+endif((IS_DIRECTORY ${CMAKE_SOURCE_DIR}/cpplib/Tests) AND COMPILE_TESTS)

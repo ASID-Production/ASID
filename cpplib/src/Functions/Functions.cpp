@@ -329,7 +329,7 @@ static void ChildThreadFunc(const SearchGraphType::RequestGraphType& input, cons
 		if (next == nullptr) {
 			return;
 		}
-		auto multi = dataInterface.getMulty();
+		const auto& multi = dataInterface.getMulty();
 		auto map = input.getTypeMap();
 		graph.setupInput(input.makeCopy()); 
 		//SearchGraphType::DatabaseGraphType molData;
@@ -411,7 +411,7 @@ static cpplib::DATTuple& ConvertDATTuple(cpplib::DATTuple&& dat, const cpplib::c
 		}
 	}
 	std::sort(tors.begin(), tors.end());
-	for (auto it2 = (++tors.begin()), it = tors.begin(); it2 != tors.end();)
+	for (auto& it2 = (++tors.begin()), it = tors.begin(); it2 != tors.end();)
 	{
 		if ((std::get<0>(*it) == std::get<0>(*it2)) && (std::get<1>(*it) == std::get<1>(*it2)) &&
 			(std::get<2>(*it) == std::get<2>(*it2)) && (std::get<3>(*it) == std::get<3>(*it2)) && (::std::abs(std::get<4>(*it) - std::get<4>(*it2)) < 0.0001)) {
@@ -459,13 +459,6 @@ std::tuple<std::vector<cpplib::currents::PointType>, std::list<std::string>> Com
 }
 
 
-
-static inline FAMStructType::ShiftType toShift(PointType a) {
-	return FAMStructType::ShiftType(static_cast<FAMStructType::ShiftType::value_type>(a.get(0)),
-									static_cast<FAMStructType::ShiftType::value_type>(a.get(1)),
-									static_cast<FAMStructType::ShiftType::value_type>(a.get(2)));
-}
-
 static std::map<FAMStructType::ShiftType, std::vector<bool>> CreateBox(const std::vector<std::pair<PointType, FloatingPointType>>& anchors,
 																	   const cpplib::geometry::Matrix<FloatingPointType>& fracToCart,
 																	   FAMStructType::size_type sizePoints) {
@@ -486,8 +479,7 @@ static std::map<FAMStructType::ShiftType, std::vector<bool>> CreateBox(const std
 
 	for (size_t i = 0; i < anchors.size(); i++)
 	{
-		auto b = anchors[i].first.floor();
-		//char maxr[6]; // [ -x, +x, -y, +y, -z, +z ]
+		auto b = FAMCellType::toShift(anchors[i].first.floor());
 		FloatingPointType low[3] { plane[0].distance(fracToCart * anchors[i].first) - b.get(0) * dp[0],
 								   plane[1].distance(fracToCart * anchors[i].first) - b.get(1) * dp[1],
 								   plane[2].distance(fracToCart * anchors[i].first) - b.get(2) * dp[2] };
@@ -496,12 +488,14 @@ static std::map<FAMStructType::ShiftType, std::vector<bool>> CreateBox(const std
 								   dp[1] - low[1],
 								   dp[2] - low[2] };
 
-		const char maxr[6] = { b.get(0) - static_cast<char>(ceil((anchors[i].second - low[0]) / dp[0])),
-							   b.get(0) + static_cast<char>(ceil((anchors[i].second - high[0]) / dp[0])),
-						 b.get(1) - static_cast<char>(ceil((anchors[i].second - low[1]) / dp[1])),
-						 b.get(1) + static_cast<char>(ceil((anchors[i].second - high[1]) / dp[1])),
-						 b.get(2) - static_cast<char>(ceil((anchors[i].second - low[2]) / dp[2])),
-						 b.get(2) + static_cast<char>(ceil((anchors[i].second - high[2]) / dp[2])), };
+		// [ -x, +x, -y, +y, -z, +z ]
+		const FAMStructType::ShiftType::value_type maxr[6] =
+		                     { b.get(0) - static_cast<FAMStructType::ShiftType::value_type>(ceil((anchors[i].second - low[0]) / dp[0])),
+							   b.get(0) + static_cast<FAMStructType::ShiftType::value_type>(ceil((anchors[i].second - high[0]) / dp[0])),
+		                       b.get(1) - static_cast<FAMStructType::ShiftType::value_type>(ceil((anchors[i].second - low[1]) / dp[1])),
+						       b.get(1) + static_cast<FAMStructType::ShiftType::value_type>(ceil((anchors[i].second - high[1]) / dp[1])),
+						       b.get(2) - static_cast<FAMStructType::ShiftType::value_type>(ceil((anchors[i].second - low[2]) / dp[2])),
+						       b.get(2) + static_cast<FAMStructType::ShiftType::value_type>(ceil((anchors[i].second - high[2]) / dp[2])), };
 
 		for (char i = maxr[0]; i <= maxr[1]; i++) {
 			for (char j = maxr[2]; j <= maxr[3]; j++) {
@@ -568,7 +562,7 @@ normal:
 	for (size_t i = 0; i < anchors.size(); i++)
 	{
 		r_anchors[i] = fracToCart * anchors[i].first;
-		auto b = anchors[i].first.floor();
+		auto b = FAMCellType::toShift(anchors[i].first.floor());
 		//char maxr[6]; // [ -x, +x, -y, +y, -z, +z ]
 		FloatingPointType low[3]{ plane[0].distance(r_anchors[i]) - b.get(0) * dp[0],
 								  plane[1].distance(r_anchors[i]) - b.get(1) * dp[1],
@@ -578,12 +572,13 @@ normal:
 								   dp[1] - low[1],
 								   dp[2] - low[2] };
 
-		const char maxr[6] = { b.get(0) - static_cast<char>(ceil((over_radius - low[0]) / dp[0])),
-							   b.get(0) + static_cast<char>(ceil((over_radius - high[0]) / dp[0])),
-							   b.get(1) - static_cast<char>(ceil((over_radius - low[1]) / dp[1])),
-							   b.get(1) + static_cast<char>(ceil((over_radius - high[1]) / dp[1])),
-							   b.get(2) - static_cast<char>(ceil((over_radius - low[2]) / dp[2])),
-							   b.get(2) + static_cast<char>(ceil((over_radius - high[2]) / dp[2])), };
+		const FAMStructType::ShiftType::value_type maxr[6] = 
+							 { b.get(0) - static_cast<FAMStructType::ShiftType::value_type>(ceil((over_radius - low[0]) / dp[0])),
+							   b.get(0) + static_cast<FAMStructType::ShiftType::value_type>(ceil((over_radius - high[0]) / dp[0])),
+							   b.get(1) - static_cast<FAMStructType::ShiftType::value_type>(ceil((over_radius - low[1]) / dp[1])),
+							   b.get(1) + static_cast<FAMStructType::ShiftType::value_type>(ceil((over_radius - high[1]) / dp[1])),
+							   b.get(2) - static_cast<FAMStructType::ShiftType::value_type>(ceil((over_radius - low[2]) / dp[2])),
+							   b.get(2) + static_cast<FAMStructType::ShiftType::value_type>(ceil((over_radius - high[2]) / dp[2])), };
 
 		// generate sets
 		for (char i = maxr[0]; i <= maxr[1]; i++ ) {
@@ -597,7 +592,7 @@ normal:
 	}
 
 	std::vector<bool> polyatoms(fs.sizePoints, false);
-	for (size_t i = 1; i < polyflags[i]; i++)
+	for (size_t i = 1; i < polyflags.size(); i++)
 	{
 		if (polyflags[i] == false) continue;
 		for (AtomIndex j = 0; j < fs.sizePoints; j++)

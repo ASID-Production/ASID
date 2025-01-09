@@ -57,8 +57,8 @@ namespace cpplib {
 		using AtomContainerType = ::std::vector<AtomType>;
 		using PointConteinerType = ::std::vector<PointType>;
 		using DistanceFunction = ::std::function<currents::FloatingPointType(const PointType& p1, const PointType& p2)>;
-		using ShiftType = geometry::Point<char>;
-		using SymmRef = unsigned char;
+		using ShiftType = geometry::Point<int>;
+		using SymmRef = unsigned int;
 		using ParseIndexType = ::std::vector<std::tuple<AtomIndex, SymmRef, ShiftType>>;
 
 		// Data
@@ -205,18 +205,18 @@ namespace cpplib {
 		explicit FAM_Cell(base&& cell) : base(::std::move(cell)) {}
 		void GenerateSymm(FAM_Struct& fs, const std::vector<SymmType>& symm, const bool intoCell, const bool force_unique) const {
 			const size_t p_s = fs.points.size();
-			const size_t s_s = symm.size();
+			const FAM_Struct::SymmRef s_s = symm.size();
 
 			// Find all translated atoms in "unique" atoms
 			std::vector<bool> unique(p_s, true);
 			if (force_unique) unique = this->FindUnique(fs, p_s, intoCell);
 
-			for (size_t s = 0; s < s_s; s++) {
+			for (FAM_Struct::SymmRef s = 0; s < s_s; s++) {
 				if (symm[s].is_Eq()) continue;
-				for (size_t p = 0; p < p_s; p++) {
+				for (FAM_Struct::AtomIndex p = 0; p < p_s; p++) {
 					if (unique[p] == false) // skip non unique atoms
 						continue;
-					const size_t p_start = fs.points.size();
+					const FAM_Struct::AtomIndex p_start = fs.points.size();
 					PointType newpoint = symm[s].GenSymm(fs.points[p]);
 					PointType shift = (PointType(0.5, 0.5, 0.5) - newpoint).round();
 					if (intoCell) newpoint += shift;
@@ -231,7 +231,9 @@ namespace cpplib {
 						}
 					}
 					fs.points.push_back(newpoint);
-					fs.parseIndex.emplace_back(p, s, FAM_Struct::ShiftType(static_cast<int>(shift.get(0)),															   static_cast<int>(shift.get(1)),																	   static_cast<int>(shift.get(2))));
+					fs.parseIndex.emplace_back(p, s, FAM_Struct::ShiftType(static_cast<int>(shift.get(0)), 
+																		   static_cast<int>(shift.get(1)),
+																		   static_cast<int>(shift.get(2))));
 				}
 			}
 			fs.sizePoints = fs.points.size();
@@ -320,7 +322,7 @@ namespace cpplib {
 			base::create(base::lat_dir(0), base::lat_dir(1), base::lat_dir(2), base::getAngleGrad(0), base::getAngleGrad(1), base::getAngleGrad(2), true);
 		}
 		FloatingPointType distanceInCell(const PointType& p1, const PointType& p2) const noexcept {
-			auto dp = (p1 - p2).MoveToCell();
+			auto&& dp = (p1 - p2).MoveToCell();
 			FloatingPointType ret = 0;
 			for (DimmentionType i = 0; i < static_cast<DimmentionType>(3); i++) {
 				FloatingPointType val = dp.get(i);
@@ -402,6 +404,12 @@ namespace cpplib {
 			}
 			return allMolecules;
 		}
+		static inline currents::FAMStructType::ShiftType toShift(const PointType& a1) {
+			using namespace currents;
+			return FAMStructType::ShiftType(static_cast<FAMStructType::ShiftType::value_type>((a1.get(0))),
+											static_cast<FAMStructType::ShiftType::value_type>((a1.get(1))),
+											static_cast<FAMStructType::ShiftType::value_type>((a1.get(2))));
+		}
 
 	private:
 
@@ -435,23 +443,7 @@ namespace cpplib {
 			}
 		}
 
-		inline currents::FAMStructType::ShiftType toShift(const PointType& a1) const {
-			using namespace currents;
-			return FAMStructType::ShiftType(static_cast<FAMStructType::ShiftType::value_type>((a1.get(0))),
-											static_cast<FAMStructType::ShiftType::value_type>((a1.get(1))),
-											static_cast<FAMStructType::ShiftType::value_type>((a1.get(2))));
-		}
 
-		std::pair<FloatingPointType, currents::FAMStructType::ShiftType> distanceWithShift(const PointType& p1, const PointType& p2) const noexcept {
-			auto dp = (p1 - p2).MoveToCell();
-			FloatingPointType ret = 0;
-			for (DimmentionType i = 0; i < static_cast<DimmentionType>(3); i++) {
-				FloatingPointType val = dp.get(i);
-				if (val > 0.5)
-					dp.set(i, val - 1);
-			}
-
-		}
 		inline std::vector<bool> FindUnique(const FAM_Struct& fs, const size_t p_s, const bool intoCell) const {
 			std::vector<bool> unique(p_s, true);
 
