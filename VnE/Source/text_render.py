@@ -41,7 +41,7 @@ class Font:
     """Fonts class"""
 
     # line simbols
-    line = ' qwertyuiop[]asdfg*hjkl;zxcvbnm,./"QWERTYUIOP{}ASDFGHJKL:ZXCVBNM<>?1234567890-+!@#$%^&()_\'\\'
+    line = ' qwertyuiop[]asdfg*hjkl;zxcvbnm,./"QWERTYUIOP{}ASDFGHJKL:ZXCVBNM<>?1234567890-+!@#$%^&()_=\'\\'
 
     def __init__(self):
         self.size = 6

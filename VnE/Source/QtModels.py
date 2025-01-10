@@ -81,7 +81,17 @@ class SimpleDelegate(QtWidgets.QStyledItemDelegate):
                 value = line[0]
             else:
                 property, value = line
-            value = value.replace(' ', '')
+                if line[0] == 'name' or line[0] == 'label':
+                    for i in range(len(value)):
+                        if value[i] != ' ':
+                            break
+                    value = value[i:]
+                    for i in range(len(value)-1, -1, -1):
+                        if value[i] != ' ':
+                            break
+                    value = value[:i+1]
+                else:
+                    value = value.replace(' ', '')
             if value != '' and value[0] == '[' and value[-1] == ']':
                 value = value[1:-1].split(',')
                 value = np.array([float(x) for x in value], dtype=np.float32)

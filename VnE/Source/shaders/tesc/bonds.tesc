@@ -75,7 +75,7 @@ void main()
     }
     float grade;
     vec4 asd = (perspective * aspect_ratio * scale * rotation * gl_in[gl_InvocationID].gl_Position);
-    vec4 asdf = (perspective * aspect_ratio * scale * (rotation * gl_in[gl_InvocationID].gl_Position + vec4(rad_tes * 1.0,0.0,0.0,0.0)));
+    vec4 asdf = (perspective * aspect_ratio * scale * (rotation * gl_in[gl_InvocationID].gl_Position + vec4(rad_tcs[gl_InvocationID] * 1.0,0.0,0.0,0.0)));
     asdf.xyz = asdf.xyz-asd.xyz;
     //vec4 asd = (perspective * aspect_ratio * scale * vec4(1.0, 0.0, -500.0, 0.0));
     grade = asdf.x/asdf.w;

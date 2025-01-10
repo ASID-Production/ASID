@@ -77,16 +77,12 @@ void main()
         float grade;
         //grade = ((perspective * translation * aspect_ratio * rotation * vec4(1.0, 0.0, 0.0, 1.0))/gl_in[gl_InvocationID].gl_Position.w).x;
         vec4 asd = (perspective * aspect_ratio * scale * rotation * gl_in[gl_InvocationID].gl_Position);
-        vec4 asdf = (perspective * aspect_ratio * scale * (rotation * gl_in[gl_InvocationID].gl_Position + vec4(rad_tes * 1.0,0.0,0.0,0.0)));
+        vec4 asdf = (perspective * aspect_ratio * scale * (rotation * gl_in[gl_InvocationID].gl_Position + vec4(rad_tcs[gl_InvocationID] * 1.0,0.0,0.0,0.0)));
         asdf.xyz = asdf.xyz-asd.xyz;
         //vec4 asd = (perspective * aspect_ratio * scale * vec4(1.0, 0.0, -500.0, 0.0));
         grade = asdf.x/asdf.w;
         //color_tes = vec4(1.0*grade, 0.0, 0.0, 1.0);
         int tess = int(round(grade*8*56) + 8);
-
-        /*if (grade < 0.5) {
-            tess = int(round(56 * pow(2 * grade, 3.0)) + 8);
-        }*/
 
         gl_TessLevelOuter[0] = tess;
         gl_TessLevelOuter[1] = tess;
@@ -94,49 +90,4 @@ void main()
         gl_TessLevelOuter[3] = tess;
         gl_TessLevelInner[0] = tess;
         gl_TessLevelInner[1] = tess;
-
-        /*if (grade < 0.01) {
-            gl_TessLevelOuter[0] = 12;
-            gl_TessLevelOuter[1] = 12;
-            gl_TessLevelOuter[2] = 12;
-            gl_TessLevelOuter[3] = 12;
-            gl_TessLevelInner[0] = 12;
-            gl_TessLevelInner[1] = 12;
-        }
-
-        if (grade < 0.05) {
-            gl_TessLevelOuter[0] = 16;
-            gl_TessLevelOuter[1] = 16;
-            gl_TessLevelOuter[2] = 16;
-            gl_TessLevelOuter[3] = 16;
-            gl_TessLevelInner[0] = 16;
-            gl_TessLevelInner[1] = 16;
-        }
-
-        if (grade < 0.1) {
-            gl_TessLevelOuter[0] = 24;
-            gl_TessLevelOuter[1] = 24;
-            gl_TessLevelOuter[2] = 24;
-            gl_TessLevelOuter[3] = 24;
-            gl_TessLevelInner[0] = 24;
-            gl_TessLevelInner[1] = 24;
-        }
-
-        if (grade < 0.25) {
-            gl_TessLevelOuter[0] = 32;
-            gl_TessLevelOuter[1] = 32;
-            gl_TessLevelOuter[2] = 32;
-            gl_TessLevelOuter[3] = 32;
-            gl_TessLevelInner[0] = 32;
-            gl_TessLevelInner[1] = 32;
-        }
-
-        if (grade < 0.5) {
-            gl_TessLevelOuter[0] = 64;
-            gl_TessLevelOuter[1] = 64;
-            gl_TessLevelOuter[2] = 64;
-            gl_TessLevelOuter[3] = 64;
-            gl_TessLevelInner[0] = 64;
-            gl_TessLevelInner[1] = 64;
-        }*/
     }

@@ -173,6 +173,7 @@ class BallsShaderPipeline(aShaderPipeline):
                   GL_COMPUTE_SHADER: GL_COMPUTE_SHADER_BIT}
 
     def __init__(self):
+
         self.shader_data = []
         self.VAOFormat = [(3, np.float32), (4, np.float32), (1, np.float32), (1, np.float32)]
         self.programs = [[GL_VERTEX_SHADER, None, open(f'{opath.dirname(__file__)}/shaders/vert/base.vert', 'r').read()],
@@ -282,7 +283,8 @@ class LinesShaderPipeline(aShaderPipeline):
 
     def draw(self):
         glBindProgramPipeline(self.pipeline)
-        glDisable(GL_LINE_STIPPLE)
+        if glIsEnabled(GL_LINE_STIPPLE):
+            glDisable(GL_LINE_STIPPLE)
         for shader_data in self.shader_data:
             shader_data.draw(GL_LINES)
 
