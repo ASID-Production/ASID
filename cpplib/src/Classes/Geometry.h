@@ -341,7 +341,7 @@ namespace cpplib {
 			}
 		};
 		template<class T1, class T2>
-		Point<decltype(T1()* T2())> operator*(const Matrix<T1>& left, const Point<T2>& right) noexcept {
+		constexpr Point<decltype(T1()* T2())> operator*(const Matrix<T1>& left, const Point<T2>& right) noexcept {
 			Point<decltype(T1()* T2())> res;
 			for (int i = 0; i < 3; i++) {
 				for (int j = 0; j < 3; j++) {

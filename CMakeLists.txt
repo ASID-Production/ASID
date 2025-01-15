@@ -64,7 +64,7 @@ project(cpplibLib)
                            "cpplib/src/Classes/SearchGraph.h"
                            "cpplib/src/Functions/Functions.h"
                            "cpplib/src/Functions/AllInOneAndCurrent.h" 
-                           "cpplib/src/Classes/FindGeometry.h" "cpplib/src/Functions/PythonInteface.cpp" "cpplib/src/BaseHeaders/Currents.h")
+                           "cpplib/src/Classes/FindGeometry.h" "cpplib/src/Functions/PythonInteface.cpp" "cpplib/src/BaseHeaders/Currents.h" "cpplib/src/Classes/Cluster.h")
     target_link_libraries(cpplibLib ${PYTHON_LIBRARIES} Python::Python)
 
     target_include_directories(cpplibLib PUBLIC 
@@ -105,7 +105,7 @@ project(cpplib)
                            "cpplib/src/Classes/SearchGraph.h"
                            "cpplib/src/Functions/Functions.h"
                            "cpplib/src/Functions/AllInOneAndCurrent.h" 
-                           "cpplib/src/Classes/FindGeometry.h" "cpplib/src/Functions/PythonInteface.cpp" "cpplib/src/BaseHeaders/Currents.h")
+                           "cpplib/src/Classes/FindGeometry.h" "cpplib/src/Functions/PythonInteface.cpp" "cpplib/src/BaseHeaders/Currents.h" "cpplib/src/Classes/Cluster.h")
         target_link_libraries(cpplib ${PYTHON_LIBRARIES} Python::Python)
         set_target_properties(cpplib PROPERTIES
             PREFIX ""

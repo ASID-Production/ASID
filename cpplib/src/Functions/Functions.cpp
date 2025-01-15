@@ -457,166 +457,6 @@ std::tuple<std::vector<cpplib::currents::PointType>, std::list<std::string>> Com
 	return std::make_tuple(std::move(compaqed), res_errors);
 }
 
-
-static std::map<FAMStructType::ShiftType, std::vector<bool>> CreateBox(const std::vector<std::pair<PointType, FloatingPointType>>& anchors,
-																	   const cpplib::geometry::Matrix<FloatingPointType>& fracToCart,
-																	   FAMStructType::size_type sizePoints) {
-
-	using ShiftType = FAMStructType::ShiftType;
-	using value_type = std::pair<FAMStructType::ShiftType, std::vector<bool>>;
-	using boxType = std::map<FAMStructType::ShiftType, std::vector<bool>>;
-	using Plane = cpplib::geometry::Plane<FloatingPointType>;
-	boxType box;
-
-	const std::array<PointType,3> e = { fracToCart * ShiftType(1,0,0), fracToCart * ShiftType(0,1,0), fracToCart * ShiftType(0,0,1) };
-	constexpr PointType zeroPoint(0, 0, 0);
-
-	std::array<Plane, 3> plane = { Plane(zeroPoint, e[1], e[2]), Plane(zeroPoint, e[0], e[2]), Plane(zeroPoint, e[0], e[1]) };
-	std::array<FloatingPointType, 3> dp = { plane[0].distance(fracToCart * ShiftType(1, 1, 1)), 
-								plane[1].distance(fracToCart * ShiftType(1, 1, 1)), 
-								plane[2].distance(fracToCart * ShiftType(1, 1, 1)) };
-
-	for (auto& pair : anchors)
-	{
-		auto b = FAMCellType::toShift(pair.first.floor());
-		std::array < FloatingPointType,3> low { 
-			plane[0].distance(fracToCart * pair.first) - b.get(0) * dp[0],
-			plane[1].distance(fracToCart * pair.first) - b.get(1) * dp[1],
-			plane[2].distance(fracToCart * pair.first) - b.get(2) * dp[2] };
-		
-		std::array < FloatingPointType,3> high{ 
-			dp[0] - low[0],
-			dp[1] - low[1],
-			dp[2] - low[2] };
-
-		// [ -x, +x, -y, +y, -z, +z ]
-		const std::array<FAMStructType::ShiftType::value_type,6> maxr { 
-			b.get(0) - static_cast<FAMStructType::ShiftType::value_type>(ceil((pair.second - low[0]) / dp[0])),
-			b.get(0) + static_cast<FAMStructType::ShiftType::value_type>(ceil((pair.second - high[0]) / dp[0])),
-			b.get(1) - static_cast<FAMStructType::ShiftType::value_type>(ceil((pair.second - low[1]) / dp[1])),
-			b.get(1) + static_cast<FAMStructType::ShiftType::value_type>(ceil((pair.second - high[1]) / dp[1])),
-			b.get(2) - static_cast<FAMStructType::ShiftType::value_type>(ceil((pair.second - low[2]) / dp[2])),
-			b.get(2) + static_cast<FAMStructType::ShiftType::value_type>(ceil((pair.second - high[2]) / dp[2])), };
-
-		for (char i = maxr[0]; i <= maxr[1]; i++) {
-			for (char j = maxr[2]; j <= maxr[3]; j++) {
-				for (char k = maxr[4]; k <= maxr[5]; k++) {
-					box.emplace(ShiftType(i, j, k), std::vector<bool>(sizePoints, false));
-				}
-			}
-		}
-	}
-	return box;
-}
-
-static void Grow(std::map<FAMStructType::ShiftType, std::vector<bool>>& basebox,
-				 std::map<FAMStructType::ShiftType, std::vector<bool>>& newbox,
-				 const std::vector<std::vector<FAMStructType::ShiftType>>& molecule,
-				 AtomIndex ai,
-				 const FAMStructType::ShiftType& curshift) {
-	auto baseshift = curshift - molecule[ai][0];
-	for (AtomIndex i = 0; i < molecule.size(); i++)
-	{
-		if (molecule[i].empty()) 
-			continue;
-		auto newshift = baseshift + molecule[i][0];
-		auto it = basebox.find(newshift);
-		if (it == basebox.end()) { // did not find
-			auto newit = newbox.insert(std::make_pair(newshift, std::vector<bool>(molecule.size()))).first;
-			newit->second[i] = true;
-		}
-		else { // found
-			it->second[i] = true;
-		}
-	}
-}
-
-static void GrowPoly(std::map<FAMStructType::ShiftType, std::vector<bool>>& box,
-					 const std::vector<std::pair<std::vector<std::vector<FAMStructType::ShiftType>>,bool>>& molecules,
-					 const std::vector<bool>& polyflags,
-					 const std::vector<std::pair<PointType, FloatingPointType>>& anchors,
-					 const cpplib::geometry::Matrix<FloatingPointType>& fracToCart,
-					 const FloatingPointType over_radius,
-					 const FAMStructType& fs) {
-	using ShiftType = FAMStructType::ShiftType;
-	using value_type = std::pair<FAMStructType::ShiftType, std::vector<bool>>;
-	using boxType = std::map<FAMStructType::ShiftType, std::vector<bool>>;
-	using Plane = cpplib::geometry::Plane<FloatingPointType>;
-
-	if (std::none_of(polyflags.begin(), polyflags.end(), [](bool a) {return a; })) return;
-
-	const std::array<PointType,3> e = { fracToCart * ShiftType(1,0,0), fracToCart * ShiftType(0,1,0), fracToCart * ShiftType(0,0,1) };
-	constexpr PointType zeroPoint(0, 0, 0);
-
-	std::array<Plane, 3> plane = { Plane(zeroPoint, e[1], e[2]), Plane(zeroPoint, e[0], e[2]), Plane(zeroPoint, e[0], e[1]) };
-	std::array<FloatingPointType, 3> dp = { plane[0].distance(fracToCart * ShiftType(1, 1, 1)),
-								plane[1].distance(fracToCart * ShiftType(1, 1, 1)),
-								plane[2].distance(fracToCart * ShiftType(1, 1, 1)) };
-
-
-	std::vector<PointType> r_anchors(anchors.size());
-
-	for (size_t a = 0; a < anchors.size(); a++)
-	{
-		r_anchors[a] = fracToCart * anchors[a].first;
-		auto b = FAMCellType::toShift(anchors[a].first.floor());
-		
-		std::array<FloatingPointType, 3> low {
-			plane[0].distance(r_anchors[a]) - b.get(0) * dp[0],
-			plane[1].distance(r_anchors[a]) - b.get(1) * dp[1],
-			plane[2].distance(r_anchors[a]) - b.get(2) * dp[2] };
-
-		std::array<FloatingPointType,3> high{
-			dp[0] - low[0],
-			dp[1] - low[1],
-			dp[2] - low[2] };
-
-		// [ -x, +x, -y, +y, -z, +z ]
-		const std::array<FAMStructType::ShiftType::value_type, 6> maxr{
-							   b.get(0) - static_cast<FAMStructType::ShiftType::value_type>(ceil((over_radius - low[0]) / dp[0])),
-							   b.get(0) + static_cast<FAMStructType::ShiftType::value_type>(ceil((over_radius - high[0]) / dp[0])),
-							   b.get(1) - static_cast<FAMStructType::ShiftType::value_type>(ceil((over_radius - low[1]) / dp[1])),
-							   b.get(1) + static_cast<FAMStructType::ShiftType::value_type>(ceil((over_radius - high[1]) / dp[1])),
-							   b.get(2) - static_cast<FAMStructType::ShiftType::value_type>(ceil((over_radius - low[2]) / dp[2])),
-							   b.get(2) + static_cast<FAMStructType::ShiftType::value_type>(ceil((over_radius - high[2]) / dp[2])), };
-
-		// generate sets
-		for (char i = maxr[0]; i <= maxr[1]; i++ ) {
-			for (char j = maxr[2]; j <= maxr[3]; j++) {
-				for (char k = maxr[4]; k <= maxr[5]; k++) {
-					auto newshift = ShiftType(i,j,k);
-					box.insert(std::make_pair(newshift, std::vector<bool>(fs.sizePoints)));
-				}
-			}
-		}
-	}
-
-	std::vector<bool> polyatoms(fs.sizePoints, false);
-	for (size_t i = 1; i < polyflags.size(); i++)
-	{
-		if (polyflags[i] == false) continue;
-		for (AtomIndex j = 0; j < fs.sizePoints; j++)
-		{
-			polyatoms[j] = polyatoms[j] || (!(molecules[i].first[j].empty()));
-		}
-	}
-
-	for (AtomIndex i = 0; i < fs.sizePoints; i++) {
-		if (polyatoms[i] == false)
-			continue;
-		for (auto& pair : box) {
-			auto r_point = fracToCart * (pair.first + fs.points[i]);
-			for (AtomIndex j = 0; j < r_anchors.size(); j++)
-			{
-				if ((r_anchors[j] - r_point).r() <= over_radius) {
-					pair.second[i] = true;
-					break;
-				}
-			}			
-		}
-	}
-}
-
 std::vector<std::tuple<cpplib::currents::PointType, cpplib::currents::AtomIndex, long, cpplib::FAM_Struct::ShiftType>> 
 	ClusterCreate(std::array<cpplib::currents::FloatingPointType, 6> unit_cell,
 				  const std::vector<const char*>& symm,
@@ -626,7 +466,7 @@ std::vector<std::tuple<cpplib::currents::PointType, cpplib::currents::AtomIndex,
 				  cpplib::currents::FloatingPointType over_radius,
 				  bool& hasPolymer) {
 	deb_write("ClusterCreate invoked");
-	using SymmIndex = long;
+	
 	using ShiftType = FAMStructType::ShiftType;
 
 	FAMStructType fs;
@@ -636,7 +476,9 @@ std::vector<std::tuple<cpplib::currents::PointType, cpplib::currents::AtomIndex,
 
 	auto molecules = fc.findMoleculesForCluster(fs, *p_distances, hasPolymer); // [0] is empty
 
-	std::map<ShiftType, std::vector<bool>> box = CreateBox(anchors, fc.fracToCart(), fs.sizePoints);
+	cpplib::Cluster cluster(fs, fc, anchors);
+	cpplib::Cluster::BoxType box;
+	cluster.CreateBox(box);
 	decltype(box) newbox;
 	std::vector<bool> polyflags(molecules.size(),false);
 	for (auto& pair : box) {
@@ -658,8 +500,7 @@ std::vector<std::tuple<cpplib::currents::PointType, cpplib::currents::AtomIndex,
 					_ASSERT(m != molecules.size());
 
 					if (molecules[m].second == false) {
-
-						Grow(box, newbox, molecules[m].first, i, pair.first);
+						cluster.Grow(box, newbox, molecules[m].first, i, pair.first);
 					}
 					else {
 						polyflags[m] = true;
@@ -672,7 +513,7 @@ std::vector<std::tuple<cpplib::currents::PointType, cpplib::currents::AtomIndex,
 	// concatinate boxes
 	box.insert(newbox.begin(), newbox.end());
 	
-	GrowPoly(box, molecules, polyflags, anchors, fc.fracToCart(), over_radius, fs);
+	cluster.GrowPoly(box, molecules, polyflags, over_radius);
 
 	std::vector<std::tuple<PointType, cpplib::currents::AtomIndex, long, ShiftType>> ret; // Vector of (AtomIndex, SymmIndex, dx, dy, dz)
 	//prepare ret
