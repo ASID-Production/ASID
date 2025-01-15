@@ -38,20 +38,22 @@ namespace cpplib {
 		template <class T> inline T RadtoGrad(T a) { return a * static_cast<T>(57.295779513082320877); }
 
 		template<class T> class Point {
+			template <class X> friend class Point;
 		public:
 			using value_type = T;
-			using array_type = ::std::array<T, 3>;
+			using array_type = ::std::array<value_type, 3>;
+
 		private:
 			array_type a_ = { 0,0,0 };
 
 		public:
 			// Constructors
 			constexpr Point() noexcept = default;
-			constexpr Point(T x, T y, T z) noexcept : a_{ x, y, z } {};
+			constexpr Point(value_type x, value_type y, value_type z) noexcept : a_{ x, y, z } {};
 			explicit constexpr Point(const array_type& other) noexcept : a_(other) {};
 			explicit constexpr Point(array_type&& other) noexcept : a_(::std::move(other)) {};
 
-			constexpr T r() const noexcept {
+			constexpr value_type r() const noexcept {
 				return sqrt(fma(a_[0], a_[0], fma(a_[1], a_[1], a_[2] * a_[2])));
 			}
 			constexpr Point& MoveToCell() noexcept {
@@ -62,29 +64,29 @@ namespace cpplib {
 			}
 
 			// Static constexpr functions
-			static constexpr T Scalar(const Point& left, const Point& right) noexcept {
+			static constexpr value_type Scalar(const Point& left, const Point& right) noexcept {
 				return (left.a_[0] * right.a_[0] + left.a_[1] * right.a_[1] + left.a_[2] * right.a_[2]);
 			}
 			static constexpr Point Vector(const Point& left, const Point& right) noexcept {
 				return Point(left.a_[1] * right.a_[2] - left.a_[2] * right.a_[1], left.a_[2] * right.a_[0] - left.a_[0] * right.a_[2], left.a_[0] * right.a_[1] - left.a_[1] * right.a_[0]);
 			}
-			static constexpr T distance(const Point& a, const Point& b) noexcept {
-				T d0 = a.a_[0] - b.a_[0];
-				T d1 = a.a_[1] - b.a_[1];
-				T d2 = a.a_[2] - b.a_[2];
+			static constexpr value_type distance(const Point& a, const Point& b) noexcept {
+				value_type d0 = a.a_[0] - b.a_[0];
+				value_type d1 = a.a_[1] - b.a_[1];
+				value_type d2 = a.a_[2] - b.a_[2];
 				return sqrt(fma(d0, d0, fma(d1, d1, d2 * d2)));
 			}
-			static constexpr T angleRad(const Point& a, const Point& b, const Point& c) noexcept {
+			static constexpr value_type angleRad(const Point& a, const Point& b, const Point& c) noexcept {
 				auto ab = distance(a, b);
 				auto ac = distance(a, c);
 				auto bc = distance(b, c);
 				return ::std::acos(fma(ab, ab, fma(bc, bc, -ac * ac)) / (ab * bc * 2));
 			}
-			static constexpr T angleGrad(const Point& a, const Point& b, const Point& c) noexcept {
+			static constexpr value_type angleGrad(const Point& a, const Point& b, const Point& c) noexcept {
 				return RadtoGrad(angleRad(a, b, c));
 			}
 
-			static constexpr T torsionRad(const Point& a, const Point& b, const Point& c, const Point& d) noexcept {
+			static constexpr value_type torsionRad(const Point& a, const Point& b, const Point& c, const Point& d) noexcept {
 				auto b1 = c - b;
 				auto b0 = a - b;
 				b1 = b1 / (b1.r());
@@ -97,90 +99,108 @@ namespace cpplib {
 					+ (b1.a_[0] * v.a_[1] - b1.a_[1] * v.a_[0]) * w.a_[2];
 				return ::std::atan2(y, x);
 			}
-			static constexpr T torsionGrad(const Point& a, const Point& b, const Point& c, const Point& d) noexcept {
+			static constexpr value_type torsionGrad(const Point& a, const Point& b, const Point& c, const Point& d) noexcept {
 				return RadtoGrad(torsionRad(a, b, c, d));
 			}
-			constexpr Point& round() noexcept {
-				a_[0] = std::round(a_[0]);
-				a_[1] = std::round(a_[1]);
-				a_[2] = std::round(a_[2]);
-				return *this;
+			constexpr inline Point round() const {
+				return Point(std::round(a_[0]), std::round(a_[1]), std::round(a_[2]));
+			}
+			constexpr inline Point floor() const {
+				return Point(std::floor(a_[0]), std::floor(a_[1]), std::floor(a_[2]));
 			}
 
 			//Operators
 			constexpr Point operator-() const noexcept {
 				return Point(-a_[0], -a_[1], -a_[2]);
 			}
-			constexpr Point operator+(const Point& right) const noexcept {
+			constexpr auto operator+(const Point& right) const noexcept {
 				return Point(a_[0] + right.a_[0], a_[1] + right.a_[1], a_[2] + right.a_[2]);
 			}
-			constexpr Point operator+(const T b) const noexcept {
-				return Point(a_[0] + b, a_[1] + b, a_[2] + b);
+			template<class OT> constexpr auto operator+(const Point<OT>& right) const noexcept {
+				using RT = typename std::conditional<std::is_same<T,OT>::value, T, decltype(a_[0] + right.a_[0])>::type;
+				return Point<RT>(a_[0] + right.a_[0], a_[1] + right.a_[1], a_[2] + right.a_[2]);
 			}
-			constexpr Point operator-(const Point& right) const noexcept {
-				return Point(a_[0] - right.a_[0], a_[1] - right.a_[1], a_[2] - right.a_[2]);
+			template<class OT> constexpr auto operator+(const OT b) const noexcept {
+				using RT = typename std::conditional<std::is_same<T, OT>::value, T, decltype(a_[0] + b)>::type;
+				return Point<RT>(a_[0] + b, a_[1] + b, a_[2] + b);
 			}
-			constexpr Point operator-(const T b) const noexcept {
-				return Point(a_[0] - b, a_[1] - b, a_[2] - b);
+			template<class OT> constexpr auto operator-(const Point<OT>& right) const noexcept {
+				using RT = typename std::conditional<std::is_same<T, OT>::value, T, decltype(a_[0] - right.a_[0])>::type;
+				return Point<RT>(a_[0] - right.a_[0], a_[1] - right.a_[1], a_[2] - right.a_[2]);
 			}
+			template<class OT> constexpr auto operator-(const OT b) const noexcept {
+				using RT = typename std::conditional<std::is_same<T, OT>::value, T, decltype(a_[0] - b)>::type;
+				return Point<RT>(a_[0] - b, a_[1] - b, a_[2] - b);
+			}
+
 			constexpr Point operator*(const Point& right) const noexcept {
 				return Point(a_[0] * right.a_[0], a_[1] * right.a_[1], a_[2] * right.a_[2]);
 			}
-			constexpr Point operator*(const T b) const noexcept {
+			constexpr Point operator*(const value_type b) const noexcept {
 				return Point(a_[0] * b, a_[1] * b, a_[2] * b);
 			}
 			constexpr Point operator/(const Point& right) const noexcept {
 				return Point(a_[0] / right.a_[0], a_[1] / right.a_[1], a_[2] / right.a_[2]);
 			}
-			inline constexpr Point operator/(const T b) const noexcept {
+			inline constexpr Point operator/(const value_type b) const noexcept {
 				return Point(a_[0] / b, a_[1] / b, a_[2] / b);
 			}
-			inline Point& operator+=(const Point& right) noexcept {
-				a_[0] += right.a_[0];
-				a_[1] += right.a_[1];
-				a_[2] += right.a_[2];
+			template <class OT> inline Point& operator+=(const Point<OT>& right) noexcept {
+				a_[0] += static_cast<T>(right.a_[0]);
+				a_[1] += static_cast<T>(right.a_[1]);
+				a_[2] += static_cast<T>(right.a_[2]);
 				return *this;
 			}
-			inline Point& operator+=(const T right) noexcept {
+			inline Point& operator+=(const value_type right) noexcept {
 				a_[0] += right;
 				a_[1] += right;
 				a_[2] += right;
 				return *this;
 			}
-			inline Point& operator-=(const Point& right) noexcept {
-				a_[0] -= right.a_[0];
-				a_[1] -= right.a_[1];
-				a_[2] -= right.a_[2];
+			template <class OT> inline Point<OT>& operator-=(const Point<OT>& right) noexcept {
+				a_[0] += static_cast<T>(right.a_[0]);
+				a_[1] += static_cast<T>(right.a_[1]);
+				a_[2] += static_cast<T>(right.a_[2]);
 				return *this;
 			}
-			inline Point& operator-=(const T right) noexcept {
+			inline Point& operator-=(const value_type right) noexcept {
 				a_[0] -= right;
 				a_[1] -= right;
 				a_[2] -= right;
 				return *this;
 			}
-			inline Point& operator*=(const T right) noexcept {
+			inline Point& operator*=(const value_type right) noexcept {
 				a_[0] *= right;
 				a_[1] *= right;
 				a_[2] *= right;
 				return *this;
 			}
-			inline Point& operator/=(const T right) noexcept {
+			inline Point& operator/=(const value_type right) noexcept {
 				a_[0] /= right;
 				a_[1] /= right;
 				a_[2] /= right;
 				return *this;
 			}
 			constexpr inline bool operator==(const Point& other) const noexcept {
-				return a_[0] == other.a_[0] && a_[1] == other.a_[1] && a_[2] == other.a_[2];
+				if(std::is_floating_point<T>::value)
+					return abs(a_[0] - other.a_[0]) < T(0.00001) && abs(a_[1] - other.a_[1]) < T(0.00001) && abs(a_[2] - other.a_[2]) < T(0.00001);
+				else
+					return a_[0] == other.a_[0] && a_[1] == other.a_[1] && a_[2] == other.a_[2];
 			}
 
-			constexpr inline T get(const unsigned char i) const noexcept {
+			constexpr inline value_type get(const unsigned char i) const noexcept {
 				return a_[i];
 			}
 
-			constexpr inline void set(const unsigned char i, const T newval) noexcept {
+			constexpr inline void set(const unsigned char i, const value_type newval) noexcept {
 				a_[i] = newval;
+			}
+			constexpr inline bool operator<(const Point& other) const noexcept {
+				if (a_[0] != other.a_[0])
+					return a_[0] < other.a_[0];
+				else if(a_[1] != other.a_[1])
+					return a_[1] < other.a_[1];
+				return a_[2] < other.a_[2];
 			}
 		};
 
@@ -321,7 +341,7 @@ namespace cpplib {
 			}
 		};
 		template<class T1, class T2>
-		Point<decltype(T1()* T2())> operator*(const Matrix<T1>& left, const Point<T2>& right) noexcept {
+		constexpr Point<decltype(T1()* T2())> operator*(const Matrix<T1>& left, const Point<T2>& right) noexcept {
 			Point<decltype(T1()* T2())> res;
 			for (int i = 0; i < 3; i++) {
 				for (int j = 0; j < 3; j++) {
@@ -332,6 +352,36 @@ namespace cpplib {
 		}
 
 		template<class T> constexpr Matrix<T> EqualMatrix(static_cast<T>(1));
+
+		template<class T> struct Plane {
+			using value_type = T; // the same as T
+			std::array<T, 4> a = { T(0), T(0), T(0), T(0) }; // [ A, B, C, D]
+
+			constexpr Plane() noexcept = default;
+			constexpr Plane(const Point<T>& a1, const Point<T>& a2, const Point<T>& a3) noexcept {
+				a[0] = a1.get(1) * (a2.get(2) - a3.get(2)) + a2.get(1) * (a3.get(2) - a1.get(2)) + a3.get(1) * (a1.get(2) - a2.get(2));
+				a[1] = a1.get(2) * (a2.get(0) - a3.get(0)) + a2.get(2) * (a3.get(0) - a1.get(0)) + a3.get(2) * (a1.get(0) - a2.get(0));
+				a[2] = a1.get(0) * (a2.get(1) - a3.get(1)) + a2.get(0) * (a3.get(1) - a1.get(1)) + a3.get(0) * (a1.get(1) - a2.get(1));
+				a[3] = -(a1.get(0) * (a2.get(1) * a3.get(2) - a3.get(1) * a2.get(2)) +
+						 a2.get(0) * (a3.get(1) * a1.get(2) - a1.get(1) * a3.get(2)) +
+						 a3.get(0) * (a1.get(1) * a2.get(2) - a2.get(1) * a1.get(2)));
+			}
+			constexpr Plane(const Plane& p, const Point<T>& a1) noexcept {
+				a[0] = p.a[0];
+				a[1] = p.a[1];
+				a[2] = p.a[2];
+				a[3] = -(a[0] * a1.get(0) + a[1] * a1.get(1) + a[2] * a1.get(2));
+			}
+
+			Point<T> make_projection(const Point<T>& p) const {
+				auto pcos = (a[0] * p.get(0) + a[1] * p.get(1) + a[2] * p.get(2) + a[3]) / (a[0] * a[0] + a[1] * a[1] + a[2] * a[2]);
+				return Point<T>(p.get(0) - a[0] * pcos, p.get(1) - a[1] * pcos, p.get(2) - a[2] * pcos);
+			}
+			T distance(const Point<T>& p) const {
+				return abs(a[0] * p.get(0) + a[1] * p.get(1) + a[2] * p.get(2) + a[3]) / sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]);
+			}
+		};
+
 
 		template<class T> struct Cell {
 		public:
@@ -537,17 +587,22 @@ namespace cpplib {
 					str += (bracket[i] + 1);
 				}
 			}
-
-
-			point_t GenSymm(const point_t& in) const
+			inline point_t GenSymm(const point_t& in) const
 			{
-				return (point + (mat * in));
+				return point + (mat * in);
 			}
-			point_t GenSymmNorm(const point_t& in) const
+			inline point_t GenSymmNorm(const point_t & in) const
 			{
 				point_t res = GenSymm(in);
 				res.MoveToCell();
 				return res;
+			}
+			inline bool is_Eq() const noexcept
+			{
+				return mat.El(0, 0) == 1 && mat.El(1, 0) == 0 && mat.El(2, 0) == 0 && 
+					mat.El(0, 1) == 0 && mat.El(1, 1) == 1 && mat.El(2, 1) == 0 &&
+					mat.El(0, 2) == 0 && mat.El(1, 2) == 0 && mat.El(2, 2) == 1 &&
+					point.get(0) == 0 && point.get(1) == 0 && point.get(2) == 0;
 			}
 		private:
 			size_t findcomma(const char* str) {

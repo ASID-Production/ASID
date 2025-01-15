@@ -27,6 +27,7 @@
 # ******************************************************************************************
 
 cmake_minimum_required (VERSION 3.19)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # add_compile_definitions(DEBUG_MESS_ON)
 
@@ -34,6 +35,11 @@ if (POLICY CMP0141)
     cmake_policy(SET CMP0141 NEW)
     set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<IF:$<AND:$<C_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:MSVC>>,$<$<CONFIG:Debug,RelWithDebInfo>:EditAndContinue>,$<$<CONFIG:Debug,RelWithDebInfo>:ProgramDatabase>>")
 endif()
+
+set(COMPILE_TESTS FALSE)
+if (WIN32)
+    set(COMPILE_TESTS TRUE)
+endif(WIN32)
 
 project(cpplibLib)
     if (UNIX)
@@ -58,7 +64,7 @@ project(cpplibLib)
                            "cpplib/src/Classes/SearchGraph.h"
                            "cpplib/src/Functions/Functions.h"
                            "cpplib/src/Functions/AllInOneAndCurrent.h" 
-                           "cpplib/src/Classes/FindGeometry.h" "cpplib/src/Functions/PythonInteface.cpp" "cpplib/src/BaseHeaders/Currents.h")
+                           "cpplib/src/Classes/FindGeometry.h" "cpplib/src/Functions/PythonInteface.cpp" "cpplib/src/BaseHeaders/Currents.h" "cpplib/src/Classes/Cluster.h")
     target_link_libraries(cpplibLib ${PYTHON_LIBRARIES} Python::Python)
 
     target_include_directories(cpplibLib PUBLIC 
@@ -99,7 +105,7 @@ project(cpplib)
                            "cpplib/src/Classes/SearchGraph.h"
                            "cpplib/src/Functions/Functions.h"
                            "cpplib/src/Functions/AllInOneAndCurrent.h" 
-                           "cpplib/src/Classes/FindGeometry.h" "cpplib/src/Functions/PythonInteface.cpp" "cpplib/src/BaseHeaders/Currents.h")
+                           "cpplib/src/Classes/FindGeometry.h" "cpplib/src/Functions/PythonInteface.cpp" "cpplib/src/BaseHeaders/Currents.h" "cpplib/src/Classes/Cluster.h")
         target_link_libraries(cpplib ${PYTHON_LIBRARIES} Python::Python)
         set_target_properties(cpplib PROPERTIES
             PREFIX ""
@@ -126,7 +132,7 @@ project(cpplib)
                     ${CMAKE_SOURCE_DIR}/module/cpplib.pyd)
         endif (WIN32)
     endif(CMAKE_BUILD_TYPE MATCHES Release)
-    
-if(IS_DIRECTORY ${CMAKE_SOURCE_DIR}/cpplib/Tests)
+
+if((IS_DIRECTORY ${CMAKE_SOURCE_DIR}/cpplib/Tests) AND COMPILE_TESTS)
     add_subdirectory ("cpplib/Tests")
-endif(IS_DIRECTORY ${CMAKE_SOURCE_DIR}/cpplib/Tests)
+endif((IS_DIRECTORY ${CMAKE_SOURCE_DIR}/cpplib/Tests) AND COMPILE_TESTS)

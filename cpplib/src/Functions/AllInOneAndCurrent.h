@@ -31,5 +31,6 @@
 #include "../Classes/FindMolecules.h"
 #include "../Classes/Distances.h"
 #include "../Classes/FindGeometry.h"
+#include "../Classes/Cluster.h"
 
 extern const cpplib::Distances* p_distances;

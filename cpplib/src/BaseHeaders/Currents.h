@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <type_traits>
 #include <bitset>
+#include <vector>
 
 namespace cpplib {
 	class XAtom;
@@ -36,7 +37,7 @@ namespace cpplib {
 		using FloatingPointType = float;
 		using TypeBitset = ::std::bitset<mend_size>;
 
-		using size_type = ::std::conditional<(sizeof(AtomIndex) > sizeof(MoleculeIndex)), AtomIndex, MoleculeIndex>::type;
+		using size_type = ::std::conditional_t<(sizeof(AtomIndex) > sizeof(MoleculeIndex)), AtomIndex, MoleculeIndex>;
 		using PointType = geometry::Point<FloatingPointType>;
 		using BondType = Bond;
 		using BondExType = BondEx;

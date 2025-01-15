@@ -32,11 +32,14 @@
 
 #include <thread>
 #include <vector>
+#include <map>
+#include <set>
+#include <functional>
 
 using namespace cpplib::currents;
 
 static void ChildThreadFunc(const SearchGraphType::RequestGraphType& input, const SearchGraphType::AtomIndex MaxAtom, SearchDataInterfaceType& dataInterface, const bool exact); 
-static cpplib::DATTuple& ConvertDATTuple(cpplib::DATTuple&& dat, const cpplib::currents::FAMStructType& fs);
+static cpplib::DATTuple& ConvertDATTuple(cpplib::DATTuple& dat, const cpplib::currents::FAMStructType& fs);
 
 
 const DistancesType* p_distances = nullptr;
@@ -83,7 +86,7 @@ std::tuple<std::string, std::string, FindMoleculesType::RightType> FindMolecules
 																		 std::vector<const char*>& symm, 
 																		 cpplib::currents::FAMStructType::AtomContainerType& types,
 																		 cpplib::currents::FAMStructType::PointConteinerType& points) {
-	auto& distances = *(p_distances);
+	auto& distances = *p_distances;
 	if (p_distances->isReady() == false) {
 		return std::make_tuple(std::string(),std::string("Error! Could not open BondLength.ini"),
 							  FindMoleculesType::RightType());
@@ -133,7 +136,7 @@ std::tuple<std::string, std::string, FindMoleculesType::RightType> FindMolecules
 }
 std::tuple<std::string, std::string, FindMoleculesType::RightType>  FindMoleculesWithoutCell(cpplib::currents::FAMStructType::AtomContainerType& types,
 																			  cpplib::currents::FAMStructType::PointConteinerType& points) {
-	auto& distances = *(p_distances);
+	auto& distances = *p_distances;
 
 	if (p_distances->isReady() == false) {
 		return std::make_tuple(std::string(), std::string("Error! Could not open BondLength.ini"),
@@ -307,8 +310,8 @@ cpplib::DATTuple FindDAT_IC(const std::array<float, 6>& unit_cell,
 	}
 
 	FindGeometryType fg(fs);
-
-	return ConvertDATTuple(fg.findMolDAT_Rad(*p_distances), fs);
+	auto Moldat = fg.findMolDAT_Rad(*p_distances);
+	return ConvertDATTuple(Moldat, fs);
 }
 
 cpplib::DATTuple FindDAT_WC(cpplib::currents::FAMStructType::AtomContainerType& types,
@@ -316,7 +319,8 @@ cpplib::DATTuple FindDAT_WC(cpplib::currents::FAMStructType::AtomContainerType& 
 	FAMStructType fs;
 	ParseDataType(fs, std::move(types), std::move(points));
 	FindGeometryType fg(fs);
-	return ConvertDATTuple(fg.findMolDAT_Rad(*p_distances), fs);
+	auto Moldat = fg.findMolDAT_Rad(*p_distances);
+	return ConvertDATTuple(Moldat, fs);
 }
 
 // Single thread function
@@ -327,10 +331,9 @@ static void ChildThreadFunc(const SearchGraphType::RequestGraphType& input, cons
 		if (next == nullptr) {
 			return;
 		}
-		auto multi = dataInterface.getMulty();
+		const auto& multi = dataInterface.getMulty();
 		auto map = input.getTypeMap();
 		graph.setupInput(input.makeCopy()); 
-		//SearchGraphType::DatabaseGraphType molData;
 		auto && molData = SearchGraphType::DatabaseGraphType::ReadData(next, multi, map);
 		if (!molData.second) continue;
 		auto id = molData.first.getID();
@@ -343,32 +346,51 @@ static void ChildThreadFunc(const SearchGraphType::RequestGraphType& input, cons
 }
 
 static void reorder(cpplib::FindGeometry::tupleDistance& d, const cpplib::currents::FAMStructType& fs) {
-	std::get<0>(d) = fs.parseIndex[std::get<0>(d)];
-	std::get<1>(d) = fs.parseIndex[std::get<1>(d)];
+	std::get<0>(d) = std::get<0>(fs.parseIndex[std::get<0>(d)]);
+	std::get<1>(d) = std::get<0>(fs.parseIndex[std::get<1>(d)]);
 
 	if (std::get<0>(d) > std::get<1>(d))
 		std::swap(std::get<0>(d), std::get<1>(d));
 }
 static void reorder(cpplib::FindGeometry::tupleAngle& d, const cpplib::currents::FAMStructType& fs) {
-	std::get<0>(d) = fs.parseIndex[std::get<0>(d)];
-	std::get<1>(d) = fs.parseIndex[std::get<1>(d)];
-	std::get<2>(d) = fs.parseIndex[std::get<2>(d)];
+	std::get<0>(d) = std::get<0>(fs.parseIndex[std::get<0>(d)]);
+	std::get<1>(d) = std::get<0>(fs.parseIndex[std::get<1>(d)]);
+	std::get<2>(d) = std::get<0>(fs.parseIndex[std::get<2>(d)]);
 
 	if (std::get<0>(d) > std::get<2>(d))
 		std::swap(std::get<0>(d), std::get<2>(d));
 }
 static void reorder(cpplib::FindGeometry::tupleTorsion& d, const cpplib::currents::FAMStructType& fs) {
-	std::get<0>(d) = fs.parseIndex[std::get<0>(d)];
-	std::get<1>(d) = fs.parseIndex[std::get<1>(d)];
-	std::get<2>(d) = fs.parseIndex[std::get<2>(d)];
-	std::get<3>(d) = fs.parseIndex[std::get<3>(d)];
+	std::get<0>(d) = std::get<0>(fs.parseIndex[std::get<0>(d)]);
+	std::get<1>(d) = std::get<0>(fs.parseIndex[std::get<1>(d)]);
+	std::get<2>(d) = std::get<0>(fs.parseIndex[std::get<2>(d)]);
+	std::get<3>(d) = std::get<0>(fs.parseIndex[std::get<3>(d)]);
 
 	if ((std::get<0>(d) > std::get<3>(d)) || (std::get<0>(d) == std::get<3>(d) && std::get<1>(d) > std::get<2>(d))) {
 		std::swap(std::get<0>(d), std::get<3>(d));
 		std::swap(std::get<1>(d), std::get<2>(d));
 	}
 }
-static cpplib::DATTuple& ConvertDATTuple(cpplib::DATTuple&& dat, const cpplib::currents::FAMStructType& fs) {
+template<class T,class I>
+static void eraseDoubles(std::vector<T>& vec, 
+						 typename std::function<bool(I, I)> comp) {
+	std::sort(vec.begin(), vec.end());
+	I it = vec.begin();
+	I it2 = (++(vec.begin()));
+	while (it2 != vec.end())
+	{
+		if (comp(it, it2)) {
+			vec.erase(it2);
+			it2 = it;
+			it2++;
+		}
+		else {
+			it++;
+			it2++;
+		}
+	}
+}
+static cpplib::DATTuple& ConvertDATTuple(cpplib::DATTuple& dat, const cpplib::currents::FAMStructType& fs) {
 	auto& dists = std::get<0>(dat);
 	auto s_dists = dists.size();
 	auto& angles = std::get<1>(dat);
@@ -389,38 +411,17 @@ static cpplib::DATTuple& ConvertDATTuple(cpplib::DATTuple&& dat, const cpplib::c
 		reorder(tors[i], fs);
 	}
 	// erase dublicates
-	std::sort(dists.begin(), dists.end());
 	
-	for (auto it2 = (++dists.begin()), it = dists.begin(); it2 != dists.end(); it++, it2++)
-	{
-		if ((std::get<0>(*it) == std::get<0>(*it2)) && (std::get<1>(*it) == std::get<1>(*it2)) && (::std::abs(std::get<2>(*it) - std::get<2>(*it2)) < 0.0001)) {
-			dists.erase(it2);
-			it2 = it;
-			it2++;
-		}
-	}
-	std::sort(angles.begin(), angles.end());
-	for (auto it2 = (++angles.begin()), it = angles.begin(); it2 != angles.end(); it++, it2++)
-	{
-		if ((std::get<0>(*it) == std::get<0>(*it2)) && (std::get<1>(*it) == std::get<1>(*it2)) && (std::get<2>(*it) == std::get<2>(*it2)) && (::std::abs(std::get<3>(*it) - std::get<3>(*it2)) < 0.0001)) {
-			angles.erase(it2);
-			it2 = it;
-			it2++;
-		}
-	}
-	std::sort(tors.begin(), tors.end());
-	for (auto it2 = (++tors.begin()), it = tors.begin(); it2 != tors.end();)
-	{
-		if ((std::get<0>(*it) == std::get<0>(*it2)) && (std::get<1>(*it) == std::get<1>(*it2)) &&
-			(std::get<2>(*it) == std::get<2>(*it2)) && (std::get<3>(*it) == std::get<3>(*it2)) && (::std::abs(std::get<4>(*it) - std::get<4>(*it2)) < 0.0001)) {
-			tors.erase(it2);
-			it2 = it;
-		}
-		else
-			it++;
-		it2++;
-	}
-
+	eraseDoubles(dists, std::function<bool(std::remove_reference<decltype(dists)>::type::iterator, std::remove_reference< decltype(dists)>::type::iterator)>(
+		[](std::remove_reference< decltype(dists)>::type::iterator it, std::remove_reference< decltype(dists)>::type::iterator it2)
+		{return (std::get<0>(*it) == std::get<0>(*it2)) && (std::get<1>(*it) == std::get<1>(*it2)) && (::std::abs(std::get<2>(*it) - std::get<2>(*it2)) < 0.0001); }));
+	eraseDoubles(angles, std::function<bool(std::remove_reference< decltype(angles)>::type::iterator, std::remove_reference< decltype(angles)>::type::iterator)>(
+				 [](std::remove_reference< decltype(angles)>::type::iterator it, std::remove_reference< decltype(angles)>::type::iterator it2)
+				 {return (std::get<0>(*it) == std::get<0>(*it2)) && (std::get<1>(*it) == std::get<1>(*it2)) && (std::get<2>(*it) == std::get<2>(*it2)) && (::std::abs(std::get<3>(*it) - std::get<3>(*it2)) < 0.0001); }));
+	eraseDoubles(tors, std::function<bool(std::remove_reference< decltype(tors)>::type::iterator, std::remove_reference< decltype(tors)>::type::iterator)>(
+				 [](std::remove_reference< decltype(tors)>::type::iterator it, std::remove_reference< decltype(tors)>::type::iterator it2)
+				 {return (std::get<0>(*it) == std::get<0>(*it2)) && (std::get<1>(*it) == std::get<1>(*it2)) &&
+				 (std::get<2>(*it) == std::get<2>(*it2)) && (std::get<3>(*it) == std::get<3>(*it2)) && (::std::abs(std::get<4>(*it) - std::get<4>(*it2)) < 0.0001);}));
 	return dat;
 }
 
@@ -429,7 +430,7 @@ std::tuple<std::vector<cpplib::currents::PointType>, std::list<std::string>> Com
 												cpplib::currents::FAMStructType::AtomContainerType& types,
 												cpplib::currents::FAMStructType::PointConteinerType& points) {
 	deb_write("Compaq invoked");
-	auto& distances = *(p_distances);
+	auto& distances = *p_distances;
 	if (p_distances->isReady() == false) {
 		return std::make_tuple(std::vector<cpplib::currents::PointType>(), std::list<std::string>(1, "Error!Could not open BondLength.ini"));
 	}
@@ -454,4 +455,80 @@ std::tuple<std::vector<cpplib::currents::PointType>, std::list<std::string>> Com
 	compaqed.resize(su);
 	deb_write("Compaq return");
 	return std::make_tuple(std::move(compaqed), res_errors);
+}
+
+std::vector<std::tuple<cpplib::currents::PointType, cpplib::currents::AtomIndex, long, cpplib::FAM_Struct::ShiftType>> 
+	ClusterCreate(std::array<cpplib::currents::FloatingPointType, 6> unit_cell,
+				  const std::vector<const char*>& symm,
+				  cpplib::currents::FAMStructType::AtomContainerType& types,
+				  cpplib::currents::FAMStructType::PointConteinerType& points,
+				  const std::vector<std::pair<cpplib::currents::PointType, cpplib::currents::FloatingPointType>>& anchors,
+				  cpplib::currents::FloatingPointType over_radius,
+				  bool& hasPolymer) {
+	deb_write("ClusterCreate invoked");
+	
+	using ShiftType = FAMStructType::ShiftType;
+
+	FAMStructType fs;
+	FAMCellType fc(FAMCellType::base(unit_cell, true));
+	
+	ParseDataType(fs, fc, symm, std::move(types), std::move(points), false);
+
+	auto molecules = fc.findMoleculesForCluster(fs, *p_distances, hasPolymer); // [0] is empty
+
+	cpplib::Cluster cluster(fs, fc, anchors);
+	cpplib::Cluster::BoxType box;
+	cluster.CreateBox(box);
+	decltype(box) newbox;
+	std::vector<bool> polyflags(molecules.size(),false);
+	for (auto& pair : box) {
+		for (FAMStructType::size_type i = 0; i < fs.sizePoints; i++) {
+			if (pair.second[i]) continue;
+			for (const auto& anch: anchors) {
+				auto da = anch.first - fs.points[i];
+				auto db = da - pair.first;
+				if (anch.second >= (fc.fracToCart() * db).r()) {
+					pair.second[i] = true;
+					// find molecule
+					MoleculeIndex m = 1;
+					for (; m < molecules.size(); m++)
+					{
+						if (molecules[m].first[i].empty() == false) {
+							break;
+						}
+					}
+					_ASSERT(m != molecules.size());
+
+					if (molecules[m].second == false) {
+						cluster.Grow(box, newbox, molecules[m].first, i, pair.first);
+					}
+					else {
+						polyflags[m] = true;
+					}
+				}
+			}
+		}
+	}
+
+	// concatinate boxes
+	box.insert(newbox.begin(), newbox.end());
+	
+	cluster.GrowPoly(box, molecules, polyflags, over_radius);
+
+	std::vector<std::tuple<PointType, cpplib::currents::AtomIndex, long, ShiftType>> ret; // Vector of (AtomIndex, SymmIndex, dx, dy, dz)
+	//prepare ret
+	for (auto& pair : box) {
+		for (AtomIndex i = 0; i < fs.sizePoints; i++) {
+			if (pair.second[i] == false) continue;
+			auto point = pair.first + fs.points[i];
+			auto shift = pair.first + std::get<2>(fs.parseIndex[i]);
+			ret.emplace_back(pair.first + fs.points[i],
+							 std::get<0>(fs.parseIndex[i]),
+							 static_cast<long>(std::get<1>(fs.parseIndex[i])),
+							 pair.first + std::get<2>(fs.parseIndex[i]));
+		}
+	}
+
+	deb_write("ClusterCreate return");
+	return ret;
 }

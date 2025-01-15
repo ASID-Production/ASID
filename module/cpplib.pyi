@@ -326,3 +326,29 @@ def himp(atoms: List[Tuple[int, float, float, float]], value: float | List[float
             "error_str": optional key. String with error message. Exists only if something gone wrong.
     """
     ...
+def Cluster(cell_params: List[float], symms: List[str], atoms: List[Tuple[int, float, float, float]], anchors: List[Tuple[float,float,float,float]]) -> Dict[
+    "bonds":  List[Tuple[int,int,float]],
+    "angles": List[Tuple[int,int,int,float]],
+    "tors":   List[Tuple[int,int,int,int,float]]]:
+    """
+        Create cluster around anchors.
+        Variables:
+          cell_params: List of exactly 6 cell parameters in strict order: [a, b, c, alpha, beta, gamma].
+            (a, b, c - are translation vectors (in Angstroms) and alpha, beta, gamma - are angles (in degrees)
+          symms:  SYMM-codes of structure. Should contain 'x,y,z' (equivalent) as first ([0]) symmetry - it is ignored.
+          atoms: List of Tuples of atomic type and three internal coordinates.
+            AtomType is integer, coordinates are floating point numbers.
+            example [ [1, 0.0, 0.0, 0.0], [9, 0.5, 0.5, 0.5], ... ]
+          anchors: List of Tuples of anchors' three internal coordinates and generation radius (in ang.).
+            Coordinates and generation radius are floating point numbers.
+            example [ [0.0, 0.0, 0.0, 4.0], [0.5, 0.5, 0.5, 2.3], ... ]
+        Returns:
+          Dictionary with keys ["points","hasPolymer"], where
+            "points": List of Tuples (Px, Py, Pz, Index, SymmRef, Sx, Sy, Sz), where
+              Px, Py, Pz: coordinates of atom
+              Index: reference to atom in the initial set
+              SymmRef: reference to initial SYMM-code
+              Sx, Sy, Sz: translation shifts from initial position of SYMM-code (NOT FROM [0,0,0] !!!)
+            "hasPolymer": Boolian flag, equals True if cell contains polymer (MOF) structure
+    """
+    ...

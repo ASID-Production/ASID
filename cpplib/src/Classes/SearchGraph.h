@@ -56,7 +56,7 @@ namespace cpplib {
 		::std::vector<bool> usedInComp_;
 
 	public:
-		SearchGraph() {}
+		SearchGraph() = default;
 		inline void setupInput(RequestGraphType&& molGraph) noexcept {
 			input_ = ::std::move(molGraph);
 			inputSize_ = input_.size();
@@ -269,15 +269,14 @@ namespace cpplib {
 				bool completed = FinalComparision(exact);
 				if (completed)
 					return true;
-				else {
-					for (size_t i = 1; i < inputSize_; i++)
-					{
-						if (comp_[i] == 0) {
-							nextI = i;
-							break;
-						}
+				for (size_t i = 1; i < inputSize_; i++)
+				{
+					if (comp_[i] == 0) {
+						nextI = i;
+						break;
 					}
 				}
+				
 			}
 
 			// nextI is an atom with neighbours
