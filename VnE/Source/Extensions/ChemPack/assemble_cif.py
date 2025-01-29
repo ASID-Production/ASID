@@ -32,7 +32,7 @@ from .ui.select_mol_dialog import SelectMolDialog
 def execute():
     from . import MOLECULE_SYSTEMS
     from . import parsers
-    from . import point_class
+    from ... import point_class
     from . import TREE_MODEL
     import numpy as np
 

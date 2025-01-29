@@ -29,7 +29,6 @@
 
 from abc import ABC, abstractmethod
 import numpy as np
-from ctypes import *
 from ..ChemPack import PALETTE
 
 import debug

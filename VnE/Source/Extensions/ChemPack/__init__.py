@@ -27,7 +27,6 @@
 # ******************************************************************************************
 
 
-from ... import point_class
 import numpy as np
 from . import AtomsPalette
 import os
@@ -101,6 +100,7 @@ def pars(file, bond=True, root=None):
 
 
 def createPalette():
+    from ... import point_class
     z = False
     for child in TREE_MODEL.getRoot().children:
         if child.name == 'Atom Colors':
@@ -321,9 +321,16 @@ def save():
             SAVE_FILE.save(mol_sys, filename, format)
     return
 
+
 def assemble():
     from . import assemble_cif
     assemble_cif.execute()
+
+
+def clusterCreationFunc():
+    from . import clusterCreation
+    clusterCreation.execute()
+
 
 def setup(menu, model, uniform_model=None, *args, main_widget=None, **kwargs):
     from PySide6.QtGui import QAction
@@ -399,5 +406,9 @@ def setup(menu, model, uniform_model=None, *args, main_widget=None, **kwargs):
     action_assemble.triggered.connect(assemble)
     cmenu.addAction(action_assemble)
 
-    actions = [open_action, action_test, action_DB, save_action, action_sym_op, action_export, action_winx, action_cls, action_aimall, action_2d_export, action_multiwfn, action_symm_poscar, action_assemble]
+    action_cluster = QAction('Create cluster')
+    action_cluster.triggered.connect(clusterCreationFunc)
+    cmenu.addAction(action_cluster)
+
+    actions = [open_action, action_test, action_DB, save_action, action_sym_op, action_export, action_winx, action_cls, action_aimall, action_2d_export, action_multiwfn, action_symm_poscar, action_assemble, action_cluster]
     return actions
