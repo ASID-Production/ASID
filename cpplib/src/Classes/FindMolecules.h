@@ -85,7 +85,7 @@ namespace cpplib {
 		};
 
 		// Methods
-		auto findBonds(const DistancesType& distances, std::string& errorMSG, DistanceFunction distance_f) const {
+		auto findBonds(const DistancesType& distances, std::string& errorMSG, const DistanceFunction& distance_f) const {
 			::std::vector<BondType> res;
 			::std::vector<AtomIndex> invalidAtoms;
 			for (size_type i = 0; i < sizePoints; i++) {
@@ -127,7 +127,7 @@ namespace cpplib {
 			}
 			return std::make_pair(res, invalidAtoms);
 		}
-		auto findBondsEx(const DistancesType& distances, std::string& errorMSG, DistanceFunction distance_f) const {
+		auto findBondsEx(const DistancesType& distances, std::string& errorMSG, const DistanceFunction& distance_f) const {
 			std::vector<BondExType> res;
 			std::vector<AtomIndex> invalidAtoms;
 			for (size_type i = 0; i < sizePoints; i++) {

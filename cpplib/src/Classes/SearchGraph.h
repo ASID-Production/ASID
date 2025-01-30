@@ -99,7 +99,6 @@ namespace cpplib {
 				}
 				if (searchTry(startAtom, i, exact) == true)
 					return true;
-				//prepareToSearch();
 			}
 			return false;
 		}
