@@ -353,6 +353,7 @@ namespace cpplib {
 					case  1:
 					{
 						bonds.emplace_back(Bond(i, j), toShift((fs.points[i] - fs.points[j]).round()));
+						auto & curbond = bonds.back();
 						AtomIndex k1 = 0;
 						for (; k1 < allMolecules.size(); k1++)
 						{
@@ -371,26 +372,26 @@ namespace cpplib {
 						case 0: // None
 							allMolecules.emplace_back(std::vector<std::vector<ShiftType>>(fs.sizePoints), false);
 							allMolecules.back().first[i].push_back(std::get<2>(fs.parseIndex[i]));
-							allMolecules.back().first[j].push_back(std::get<2>(fs.parseIndex[j]) + bonds.back().second);
+							allMolecules.back().first[j].push_back(std::get<2>(fs.parseIndex[i]) + curbond.second);
 							break;
 						case 1: // Only k1 found
 							_ASSERT(!allMolecules[k1].first[i].empty());
-							allMolecules[k1].first[j].push_back(allMolecules[k1].first[i][0] + bonds.back().second);
+							allMolecules[k1].first[j].push_back(allMolecules[k1].first[i][0] + curbond.second);
 							_ASSERT(allMolecules[k1].first[j].size() == 1);
 							break;
 						case 2: // Only k2 found
 							_ASSERT(!allMolecules[k2].first[j].empty());
-							allMolecules[k2].first[i].push_back(allMolecules[k2].first[j][0] - bonds.back().second);
+							allMolecules[k2].first[i].push_back(allMolecules[k2].first[j][0] - curbond.second);
 							_ASSERT(allMolecules[k2].first[i].size() == 1);
 							break;
 						case 3: // Both found
 							if (k1 != k2) { // different molecules
-								Merge(fs, allMolecules[k1].first, allMolecules[k2].first, bonds.back());
+								Merge(fs, allMolecules[k1].first, allMolecules[k2].first, curbond);
 								allMolecules.erase(allMolecules.begin() + k1);
 							}
 							else {
-								if (!(allMolecules[k1].first[i][0] + bonds.back().second == allMolecules[k2].first[j][0])) { // It's a polymer!
-									allMolecules[k1].first[j].push_back(allMolecules[k1].first[i][0] + bonds.back().second);
+								if (!(allMolecules[k1].first[i][0] + curbond.second == allMolecules[k2].first[j][0])) { // It's a polymer!
+									allMolecules[k1].first[j].push_back(allMolecules[k1].first[i][0] + curbond.second);
 									allMolecules[k1].second = true;
 									hasPoymer = true;
 								}
@@ -420,27 +421,23 @@ namespace cpplib {
 						  std::vector<std::vector<FAM_Struct::ShiftType>>& molN /*j*/,
 						  const std::pair<Bond, FAM_Struct::ShiftType>& bond) const {
 			// calculate shift
-
-			FAM_Struct::ShiftType s_f, s_s, s;
+			FAM_Struct::ShiftType s_o, s_n, s;
 			if (molO[bond.first.first].empty()) {
-				s_f = molN[bond.first.first][0];
+				s_n = molN[bond.first.first][0];
+				s_o = molO[bond.first.second][0];
+				s = s_n - s_o + bond.second;
 			}
 			else {
-				s_f = molO[bond.first.first][0];
+				s_o = molO[bond.first.first][0];
+				s_n = molN[bond.first.second][0];
+				s = s_n - s_o - bond.second;
 			}
-			if (molN[bond.first.second].empty()) {
-				s_s = molO[bond.first.second][0];
-			}
-			else {
-				s_s = molN[bond.first.second][0];
-			}
-			s = s_s - s_f;
 
 			for (AtomIndex i = 0; i < fs.sizePoints; i++)
 			{
 				for (AtomIndex j = 0; j < molO[i].size(); j++)
 				{
-					molN[i].emplace_back(molO[i][j] - bond.second + s);
+					molN[i].emplace_back(molO[i][j] + s);
 				}
 			}
 		}
