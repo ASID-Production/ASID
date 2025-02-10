@@ -82,7 +82,7 @@ std::vector<int> SearchMain(const char* search, std::vector<const char*>&& data,
 	return databuf.getAllResults();
 }
 
-std::tuple<std::string, std::string, FindMoleculesType::RightType> FindMoleculesInCell(const std::array<float, 6>& unit_cell,
+std::tuple<std::string, std::string, FindMoleculesType::RightType> FindMoleculesInCell(const std::array<cpplib::currents::FloatingPointType, 6>& unit_cell,
 																		 std::vector<const char*>& symm, 
 																		 cpplib::currents::FAMStructType::AtomContainerType& types,
 																		 cpplib::currents::FAMStructType::PointConteinerType& points) {
@@ -156,7 +156,7 @@ std::tuple<std::string, std::string, FindMoleculesType::RightType>  FindMolecule
 std::vector<FindGeometryType::tupleDistance> FindDistanceWC(cpplib::currents::FAMStructType::AtomContainerType& types,
 						   cpplib::currents::FAMStructType::PointConteinerType& points,
 						   const std::array<int, 2>& type,
-						   const std::pair<float, float>& value) {
+						   const std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>& value) {
 	FAMStructType fs;
 	ParseDataType(fs, std::move(types), std::move(points));
 	FindGeometryType fg(fs);
@@ -166,12 +166,12 @@ std::vector<FindGeometryType::tupleDistance> FindDistanceWC(cpplib::currents::FA
 	return raw;
 }
 
-std::vector<FindGeometryType::tupleDistance> FindDistanceIC(const std::array<float, 6>& unit_cell,
+std::vector<FindGeometryType::tupleDistance> FindDistanceIC(const std::array<cpplib::currents::FloatingPointType, 6>& unit_cell,
 						   std::vector<const char*>& symm,
 						   cpplib::currents::FAMStructType::AtomContainerType& types,
 						   cpplib::currents::FAMStructType::PointConteinerType& points,
 						   const std::array<int, 2>& type,
-						   const std::pair<float, float>& value) {
+						   const std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>& value) {
 	FAMStructType fs;
 	FAMCellType fc(FAMCellType::base(unit_cell, true));
 	ParseDataType(fs, fc, symm, std::move(types), std::move(points));
@@ -193,8 +193,8 @@ std::vector<FindGeometryType::tupleDistance> FindDistanceIC(const std::array<flo
 std::vector<FindGeometryType::tupleAngle> FindAngleWC(cpplib::currents::FAMStructType::AtomContainerType& types,
 						                              cpplib::currents::FAMStructType::PointConteinerType& points,
 						                              const std::array<int, 3>& type,
-						                              const std::array<std::pair<float, float>, 2>& value_d,
-						                              const std::pair<float, float>& value_a) {
+						                              const std::array<std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>, 2>& value_d,
+						                              const std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>& value_a) {
 	FAMStructType fs;
 	ParseDataType(fs, std::move(types), std::move(points));
 	FindGeometryType fg(fs);
@@ -208,13 +208,13 @@ std::vector<FindGeometryType::tupleAngle> FindAngleWC(cpplib::currents::FAMStruc
 	return raw;
 }
 
-std::vector<FindGeometryType::tupleAngle> FindAngleIC(const std::array<float, 6>& unit_cell,
+std::vector<FindGeometryType::tupleAngle> FindAngleIC(const std::array<cpplib::currents::FloatingPointType, 6>& unit_cell,
 						                              std::vector<const char*>& symm, 
 						                              cpplib::currents::FAMStructType::AtomContainerType& types,
 						                              cpplib::currents::FAMStructType::PointConteinerType& points,
 						                              const std::array<int, 3>& type,
-						                              const std::array<std::pair<float, float>, 2>& value_d,
-						                              const std::pair<float, float>& value_a)
+						                              const std::array<std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>, 2>& value_d,
+						                              const std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>& value_a)
 {
 	FAMStructType fs;
 	FAMCellType fc(FAMCellType::base(unit_cell, true));
@@ -241,9 +241,9 @@ std::vector<FindGeometryType::tupleAngle> FindAngleIC(const std::array<float, 6>
 std::vector<FindGeometryType::tupleTorsion> FindTorsionWC(cpplib::currents::FAMStructType::AtomContainerType& types,
 						                                  cpplib::currents::FAMStructType::PointConteinerType& points,
 							                              const std::array<int, 4>& type,
-							                              const std::array<std::pair<float, float>, 3>& value_d,
-							                              const std::array<std::pair<float, float>, 2>& value_a,
-							                              const std::pair<float, float>& value_t)
+							                              const std::array<std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>, 3>& value_d,
+							                              const std::array<std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>, 2>& value_a,
+							                              const std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>& value_t)
 {
 	FAMStructType fs;
 	ParseDataType(fs, std::move(types), std::move(points));
@@ -260,14 +260,14 @@ std::vector<FindGeometryType::tupleTorsion> FindTorsionWC(cpplib::currents::FAMS
 							  std::make_pair(cpplib::geometry::GradtoRad(value_t.first), cpplib::geometry::GradtoRad(value_t.second)));
 	return raw;
 }
-std::vector<FindGeometryType::tupleTorsion> FindTorsionIC(const std::array<float, 6>& unit_cell,
+std::vector<FindGeometryType::tupleTorsion> FindTorsionIC(const std::array<cpplib::currents::FloatingPointType, 6>& unit_cell,
 						                                  std::vector<const char*>& symm,
 						                                  cpplib::currents::FAMStructType::AtomContainerType& types,
 						                                  cpplib::currents::FAMStructType::PointConteinerType& points,
 						                                  const std::array<int, 4>& type,
-						                                  const std::array<std::pair<float, float>, 3>& value_d,
-						                                  const std::array<std::pair<float, float>, 2>& value_a,
-						                                  const std::pair<float, float>& value_t) {
+						                                  const std::array<std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>, 3>& value_d,
+						                                  const std::array<std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>, 2>& value_a,
+						                                  const std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>& value_t) {
 	FAMStructType fs;
 	FAMCellType fc(FAMCellType::base(unit_cell, true));
 	ParseDataType(fs, fc, symm, std::move(types), std::move(points));
@@ -293,7 +293,7 @@ std::vector<FindGeometryType::tupleTorsion> FindTorsionIC(const std::array<float
 	return raw;
 }
 
-cpplib::DATTuple FindDAT_IC(const std::array<float, 6>& unit_cell,
+cpplib::DATTuple FindDAT_IC(const std::array<cpplib::currents::FloatingPointType, 6>& unit_cell,
 							std::vector<const char*>& symm,
 							cpplib::currents::FAMStructType::AtomContainerType& types,
 							cpplib::currents::FAMStructType::PointConteinerType& points) {
@@ -374,6 +374,7 @@ static void reorder(cpplib::FindGeometry::tupleTorsion& d, const cpplib::current
 template<class T,class I>
 static void eraseDoubles(std::vector<T>& vec, 
 						 typename std::function<bool(I, I)> comp) {
+	if (vec.empty()) return;
 	std::sort(vec.begin(), vec.end());
 	I it = vec.begin();
 	I it2 = (++(vec.begin()));
@@ -400,24 +401,30 @@ static cpplib::DATTuple& ConvertDATTuple(cpplib::DATTuple& dat, const cpplib::cu
 
 	for (size_t i = 0; i < s_dists; i++)
 	{
+		deb_write("ConvertDATTuple: reorder dist: ", i);
 		reorder(dists[i], fs);
 	}
 	for (size_t i = 0; i < s_angles; i++)
 	{
+		deb_write("ConvertDATTuple: reorder angl: ", i);
 		reorder(angles[i], fs);
 	}
 	for (size_t i = 0; i < s_tors; i++)
 	{
+		deb_write("ConvertDATTuple: reorder tors: ", i);
 		reorder(tors[i], fs);
 	}
 	// erase dublicates
-	
+
+	deb_write("ConvertDATTuple: erase dist");
 	eraseDoubles(dists, std::function<bool(std::remove_reference<decltype(dists)>::type::iterator, std::remove_reference< decltype(dists)>::type::iterator)>(
 		[](std::remove_reference< decltype(dists)>::type::iterator it, std::remove_reference< decltype(dists)>::type::iterator it2)
 		{return (std::get<0>(*it) == std::get<0>(*it2)) && (std::get<1>(*it) == std::get<1>(*it2)) && (::std::abs(std::get<2>(*it) - std::get<2>(*it2)) < 0.0001); }));
+	deb_write("ConvertDATTuple: erase angl");
 	eraseDoubles(angles, std::function<bool(std::remove_reference< decltype(angles)>::type::iterator, std::remove_reference< decltype(angles)>::type::iterator)>(
 				 [](std::remove_reference< decltype(angles)>::type::iterator it, std::remove_reference< decltype(angles)>::type::iterator it2)
 				 {return (std::get<0>(*it) == std::get<0>(*it2)) && (std::get<1>(*it) == std::get<1>(*it2)) && (std::get<2>(*it) == std::get<2>(*it2)) && (::std::abs(std::get<3>(*it) - std::get<3>(*it2)) < 0.0001); }));
+	deb_write("ConvertDATTuple: erase tors"); 
 	eraseDoubles(tors, std::function<bool(std::remove_reference< decltype(tors)>::type::iterator, std::remove_reference< decltype(tors)>::type::iterator)>(
 				 [](std::remove_reference< decltype(tors)>::type::iterator it, std::remove_reference< decltype(tors)>::type::iterator it2)
 				 {return (std::get<0>(*it) == std::get<0>(*it2)) && (std::get<1>(*it) == std::get<1>(*it2)) &&
@@ -425,7 +432,7 @@ static cpplib::DATTuple& ConvertDATTuple(cpplib::DATTuple& dat, const cpplib::cu
 	return dat;
 }
 
-std::tuple<std::vector<cpplib::currents::PointType>, std::list<std::string>> Compaq(const std::array<float, 6>& unit_cell,
+std::tuple<std::vector<cpplib::currents::PointType>, std::list<std::string>> Compaq(const std::array<cpplib::currents::FloatingPointType, 6>& unit_cell,
 												const std::vector<const char*>& symm,
 												cpplib::currents::FAMStructType::AtomContainerType& types,
 												cpplib::currents::FAMStructType::PointConteinerType& points) {
@@ -439,7 +446,7 @@ std::tuple<std::vector<cpplib::currents::PointType>, std::list<std::string>> Com
 	deb_write("Compaq FAMCellType creation start");
 	FAMCellType fc(FAMCellType::base(unit_cell, true));
 	deb_write("Compaq call constructor ParseDataType");
-	ParseDataType(fs, fc, symm, std::move(types), std::move(points));
+	ParseDataType(fs, fc, symm, std::move(types), std::move(points), false);
 
 	const auto su = fs.sizeUnique;
 	std::string errorMsg;
@@ -474,11 +481,17 @@ std::vector<std::tuple<cpplib::currents::PointType, cpplib::currents::AtomIndex,
 	
 	ParseDataType(fs, fc, symm, std::move(types), std::move(points), false);
 
+	deb_write("ClusterCreate: call findMoleculesForCluster");
 	auto molecules = fc.findMoleculesForCluster(fs, *p_distances, hasPolymer); // [0] is empty
+	deb_write("ClusterCreate: findMoleculesForCluster returns");
+	for(const auto &m:molecules) {
+		if(m.second) deb_write("ClusterCreate: poly true");
+	}
 
 	cpplib::Cluster cluster(fs, fc, anchors);
 	cpplib::Cluster::BoxType box;
 	cluster.CreateBox(box);
+	deb_write("ClusterCreate: CreateBox returns");
 	decltype(box) newbox;
 	std::vector<bool> polyflags(molecules.size(),false);
 	for (auto& pair : box) {
@@ -498,7 +511,9 @@ std::vector<std::tuple<cpplib::currents::PointType, cpplib::currents::AtomIndex,
 						}
 					}
 					_ASSERT(m != molecules.size());
-
+					if(m == molecules.size()) {
+						deb_write("ClusterCreate: m == molecules.size(): m = ", m);						
+					}
 					if (molecules[m].second == false) {
 						cluster.Grow(box, newbox, molecules[m].first, i, pair.first);
 					}
@@ -510,10 +525,13 @@ std::vector<std::tuple<cpplib::currents::PointType, cpplib::currents::AtomIndex,
 		}
 	}
 
+	deb_write("ClusterCreate: concatination start");
 	// concatinate boxes
 	box.insert(newbox.begin(), newbox.end());
 	
 	cluster.GrowPoly(box, molecules, polyflags, over_radius);
+
+	deb_write("ClusterCreate: concatination end");
 
 	std::vector<std::tuple<PointType, cpplib::currents::AtomIndex, long, ShiftType>> ret; // Vector of (AtomIndex, SymmIndex, dx, dy, dz)
 	//prepare ret

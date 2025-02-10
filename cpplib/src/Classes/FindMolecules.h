@@ -322,7 +322,7 @@ namespace cpplib {
 			base::create(base::lat_dir(0), base::lat_dir(1), base::lat_dir(2), base::getAngleGrad(0), base::getAngleGrad(1), base::getAngleGrad(2), true);
 		}
 		FloatingPointType distanceInCell(const PointType& p1, const PointType& p2) const noexcept {
-			auto&& dp = (p1 - p2).MoveToCell();
+			PointType dp = (p1 - p2).MoveToCell();
 			FloatingPointType ret = 0;
 			for (DimmentionType i = 0; i < static_cast<DimmentionType>(3); i++) {
 				FloatingPointType val = dp.get(i);

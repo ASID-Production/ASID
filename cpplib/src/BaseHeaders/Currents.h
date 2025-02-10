@@ -3,6 +3,7 @@
 #include <type_traits>
 #include <bitset>
 #include <vector>
+#include "Support.h"
 
 namespace cpplib {
 	class XAtom;

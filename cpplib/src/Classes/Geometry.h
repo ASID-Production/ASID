@@ -557,7 +557,7 @@ namespace cpplib {
 
 		template<class T> struct Symm
 		{
-			using matrix_t = geometry::Matrix<int8_t>;
+			using matrix_t = geometry::Matrix<T>;
 			using point_t = geometry::Point<T>;
 			matrix_t mat;
 			point_t point;
