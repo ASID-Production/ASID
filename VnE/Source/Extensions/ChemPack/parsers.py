@@ -26,7 +26,6 @@
 #
 # ******************************************************************************************
 
-
 from ... import point_class
 import numpy as np
 from ..ChemPack import PALETTE, MOLECULE_SYSTEMS
@@ -55,13 +54,28 @@ class FileParser:
         cos = np.cos
         cot = lambda x: np.tan(x) ** -1
         csc = lambda x: np.sin(x) ** -1
+        n = (cos(al)-(cos(ga) * cos(be)))/sin(ga)
+        p = (1-cos(al)**2-cos(be)**2-cos(ga)**2+2*cos(al)*cos(be)*cos(ga))**0.5
 
         mat = np.array([[a * sin(be) * np.sqrt(1 - (cot(al) * cot(be) - csc(al) * csc(be) * cos(ga)) ** 2), 0, 0],
                         [a * csc(al) * cos(ga) - a * cot(al) * cos(be), b * sin(al), 0],
                         [a * cos(be), b * cos(al), c]])
-        mat = mat.transpose()
+        mat = np.array([[a, 0, 0],
+                        [b*cos(ga), b*sin(ga), 0],
+                        [c*cos(be), c*n, c*(sin(be)**2-n**2)**0.5],])
+        mat = np.array([[a*p/sin(al), 0, 0],
+                        [a*(cos(ga)-cos(al)*cos(be))/sin(al), b*sin(al), 0],
+                        [a*cos(be), b*cos(al), c]])
+        mat = np.array([[a, b*cos(ga), c*cos(be)],
+                        [0, b*sin(ga), c*(cos(al)-cos(be)*cos(ga))/sin(ga)],
+                        [0, 0, c*p/sin(ga)]])
+        mat = mat
         for i in range(len(coords)):
-            coords[i] = (coords[i] @ mat).astype(dtype=np.float32)
+            coord = np.array(coords[i])[...,np.newaxis]
+            coord = mat @ coord
+            coord = coord.transpose().squeeze()
+            #coords[i] = (coords[i] @ mat).astype(dtype=np.float32)
+            coords[i] = coord
         return coords
 
     def parsFile(self, file_path, bond=True, root=None):
@@ -79,7 +93,6 @@ class FileParser:
 
     def parsXyz(self, file_path, bond=True, root=None, *args, **kwargs):
         from . import Db_viewer
-
         mol_list, atom_list, bonds_l = None, None, None
         file = open(file_path, 'r')
         mol_sys = MoleculeClass.MoleculeSystem()
@@ -298,6 +311,13 @@ class FileParser:
     def parsCif(self, file_path, bond=True, root=None, *args, **kwargs):
         from gemmi import cif
         from . import Db_viewer
+        import scipy
+
+        def normalize(v):
+            norm = np.linalg.norm(v)
+            if norm == 0:
+                return v
+            return v / norm
 
         mol_list, atom_list, bonds_l = None, None, None
         blocks = cif.read_file(file_path)
@@ -332,7 +352,18 @@ class FileParser:
                 space_group = space_group[0][0]
 
             atoms = block.find(['_atom_site_label', '_atom_site_type_symbol', '_atom_site_fract_x', '_atom_site_fract_y', '_atom_site_fract_z'])
+            anisou = block.find(['_atom_site_aniso_label', '_atom_site_aniso_U_11', '_atom_site_aniso_U_22', '_atom_site_aniso_U_33', '_atom_site_aniso_U_23', '_atom_site_aniso_U_13', '_atom_site_aniso_U_12'])
             atoms = [[x[i] if i < 2 else float(x[i]) if x[i].find('(') == -1 else float(x[i][:x[i].find('(')]) for i in range(len(x))] for x in atoms]
+            u_eq = block.find(['_atom_site_U_iso_or_equiv'])
+            u_eq = [float(x[0][:x[0].find('(')]) for x in u_eq]
+            if anisou:
+                alabels = [x[0] for x in anisou]
+                anisou = [[float(y[:y.find('(')]) for y in list(x)[1:]] for x in anisou]
+                anisou = [np.array([[x[0], x[5], x[4]],
+                                          [x[5], x[1], x[3]],
+                                          [x[4], x[3], x[2]]], dtype=np.float32) for x in anisou]
+                anisou = {x:y for x,y in zip(alabels, anisou)}
+
             for atm in atoms:
                 atype = ''.join([x for x in atm[1] if x.isalpha()])
                 atm[1] = atype
@@ -342,17 +373,52 @@ class FileParser:
             args.append(coords)
             dec_coords = self.fracToDec(*args)
             for i, atom in enumerate(atoms):
-                cif_data = {'cif_space_group': space_group,
-                            'cif_sym_codes': sym_codes,
-                            'cif_cell_a': cell[0],
-                            'cif_cell_b': cell[1],
-                            'cif_cell_c': cell[2],
-                            'cif_cell_al': cell[3],
-                            'cif_cell_be': cell[4],
-                            'cif_cell_ga': cell[5],
-                            'cif_frac_coords': np.array(atom[2:], dtype=np.float32)}
+                aanisou = anisou.get(atom[0], None)
+                ell = {'ellipsV1': np.array([np.sqrt(u_eq[i]), 0, 0], dtype=np.float32),
+                       'ellipsV2': np.array([0, np.sqrt(u_eq[i]), 0], dtype=np.float32),
+                       'ellipsV3': np.array([0, 0, np.sqrt(u_eq[i])], dtype=np.float32),
+                       }
+                if aanisou is not None:
+                    eigs = scipy.linalg.eigh(aanisou)
+                    eig = np.array([float(x) for x in eigs[0]])
+                    eigv = eigs[1]
+                    ellipsV = np.array([eigv[0]*(eig[0]**0.5), eigv[1]*(eig[1]**0.5), eigv[2]*(eig[2]**0.5)], dtype=np.float32)
+                    #ellipsV = self.fracToDec(*cell, ellipsV)
+                    m = np.array(aanisou, dtype=np.float32)
+                    m = scipy.linalg.sqrtm(m)
+                    ell = {'ellipsV1': m[0],
+                           'ellipsV2': m[1],
+                           'ellipsV3': m[2],}
+                    cif_data = {'cif_space_group': space_group,
+                                'cif_sym_codes': sym_codes,
+                                'cif_cell_a': cell[0],
+                                'cif_cell_b': cell[1],
+                                'cif_cell_c': cell[2],
+                                'cif_cell_al': cell[3],
+                                'cif_cell_be': cell[4],
+                                'cif_cell_ga': cell[5],
+                                'cif_frac_coords': np.array(atom[2:], dtype=np.float32),
+                                'cif_anisou_mat': aanisou,
+                                'cif_anisou_eigs': eig,
+                                'cif_anisou_eigv': eigv,
+                                'ellipsV1': ellipsV[0],
+                                'ellipsV2': ellipsV[1],
+                                'ellipsV3': ellipsV[2],
+                                }
+                else:
+                    cif_data = {'cif_space_group': space_group,
+                                'cif_sym_codes': sym_codes,
+                                'cif_cell_a': cell[0],
+                                'cif_cell_b': cell[1],
+                                'cif_cell_c': cell[2],
+                                'cif_cell_al': cell[3],
+                                'cif_cell_be': cell[4],
+                                'cif_cell_ga': cell[5],
+                                'cif_frac_coords': np.array(atom[2:], dtype=np.float32),
+                                }
                 coord = np.array(dec_coords[i], dtype=np.float32)
                 atom = MoleculeClass.Atom(coord.copy(), PALETTE.getName(atom[1]), parent=mol, name=atom[0], **cif_data)
+                atom.sup_data_dict = ell
             cell_coords = [[0, 0, 0],
                            [1, 0, 0],
                            [0, 1, 0],
@@ -364,7 +430,28 @@ class FileParser:
             args = [*cell, cell_coords]
             cell_dec_coords = self.fracToDec(*args)
 
-            mol_sys, list_tuple = self.parsMolSys(mol_sys, bond, root)
+            def pf(atom_list, atom):
+                coord = atom.coord.copy()
+                add_data = atom.sup_data_dict
+                if add_data is None:
+                    point = point_class.Point(parent=atom_list, coord=coord, rad=atom_list,
+                                              color=PALETTE.point_dict[PALETTE.getName(atom.atom_type)],
+                                              atom_type=atom.atom_type,
+                                              name=atom.name,
+                                              label=atom.name.replace(' ', '_'),
+                                              el_rad=atom_list)
+                else:
+                    point = point_class.Point(parent=atom_list, coord=coord, rad=atom_list,
+                                              color=PALETTE.point_dict[PALETTE.getName(atom.atom_type)],
+                                              atom_type=atom.atom_type,
+                                              name=atom.name,
+                                              label=atom.name,
+                                              el_rad=atom_list,
+                                              **add_data)
+                return point
+
+            mol_sys, list_tuple = self.parsMolSys(mol_sys, bond, root, point_func=pf)
+            list_tuple[1].addProperty('el_rad', 0.5)
             mol_list = list_tuple[0]
 
             if mol_list.additional_context_actions is None:

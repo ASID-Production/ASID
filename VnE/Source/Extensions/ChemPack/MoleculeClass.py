@@ -60,6 +60,9 @@ class DefaultData:
         'cif_cell_be': 90,
         'cif_cell_ga': 90,
         'cif_frac_coords': np.array([0,0,0], dtype=np.float32),
+        'cif_anisou_mat': np.array([[1,0,0],[0,1,0],[0,0,1]], dtype=np.float32),
+        'cif_anisou_eigs': np.array([1,1,1], dtype=np.float32),
+        'cif_anisou_eigv': np.array([[1,0,0],[0,1,0],[0,0,1]], dtype=np.float32),
     }
 
     def __getattr__(self, item):

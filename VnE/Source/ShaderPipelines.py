@@ -205,6 +205,47 @@ class BallsShaderPipeline(aShaderPipeline):
             glUseProgramStages(self.pipeline, prog[1], prog[0])
 
 
+class EllipsoidShaderPipeline(aShaderPipeline):
+
+    shader_bit = {GL_VERTEX_SHADER: GL_VERTEX_SHADER_BIT,
+                  GL_TESS_CONTROL_SHADER: GL_TESS_CONTROL_SHADER_BIT,
+                  GL_TESS_EVALUATION_SHADER: GL_TESS_EVALUATION_SHADER_BIT,
+                  GL_FRAGMENT_SHADER: GL_FRAGMENT_SHADER_BIT,
+                  GL_COMPUTE_SHADER: GL_COMPUTE_SHADER_BIT}
+
+    def __init__(self):
+
+        self.shader_data = []
+        self.VAOFormat = [(3, np.float32), (4, np.float32), (1, np.float32), (1, np.float32), (3, np.float32), (3, np.float32), (3, np.float32)]
+        self.programs = [[GL_VERTEX_SHADER, None, open(f'{opath.dirname(__file__)}/shaders/vert/ellipsoid.vert', 'r').read()],
+                         [GL_TESS_CONTROL_SHADER, None, open(f'{opath.dirname(__file__)}/shaders/tesc/ellipsoid.tesc', 'r').read()],
+                         [GL_TESS_EVALUATION_SHADER, None, open(f'{opath.dirname(__file__)}/shaders/tese/ellipsoid.tese', 'r').read()],
+                         [GL_FRAGMENT_SHADER, None, open(f'{opath.dirname(__file__)}/shaders/frag/base.frag', 'r').read()]]
+
+        self.pipeline = glGenProgramPipelines(1)
+        glBindProgramPipeline(self.pipeline)
+
+        for i, program in enumerate(self.programs):
+            self.programs[i][1] = SHADER_PROGRAM_CREATOR.createProgram(program[2], program[0])[0]
+            glUseProgramStages(self.pipeline, BallsShaderPipeline.shader_bit[self.programs[i][0]], self.programs[i][1])
+
+    def draw(self):
+        glBindProgramPipeline(self.pipeline)
+        glPatchParameteri(GL_PATCH_VERTICES, 1)
+        for shader_data in self.shader_data:
+            shader_data.draw(GL_PATCHES)
+
+    def changeShaderProgram(self, shader_bit=None, source=None, id=None):
+        if id:
+            prog = SHADER_PROGRAM_CREATOR.getProgramById(id)
+            if prog:
+                glUseProgramStages(self.pipeline, prog[1], prog[0])
+
+        if source and shader_bit:
+            prog = SHADER_PROGRAM_CREATOR.createProgram(source, shader_bit)
+            glUseProgramStages(self.pipeline, prog[1], prog[0])
+
+
 class BondShaderPipeline(BallsShaderPipeline):
 
     def __init__(self):

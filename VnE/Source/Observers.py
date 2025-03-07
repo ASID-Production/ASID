@@ -141,6 +141,76 @@ class SphereObserver(aObserver):
                 self._facade.deleteDataInShaderData(self._shader_data, self._properties_list.index(property), pos * self._properties[property].nbytes, self._properties[property].nbytes)
 
 
+class EllipsoidObserver(aObserver):
+
+    def __init__(self, facade, scene):
+
+        from .ShaderPipelines import EllipsoidShaderPipeline
+
+        self._scene = scene
+        self._facade = facade
+        self._pipeline = self._facade.addPipelineToScene(self._scene, pipeline_cls=EllipsoidShaderPipeline)
+        self._shader_data = self._facade.addDataBufferToPipeline(self._pipeline)
+        self._points = []
+        self._properties_list = ['coord', 'color', 'el_rad', 'pick', 'ellipsV1', 'ellipsV2', 'ellipsV3']
+        self._properties = {'coord': np.array([0, 0, 0], dtype=np.float32),
+                            'color': np.array([0, 0, 0, 1], dtype=np.float32),
+                            'el_rad': np.array([0.5], dtype=np.float32),
+                            'pick': np.array([0], dtype=np.float32),
+                            'ellipsV1': np.array([.044,0,0], dtype=np.float32),
+                            'ellipsV2': np.array([0,.044,0], dtype=np.float32),
+                            'ellipsV3': np.array([0,0,.044], dtype=np.float32),
+                            }
+
+    def update(self, object, property, value):
+        if type(object).__name__ is PointsList.__name__:
+            return
+        if object not in self._points:
+            return
+        if property not in self._properties_list:
+            return
+        if value is None:
+            value = self._properties[property]
+        if isinstance(value, float) or isinstance(value, int):
+            value = np.array([value], dtype=np.float32)
+        self._facade.replaceDataInShaderData(self._shader_data, self._properties_list.index(property), value, self._points.index(object) * self._properties[property].nbytes)
+
+    def add(self, object, *args, **kwargs):
+        if type(object).__name__ is PointsList.__name__:
+            if object.children is None:
+                return
+            for point in object.children:
+                self.add(point)
+        elif type(object).__name__ is Point.__name__:
+            data = {}
+
+            for property in self._properties:
+                try:
+                    data[property] = object.__getattribute__(property)
+                    if isinstance(data[property], float) or isinstance(data[property], int):
+                        data[property] = np.array([data[property]], dtype=np.float32)
+                except AttributeError:
+                    data[property] = self._properties[property]
+                if data[property] is None:
+                    data[property] = self._properties[property]
+            for property in self._properties:
+                self._facade.addDataToShaderData(self._shader_data, self._properties_list.index(property), data[property])
+            self._points.append(object)
+
+    def remove(self, object, *args, **kwargs):
+        if type(object).__name__ is PointsList.__name__:
+            for point in object.children:
+                self.remove(point)
+        elif type(object).__name__ is Point.__name__:
+            try:
+                pos = self._points.index(object)
+            except ValueError:
+                return
+            self._points.remove(object)
+            for property in self._properties_list:
+                self._facade.deleteDataInShaderData(self._shader_data, self._properties_list.index(property), pos * self._properties[property].nbytes, self._properties[property].nbytes)
+
+
 class BondsObserver(aObserver):
 
     def __init__(self, facade, scene):
@@ -539,5 +609,6 @@ observers = {'Sphere': SphereObserver,
              'Label': LabelObserver,
              'Plane': PlaneObserver,
              'Line': LineObserver,
-             'Dashed line': DashedLineObserver}
+             'Dashed line': DashedLineObserver,
+             'Ellipsoid': EllipsoidObserver}
 
