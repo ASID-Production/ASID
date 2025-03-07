@@ -69,13 +69,6 @@ out vec4 frag_pos;
 
 void main()
 {
-    if (bool(pick_tes)){
-        color_frag = vec4(0.1,0.1,0.1,color_tes.w);
-    }
-    else{
-        color_frag = color_tes;
-    }
-
     float phi = gl_TessCoord.x * 2.0 * 3.14159265;
     float theta = gl_TessCoord.y * 3.14159265;
 
@@ -83,6 +76,17 @@ void main()
     float y = sin(theta) * sin(phi);
     float z = cos(theta);
     vec3 pos = vec3(x,y,z);
+    float c = exp(-(x*x)/0.0001) + exp(-(y*y)/0.0001) + exp(-(z*z)/0.0001);
+    if (c > 1.0) {
+        c = 1.0;
+    }
+    if (bool(pick_tes)){
+        color_frag = vec4(0.1,0.1,0.1,color_tes.w);
+    }
+    else{
+        color_frag = c * vec4(0.1,0.1,0.1,color_tes.w) + (1-c) * color_tes;
+    }
+
     pos = ellipsV_tes * pos;
     //pos = normalize(pos) * sqrt(length(pos));
     //color_frag = vec4(abs(x),abs(y),abs(z),1.0);
