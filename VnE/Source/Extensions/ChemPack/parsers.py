@@ -373,22 +373,37 @@ class FileParser:
             args.append(coords)
             dec_coords = self.fracToDec(*args)
             for i, atom in enumerate(atoms):
-                aanisou = anisou.get(atom[0], None)
-                ell = {'ellipsV1': np.array([np.sqrt(u_eq[i]), 0, 0], dtype=np.float32),
-                       'ellipsV2': np.array([0, np.sqrt(u_eq[i]), 0], dtype=np.float32),
-                       'ellipsV3': np.array([0, 0, np.sqrt(u_eq[i])], dtype=np.float32),
-                       }
+                aanisou = None
+                if anisou:
+                    aanisou = anisou.get(atom[0], None)
+                if u_eq:
+                    ell = {'ellipsV1': np.array([np.sqrt(u_eq[i]), 0, 0], dtype=np.float32),
+                           'ellipsV2': np.array([0, np.sqrt(u_eq[i]), 0], dtype=np.float32),
+                           'ellipsV3': np.array([0, 0, np.sqrt(u_eq[i])], dtype=np.float32),
+                           }
+                else:
+                    ell = {'ellipsV1': np.array([np.sqrt(0.02), 0, 0], dtype=np.float32),
+                           'ellipsV2': np.array([0, np.sqrt(0.02), 0], dtype=np.float32),
+                           'ellipsV3': np.array([0, 0, np.sqrt(0.02)], dtype=np.float32),
+                           }
                 if aanisou is not None:
                     eigs = scipy.linalg.eigh(aanisou)
+                    #print(eigs[0], '\n' ,eigs[1], end='\n')
+                    ma = np.array([[eigs[0][0], 0, 0],
+                                   [0, eigs[0][1], 0],
+                                   [0, 0, eigs[0][2]]], dtype=np.float32)
+                    #ma = eigs[1] @ ma @ eigs[1].transpose()
+                    #print(aanisou)
+                    #print(ma)
                     eig = np.array([float(x) for x in eigs[0]])
-                    eigv = eigs[1]
+                    eigv = eigs[1].transpose()
                     ellipsV = np.array([eigv[0]*(eig[0]**0.5), eigv[1]*(eig[1]**0.5), eigv[2]*(eig[2]**0.5)], dtype=np.float32)
                     #ellipsV = self.fracToDec(*cell, ellipsV)
-                    m = np.array(aanisou, dtype=np.float32)
-                    m = scipy.linalg.sqrtm(m)
-                    ell = {'ellipsV1': m[0],
-                           'ellipsV2': m[1],
-                           'ellipsV3': m[2],}
+                    #m = np.array(aanisou, dtype=np.float32)
+                    #m = scipy.linalg.sqrtm(m)
+                    ell = {'ellipsV1': ellipsV[0],
+                           'ellipsV2': ellipsV[1],
+                           'ellipsV3': ellipsV[2],}
                     cif_data = {'cif_space_group': space_group,
                                 'cif_sym_codes': sym_codes,
                                 'cif_cell_a': cell[0],

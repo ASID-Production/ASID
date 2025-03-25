@@ -77,20 +77,20 @@ void main()
         color_tes = color_tcs[gl_InvocationID];
         pick_tes = pick_tcs[gl_InvocationID];
         ellipsV_tes = ellipsV_tcs[gl_InvocationID];
-        float grade;
+        //float grade;
         //grade = ((perspective * translation * aspect_ratio * rotation * vec4(1.0, 0.0, 0.0, 1.0))/gl_in[gl_InvocationID].gl_Position.w).x;
-        vec4 asd = (perspective * aspect_ratio * scale * rotation * gl_in[gl_InvocationID].gl_Position);
-        vec4 asdf = (perspective * aspect_ratio * scale * (rotation * gl_in[gl_InvocationID].gl_Position + vec4(rad_tcs[gl_InvocationID] * 1.0,0.0,0.0,0.0)));
-        asdf.xyz = asdf.xyz-asd.xyz;
+        //vec4 asd = (perspective * aspect_ratio * scale * rotation * gl_in[gl_InvocationID].gl_Position);
+        //vec4 asdf = (perspective * aspect_ratio * scale * (rotation * gl_in[gl_InvocationID].gl_Position + vec4(rad_tcs[gl_InvocationID] * 1.0,0.0,0.0,0.0)));
+        //asdf.xyz = asdf.xyz-asd.xyz;
         //vec4 asd = (perspective * aspect_ratio * scale * vec4(1.0, 0.0, -500.0, 0.0));
-        grade = asdf.x/asdf.w;
+        //grade = asdf.x/asdf.w;
         //color_tes = vec4(1.0*grade, 0.0, 0.0, 1.0);
-        int tess = int(round(grade*8*56) + 8);
+        //int tess = int(round(grade*8*32) + 32);
 
-        gl_TessLevelOuter[0] = tess;
-        gl_TessLevelOuter[1] = tess;
-        gl_TessLevelOuter[2] = tess;
-        gl_TessLevelOuter[3] = tess;
-        gl_TessLevelInner[0] = tess;
-        gl_TessLevelInner[1] = tess;
+        gl_TessLevelOuter[0] = 64;
+        gl_TessLevelOuter[1] = 64;
+        gl_TessLevelOuter[2] = 64;
+        gl_TessLevelOuter[3] = 64;
+        gl_TessLevelInner[0] = 64;
+        gl_TessLevelInner[1] = 64;
     }
