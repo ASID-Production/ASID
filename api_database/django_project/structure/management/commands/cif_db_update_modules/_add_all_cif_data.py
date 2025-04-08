@@ -205,24 +205,29 @@ def get_or_create_space_group(cif_block, return_only_symops=False):
             if False: get or create space group object and return it.
     """
 
-    def get_sg_number_by_h_m_name(h_m_name: str):
-        file = open(os.path.join(os.path.dirname(__file__), '../symops.json'))
-        symops_list = json.load(file)
-        for i, symops in enumerate(symops_list):
-            if i > 0:
-                if symops['crystal_class'] == 'monoclinic' and symops['hermann_mauguin'].split()[1] == '1' and symops['hermann_mauguin'].split()[3] == '1':
-                    if ' '.join([symops['hermann_mauguin'].split()[0], symops['hermann_mauguin'].split()[2]]) == h_m_name:
-                        return symops['number']
-                if symops['hermann_mauguin'] == h_m_name:
-                    return symops['number']
+    def get_std_h_m_name(h_m_name: str):
+        h_m_name_temp = re.findall('[\d\w\/:-]', h_m_name)
+        return ''.join(h_m_name_temp)
 
-    def get_symops_by_number(sg_number: int):
+    def get_sg_by_h_m_name(h_m_name: str, return_number: bool = False, return_symops: bool = False):
+        h_m_name = get_std_h_m_name(h_m_name)
         file = open(os.path.join(os.path.dirname(__file__), '../symops.json'))
         symops_list = json.load(file)
         for i, symops in enumerate(symops_list):
             if i > 0:
-                if symops['number'] == sg_number:
-                    return symops['symops']
+                if symops['crystal_class'] == 'monoclinic' and symops['hermann_mauguin'].split()[1] == '1' and \
+                        symops['hermann_mauguin'].split()[3] == '1':
+                    if ''.join(
+                            [symops['hermann_mauguin'].split()[0], symops['hermann_mauguin'].split()[2]]) == h_m_name:
+                        if return_number:
+                            return symops['number']
+                        if return_symops:
+                            return symops['symops']
+                if ''.join(symops['hermann_mauguin'].split()) == h_m_name:
+                    if return_number:
+                        return symops['number']
+                    if return_symops:
+                        return symops['symops']
 
     def get_system_from_numb(sg_number: int):
         file = open(os.path.join(os.path.dirname(__file__), '../symops.json'))
@@ -239,7 +244,7 @@ def get_or_create_space_group(cif_block, return_only_symops=False):
     elif '_symmetry_int_tables_number' in data_in_cif:
         sg_number = int(cif_block['_symmetry_int_tables_number'])
     elif '_symmetry_space_group_name_h-m' in data_in_cif:
-        sg_number = get_sg_number_by_h_m_name(cif_block['_symmetry_space_group_name_h-m'])
+        sg_number = get_sg_by_h_m_name(cif_block['_symmetry_space_group_name_h-m'], return_number=True)
     else:
         raise Exception('No space group number found in cif!')
     logger_1.info(f'Space group number: {sg_number}')
@@ -275,6 +280,7 @@ def get_or_create_space_group(cif_block, return_only_symops=False):
             if space_group_name[1] == '1' and space_group_name[3] == '1':
                 space_group_name = [space_group_name[0], space_group_name[2]]
         space_group_name = ''.join(space_group_name)
+        space_group_name = get_std_h_m_name(space_group_name)
         logger_1.info(f'Space group name: {space_group_name}')
     else:
         raise Exception('No space group found in cif!')
@@ -311,7 +317,7 @@ def get_or_create_space_group(cif_block, return_only_symops=False):
             symops = cif_block.GetLoop('_space_group_symop_operation_xyz')
             key = '_space_group_symop_operation_xyz'
         except:
-            symops_list = get_symops_by_number(sg_number)
+            symops_list = get_sg_by_h_m_name(space_group_name, return_symops=True)
             get_symops_from_json = True
     if not get_symops_from_json:
         keys: list = symops.GetItemOrder()
