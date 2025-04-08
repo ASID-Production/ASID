@@ -724,8 +724,11 @@ def add_all_cif_data(cifs: dict):
                 add_universal(ExperimentalInfo, struct_obj, cif_block, experimental_info)
             except Exception:
                 pass
+            try:
                 logger_1.info(f'Add refinement info')
                 add_universal(RefinementInfo, struct_obj, cif_block, refinement_info)
+            except Exception:
+                pass
             try:
                 logger_1.info(f'Add crystal and structure info')
                 add_universal(CrystalAndStructureInfo, struct_obj, cif_block, crystal_and_structure_info)

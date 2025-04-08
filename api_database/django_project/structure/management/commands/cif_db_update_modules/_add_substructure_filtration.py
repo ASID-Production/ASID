@@ -91,13 +91,13 @@ def reset_old_data_or_create(refcode):
     fields_substr1.remove('id')
     fields_substr1.remove('refcode')
     set_substr1 = dict.fromkeys(fields_substr1, False)
-    Substructure1.objects.update_or_create(refcode__refcode=refcode, defaults=set_substr1)
+    Substructure1.objects.update_or_create(refcode=refcode, defaults=set_substr1)
     # reset substructure2 model objects
     fields_substr2 = get_fields_list(Substructure2)
     fields_substr2.remove('id')
     fields_substr2.remove('refcode')
     set_substr2 = dict.fromkeys(fields_substr2, False)
-    Substructure2.objects.update_or_create(refcode__refcode=refcode, defaults=set_substr2)
+    Substructure2.objects.update_or_create(refcode=refcode, defaults=set_substr2)
 
 
 def set_only_CHNO(graphs, substructure_obj=Substructure1, filter_template='refcode__elements__element_set'):
