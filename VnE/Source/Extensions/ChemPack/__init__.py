@@ -206,7 +206,7 @@ def parseMultiWfn():
 
     from . import attach_cpprop
 
-    attach_cpprop.execute(cp_points_lists)
+    attach_cpprop.execute(cp_molsys)
 
     return molsys, points_lists
 

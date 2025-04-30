@@ -28,24 +28,12 @@
 
 
 #version 460
-#define PI 3.1415926538
 
-in gl_PerVertex
-{
-  vec4 gl_Position;
-  float gl_PointSize;
-  float gl_ClipDistance[];
-} gl_in[gl_MaxPatchVertices];
+out gl_PerVertex { vec4 gl_Position;};
 
-out gl_PerVertex
-{
-    vec4 gl_Position;
-    float gl_PointSize;
-    float gl_ClipDistance[];
-};
-
-layout(quads, equal_spacing, ccw) in;
-
+layout(location = 0) in vec3 pos_vert;
+layout(location = 2) in float rad_vert;
+layout(location = 4) in mat3 ellipsV;
 layout(std140, binding = 0) uniform Matrices
     {
         mat4 scale;
@@ -57,40 +45,16 @@ layout(std140, binding = 0) uniform Matrices
         mat4 scene_shift;
     };
 
-patch in vec4 color_tes;
-patch in float rad_tes;
-patch in float pick_tes;
-patch in mat3 ellipsV_tes;
+uniform float shift = 0;
 
-out vec4 color_frag;
-out vec3 normals_frag;
-out vec4 frag_pos;
-out vec3 line;
-
+out uint id_tcs;
+out float rad_tcs;
+out mat3 ellipsV_tcs;
 
 void main()
-{
-    float phi = gl_TessCoord.x * 2.0 * 3.14159265;
-    float theta = gl_TessCoord.y * 3.14159265;
-
-    float x = sin(theta) * cos(phi);
-    float y = sin(theta) * sin(phi);
-    float z = cos(theta);
-    vec3 pos = vec3(x,y,z);
-    vec3 c = vec3(x,y,z);
-    if (bool(pick_tes)){
-        color_frag = vec4(0.1,0.1,0.1,color_tes.w);
+    {
+        id_tcs = gl_VertexID;
+        rad_tcs = rad_vert;
+        ellipsV_tcs = ellipsV;
+        gl_Position = scene_shift * vec4(pos_vert, 1.0);
     }
-    else{
-        color_frag = color_tes;
-    }
-    line = c;
-
-    pos = ellipsV_tes * pos;
-    //pos = normalize(pos) * sqrt(length(pos));
-    //color_frag = vec4(abs(x),abs(y),abs(z),1.0);
-    normals_frag = mat3(rotation) * pos;
-    float rad = sqrt(-2*log(1-rad_tes));
-    frag_pos = translation * perspective * aspect_ratio * scale * (vec4(normals_frag * rad, 0.0) + rotation * gl_in[0].gl_Position);
-    gl_Position = frag_pos;
-}

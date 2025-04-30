@@ -29,7 +29,6 @@
 
 #version 460
 
-
 in gl_PerVertex
 {
   vec4 gl_Position;
@@ -43,12 +42,10 @@ out gl_PerVertex
     float gl_ClipDistance[];
 } gl_out[];
 
-layout(vertices = 1) out;
+layout(vertices = 2) out;
 
 in float rad_tcs[];
-in vec4 color_tcs[];
-in float pick_tcs[];
-in mat3 ellipsV_tcs[];
+in uint id_tcs[];
 
 layout(std140, binding = 0) uniform Matrices
     {
@@ -61,36 +58,36 @@ layout(std140, binding = 0) uniform Matrices
         mat4 scene_shift;
     };
 
-uniform float shift = 0;
-
 patch out float rad_tes;
-patch out vec4 color_tes;
-patch out float pick_tes;
-patch out mat3 ellipsV_tes;
+patch out uint id_tes;
+patch out uint count_tes;
 
 void main()
-    {
-        //Multiples of eight can cause crash on some systems
-        gl_out[gl_InvocationID].gl_Position = gl_in[gl_InvocationID].gl_Position;
-
-        rad_tes = rad_tcs[gl_InvocationID];
-        color_tes = color_tcs[gl_InvocationID];
-        pick_tes = pick_tcs[gl_InvocationID];
-        ellipsV_tes = ellipsV_tcs[gl_InvocationID];
-        float grade;
-        //grade = ((perspective * translation * aspect_ratio * rotation * vec4(1.0, 0.0, 0.0, 1.0))/gl_in[gl_InvocationID].gl_Position.w).x;
-        vec4 asd = (perspective * aspect_ratio * scale * rotation * gl_in[gl_InvocationID].gl_Position);
-        vec4 asdf = (perspective * aspect_ratio * scale * (rotation * gl_in[gl_InvocationID].gl_Position + vec4(rad_tcs[gl_InvocationID] * 1.0,0.0,0.0,0.0)));
-        asdf.xyz = asdf.xyz-asd.xyz;
-        //vec4 asd = (perspective * aspect_ratio * scale * vec4(1.0, 0.0, -500.0, 0.0));
-        grade = asdf.x/asdf.w;
-        //color_tes = vec4(1.0*grade, 0.0, 0.0, 1.0);
-        int tess = int(round(grade*8*32) + 32);
-
-        gl_TessLevelOuter[0] = tess;
-        gl_TessLevelOuter[1] = tess;
-        gl_TessLevelOuter[2] = tess;
-        gl_TessLevelOuter[3] = tess;
-        gl_TessLevelInner[0] = tess;
-        gl_TessLevelInner[1] = tess;
+{
+    //Multiples of eight can cause crash on some systems
+    gl_out[gl_InvocationID].gl_Position = gl_in[gl_InvocationID].gl_Position;
+    rad_tes = rad_tcs[gl_InvocationID];
+    count_tes = 2;
+    id_tes = 4294967295;
+    for (int i = 0; i < 2; i++) {
+        if (id_tcs[i] < id_tes) {
+            id_tes = id_tcs[i];
+        }
     }
+    float grade;
+    vec4 asd = (perspective * aspect_ratio * scale * rotation * gl_in[gl_InvocationID].gl_Position);
+    vec4 asdf = (perspective * aspect_ratio * scale * (rotation * gl_in[gl_InvocationID].gl_Position + vec4(rad_tcs[gl_InvocationID] * 1.0,0.0,0.0,0.0)));
+    asdf.xyz = asdf.xyz-asd.xyz;
+    //vec4 asd = (perspective * aspect_ratio * scale * vec4(1.0, 0.0, -500.0, 0.0));
+    grade = asdf.x/asdf.w;
+    //color_tes = vec4(1.0*grade, 0.0, 0.0, 1.0);
+    int tess = int(round(grade*4*56) + 8);
+
+    //rad_tes = 1;
+    gl_TessLevelOuter[0] = 4;
+    gl_TessLevelOuter[1] = tess;
+    gl_TessLevelOuter[2] = 4;
+    gl_TessLevelOuter[3] = tess;
+    gl_TessLevelInner[0] = tess;
+    gl_TessLevelInner[1] = 4;
+}

@@ -355,7 +355,7 @@ class FileParser:
             anisou = block.find(['_atom_site_aniso_label', '_atom_site_aniso_U_11', '_atom_site_aniso_U_22', '_atom_site_aniso_U_33', '_atom_site_aniso_U_23', '_atom_site_aniso_U_13', '_atom_site_aniso_U_12'])
             atoms = [[x[i] if i < 2 else float(x[i]) if x[i].find('(') == -1 else float(x[i][:x[i].find('(')]) for i in range(len(x))] for x in atoms]
             u_eq = block.find(['_atom_site_U_iso_or_equiv'])
-            u_eq = [float(x[0][:x[0].find('(')]) for x in u_eq]
+            u_eq = [float(x[0][:x[0].find('(')]) if '(' in x[0] else float(x[0]) for x in u_eq]
             if anisou:
                 alabels = [x[0] for x in anisou]
                 anisou = [[float(y[:y.find('(')]) for y in list(x)[1:]] for x in anisou]

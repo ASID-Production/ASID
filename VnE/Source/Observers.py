@@ -90,7 +90,7 @@ class SphereObserver(aObserver):
         self._properties = {'coord': np.array([0, 0, 0], dtype=np.float32),
                             'color': np.array([0, 0, 0, 1], dtype=np.float32),
                             'rad': np.array([1], dtype=np.float32),
-                            'pick': np.array([0], dtype=np.float32)}
+                            'pick': np.array([0], dtype=np.float32),}
 
     def update(self, object, property, value):
         if type(object).__name__ is PointsList.__name__:
@@ -101,8 +101,7 @@ class SphereObserver(aObserver):
             return
         if value is None:
             value = self._properties[property]
-        if isinstance(value, float) or isinstance(value, int):
-            value = np.array([value], dtype=np.float32)
+        value = np.array([value], dtype=self._properties[property].dtype)
         self._facade.replaceDataInShaderData(self._shader_data, self._properties_list.index(property), value, self._points.index(object) * self._properties[property].nbytes)
 
     def add(self, object, *args, **kwargs):
@@ -117,8 +116,8 @@ class SphereObserver(aObserver):
             for property in self._properties:
                 try:
                     data[property] = object.__getattribute__(property)
-                    if isinstance(data[property], float) or isinstance(data[property], int):
-                        data[property] = np.array([data[property]], dtype=np.float32)
+                    if data[property] is not None:
+                        data[property] = np.array([data[property]], dtype=self._properties[property].dtype)
                 except AttributeError:
                     data[property] = self._properties[property]
                 if data[property] is None:

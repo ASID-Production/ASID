@@ -69,7 +69,7 @@ class aScene(ABC):
         return
 
     @abstractmethod
-    def draw(self):
+    def draw(self, mode='DEFAULT'):
         self._context.makeCurrent()
         for buffer in self.uniform_buffers:
             buffer.bind()
@@ -83,13 +83,12 @@ class Scene(aScene):
         super().__init__(context=context)
         self.conf = False
 
-    def draw(self):
-        self.makeCurrent()
+    def draw(self, mode='DEFAULT'):
         if self.conf:
             for buffer in self.uniform_buffers:
                 buffer.bind()
             for pipe_line in self.shader_pipelines:
-                pipe_line.draw()
+                pipe_line.draw(mode=mode)
         else:
             glEnable(GL_DEPTH_TEST)
             glEnable(GL_MULTISAMPLE)
@@ -98,7 +97,7 @@ class Scene(aScene):
             glClearColor(1.0, 1.0, 1.0, 1.0)
             glUseProgram(0)
             self.conf = True
-            self.draw()
+            self.draw(mode)
 
 
 class TestScene(aScene):

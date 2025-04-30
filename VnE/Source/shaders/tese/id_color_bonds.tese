@@ -30,6 +30,19 @@
 #version 460
 #define PI 3.1415926538
 
+layout(quads, equal_spacing, ccw) in;
+
+layout(std140, binding = 0) uniform Matrices
+{
+    mat4 scale;
+    mat4 translation;
+    mat4 rotation;
+    mat4 aspect_ratio;
+    mat4 clip_distance;
+    mat4 perspective;
+    mat4 scene_shift;
+};
+
 in gl_PerVertex
 {
   vec4 gl_Position;
@@ -44,53 +57,33 @@ out gl_PerVertex
     float gl_ClipDistance[];
 };
 
-layout(quads, equal_spacing, ccw) in;
-
-layout(std140, binding = 0) uniform Matrices
-    {
-        mat4 scale;
-        mat4 translation;
-        mat4 rotation;
-        mat4 aspect_ratio;
-        mat4 clip_distance;
-        mat4 perspective;
-        mat4 scene_shift;
-    };
-
-patch in vec4 color_tes;
+in vec4 color_tes[];
 patch in float rad_tes;
-patch in float pick_tes;
-patch in mat3 ellipsV_tes;
+patch in uint id_tes;
+patch in uint count_tes;
 
-out vec4 color_frag;
-out vec3 normals_frag;
-out vec4 frag_pos;
-out vec3 line;
+flat out uint id_frag;
+flat out uint count;
 
+const vec3 s = normalize(vec3(1,1,1));
+
+vec3 tube_int(in float cord_x, in float cord_y, in vec3 dest)
+{
+
+    vec3 ndest = normalize(dest);
+    vec3 point = sin(cord_x * 2 * PI) * normalize(s - dot(ndest, s) * ndest) + cos(cord_x * 2 * PI) * normalize(cross((s - dot(ndest, s) * ndest), dest));
+
+    return point;
+}
 
 void main()
 {
-    float phi = gl_TessCoord.x * 2.0 * 3.14159265;
-    float theta = gl_TessCoord.y * 3.14159265;
-
-    float x = sin(theta) * cos(phi);
-    float y = sin(theta) * sin(phi);
-    float z = cos(theta);
-    vec3 pos = vec3(x,y,z);
-    vec3 c = vec3(x,y,z);
-    if (bool(pick_tes)){
-        color_frag = vec4(0.1,0.1,0.1,color_tes.w);
-    }
-    else{
-        color_frag = color_tes;
-    }
-    line = c;
-
-    pos = ellipsV_tes * pos;
-    //pos = normalize(pos) * sqrt(length(pos));
-    //color_frag = vec4(abs(x),abs(y),abs(z),1.0);
-    normals_frag = mat3(rotation) * pos;
-    float rad = sqrt(-2*log(1-rad_tes));
-    frag_pos = translation * perspective * aspect_ratio * scale * (vec4(normals_frag * rad, 0.0) + rotation * gl_in[0].gl_Position);
+    vec3 dest = gl_in[1].gl_Position.xyz - gl_in[0].gl_Position.xyz;
+    vec3 normals_frag = tube_int(gl_TessCoord[0], gl_TessCoord[1], dest);
+    vec4 frag_pos = translation * perspective * aspect_ratio * scale * rotation * vec4(((normals_frag * rad_tes) + gl_in[0].gl_Position.xyz + (dest * gl_TessCoord[1])), 1.0);
     gl_Position = frag_pos;
+
+    id_frag = id_tes;
+    count = count_tes;
+
 }

@@ -57,7 +57,10 @@ class VAOCreator:
         glBindVertexArray(VAO)
         self.VAOs[shape][data_types] = VAO
         for i, attr in enumerate(shape):
-            glVertexAttribFormat(i, attr, ShaderData.types[data_types[i]], GL_FALSE, 0)
+            if ShaderData.types[data_types[i]] in (GL_UNSIGNED_INT, GL_INT):
+                glVertexAttribIFormat(i, attr, ShaderData.types[data_types[i]], 0)
+            else:
+                glVertexAttribFormat(i, attr, ShaderData.types[data_types[i]], GL_FALSE, 0)
             glVertexAttribBinding(i, i)
             glEnableVertexAttribArray(i)
         glBindVertexArray(0)
@@ -67,8 +70,8 @@ class VAOCreator:
 class ShaderData:
     types = {np.byte: GL_BYTE,
              np.ubyte: GL_UNSIGNED_BYTE,
-             np.intc: GL_INT,
-             np.uintc: GL_UNSIGNED_INT,
+             np.int32: GL_INT,
+             np.uint32: GL_UNSIGNED_INT,
              np.float32: GL_FLOAT}
 
     def __init__(self, VAOFormat, allocation_size):

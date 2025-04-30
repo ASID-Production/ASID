@@ -28,7 +28,7 @@
 
 
 #version 460
-
+#define PI 3.1415926538
 
 in gl_PerVertex
 {
@@ -36,19 +36,15 @@ in gl_PerVertex
   float gl_PointSize;
   float gl_ClipDistance[];
 } gl_in[gl_MaxPatchVertices];
+
 out gl_PerVertex
 {
     vec4 gl_Position;
     float gl_PointSize;
     float gl_ClipDistance[];
-} gl_out[];
+};
 
-layout(vertices = 1) out;
-
-in float rad_tcs[];
-in vec4 color_tcs[];
-in float pick_tcs[];
-in mat3 ellipsV_tcs[];
+layout(quads, equal_spacing, ccw) in;
 
 layout(std140, binding = 0) uniform Matrices
     {
@@ -61,36 +57,31 @@ layout(std140, binding = 0) uniform Matrices
         mat4 scene_shift;
     };
 
-uniform float shift = 0;
+patch in uint id_tes;
+patch in float rad_tes;
+patch in mat3 ellipsV_tes;
 
-patch out float rad_tes;
-patch out vec4 color_tes;
-patch out float pick_tes;
-patch out mat3 ellipsV_tes;
+flat out uint id_frag;
+flat out uint count;
+
 
 void main()
-    {
-        //Multiples of eight can cause crash on some systems
-        gl_out[gl_InvocationID].gl_Position = gl_in[gl_InvocationID].gl_Position;
+{
+    float phi = gl_TessCoord.x * 2.0 * 3.14159265;
+    float theta = gl_TessCoord.y * 3.14159265;
 
-        rad_tes = rad_tcs[gl_InvocationID];
-        color_tes = color_tcs[gl_InvocationID];
-        pick_tes = pick_tcs[gl_InvocationID];
-        ellipsV_tes = ellipsV_tcs[gl_InvocationID];
-        float grade;
-        //grade = ((perspective * translation * aspect_ratio * rotation * vec4(1.0, 0.0, 0.0, 1.0))/gl_in[gl_InvocationID].gl_Position.w).x;
-        vec4 asd = (perspective * aspect_ratio * scale * rotation * gl_in[gl_InvocationID].gl_Position);
-        vec4 asdf = (perspective * aspect_ratio * scale * (rotation * gl_in[gl_InvocationID].gl_Position + vec4(rad_tcs[gl_InvocationID] * 1.0,0.0,0.0,0.0)));
-        asdf.xyz = asdf.xyz-asd.xyz;
-        //vec4 asd = (perspective * aspect_ratio * scale * vec4(1.0, 0.0, -500.0, 0.0));
-        grade = asdf.x/asdf.w;
-        //color_tes = vec4(1.0*grade, 0.0, 0.0, 1.0);
-        int tess = int(round(grade*8*32) + 32);
+    float x = sin(theta) * cos(phi);
+    float y = sin(theta) * sin(phi);
+    float z = cos(theta);
+    vec3 pos = vec3(x,y,z);
+    vec3 c = vec3(x,y,z);
 
-        gl_TessLevelOuter[0] = tess;
-        gl_TessLevelOuter[1] = tess;
-        gl_TessLevelOuter[2] = tess;
-        gl_TessLevelOuter[3] = tess;
-        gl_TessLevelInner[0] = tess;
-        gl_TessLevelInner[1] = tess;
-    }
+    id_frag = id_tes;
+    count = 1;
+
+    pos = ellipsV_tes * pos;
+    vec3 normals_frag = mat3(rotation) * pos;
+    float rad = sqrt(-2*log(1-rad_tes));
+    vec4 frag_pos = translation * perspective * aspect_ratio * scale * (vec4(normals_frag * rad, 0.0) + rotation * gl_in[0].gl_Position);
+    gl_Position = frag_pos;
+}

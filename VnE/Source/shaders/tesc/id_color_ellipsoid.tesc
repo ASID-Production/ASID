@@ -46,8 +46,7 @@ out gl_PerVertex
 layout(vertices = 1) out;
 
 in float rad_tcs[];
-in vec4 color_tcs[];
-in float pick_tcs[];
+in uint id_tcs[];
 in mat3 ellipsV_tcs[];
 
 layout(std140, binding = 0) uniform Matrices
@@ -64,8 +63,7 @@ layout(std140, binding = 0) uniform Matrices
 uniform float shift = 0;
 
 patch out float rad_tes;
-patch out vec4 color_tes;
-patch out float pick_tes;
+patch out uint id_tes;
 patch out mat3 ellipsV_tes;
 
 void main()
@@ -74,8 +72,7 @@ void main()
         gl_out[gl_InvocationID].gl_Position = gl_in[gl_InvocationID].gl_Position;
 
         rad_tes = rad_tcs[gl_InvocationID];
-        color_tes = color_tcs[gl_InvocationID];
-        pick_tes = pick_tcs[gl_InvocationID];
+        id_tes = id_tcs[gl_InvocationID];
         ellipsV_tes = ellipsV_tcs[gl_InvocationID];
         float grade;
         //grade = ((perspective * translation * aspect_ratio * rotation * vec4(1.0, 0.0, 0.0, 1.0))/gl_in[gl_InvocationID].gl_Position.w).x;
