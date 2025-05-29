@@ -37,6 +37,7 @@ from django_project.loggers import vasp_logger
 from math import cos, sqrt, radians
 import networkx as nx
 import re
+from pymatgen.io.cif import CifParser
 from structure.management.commands.cif_db_update_modules._element_numbers import element_numbers
 from structure.management.commands.cif_db_update_modules._make_graphs_c import make_graph_c
 from structure.management.commands.cif_db_update_modules._add_substructure_filtration import (TEMPLATES, start_dll_and_write,
@@ -48,13 +49,13 @@ from qc_structure.models import (QCStructureCode, QCCell, QCReducedCell, QCFormu
                                  QCProgram, QCInChI)
 
 
-def save_program(struct_obj):
-    vasp_logger.info('Add program name...')
-    prog, created = QCProgram.objects.get_or_create(refcode=struct_obj, vasp=True)
+def save_program(struct_obj, program_name):
+    prog, created = QCProgram.objects.get_or_create(refcode=struct_obj)
+    setattr(prog, program_name, True)
+    prog.save()
 
 
 def save_name(struct_obj, syst_name, triv_name):
-    vasp_logger.info('Add compound name...')
     name, created = QCCompoundName.objects.get_or_create(refcode=struct_obj)
     if syst_name:
         name.systematic_name = syst_name
@@ -69,6 +70,7 @@ def save_properties(struct_obj, vasp_out):
     density = vasp_out.final_structure.density
     prop, created = QCProperties.objects.get_or_create(refcode=struct_obj)
     prop.energy = energy
+    prop.energy_units = 'eV'
     prop.calculated_density = round(density, 3)
     prop.save()
 
@@ -182,7 +184,6 @@ def save_reduced_cell(struct_obj):
 def save_coordinates(struct_obj, symmed_vasp_struct, return_only_str_sites=False):
     vasp_logger.info('Add coordinates...')
     cif_form_vasp = symmed_vasp_struct.to(fmt='cif', symprec=0.02)
-    from pymatgen.io.cif import CifParser
     cif = CifParser.from_str(cif_form_vasp)
     cif_info = list(cif.as_dict().values())[0]
     atom_types = cif_info['_atom_site_type_symbol']
@@ -228,11 +229,12 @@ def save_graph(struct_obj):
 
 
 def save_smiles_inchi(structure_obj, qc_smiles, qc_inchi):
-    vasp_logger.info('Save smiles and inchi...')
     coord_block = QCCoordinatesBlock.objects.get(refcode=structure_obj)
     if qc_smiles:
         coord_block.smiles = qc_smiles
         coord_block.save()
+        # for serializer
+        structure_obj.qc_coordinates.smiles = qc_smiles
     if qc_inchi:
         inchi = qc_inchi.split('=')[1].split('/')
         inchi_block = QCInChI.objects.create(refcode=structure_obj, version=inchi[0], formula=inchi[1])
@@ -309,7 +311,6 @@ def save_formula(structure_obj, symmed_vasp_struct):
 
 
 def save_element_sets(structure_obj):
-    vasp_logger.info('Add elements...')
     formula = structure_obj.qc_formula.formula_sum
     elements = formula.split()
     elements_from_formula = dict()
@@ -326,7 +327,6 @@ def save_element_sets(structure_obj):
 
 
 def save_substructure(structure_obj):
-    vasp_logger.info('Add substructure filtration...')
     models = {'Substructure1': QCSubstructure1,
               'Substructure2': QCSubstructure2}
     graph = structure_obj.qc_coordinates.graph
@@ -344,7 +344,9 @@ def save_substructure(structure_obj):
 
 def vasp_parser(structure_obj, file: str, syst_name='', triv_name=''):
     """Read and parse vasprun.xml output file"""
-    save_program(structure_obj)
+    vasp_logger.info('Add program name...')
+    save_program(structure_obj, 'vasp')
+    vasp_logger.info('Add compound name...')
     save_name(structure_obj, syst_name, triv_name)
     vasp_out = Vasprun(file)
     vasp_structure = vasp_out.final_structure
@@ -354,7 +356,10 @@ def vasp_parser(structure_obj, file: str, syst_name='', triv_name=''):
     save_reduced_cell(structure_obj)
     save_coordinates(structure_obj, symmed_vasp_struct)
     smiles, inchi = save_graph(structure_obj)
+    vasp_logger.info('Save smiles and inchi...')
     save_smiles_inchi(structure_obj, smiles, inchi)
     save_formula(structure_obj, symmed_vasp_struct)
+    vasp_logger.info('Add elements...')
     save_element_sets(structure_obj)
+    vasp_logger.info('Add substructure filtration...')
     save_substructure(structure_obj)

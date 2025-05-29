@@ -40,6 +40,8 @@ if not os.path.exists(os.path.join(BASE_DIR, 'logs')):
     os.mkdir(os.path.join(BASE_DIR, 'logs'))
 if not os.path.exists(os.path.join(BASE_DIR, 'static')):
     os.mkdir(os.path.join(BASE_DIR, 'static'))
+if not os.path.exists(os.path.join(BASE_DIR, 'media')):
+    os.mkdir(os.path.join(BASE_DIR, 'media'))
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-%v12=ty4+&c--ynk514n^3gg*_*q+6kb4=34vw@abxi4*cl2lj'

@@ -164,6 +164,10 @@ class AbstractCoordinatesBlock(models.Model):
     coordinates = models.TextField(
         verbose_name='Coordinates'
     )
+    is_fractional = models.BooleanField(
+        verbose_name='Fractional or Сartesian coordinates',
+        default=True,
+    )
     smiles = models.TextField(
         verbose_name='Smiles',
         blank=True,

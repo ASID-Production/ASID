@@ -36,6 +36,8 @@ from structure.models import (Spacegroup, AbstractCell, AbstractReducedCell,
 from django.db import models
 from django.contrib.auth import get_user_model
 import os
+from django.dispatch.dispatcher import receiver
+from django.db.models.signals import pre_delete
 
 User = get_user_model()
 
@@ -103,6 +105,38 @@ class VaspFile(models.Model):
         max_length=200,
         verbose_name='VASP .xml file'
     )
+
+
+@receiver(pre_delete, sender=VaspFile)
+def orca_file_delete(sender, instance, **kwargs):
+    if instance.file:
+        if os.path.isfile(instance.file.path):
+            os.remove(instance.file.path)
+
+
+def orca_user_directory_path(instance, filename):
+    return os.path.join('orca', f'user_{instance.refcode.user.id}', f'{instance.refcode}.out')
+
+
+class OrcaFile(models.Model):
+    '''ORCA .out files.'''
+    refcode = models.OneToOneField(
+        QCStructureCode,
+        related_name='orca_file',
+        on_delete=models.CASCADE
+    )
+    file = models.FileField(
+        upload_to=orca_user_directory_path,
+        max_length=200,
+        verbose_name='ORCA .out file',
+    )
+
+
+@receiver(pre_delete, sender=OrcaFile)
+def orca_file_delete(sender, instance, **kwargs):
+    if instance.file:
+        if os.path.isfile(instance.file.path):
+            os.remove(instance.file.path)
 
 
 class QCCell(AbstractCell):
@@ -266,11 +300,40 @@ class QCProperties(models.Model):
         on_delete=models.CASCADE
     )
     energy = models.FloatField(
-        verbose_name='Final energy in eV',
+        verbose_name='Final energy',
         null=True, blank=True
+    )
+    energy_units = models.CharField(
+        default='Eh',
+        verbose_name='Energy units',
+        max_length=10
     )
     calculated_density = models.FloatField(
         verbose_name='Calculated crystal density in g/cm^3',
+        null=True, blank=True
+    )
+    zpe = models.FloatField(
+        verbose_name='Zero point energy, Eh',
+        null=True, blank=True
+    )
+    enthalpy = models.FloatField(
+        verbose_name='Total enthalpy, Eh',
+        null=True, blank=True
+    )
+    entropy = models.FloatField(
+        verbose_name='Final entropy term, Eh',
+        null=True, blank=True
+    )
+    gibbs = models.FloatField(
+        verbose_name='Gibbs free energy, Eh',
+        null=True, blank=True
+    )
+    homo = models.FloatField(
+        verbose_name='HOMO orbital energy, Eh',
+        null=True, blank=True
+    )
+    lumo = models.FloatField(
+        verbose_name='LUMO orbital energy, Eh',
         null=True, blank=True
     )
 
