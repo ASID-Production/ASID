@@ -86,11 +86,17 @@ class AbstractStructureCode(models.Model):
 
     def gen_2d_img(self, size=(250, 250), format='gif', f='img'):
         smiles = ''
+        inchis = ''
         if hasattr(self, 'coordinates'):
             smiles = self.coordinates.smiles
+        if hasattr(self, 'qc_coordinates'):
+            smiles = self.qc_coordinates.smiles
         inchis_list = []
         if hasattr(self, 'inchi') and self.inchi:
             inchis = self.inchi.all()
+        if hasattr(self, 'qc_inchi') and self.qc_inchi:
+            inchis = self.qc_inchi.all()
+        if inchis:
             for inchi in inchis:
                 inchis_list.append(inchi.get_inchi_string())
         img = gen2d(smiles=smiles, inchis=inchis_list, sanitize=False, size=size, format=f)
