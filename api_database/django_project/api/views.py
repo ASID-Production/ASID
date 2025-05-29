@@ -464,6 +464,11 @@ class QCStructureViewSet(StructureModelViewSet):
     )
     def export_cif(self, request, pk):
         qc_structure = get_object_or_404(QCStructureCode, pk=pk)
+        if not hasattr(qc_structure, 'qc_cell'):
+            return Response(
+                {'errors': f'This structure has not periodic structure!'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         filename = f'{qc_structure.refcode}.cif'
         content = qc_get_cif_content(qc_structure)
         response = HttpResponse(content, content_type='text/plain')
@@ -473,12 +478,34 @@ class QCStructureViewSet(StructureModelViewSet):
     @action(
         detail=True,
         methods=['GET'],
+        url_path='export/xyz'
+    )
+    def export_xyz(self, request, pk):
+        qc_structure = get_object_or_404(QCStructureCode, pk=pk)
+        if qc_structure.qc_coordinates.is_fractional:
+            return Response(
+                {'errors': f'Export xyz is available only for not periodic structures!'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        coords = qc_structure.qc_coordinates.coordinates.split('\n')
+        content = str(len(coords)) + '\n' + qc_structure.refcode + '\n' + qc_structure.qc_coordinates.coordinates
+        filename = f'{qc_structure.refcode}.xyz'
+        response = HttpResponse(content, content_type='text/plain')
+        response['Content-Disposition'] = f'attachment; filename={filename}'
+        return response
+
+
+    @action(
+        detail=True,
+        methods=['GET'],
     )
     def download(self, request, pk):
         qc_structure = get_object_or_404(QCStructureCode, pk=pk)
         filename = f'{qc_structure.refcode}.txt'
-        vasp_file = open(os.path.join(settings.BASE_DIR, 'media', str(qc_structure.vasp_file.file)), 'r')
-        content = vasp_file.readlines()
+        program_name = qc_structure.qc_prog.get_program_name()
+        file_path = getattr(qc_structure, f'{program_name}_file').file
+        file = open(os.path.join(settings.BASE_DIR, 'media', str(file_path)), 'r')
+        content = file.readlines()
         response = HttpResponse(content, content_type='text/xml')
         response['Content-Disposition'] = f'attachment; filename={filename}'
         return response

@@ -88,6 +88,12 @@ class QCProgram(models.Model):
     class Meta:
         verbose_name_plural = 'QCPrograms'
 
+    def get_program_name(self):
+        fields = [field.name for field in self._meta.get_fields()]
+        for field in fields:
+            if hasattr(self, field) and field not in ['id', 'refcode'] and getattr(self, field):
+                return field
+
 
 def vasp_user_directory_path(instance, filename):
     return os.path.join('vasp', f'user_{instance.refcode.user.id}', f'{instance.refcode}_vasprun.xml')
