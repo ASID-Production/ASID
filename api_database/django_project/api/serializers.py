@@ -36,7 +36,7 @@ from structure.models import (StructureCode, Author, Spacegroup, Cell,
                               CifFile, Journal, InChI)
 from qc_structure.models import (QCStructureCode, QCCell, QCCompoundName, QCFormula,
                                  QCReducedCell, QCCoordinatesBlock, QCProgram,
-                                 QCProperties, VaspFile, QCInChI)
+                                 QCProperties, VaspFile, OrcaFile, QCInChI)
 from djoser.serializers import UserSerializer, UserCreateSerializer
 from django.contrib.auth import get_user_model
 from .fields import NodesListField, EdgesListField
@@ -264,9 +264,16 @@ class QCFormulaSerializer(serializers.ModelSerializer):
 
 
 class QCCoordinatesSerializer(serializers.ModelSerializer):
+    coordinates_system = SerializerMethodField(read_only=True)
+
     class Meta:
         model = QCCoordinatesBlock
-        fields = ('id', 'coordinates', 'smiles', 'graph')
+        fields = ('id', 'coordinates', 'coordinates_system', 'smiles', 'graph')
+
+    def get_coordinates_system(self, obj):
+        if obj.is_fractional:
+            return 'fractional'
+        return 'cartesian'
 
 
 class QCProgramSerializer(serializers.ModelSerializer):
@@ -278,19 +285,12 @@ class QCProgramSerializer(serializers.ModelSerializer):
 
 
 class QCPropertiesSerializer(serializers.ModelSerializer):
-    energy = SerializerMethodField(read_only=True)
-
     class Meta:
         model = QCProperties
-        fields = ('id', 'energy')
-
-    def get_energy(self, obj):
-        try:
-            energy = obj.energy
-            if energy:
-                return str(energy) + ' eV'
-        except Exception:
-            pass
+        fields = (
+            'id', 'energy', 'energy_units', 'calculated_density',
+            'zpe', 'enthalpy', 'entropy', 'gibbs', 'homo', 'lumo'
+        )
 
 
 class QCRefcodeFullSerializer(serializers.ModelSerializer):
@@ -330,6 +330,15 @@ class VaspUploadSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = VaspFile
+        fields = ('file', 'systematic_name', 'trivial_name')
+
+
+class OrcaUploadSerializer(serializers.ModelSerializer):
+    systematic_name = serializers.CharField(max_length=200, required=False, default='')
+    trivial_name = serializers.CharField(max_length=200, required=False, default='')
+
+    class Meta:
+        model = OrcaFile
         fields = ('file', 'systematic_name', 'trivial_name')
 
 

@@ -112,12 +112,18 @@ def get_data(cif_block, symops_db):
 
 
 def make_graph_c(params, coords, types, refcode, add_graphs_logger, symops):
-    cpplib_result = cpplib.FindMoleculesInCell(params, symops, coords)
+    if params and symops:
+        cpplib_result = cpplib.FindMoleculesInCell(params, symops, coords)
+    else:
+        cpplib_result = cpplib.FindMoleculesWithoutCell(coords)
     graph_str = cpplib_result['graph_str']
     warning = cpplib_result['error_str']
     xyz_mols = cpplib_result['xyz_block']
     if warning:
-        add_graphs_logger.warning(f"FindMoleculesInCellError in {refcode}:\n\t{warning}")
+        if params and symops:
+            add_graphs_logger.warning(f"FindMoleculesInCellError in {refcode}:\n\t{warning}")
+        else:
+            add_graphs_logger.warning(f"FindMoleculesWithoutCell in {refcode}:\n\t{warning}")
     if graph_str.split()[1] == '0':
         raise Exception(f"There are no atoms in graph! May be the structure was unordered")
     # generate data for 2d graph picture

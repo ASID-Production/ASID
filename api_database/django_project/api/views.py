@@ -29,14 +29,15 @@
 from rest_framework.viewsets import ReadOnlyModelViewSet
 from structure.models import StructureCode, CifFile, CoordinatesBlock
 from structure.download import create_cif_text
-from qc_structure.models import QCStructureCode, VaspFile, QCCoordinatesBlock
+from qc_structure.models import QCStructureCode, VaspFile, OrcaFile, QCCoordinatesBlock
 from qc_structure.vasp import vasp_parser as add_vasp_data
+from qc_structure.orca import orca_parser as add_orca_data
 from qc_structure.vasp import get_or_create_space_group as vasp_get_or_create_space_group
 from qc_structure.vasp import save_coordinates as vasp_save_coordinates
 from qc_structure.export.cif import qc_get_cif_content
 from .serializers import (RefcodeShortSerializer, RefcodeFullSerializer, CifUploadSerializer,
                           SearchSerializer, QCRefcodeShortSerializer, QCRefcodeFullSerializer,
-                          VaspUploadSerializer, Gen2DImgSerializer)
+                          VaspUploadSerializer, Gen2DImgSerializer, OrcaUploadSerializer)
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from django.http import HttpResponse
@@ -511,8 +512,52 @@ class QCStructureViewSet(StructureModelViewSet):
         vasp_file_obj = VaspFile.objects.create(refcode=refcode_obj, file=file)
         vasp_file_path = os.path.join(settings.BASE_DIR, 'media', str(vasp_file_obj.file))
         try:
-            add_vasp_data(structure_obj=refcode_obj, file=vasp_file_path)
+            add_vasp_data(
+                structure_obj=refcode_obj,
+                file=vasp_file_path,
+                syst_name=request.data.get('systematic_name'),
+                triv_name=request.data.get('trivial_name')
+            )
         except Exception as error_message:
+            refcode_obj.delete()
+            return Response(
+                {'errors': f'Structure information was not added! {error_message}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        out_serializer = QCRefcodeFullSerializer(refcode_obj)
+        return Response(
+            out_serializer.data,
+            status=status.HTTP_201_CREATED
+        )
+
+    @action(
+        detail=False,
+        methods=['POST'],
+        permission_classes=[IsAuthenticated],
+        serializer_class=[OrcaUploadSerializer],
+        url_path='upload/orca'
+    )
+    def upload_orca(self, request):
+        user = request.user
+        count_user_orca = QCStructureCode.objects.filter(user=user).count()
+        while True:
+            refcode = 'user-' + str(user.id) + '-orca-' + str(count_user_orca + 1)
+            if QCStructureCode.objects.filter(refcode=refcode).count() == 0:
+                break
+            count_user_orca += 1
+        file = request.FILES.get('file')
+        refcode_obj = QCStructureCode.objects.create(user=user, refcode=refcode)
+        orca_file_obj = OrcaFile.objects.create(refcode=refcode_obj, file=file)
+        orca_file_path = os.path.join(settings.BASE_DIR, 'media', str(orca_file_obj.file))
+        try:
+            add_orca_data(
+                structure_obj=refcode_obj,
+                file=orca_file_path,
+                syst_name=request.data.get('systematic_name'),
+                triv_name=request.data.get('trivial_name')
+            )
+        except Exception as error_message:
+            refcode_obj.delete()
             return Response(
                 {'errors': f'Structure information was not added! {error_message}'},
                 status=status.HTTP_400_BAD_REQUEST

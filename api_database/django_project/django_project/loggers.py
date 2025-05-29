@@ -82,6 +82,13 @@ formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
 vasp_handler.setFormatter(formatter)
 vasp_logger.addHandler(vasp_handler)
 
+orca_logger = logging.getLogger('orca_logger')
+orca_logger.setLevel(level)
+orca_handler = logging.FileHandler(os.path.join(settings.BASE_DIR, 'logs', 'orca.log'), mode='w')
+formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
+orca_handler.setFormatter(formatter)
+orca_logger.addHandler(orca_handler)
+
 cif_db_update_main_logger = logging.getLogger('cif_db_update_main')
 cif_db_update_main_logger.setLevel(level)
 cif_db_update_main_handler = logging.FileHandler(os.path.join(settings.BASE_DIR, 'logs', 'cif_db_update.log'), mode='a')
