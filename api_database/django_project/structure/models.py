@@ -80,6 +80,7 @@ def get_fields_list(model):
 class AbstractStructureCode(models.Model):
     '''(Abstract table) Table with structure codes.'''
     refcode = models.CharField(verbose_name='Refcode', max_length=17, unique=True)
+    public = models.BooleanField(verbose_name='Is structure available for other users', default=True)
 
     class Meta:
         abstract = True

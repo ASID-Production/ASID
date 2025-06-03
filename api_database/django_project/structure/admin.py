@@ -44,7 +44,7 @@ class AuthorAdmin(admin.ModelAdmin):
 
 @admin.register(StructureCode)
 class StructureCodeAdmin(admin.ModelAdmin):
-    list_display = ('id', 'refcode', 'CCDC_number', 'user')
+    list_display = ('id', 'refcode', 'CCDC_number', 'user', 'public')
     search_fields = ('refcode', 'CCDC_number')
     empty_value_display = '-empty-'
 

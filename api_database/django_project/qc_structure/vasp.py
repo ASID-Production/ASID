@@ -46,7 +46,7 @@ from structure.management.commands.cif_db_update_modules._add_substructure_filtr
 from qc_structure.models import (QCStructureCode, QCCell, QCReducedCell, QCFormula,
                                  QCCompoundName, QCElementsManager, QCProperties,
                                  QCCoordinatesBlock, QCSubstructure1, QCSubstructure2,
-                                 QCProgram, QCInChI)
+                                 QCProgram, QCInChI, QCEnergy)
 
 
 def save_program(struct_obj, program_name):
@@ -64,13 +64,15 @@ def save_name(struct_obj, syst_name, triv_name):
     name.save()
 
 
-def save_properties(struct_obj, vasp_out):
-    vasp_logger.info('Add properties info...')
+def save_properties_and_energy(struct_obj, vasp_out):
+    vasp_logger.info('Add properties and energy info...')
     energy, units = str(vasp_out.final_energy).split()
     density = vasp_out.final_structure.density
+    energ, created = QCEnergy.objects.get_or_create(refcode=struct_obj)
+    energ.energy = energy
+    energ.energy_units = 'eV'
+    energ.save()
     prop, created = QCProperties.objects.get_or_create(refcode=struct_obj)
-    prop.energy = energy
-    prop.energy_units = 'eV'
     prop.calculated_density = round(density, 3)
     prop.save()
 
@@ -350,7 +352,7 @@ def vasp_parser(structure_obj, file: str, syst_name='', triv_name=''):
     save_name(structure_obj, syst_name, triv_name)
     vasp_out = Vasprun(file)
     vasp_structure = vasp_out.final_structure
-    save_properties(structure_obj, vasp_out)
+    save_properties_and_energy(structure_obj, vasp_out)
     space_group = get_or_create_space_group(vasp_structure)
     symmed_vasp_struct = save_cell(structure_obj, vasp_structure, space_group)
     save_reduced_cell(structure_obj)

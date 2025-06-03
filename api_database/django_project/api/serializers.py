@@ -36,7 +36,8 @@ from structure.models import (StructureCode, Author, Spacegroup, Cell,
                               CifFile, Journal, InChI)
 from qc_structure.models import (QCStructureCode, QCCell, QCCompoundName, QCFormula,
                                  QCReducedCell, QCCoordinatesBlock, QCProgram,
-                                 QCProperties, VaspFile, OrcaFile, QCInChI)
+                                 QCProperties, VaspFile, OrcaFile, QCInChI, QCEnergy,
+                                 QCInputParameters)
 from djoser.serializers import UserSerializer, UserCreateSerializer
 from django.contrib.auth import get_user_model
 from .fields import NodesListField, EdgesListField
@@ -284,12 +285,27 @@ class QCProgramSerializer(serializers.ModelSerializer):
                   'mopac', 'quantum_espresso')
 
 
+class QCEnergySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QCEnergy
+        fields = (
+            'id', 'energy', 'energy_units',
+            'zpe', 'enthalpy', 'entropy', 'gibbs', 'homo', 'lumo'
+        )
+
+
 class QCPropertiesSerializer(serializers.ModelSerializer):
     class Meta:
         model = QCProperties
+        fields = ('id', 'calculated_density', 'charge', 'multiplicity', 'dipole_moment')
+
+
+class QCInputParametersSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = QCInputParameters
         fields = (
-            'id', 'energy', 'energy_units', 'calculated_density',
-            'zpe', 'enthalpy', 'entropy', 'gibbs', 'homo', 'lumo'
+            'id', 'job', 'basis_set', 'functional', 'version', 'freq',
+            'dispersion', 'solvation'
         )
 
 
@@ -299,7 +315,9 @@ class QCRefcodeFullSerializer(serializers.ModelSerializer):
     reduced_cells = QCReducedCellSerializer(many=True, read_only=True, source='qc_reduced_cells')
     compound_name = QCCompoundNameSerializer(read_only=True, source='qc_name')
     coordinates = QCCoordinatesSerializer(read_only=True, source='qc_coordinates')
+    energy = QCEnergySerializer(read_only=True, source='qc_energy')
     properties = QCPropertiesSerializer(read_only=True, source='qc_properties')
+    input_parameters = QCInputParametersSerializer(read_only=True, source='qc_input')
     programs = QCProgramSerializer(read_only=True, source='qc_prog')
     inchi = SerializerMethodField(read_only=True)
 
@@ -307,7 +325,7 @@ class QCRefcodeFullSerializer(serializers.ModelSerializer):
         model = QCStructureCode
         fields = (
             'id', 'refcode', 'cell', 'reduced_cells', 'compound_name',
-            'formula', 'coordinates', 'properties', 'programs', 'inchi'
+            'formula', 'coordinates', 'energy', 'properties', 'input_parameters', 'programs', 'inchi'
         )
 
     def get_inchi(self, obj):
