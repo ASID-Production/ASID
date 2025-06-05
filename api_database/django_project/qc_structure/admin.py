@@ -29,13 +29,13 @@
 from .models import (QCStructureCode, QCCell, QCProgram,
                      QCCompoundName, QCFormula, QCReducedCell,
                      QCCoordinatesBlock, QCProperties,
-                     QCSubstructure1, QCSubstructure2, QCInChI)
+                     QCSubstructure1, QCSubstructure2, QCInChI, QCEnergy, QCInputParameters)
 from django.contrib import admin
 
 
 @admin.register(QCStructureCode)
 class QCStructureCodeAdmin(admin.ModelAdmin):
-    list_display = ('id', 'refcode', 'user')
+    list_display = ('id', 'refcode', 'user', 'public')
     search_fields = ('refcode',)
     empty_value_display = '-empty-'
 
@@ -116,7 +116,30 @@ class QCProgramAdmin(admin.ModelAdmin):
 
 @admin.register(QCProperties)
 class QCPropertiesAdmin(admin.ModelAdmin):
-    list_display = ('id', 'refcode', 'energy', 'calculated_density')
+    list_display = (
+        'id', 'refcode', 'calculated_density', 'charge', 'multiplicity',
+        'dipole_moment'
+    )
+    search_fields = ('refcode__qc_refcode__startswith',)
+    empty_value_display = '-empty-'
+
+
+@admin.register(QCEnergy)
+class QCEnergyAdmin(admin.ModelAdmin):
+    list_display = (
+        'id', 'refcode', 'energy_units', 'energy', 'zpe', 'enthalpy',
+        'entropy', 'gibbs', 'homo', 'lumo'
+    )
+    search_fields = ('refcode__qc_refcode__startswith',)
+    empty_value_display = '-empty-'
+
+
+@admin.register(QCInputParameters)
+class QCInputParametersAdmin(admin.ModelAdmin):
+    list_display = (
+        'id', 'refcode', 'job', 'basis_set', 'functional', 'version',
+        'freq', 'dispersion', 'solvation'
+    )
     search_fields = ('refcode__qc_refcode__startswith',)
     empty_value_display = '-empty-'
 

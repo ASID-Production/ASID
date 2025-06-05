@@ -298,24 +298,20 @@ class QCElementsManager(AbstractElementsManager):
         verbose_name_plural = 'QCElements'
 
 
-class QCProperties(models.Model):
-    '''Quantum chemistry calculation properties.'''
+class QCEnergy(models.Model):
+    '''Quantum chemistry calculation energies.'''
     refcode = models.OneToOneField(
         QCStructureCode,
-        related_name='qc_properties',
+        related_name='qc_energy',
         on_delete=models.CASCADE
-    )
-    energy = models.FloatField(
-        verbose_name='Final energy',
-        null=True, blank=True
     )
     energy_units = models.CharField(
         default='Eh',
         verbose_name='Energy units',
         max_length=10
     )
-    calculated_density = models.FloatField(
-        verbose_name='Calculated crystal density in g/cm^3',
+    energy = models.FloatField(
+        verbose_name='Final energy',
         null=True, blank=True
     )
     zpe = models.FloatField(
@@ -344,7 +340,82 @@ class QCProperties(models.Model):
     )
 
     class Meta:
+        verbose_name_plural = 'QCEnergies'
+
+
+class QCProperties(models.Model):
+    '''Quantum chemistry calculation properties.'''
+    refcode = models.OneToOneField(
+        QCStructureCode,
+        related_name='qc_properties',
+        on_delete=models.CASCADE
+    )
+    calculated_density = models.FloatField(
+        verbose_name='Calculated crystal density in g/cm^3',
+        null=True, blank=True
+    )
+    charge = models.FloatField(
+        verbose_name='Charge of the system',
+        default=0,
+    )
+    multiplicity = models.FloatField(
+        verbose_name='Multiplicity',
+        null=True, blank=True
+    )
+    dipole_moment = models.FloatField(
+        verbose_name='Dipole moment, D',
+        null=True, blank=True
+    )
+
+    class Meta:
         verbose_name_plural = 'QCProperties'
+
+
+class QCInputParameters(models.Model):
+    '''Quantum chemistry input parameters.'''
+    refcode = models.OneToOneField(
+        QCStructureCode,
+        related_name='qc_input',
+        on_delete=models.CASCADE
+    )
+    job = models.CharField(
+        verbose_name='Job type (Opt / SP)',
+        choices=[('Opt', 'Optimization'), ('SP', 'Single Point')],
+        max_length=5,
+        null=True, blank=True
+    )
+    basis_set = models.CharField(
+        verbose_name='Basis set',
+        max_length=50,
+        null=True, blank=True
+    )
+    functional = models.CharField(
+        verbose_name='Functional',
+        max_length=50,
+        null=True, blank=True
+    )
+    version = models.CharField(
+        verbose_name='Program version',
+        max_length=50,
+        null=True, blank=True
+    )
+    freq = models.BooleanField(
+        verbose_name='Calculate frequencies',
+        null=True, blank=True
+    )
+    dispersion = models.CharField(
+        verbose_name='Orca version',
+        max_length=50,
+        null=True, blank=True
+    )
+    solvation = models.CharField(
+        verbose_name='Solvation',
+        max_length=50,
+        null=True, blank=True
+    )
+
+    class Meta:
+        verbose_name_plural = 'QCInputParameters'
 
 
 class QCInChI(AbstractInChI):

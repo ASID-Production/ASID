@@ -418,7 +418,11 @@ class StructureViewSet(StructureModelViewSet):
                 break
             count_user_cifs += 1
         file = request.FILES.get('file')
+        public = int(request.data.get('public', 0))
         refcode_obj = StructureCode.objects.create(user=user, refcode=refcode)
+        if not public:
+            refcode_obj.public = False
+            refcode_obj.save()
         cif_file_obj = CifFile.objects.create(refcode=refcode_obj, file=file, old_file_name=file.name)
         cif_file_path = os.path.join(settings.BASE_DIR, 'media', str(cif_file_obj.file))
         try:
@@ -535,7 +539,11 @@ class QCStructureViewSet(StructureModelViewSet):
                 break
             count_user_vasp += 1
         file = request.FILES.get('file')
+        public = int(request.data.get('public', 0))
         refcode_obj = QCStructureCode.objects.create(user=user, refcode=refcode)
+        if not public:
+            refcode_obj.public = False
+            refcode_obj.save()
         vasp_file_obj = VaspFile.objects.create(refcode=refcode_obj, file=file)
         vasp_file_path = os.path.join(settings.BASE_DIR, 'media', str(vasp_file_obj.file))
         try:
@@ -556,6 +564,7 @@ class QCStructureViewSet(StructureModelViewSet):
             out_serializer.data,
             status=status.HTTP_201_CREATED
         )
+    # TODO: Unite upload in one function!
 
     @action(
         detail=False,
@@ -573,7 +582,11 @@ class QCStructureViewSet(StructureModelViewSet):
                 break
             count_user_orca += 1
         file = request.FILES.get('file')
+        public = int(request.data.get('public', 0))
         refcode_obj = QCStructureCode.objects.create(user=user, refcode=refcode)
+        if not public:
+            refcode_obj.public = False
+            refcode_obj.save()
         orca_file_obj = OrcaFile.objects.create(refcode=refcode_obj, file=file)
         orca_file_path = os.path.join(settings.BASE_DIR, 'media', str(orca_file_obj.file))
         try:

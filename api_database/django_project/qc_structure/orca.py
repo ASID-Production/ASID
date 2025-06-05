@@ -1,36 +1,64 @@
+import time
+
 from django_project.loggers import orca_logger
 from qc_structure.vasp import save_program, save_name, save_smiles_inchi, save_substructure
-from orca_parser import ORCAParse
+from modules.parsers.ORCAParse import ORCAParse
 import re
 from structure.management.commands.cif_db_update_modules._element_numbers import element_numbers
 from structure.management.commands.cif_db_update_modules._make_graphs_c import make_graph_c
 from qc_structure.models import (QCStructureCode, QCCell, QCReducedCell, QCFormula,
                                  QCCompoundName, QCElementsManager, QCProperties,
                                  QCCoordinatesBlock, QCSubstructure1, QCSubstructure2,
-                                 QCProgram, QCInChI)
+                                 QCProgram, QCInChI, QCEnergy, QCInputParameters)
+
+
+def save_energies(struct_obj, orca_out):
+    orca_logger.info('Add energies info...')
+    orca_out.parse_energies()
+    energy = orca_out.energies
+    energy = round(energy[-1], 6)
+    energ, created = QCEnergy.objects.get_or_create(refcode=struct_obj)
+    energ.energy = energy
+    orca_out.parse_free_energy()
+    if orca_out.enthalpies:
+        energ.enthalpy = round(list(orca_out.enthalpies.values())[-1], 6)
+    if orca_out.entropies:
+        energ.entropy = round(list(orca_out.entropies.values())[-1], 6)
+    if orca_out.AllGibbs:
+        energ.gibbs = round(orca_out.Gibbs, 6)
+    if "Zero point energy" in orca_out.raw:
+        zpe = orca_out.raw.split("Zero point energy")[1].split("Eh")[0].split()[1]
+        energ.zpe = round(float(zpe), 6)
+    orca_out.parse_HOMO_LUMO()
+    energ.homo = orca_out.all_HOMO[-1][-2]
+    energ.lumo = orca_out.all_LUMO[-1][-2]
+    energ.save()
 
 
 def save_properties(struct_obj, orca_out):
     orca_logger.info('Add properties info...')
-    orca_out.parse_energies()
-    energy = orca_out.energies
-    energy = round(energy[-1], 6)
+    input_data = orca_out.parse_input()
     prop, created = QCProperties.objects.get_or_create(refcode=struct_obj)
-    prop.energy = energy
-    orca_out.parse_free_energy()
-    if orca_out.enthalpies:
-        prop.enthalpy = round(list(orca_out.enthalpies.values())[-1], 6)
-    if orca_out.entropies:
-        prop.entropy = round(list(orca_out.entropies.values())[-1], 6)
-    if orca_out.AllGibbs:
-        prop.gibbs = round(orca_out.Gibbs, 6)
-    if "Zero point energy" in orca_out.raw:
-        zpe = orca_out.raw.split("Zero point energy")[1].split("Eh")[0].split()[1]
-        prop.zpe = round(float(zpe), 6)
-    orca_out.parse_HOMO_LUMO()
-    prop.homo = orca_out.all_HOMO[-1][-2]
-    prop.lumo = orca_out.all_LUMO[-1][-2]
+    prop.charge = orca_out.Z
+    prop.multiplicity = orca_out.Multiplicity
+    dipole = orca_out.parse_dipole()
+    if type(dipole) is dict:
+        prop.dipole_moment = round(dipole['Magnitude (Debye)'][0], 3)
     prop.save()
+    return input_data
+
+
+def save_input(struct_obj, data):
+    orca_logger.info('Add input parameters info...')
+    inp, created = QCInputParameters.objects.get_or_create(refcode=struct_obj)
+    for field, key in {
+        'job': 'Job', 'basis_set': 'BasisSet', 'functional': 'Functional',
+        'version': 'version', 'freq': 'Freq', 'dispersion': 'Dispersion',
+        'solvation': 'Solvation'
+    }.items():
+        if key in data.keys() and data[key]:
+            setattr(inp, field, data[key])
+    inp.save()
 
 
 def save_coordinates(struct_obj, orca_out, return_only_str_sites=False):
@@ -109,7 +137,9 @@ def orca_parser(structure_obj, file: str, syst_name='', triv_name=''):
         raise Exception('Error in parsing file')
     if not orca_out.valid:
         raise Exception('Input file is not valid!')
-    save_properties(structure_obj, orca_out)
+    save_energies(structure_obj, orca_out)
+    input_data = save_properties(structure_obj, orca_out)
+    save_input(structure_obj, input_data)
     save_coordinates(structure_obj, orca_out)
     smiles, inchi = save_graph(structure_obj)
     orca_logger.info('Save smiles and inchi...')
