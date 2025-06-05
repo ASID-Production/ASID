@@ -2,7 +2,7 @@ import time
 
 from django_project.loggers import orca_logger
 from qc_structure.vasp import save_program, save_name, save_smiles_inchi, save_substructure
-from orca_parser import ORCAParse
+from modules.parsers.ORCAParse import ORCAParse
 import re
 from structure.management.commands.cif_db_update_modules._element_numbers import element_numbers
 from structure.management.commands.cif_db_update_modules._make_graphs_c import make_graph_c
@@ -58,7 +58,6 @@ def save_input(struct_obj, data):
     }.items():
         if key in data.keys() and data[key]:
             setattr(inp, field, data[key])
-            print(field)
     inp.save()
 
 
