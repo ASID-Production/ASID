@@ -65,6 +65,7 @@ patch in mat3 ellipsV_tes;
 out vec4 color_frag;
 out vec3 normals_frag;
 out vec4 frag_pos;
+out vec3 line;
 
 
 void main()
@@ -76,16 +77,14 @@ void main()
     float y = sin(theta) * sin(phi);
     float z = cos(theta);
     vec3 pos = vec3(x,y,z);
-    float c = exp(-(x*x)/0.0001) + exp(-(y*y)/0.0001) + exp(-(z*z)/0.0001);
-    if (c > 1.0) {
-        c = 1.0;
-    }
+    vec3 c = vec3(x,y,z);
     if (bool(pick_tes)){
         color_frag = vec4(0.1,0.1,0.1,color_tes.w);
     }
     else{
-        color_frag = c * vec4(0.1,0.1,0.1,color_tes.w) + (1-c) * color_tes;
+        color_frag = color_tes;
     }
+    line = c;
 
     pos = ellipsV_tes * pos;
     //pos = normalize(pos) * sqrt(length(pos));

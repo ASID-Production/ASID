@@ -60,10 +60,9 @@ class RenderFacade:
         self.ids[id(scene)] = scene
         return id(scene)
 
-    def drawScene(self, scene_id):
-        self.makeCurrent()
+    def drawScene(self, scene_id, mode='DEFAULT'):
         scene = self.scenes[scene_id]
-        scene.draw()
+        scene.draw(mode=mode)
 
     def addPipelineToScene(self, scene_id, pipeline_cls=None, pipeline_inst=None):
         self.makeCurrent()

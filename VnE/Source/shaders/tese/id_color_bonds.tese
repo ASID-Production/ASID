@@ -28,42 +28,62 @@
 
 
 #version 460
+#define PI 3.1415926538
 
-out gl_PerVertex { vec4 gl_Position;};
+layout(quads, equal_spacing, ccw) in;
 
-layout(location = 0) in vec3 pos_vert;
-layout(location = 1) in vec4 color;
-layout(location = 2) in float rad;
-layout(location = 3) in float freq;
-layout(location = 4) in float hfreq;
-layout(location = 5) in float pick;
 layout(std140, binding = 0) uniform Matrices
-    {
-        mat4 scale;
-        mat4 translation;
-        mat4 rotation;
-        mat4 aspect_ratio;
-        mat4 clip_distance;
-        mat4 perspective;
-        mat4 scene_shift;
-    };
+{
+    mat4 scale;
+    mat4 translation;
+    mat4 rotation;
+    mat4 aspect_ratio;
+    mat4 clip_distance;
+    mat4 perspective;
+    mat4 scene_shift;
+};
 
-out vec4 color_geom;
-out float rad_geom;
-out float freq_geom;
-out float hfreq_geom;
-uniform float shift;
+in gl_PerVertex
+{
+  vec4 gl_Position;
+  float gl_PointSize;
+  float gl_ClipDistance[];
+} gl_in[gl_MaxPatchVertices];
+
+out gl_PerVertex
+{
+    vec4 gl_Position;
+    float gl_PointSize;
+    float gl_ClipDistance[];
+};
+
+in vec4 color_tes[];
+patch in float rad_tes;
+patch in uint id_tes;
+patch in uint count_tes;
+
+flat out uint id_frag;
+flat out uint count;
+
+const vec3 s = normalize(vec3(1,1,1));
+
+vec3 tube_int(in float cord_x, in float cord_y, in vec3 dest)
+{
+
+    vec3 ndest = normalize(dest);
+    vec3 point = sin(cord_x * 2 * PI) * normalize(s - dot(ndest, s) * ndest) + cos(cord_x * 2 * PI) * normalize(cross((s - dot(ndest, s) * ndest), dest));
+
+    return point;
+}
 
 void main()
-    {
-        if (pick == 1.0) {
-            color_geom = vec4(0.0,0.0,0.0,1.0);
-        }
-        else {
-            color_geom = color;
-        }
-        rad_geom = rad;
-        freq_geom = freq;
-        hfreq_geom = hfreq;
-        gl_Position = translation * perspective * aspect_ratio * scale * rotation * scene_shift * vec4(pos_vert, 1.0);
-    }
+{
+    vec3 dest = gl_in[1].gl_Position.xyz - gl_in[0].gl_Position.xyz;
+    vec3 normals_frag = tube_int(gl_TessCoord[0], gl_TessCoord[1], dest);
+    vec4 frag_pos = translation * perspective * aspect_ratio * scale * rotation * vec4(((normals_frag * rad_tes) + gl_in[0].gl_Position.xyz + (dest * gl_TessCoord[1])), 1.0);
+    gl_Position = frag_pos;
+
+    id_frag = id_tes;
+    count = count_tes;
+
+}

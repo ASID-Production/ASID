@@ -31,6 +31,7 @@ from abc import ABC, abstractmethod
 import numpy as np
 from . import text_render
 from .point_class import Point, PointsList
+from collections.abc import Iterable
 
 import debug
 
@@ -90,7 +91,7 @@ class SphereObserver(aObserver):
         self._properties = {'coord': np.array([0, 0, 0], dtype=np.float32),
                             'color': np.array([0, 0, 0, 1], dtype=np.float32),
                             'rad': np.array([1], dtype=np.float32),
-                            'pick': np.array([0], dtype=np.float32)}
+                            'pick': np.array([0], dtype=np.float32),}
 
     def update(self, object, property, value):
         if type(object).__name__ is PointsList.__name__:
@@ -101,8 +102,10 @@ class SphereObserver(aObserver):
             return
         if value is None:
             value = self._properties[property]
-        if isinstance(value, float) or isinstance(value, int):
-            value = np.array([value], dtype=np.float32)
+        if isinstance(value, Iterable):
+            value = np.array(value, dtype=self._properties[property].dtype)
+        else:
+            value = np.array([value], dtype=self._properties[property].dtype)
         self._facade.replaceDataInShaderData(self._shader_data, self._properties_list.index(property), value, self._points.index(object) * self._properties[property].nbytes)
 
     def add(self, object, *args, **kwargs):
@@ -117,8 +120,8 @@ class SphereObserver(aObserver):
             for property in self._properties:
                 try:
                     data[property] = object.__getattribute__(property)
-                    if isinstance(data[property], float) or isinstance(data[property], int):
-                        data[property] = np.array([data[property]], dtype=np.float32)
+                    if data[property] is not None:
+                        data[property] = np.array([data[property]], dtype=self._properties[property].dtype)
                 except AttributeError:
                     data[property] = self._properties[property]
                 if data[property] is None:
@@ -171,7 +174,9 @@ class EllipsoidObserver(aObserver):
             return
         if value is None:
             value = self._properties[property]
-        if isinstance(value, float) or isinstance(value, int):
+        if (isinstance(value, float) or isinstance(value, int)) and isinstance(value, Iterable):
+            value = np.array(value, dtype=np.float32)
+        elif isinstance(value, float) or isinstance(value, int):
             value = np.array([value], dtype=np.float32)
         self._facade.replaceDataInShaderData(self._shader_data, self._properties_list.index(property), value, self._points.index(object) * self._properties[property].nbytes)
 
@@ -509,9 +514,12 @@ class LineObserver(aObserver):
         self._pipeline = self._facade.addPipelineToScene(self._scene, pipeline_cls=LinesShaderPipeline)
         self._shader_data = self._facade.addDataBufferToPipeline(self._pipeline)
         self._points = []
-        self._properties_list = ['coord', 'color', 'pick']
+        self._properties_list = ['coord', 'color', 'rad', 'freq', 'hfreq', 'pick']
         self._properties = {'coord': np.array([0, 0, 0], dtype=np.float32),
                             'color': np.array([0, 0, 0, 1], dtype=np.float32),
+                            'rad': np.array([0.5], dtype=np.float32),
+                            'freq': np.array([0], dtype=np.float32),
+                            'hfreq': np.array([0], dtype=np.float32),
                             'pick': np.array([0], dtype=np.float32)}
 
     def changeOrder(self, object, order):
@@ -588,27 +596,10 @@ class LineObserver(aObserver):
                 self._facade.deleteDataInShaderData(self._shader_data, self._properties_list.index(property), pos * self._properties[property].nbytes, self._properties[property].nbytes)
 
 
-class DashedLineObserver(LineObserver):
-
-    def __init__(self, facade, scene):
-        from .ShaderPipelines import DashedLineShaderPipeline
-
-        self._scene = scene
-        self._facade = facade
-        self._pipeline = self._facade.addPipelineToScene(self._scene, pipeline_cls=DashedLineShaderPipeline)
-        self._shader_data = self._facade.addDataBufferToPipeline(self._pipeline)
-        self._points = []
-        self._properties_list = ['coord', 'color', 'pick']
-        self._properties = {'coord': np.array([0, 0, 0], dtype=np.float32),
-                            'color': np.array([0, 0, 0, 1], dtype=np.float32),
-                            'pick': np.array([0], dtype=np.float32)}
-
-
 observers = {'Sphere': SphereObserver,
              'Bond': BondsObserver,
              'Label': LabelObserver,
              'Plane': PlaneObserver,
              'Line': LineObserver,
-             'Dashed line': DashedLineObserver,
              'Ellipsoid': EllipsoidObserver}
 

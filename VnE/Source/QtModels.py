@@ -567,9 +567,9 @@ class QtPointsTreeModel(QAbstractItemModel):
     def insertRow(self, row, parent=QModelIndex(), *args, **kwargs):
         type = kwargs.get('type', None)
         if type is None:
-            self.beginResetModel()
+            self.beginInsertRows(parent, row, row+1)
             ret = super().insertRow(row, parent=parent)
-            self.endResetModel()
+            self.endInsertRows()
             return ret
         if parent.internalPointer() is None:
             parent_item = self._root

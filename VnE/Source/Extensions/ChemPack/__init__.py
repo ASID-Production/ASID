@@ -206,7 +206,7 @@ def parseMultiWfn():
 
     from . import attach_cpprop
 
-    attach_cpprop.execute(cp_points_lists)
+    attach_cpprop.execute(cp_molsys)
 
     return molsys, points_lists
 
@@ -332,6 +332,24 @@ def clusterCreationFunc():
     clusterCreation.execute()
 
 
+def instrumentsFunc():
+    import importlib
+    from . import instruments
+    importlib.reload(instruments)
+    instruments.execute()
+
+
+def polyhedronFunc():
+    import importlib
+    from . import polyherdron
+    import traceback
+    importlib.reload(polyherdron)
+    try:
+        polyherdron.execute()
+    except Exception as e:
+        traceback.print_exc()
+        print(traceback.format_exc())
+
 def setup(menu, model, uniform_model=None, *args, main_widget=None, **kwargs):
     from PySide6.QtGui import QAction
 
@@ -410,5 +428,14 @@ def setup(menu, model, uniform_model=None, *args, main_widget=None, **kwargs):
     action_cluster.triggered.connect(clusterCreationFunc)
     cmenu.addAction(action_cluster)
 
-    actions = [open_action, action_test, action_DB, save_action, action_sym_op, action_export, action_winx, action_cls, action_aimall, action_2d_export, action_multiwfn, action_symm_poscar, action_assemble, action_cluster]
+    #action_instruments = QAction('Instruments')
+    #action_instruments.setShortcut('Ctrl+I')
+    #action_instruments.triggered.connect(instrumentsFunc)
+#    cmenu.addAction(action_instruments)
+
+    action_polyhedron = QAction('Polyhedron')
+    action_polyhedron.triggered.connect(polyhedronFunc)
+    cmenu.addAction(action_polyhedron)
+
+    actions = [open_action, action_test, action_DB, save_action, action_sym_op, action_export, action_winx, action_cls, action_aimall, action_2d_export, action_multiwfn, action_symm_poscar, action_assemble, action_cluster, action_polyhedron]
     return actions

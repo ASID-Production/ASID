@@ -28,15 +28,24 @@
 
 
 #version 460
+#define PI 3.1415926538
 
-out gl_PerVertex { vec4 gl_Position;};
+in gl_PerVertex
+{
+  vec4 gl_Position;
+  float gl_PointSize;
+  float gl_ClipDistance[];
+} gl_in[gl_MaxPatchVertices];
 
-layout(location = 0) in vec3 pos_vert;
-layout(location = 1) in vec4 color;
-layout(location = 2) in float rad;
-layout(location = 3) in float freq;
-layout(location = 4) in float hfreq;
-layout(location = 5) in float pick;
+out gl_PerVertex
+{
+    vec4 gl_Position;
+    float gl_PointSize;
+    float gl_ClipDistance[];
+};
+
+layout(quads, equal_spacing, ccw) in;
+
 layout(std140, binding = 0) uniform Matrices
     {
         mat4 scale;
@@ -48,22 +57,31 @@ layout(std140, binding = 0) uniform Matrices
         mat4 scene_shift;
     };
 
-out vec4 color_geom;
-out float rad_geom;
-out float freq_geom;
-out float hfreq_geom;
-uniform float shift;
+patch in uint id_tes;
+patch in float rad_tes;
+patch in mat3 ellipsV_tes;
+
+flat out uint id_frag;
+flat out uint count;
+
 
 void main()
-    {
-        if (pick == 1.0) {
-            color_geom = vec4(0.0,0.0,0.0,1.0);
-        }
-        else {
-            color_geom = color;
-        }
-        rad_geom = rad;
-        freq_geom = freq;
-        hfreq_geom = hfreq;
-        gl_Position = translation * perspective * aspect_ratio * scale * rotation * scene_shift * vec4(pos_vert, 1.0);
-    }
+{
+    float phi = gl_TessCoord.x * 2.0 * 3.14159265;
+    float theta = gl_TessCoord.y * 3.14159265;
+
+    float x = sin(theta) * cos(phi);
+    float y = sin(theta) * sin(phi);
+    float z = cos(theta);
+    vec3 pos = vec3(x,y,z);
+    vec3 c = vec3(x,y,z);
+
+    id_frag = id_tes;
+    count = 1;
+
+    pos = ellipsV_tes * pos;
+    vec3 normals_frag = mat3(rotation) * pos;
+    float rad = sqrt(-2*log(1-rad_tes));
+    vec4 frag_pos = translation * perspective * aspect_ratio * scale * (vec4(normals_frag * rad, 0.0) + rotation * gl_in[0].gl_Position);
+    gl_Position = frag_pos;
+}

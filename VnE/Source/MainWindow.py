@@ -77,6 +77,8 @@ class OpenGlWidget(QOpenGLWidget):
         self.timer_pressed = 0
         self.pressed = False
         self.pos = [0, 0]
+        self.select_fbo = None
+        self.select_crbo, self.select_dsrbo = None, None
 
     def log(self, msg):
         logging.debug(f'{msg.severity()} {msg.type()} {msg.id()} {msg.source()}\n{msg.message()}')
@@ -91,6 +93,18 @@ class OpenGlWidget(QOpenGLWidget):
 
     def initializeGL(self) -> None:
         super().initializeGL()
+
+        self.select_fbo = glGenFramebuffers(1)
+        self.select_crbo, self.select_dsrbo = glGenRenderbuffers(2)
+        def_rbo = int(glGetIntegerv(GL_RENDERBUFFER_BINDING))
+        glBindFramebuffer(GL_FRAMEBUFFER, self.select_fbo)
+        glBindRenderbuffer(GL_RENDERBUFFER, self.select_crbo)
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, self.select_crbo)
+        glBindRenderbuffer(GL_RENDERBUFFER, self.select_dsrbo)
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, self.select_dsrbo)
+        glBindRenderbuffer(GL_RENDERBUFFER, def_rbo)
+        glBindFramebuffer(GL_FRAMEBUFFER, self.context().defaultFramebufferObject())
+
         logging.debug(f'OpenGL context profile: {self.surface_format.profile()} {self.surface_format.renderableType()} {self.surface_format.majorVersion()}.{self.surface_format.minorVersion()}')
         if self.context().hasExtension(QByteArray("GL_KHR_debug".encode())):
             logging.debug('GL_KHR_debug supported')
@@ -178,24 +192,56 @@ class OpenGlWidget(QOpenGLWidget):
     def select(self, pos):
         if self.selection_model is None:
             return
-        mod = self.uniforms.translation @ self.uniforms.perspective @ self.uniforms.aspect_ratio @ self.uniforms._rotation_point_matr @ self.uniforms.scale @ self.uniforms.rotation @ self.uniforms._r_rotation_point_matr @ self.uniforms._scene_shift
-        tol = (self.uniforms.aspect_ratio @ self.uniforms._rotation_point_matr @ self.uniforms.scale @ self.uniforms._r_rotation_point_matr)[:2,:2] @ np.array([[1], [1]])
-        tol = tol.flatten()
-        pos = [(pos.x()/self.width()) * 2 - 1, (pos.y()/self.height()) * (-2) + 1]
-        root = self.selection_model.model().getRoot()
-        selected = root.select(pos, tol=tol, mod=mod)
-        if selected is not None:
-            selected = selected[0]
-            index = self.selection_model.model().index(0, 0, by_point=selected)
-            if selected.pick is None:
-                selected.addProperty('pick', 0.0)
-            if selected.pick == 1.0:
-                self.selection_model.select(index, QItemSelectionModel.Deselect)
-            else:
-                self.selection_model.select(index, QItemSelectionModel.Select)
-        self.update()
+        pos_new = [int(pos.x()), self.height()-int(pos.y())]
+        self.makeCurrent()
+        size = glGetIntegerv(GL_VIEWPORT)
+        glBindFramebuffer(GL_FRAMEBUFFER, self.select_fbo)
+        glBindRenderbuffer(GL_RENDERBUFFER, self.select_crbo)
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA32UI, *size[2:])
+        glBindRenderbuffer(GL_RENDERBUFFER, self.select_dsrbo)
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_STENCIL, *size[2:])
+
+        glBindFramebuffer(GL_FRAMEBUFFER, self.select_fbo)
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+
+        self.facade.drawScene(self.scene, mode='SELECT')
+        glFlush()
+        glBindFramebuffer(GL_FRAMEBUFFER, self.select_fbo)
+        glReadBuffer(GL_COLOR_ATTACHMENT0)
+
+        c = np.zeros((4,), dtype=np.uint32)
+        glReadPixels(*pos_new, 1, 1, GL_RGBA_INTEGER, GL_UNSIGNED_INT, c)
+
+        pipeline_id = int.from_bytes(c[2:].tobytes(), 'little')
+        point_pos = int(c[0])
+        point_count = int(c[1])
+        points = []
+        for obs in QtModels.SINGLE_OBSERVER.obs_dict.values():
+            if pipeline_id == obs._pipeline:
+                points = obs._points[point_pos:point_pos + point_count]
+                break
+        self.makeCurrent()
+
+        if points:
+            for point in points:
+                index = self.selection_model.model().index(0, 0, by_point=point)
+                if point.pick is None:
+                    point.addProperty('pick', 0.0)
+                if point.pick == 1.0:
+                    self.selection_model.select(index, QItemSelectionModel.Deselect)
+                else:
+                    self.selection_model.select(index, QItemSelectionModel.Select)
+            self.update()
+
+        return points
 
     def eventFilter(self, obj: 'QObject', event: 'QEvent') -> bool:
+        self.eventFilterf(self, obj, event)
+
+        return super().eventFilter(obj, event)
+
+    @staticmethod
+    def eventFilterf(self, obj, event):
         if event.type() == QtCore.QEvent.MouseButtonPress:
             self.pressed = True
             self.button = event.buttons()
@@ -239,8 +285,6 @@ class OpenGlWidget(QOpenGLWidget):
                 self.scale_func(1)
             else:
                 self.scale_func(-1)
-
-        return super().eventFilter(obj, event)
 
     def getUniforms(self):
         return self.facade.getInst(self.uniforms_id)
@@ -326,6 +370,7 @@ class MainWindow(QtWidgets.QMainWindow):
         from . import Extensions
 
         self.menu = self.menuBar()
+        self.opengl_widget.setObjectName('OpenGLWidget')
         self.menu.setObjectName('MenuBar')
         self.extension_menu = Extensions.getMenu(self.model, self.uniformModel, main_widget=widget, main_menu=self.menu)
         self.uniformAction = self.menu.addAction('Uniforms')
@@ -344,6 +389,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def closeEvent(self, event, *args, **kwargs):
         ret = QtWidgets.QMainWindow.closeEvent(self, event)
         sys.exit()
+
 
 def show():
     app = QtWidgets.QApplication(sys.argv)

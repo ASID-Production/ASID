@@ -57,7 +57,7 @@ class FileParser:
         n = (cos(al)-(cos(ga) * cos(be)))/sin(ga)
         p = (1-cos(al)**2-cos(be)**2-cos(ga)**2+2*cos(al)*cos(be)*cos(ga))**0.5
 
-        mat = np.array([[a * sin(be) * np.sqrt(1 - (cot(al) * cot(be) - csc(al) * csc(be) * cos(ga)) ** 2), 0, 0],
+        '''mat = np.array([[a * sin(be) * np.sqrt(1 - (cot(al) * cot(be) - csc(al) * csc(be) * cos(ga)) ** 2), 0, 0],
                         [a * csc(al) * cos(ga) - a * cot(al) * cos(be), b * sin(al), 0],
                         [a * cos(be), b * cos(al), c]])
         mat = np.array([[a, 0, 0],
@@ -65,11 +65,10 @@ class FileParser:
                         [c*cos(be), c*n, c*(sin(be)**2-n**2)**0.5],])
         mat = np.array([[a*p/sin(al), 0, 0],
                         [a*(cos(ga)-cos(al)*cos(be))/sin(al), b*sin(al), 0],
-                        [a*cos(be), b*cos(al), c]])
+                        [a*cos(be), b*cos(al), c]])'''
         mat = np.array([[a, b*cos(ga), c*cos(be)],
                         [0, b*sin(ga), c*(cos(al)-cos(be)*cos(ga))/sin(ga)],
                         [0, 0, c*p/sin(ga)]])
-        mat = mat
         for i in range(len(coords)):
             coord = np.array(coords[i])[...,np.newaxis]
             coord = mat @ coord
@@ -355,7 +354,7 @@ class FileParser:
             anisou = block.find(['_atom_site_aniso_label', '_atom_site_aniso_U_11', '_atom_site_aniso_U_22', '_atom_site_aniso_U_33', '_atom_site_aniso_U_23', '_atom_site_aniso_U_13', '_atom_site_aniso_U_12'])
             atoms = [[x[i] if i < 2 else float(x[i]) if x[i].find('(') == -1 else float(x[i][:x[i].find('(')]) for i in range(len(x))] for x in atoms]
             u_eq = block.find(['_atom_site_U_iso_or_equiv'])
-            u_eq = [float(x[0][:x[0].find('(')]) for x in u_eq]
+            u_eq = [float(x[0][:x[0].find('(')]) if '(' in x[0] else float(x[0]) for x in u_eq]
             if anisou:
                 alabels = [x[0] for x in anisou]
                 anisou = [[float(y[:y.find('(')]) for y in list(x)[1:]] for x in anisou]
@@ -387,6 +386,25 @@ class FileParser:
                            'ellipsV3': np.array([0, 0, np.sqrt(0.02)], dtype=np.float32),
                            }
                 if aanisou is not None:
+                    m = np.array([[1/cell[0],0,0],
+                                  [0,1/cell[1],0],
+                                  [0,0,1/cell[2]]])
+                    aanisou = m @ aanisou @ m
+                    a, b, c, al, be, ga = cell
+                    al = (al / 180) * np.pi
+                    be = (be / 180) * np.pi
+                    ga = (ga / 180) * np.pi
+
+                    sin = np.sin
+                    cos = np.cos
+                    p = (1 - cos(al) ** 2 - cos(be) ** 2 - cos(ga) ** 2 + 2 * cos(al) * cos(be) * cos(ga)) ** 0.5
+
+                    mat = np.array([[a, b * cos(ga), c * cos(be)],
+                                    [0, b * sin(ga), c * (cos(al) - cos(be) * cos(ga)) / sin(ga)],
+                                    [0, 0, c * p / sin(ga)]])
+
+                    aanisou = mat @ aanisou @ mat.T
+
                     eigs = scipy.linalg.eigh(aanisou)
                     #print(eigs[0], '\n' ,eigs[1], end='\n')
                     ma = np.array([[eigs[0][0], 0, 0],
@@ -565,6 +583,7 @@ class FileParser:
                             b2 = point_class.Point(coord=bond.parents()[1].point(), color=bond.parents()[1].point(),
                                                    rad=bond_l,
                                                    parent=bond_l)
+                            bond.assignPoint((b1,b2))
                     bond_atm.append(atom)
         return mol_sys, (mol_list, atom_list, bonds_l)
 

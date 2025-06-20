@@ -26,44 +26,27 @@
 //
 // ******************************************************************************************
 
-
 #version 460
 
-out gl_PerVertex { vec4 gl_Position;};
+out uvec4 out_id;
 
-layout(location = 0) in vec3 pos_vert;
-layout(location = 1) in vec4 color;
-layout(location = 2) in float rad;
-layout(location = 3) in float freq;
-layout(location = 4) in float hfreq;
-layout(location = 5) in float pick;
+flat in uint id_frag;
+flat in uint count;
+
 layout(std140, binding = 0) uniform Matrices
-    {
-        mat4 scale;
-        mat4 translation;
-        mat4 rotation;
-        mat4 aspect_ratio;
-        mat4 clip_distance;
-        mat4 perspective;
-        mat4 scene_shift;
-    };
+{
+    mat4 scale;
+    mat4 translation;
+    mat4 rotation;
+    mat4 aspect_ratio;
+    mat4 clip_distance;
+    mat4 perspective;
+    mat4 scene_shift;
+};
 
-out vec4 color_geom;
-out float rad_geom;
-out float freq_geom;
-out float hfreq_geom;
-uniform float shift;
+uniform uvec2 pipeline_id = uvec2(0,0);
 
 void main()
-    {
-        if (pick == 1.0) {
-            color_geom = vec4(0.0,0.0,0.0,1.0);
-        }
-        else {
-            color_geom = color;
-        }
-        rad_geom = rad;
-        freq_geom = freq;
-        hfreq_geom = hfreq;
-        gl_Position = translation * perspective * aspect_ratio * scale * rotation * scene_shift * vec4(pos_vert, 1.0);
-    }
+{
+    out_id = uvec4(id_frag, count, pipeline_id);
+}

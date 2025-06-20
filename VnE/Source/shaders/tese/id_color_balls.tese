@@ -28,15 +28,24 @@
 
 
 #version 460
+#define PI 3.1415926538
 
-out gl_PerVertex { vec4 gl_Position;};
+in gl_PerVertex
+{
+  vec4 gl_Position;
+  float gl_PointSize;
+  float gl_ClipDistance[];
+} gl_in[gl_MaxPatchVertices];
 
-layout(location = 0) in vec3 pos_vert;
-layout(location = 1) in vec4 color;
-layout(location = 2) in float rad;
-layout(location = 3) in float freq;
-layout(location = 4) in float hfreq;
-layout(location = 5) in float pick;
+out gl_PerVertex
+{
+    vec4 gl_Position;
+    float gl_PointSize;
+    float gl_ClipDistance[];
+};
+
+layout(quads, equal_spacing, ccw) in;
+
 layout(std140, binding = 0) uniform Matrices
     {
         mat4 scale;
@@ -48,22 +57,29 @@ layout(std140, binding = 0) uniform Matrices
         mat4 scene_shift;
     };
 
-out vec4 color_geom;
-out float rad_geom;
-out float freq_geom;
-out float hfreq_geom;
-uniform float shift;
+patch in uint id_tes;
+patch in float rad_tes;
+
+flat out uint id_frag;
+flat out uint count;
+
+vec3 sphere_int(in float cord_x, in float cord_y)
+{
+    float cos_a = cos(cord_x * 2 * PI);
+    float sin_a = sin(cord_x * 2 * PI);
+    float cos_b = cos((cord_y - 0.5) * PI);
+    float sin_b = sin((cord_y - 0.5) * PI);
+    return vec3(cos_a, cos_b * sin_a, sin_b * sin_a);
+}
+
 
 void main()
-    {
-        if (pick == 1.0) {
-            color_geom = vec4(0.0,0.0,0.0,1.0);
-        }
-        else {
-            color_geom = color;
-        }
-        rad_geom = rad;
-        freq_geom = freq;
-        hfreq_geom = hfreq;
-        gl_Position = translation * perspective * aspect_ratio * scale * rotation * scene_shift * vec4(pos_vert, 1.0);
-    }
+{
+
+    id_frag = id_tes;
+    count = 1;
+    vec3 normals_frag = mat3(rotation) * sphere_int(gl_TessCoord[0], gl_TessCoord[1]);
+
+    vec4 frag_pos = translation * perspective * aspect_ratio * scale * (vec4(normals_frag * rad_tes, 0.0) + rotation * gl_in[0].gl_Position);
+    gl_Position = frag_pos;
+}
