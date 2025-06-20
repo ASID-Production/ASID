@@ -151,7 +151,7 @@ class Drawing:
         except IndexError:
             return
 
-    def add_connection(self, point1, point2):
+    def add_connection(self, point1, point2, type=1):
         point1, linep1 = point1
         point2, linep2 = point2
 
@@ -600,13 +600,13 @@ class CreateAtomCommand(Command):
                                        rad=self.point_list,
                                        label=kwargs['label'] + str(id),
                                        at_label=kwargs['label'] + str(id),
-                                       cn_label='0-14',
+                                       cn_label='',
                                        label_size=6,
                                        id=id,
                                        atom_type=kwargs['atom_type'],
                                        color=kwargs['color'],
                                        create_command=kwargs['create_command'],
-                                       cn=[0, 14])
+                                       cn=[0, 0])
         self.drawing.add_point(self.point)
         kwargs['create_command'].point = self.point
         return self.point
@@ -673,13 +673,15 @@ class CreateBondCommand(Command):
         self.line_list = line_list
         self.cc_point1 = None
         self.cc_point2 = None
+        self.point1 = None
+        self.point2 = None
 
     def payload(self, cc_point1, cc_point2, *args, **kwargs):
         point1 = cc_point1.point
         point2 = cc_point2.point
-        line1 = point_class.Point(parent=self.line_list, coord=point1, color=point1, rad=point1)
-        line2 = point_class.Point(parent=self.line_list, coord=point2, color=point2, rad=point2)
-        self.drawing.add_connection((point1, line1), (point2, line2))
+        self.point1 = point_class.Point(parent=self.line_list, coord=point1, color=[0.4,0.4,0.4,1], rad=point1.rad/5, hfreq=point1, bt=1, create_command=self)
+        self.point2 = point_class.Point(parent=self.line_list, coord=point2, color=[0.4,0.4,0.4,1], rad=point2.rad/5, hfreq=point2, bt=1, create_command=self)
+        self.drawing.add_connection((point1, self.point1), (point2, self.point2))
 
     def apply(self, cc_point1, cc_point2, *args, **kwargs):
         Command.apply(self)
@@ -829,8 +831,8 @@ class ContactsCommand(ConditionCommand):
 
     def payload(self, *cc_points, **kwargs):
         pc1, pc2 = cc_points[0].point, cc_points[1].point
-        dlp1 = point_class.Point(parent=self.line_list, color=pc1, coord=pc1, rad=pc1)
-        dlp2 = point_class.Point(parent=self.line_list, color=pc2, coord=pc2, rad=pc2)
+        dlp1 = point_class.Point(parent=self.line_list, color=[0,0,0,1], coord=pc1, rad=pc1.rad/4, freq=10)
+        dlp2 = point_class.Point(parent=self.line_list, color=[0,0,0,1], coord=pc2, rad=pc2.rad/4, freq=10)
         self.condition = self.widget.drawing.add_contact((pc1, dlp1), (pc2, dlp2))
         self.condition.create_command = self
         self.ind = self.widget.drawing.conditions_d['contacts'].index(self.condition)
@@ -1015,6 +1017,39 @@ class ChangeCNCommand(Command):
             self.payload(self.cc_point, self.old_cn, self.old_cn_label)
 
 
+class ChangeBondTypeCommand(Command):
+    BOND_TYPE = (1, 2, 3)
+    SIZE_MULT = {1: 1, 2: 3, 3: 5}
+    def __init__(self, drawing):
+        Command.__init__(self)
+        self.old_bt = None
+        self.cc_point = None
+        self.drawing = drawing
+
+    def payload(self, cc_point, btype, *args, **kwargs):
+        cc_point.point1.hfreq = btype
+        cc_point.point2.hfreq = btype
+        cc_point.point1.bt = btype
+        cc_point.point2.bt = btype
+        cc_point.point1.rad = cc_point.point1.rad * (self.SIZE_MULT[btype] / self.SIZE_MULT[self.old_bt])
+        cc_point.point2.rad = cc_point.point2.rad * (self.SIZE_MULT[btype] / self.SIZE_MULT[self.old_bt])
+        #self.drawing.changeAtomType(cc_point.point)
+
+    def apply(self, cc_point, bt, *args, **kwargs):
+        Command.apply(self)
+        self.cc_point = cc_point
+
+        self.old_bt = cc_point.point1.bt
+
+        self.apply = lambda *args, **kwargs: self.payload(self.cc_point, bt)
+        self.apply()
+
+    def undo(self):
+        if self.applied:
+            self.payload(self.cc_point, self.old_bt)
+
+
+
 class aEvent(ABC):
 
     class Timer:
@@ -1114,6 +1149,7 @@ class Drag(aDrawWidgetEvent):
     def assertEvent(self, event: QtCore.QEvent, widget):
         if event.type() == QtCore.QEvent.MouseButtonPress and event.buttons() == QtCore.Qt.LeftButton:
             self.drag_point = widget.select(event.localPos())
+            self.drag_point = self.drag_point[0] if self.drag_point and self.drag_point[0] in widget.p_list.children else None
             logging.debug(f'{self} Mouse click, self.pos: {self.pos}')
             if self.drag_point is not None:
                 self.old_pos = self.drag_point.coord
@@ -1161,11 +1197,33 @@ class HighLight(aDrawWidgetEvent):
     def assertEvent(self, event: QtCore.QEvent, widget):
         if event.type() == QtCore.QEvent.MouseMove:
             point = self.widget.select(event.localPos())
-            if point is not self.point and point is not None:
-                point.pick = 1.0
-            if self.point is not None and self.point is not point:
-                self.point.pick = 0.0
-            self.point = point
+            if not point:
+                if self.point is not None:
+                    for np in self.point:
+                        np.pick = 0.0
+                    self.point = None
+            elif point and point[0] in self.widget.p_list.children:
+                p = point[0]
+                op = self.point[0] if self.point and isinstance(self.point, list) else self.point
+                if p is not op and p is not None:
+                    for np in point:
+                        np.pick = 1.0
+                if op is not None and op is not p:
+                    for np in self.point:
+                        np.pick = 0.0
+                self.point = point
+            elif len(point) == 2:
+                par = point[0].parent
+                if par in self.widget.l_list.children:
+                    op = self.point[0] if self.point and isinstance(self.point, list) else self.point
+                    p = point[0] if point and isinstance(point, list) else None
+                    if p is not op and p is not None:
+                        for np in point:
+                            np.pick = 1.0
+                    if op is not None and op is not p:
+                        for np in self.point:
+                            np.pick = 0.0
+                    self.point = point
 
 
 class UndoRedo(aDrawWidgetEvent):
@@ -1201,6 +1259,8 @@ class Draw(aDrawWidgetEvent):
         if event.type() == QtCore.QEvent.MouseButtonPress and event.buttons() == QtCore.Qt.LeftButton:
             self.timer.start()
             self.point1 = self.widget.select(event.localPos())
+            self.point1 = self.point1[0] if self.point1 and self.point1[0] in self.widget.p_list.children else None
+
 
         if event.type() == QtCore.QEvent.MouseMove and event.buttons() == QtCore.Qt.LeftButton:
             if self.timer.run():
@@ -1234,6 +1294,7 @@ class Draw(aDrawWidgetEvent):
                     self.create_bond_command.apply(self.point1.create_command, self.point2.create_command)
                 else:
                     point2 = self.widget.select(pos)
+                    point2 = point2[0] if point2 and point2[0] in self.widget.p_list.children else None
                     if point2 is None or point2 is self.point2:
                         self.point2.coord = np.array([((pos.x() / self.widget.width()) * 2 - 1),
                                                       ((pos.y() / self.widget.height()) * (-2) + 1) / (
@@ -1247,6 +1308,7 @@ class Draw(aDrawWidgetEvent):
                 self.timer.stop()
             if self.timer.time() > self.tol:
                 point2 = self.widget.select(event.localPos())
+                point2 = point2[0] if point2 and point2[0] in self.widget.p_list.children else None
                 if point2 is not None and (point2 is not self.point2 and point2 is not self.point1):
                     self.create_bond_command.undo()
                     self.create_atom2_command.undo()
@@ -1263,6 +1325,7 @@ class Draw(aDrawWidgetEvent):
                 elif self.point2 is None:
                     pos = event.localPos()
                     point_a = self.widget.select(pos)
+                    point_a = point_a[0] if point_a and point_a[0] in self.widget.p_list.children else None
                     if point_a is None:
                         self.create_atom1_command = CreateAtomCommand(self.widget.drawing, self.widget.p_list, self.widget.ids)
                         self.create_atom1_command.apply(coord=np.array([((pos.x() / self.widget.width()) * 2 - 1),
@@ -1307,6 +1370,42 @@ class Draw(aDrawWidgetEvent):
             self.atom_color = np.array(PALETTE.getColor(atom_type) + [255], dtype=np.float32)/255
 
 
+class ChangeBondType(aDrawWidgetEvent):
+    BOND_TYPE = (1,2,3)
+    SIZE_MULT = {1: 1, 2: 3, 3: 5}
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.bt = 1
+        self.change_bt_command = None
+
+        self.point = None
+
+    def assertEvent(self, event: QtCore.QEvent, widget):
+        if event.type() == QtCore.QEvent.MouseButtonPress and event.buttons() == QtCore.Qt.LeftButton:
+            self.timer.start()
+            self.point = self.widget.select(event.localPos())
+
+        if event.type() == QtCore.QEvent.MouseButtonRelease:
+            if self.timer.run():
+                self.timer.stop()
+            if self.timer.time() > self.tol:
+                point2 = self.widget.select(event.localPos())
+                if self.point is not None and (len(self.point) == 2 and len(point2) == 2) and (self.point[0] is point2[0] and self.point[1] is point2[1]):
+                    self.change_bt_command = ChangeBondTypeCommand(self.widget.drawing)
+                    self.change_bt_command.apply(self.point[0].create_command, self.bt)
+                    self.change_bt_command.appendStack(self.change_bt_command)
+                self.point = None
+                self.change_bt_command = None
+
+    def setBT(self, bt):
+        try:
+            bt = int(bt)
+        except ValueError:
+            return
+        if bt in self.BOND_TYPE:
+            self.bt = bt
+
+
 class Clear(aDrawWidgetEvent):
 
     def __init__(self, *args, **kwargs):
@@ -1318,6 +1417,7 @@ class Clear(aDrawWidgetEvent):
         if event.type() == QtCore.QEvent.MouseButtonPress and event.buttons() == QtCore.Qt.LeftButton:
             self.timer.start()
             self.point_d = self.widget.select(event.localPos())
+            self.point_d = self.point_d[0] if self.point_d and self.point_d[0] in self.widget.p_list.children else None
 
         if event.type() == QtCore.QEvent.MouseButtonRelease:
             if self.timer.run():
@@ -1344,6 +1444,7 @@ class Contact(aDrawWidgetEvent):
         if event.type() == QtCore.QEvent.MouseButtonPress:
             if event.buttons() == QtCore.Qt.LeftButton:
                 point = self.widget.select(event.localPos())
+                point = point[0] if point and point[0] in self.widget.p_list.children else None
                 if point is not None:
                     if self.pc1 is None:
                         self.pc1 = point
@@ -1392,6 +1493,7 @@ class Angle(aDrawWidgetEvent):
         if event.type() == QtCore.QEvent.MouseButtonPress:
             if event.buttons() == QtCore.Qt.LeftButton:
                 point = self.widget.select(event.localPos())
+                point = point[0] if point and point[0] in self.widget.p_list.children else None
                 if point is not None and point not in self.add[0]:
                     self.add[0].append(point)
                     self.add[1].append(point.color)
@@ -1466,6 +1568,7 @@ class AvgDiff(aDrawWidgetEvent):
         if event.type() == QtCore.QEvent.MouseButtonPress:
             if event.buttons() == QtCore.Qt.LeftButton:
                 point = self.widget.select(event.localPos())
+                point = point[0] if point and point[0] in self.widget.p_list.children else None
                 if point is not None and point not in self.add[0]:
                     self.add[0].append(point)
                     self.add[1].append(point.color)
@@ -1527,6 +1630,7 @@ class MaxMeanPlaneDiff(aDrawWidgetEvent):
         if event.type() == QtCore.QEvent.MouseButtonPress:
             if event.buttons() == QtCore.Qt.LeftButton:
                 point = self.widget.select(event.localPos())
+                point = point[0] if point and point[0] in self.widget.p_list.children else None
                 if point is not None and point not in self.selected_points:
                     self.selected_points.append(point)
                     self.old_colors.append(point.color)
@@ -1575,12 +1679,14 @@ class ChangeCN(aDrawWidgetEvent):
         if event.type() == QtCore.QEvent.MouseButtonPress and event.buttons() == QtCore.Qt.LeftButton:
             self.timer.start()
             self.point = self.widget.select(event.localPos())
+            self.point = self.point[0] if self.point and self.point[0] in self.widget.p_list.children else None
 
         if event.type() == QtCore.QEvent.MouseButtonRelease:
             if self.timer.run():
                 self.timer.stop()
             if self.timer.time() > self.tol:
                 point2 = self.widget.select(event.localPos())
+                point2 = point2[0] if point2 and point2[0] in self.widget.p_list.children else None
                 if point2 is self.point and self.point is not None:
                     self.change_cn_command = ChangeCNCommand(self.widget.drawing)
                     self.change_cn_command.apply(self.point.create_command, self.cn, self.cn_label)
@@ -1591,6 +1697,8 @@ class ChangeCN(aDrawWidgetEvent):
     def setCN(self, cn):
         cn = [int(x) for x in cn]
         self.cn = cn
+        if cn == [0, 0]:
+            self.cn_label = ''
         self.cn_label = f'{cn[0]}-{cn[1]}'
 
 
@@ -1630,9 +1738,9 @@ class DrawerGL(QOpenGLWidget):
         self._checked_mod = self.AtomType('C')
 
         self.points = point_class.PointsList()
-        self.p_list = point_class.PointsList(parent=self.points, rad=0.02, color=np.array([0.5, 0.5, 0.5, 1.0], dtype=np.float32))
-        self.l_list = point_class.PointsList(parent=self.points)
-        self.dl_list = point_class.PointsList(parent=self.points)
+        self.p_list = point_class.PointsList(parent=self.points, rad=0.03, color=np.array([0.5, 0.5, 0.5, 1.0], dtype=np.float32))
+        self.l_list = point_class.PointsList(parent=self.points, hfreq=1, rad=0.005, freq=1)
+        self.dl_list = point_class.PointsList(parent=self.points, rad=0.005, freq=10, hfreq=1)
         self.drawing = Drawing(self.points)
 
         self.facade = None
@@ -1640,10 +1748,13 @@ class DrawerGL(QOpenGLWidget):
 
         self.ids = UniqueId()
 
+        self.select_fbo = None
+        self.select_crbo, self.select_dsrbo = None, None
+
     def paintGL(self):
         if self.ready:
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-            self.facade.drawScene(self.scene)
+            self.facade.drawScene(self.scene, mode='DEFAULT')
         else:
             self.ready = True
             self.initializeGL()
@@ -1655,17 +1766,43 @@ class DrawerGL(QOpenGLWidget):
             self.uniform_buffer.wh = [self.width(), self.height()]
 
     def select(self, pos):
-        mod = self.uniform_buffer.aspect_ratio
-        tol = np.array([1, 1])
-        pos = [(pos.x() / self.width()) * 2 - 1, (pos.y() / self.height()) * (-2) + 1]
-        selected = self.p_list.select(pos, tol=tol, mod=mod)
-        if selected is not None:
-            selected = selected[0]
-            #print(selected.seq)
-        else:
-            #print(None)
-            pass
-        return selected
+
+        pos_new = [int(pos.x()), self.height() - int(pos.y())]
+        self.makeCurrent()
+        size = glGetIntegerv(GL_VIEWPORT)
+        glBindFramebuffer(GL_FRAMEBUFFER, self.select_fbo)
+        glBindRenderbuffer(GL_RENDERBUFFER, self.select_crbo)
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA32UI, *size[2:])
+        glBindRenderbuffer(GL_RENDERBUFFER, self.select_dsrbo)
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_STENCIL, *size[2:])
+
+        glBindFramebuffer(GL_FRAMEBUFFER, self.select_fbo)
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+
+        self.facade.drawScene(self.scene, mode='SELECT')
+        glFlush()
+        glBindFramebuffer(GL_FRAMEBUFFER, self.select_fbo)
+        glReadBuffer(GL_COLOR_ATTACHMENT0)
+
+        c = np.zeros((4,), dtype=np.uint32)
+        glReadPixels(*pos_new, 1, 1, GL_RGBA_INTEGER, GL_UNSIGNED_INT, c)
+
+        pipeline_id = int.from_bytes(c[2:].tobytes(), 'little')
+        point_pos = int(c[0])
+        point_count = int(c[1])
+        points = []
+        for obs in SINGLE_OBSERVER.obs_dict.values():
+            if pipeline_id == obs._pipeline:
+                points = obs._points[point_pos:point_pos + point_count]
+                break
+        self.makeCurrent()
+
+        if points:
+            for point in points:
+                if point.pick is None:
+                    point.addProperty('pick', 0.0)
+            self.update()
+        return points
 
     def initializeGL(self):
         if self.ready:
@@ -1673,6 +1810,17 @@ class DrawerGL(QOpenGLWidget):
 
             self.facade = RenderFacade(self)
             self.scene = self.facade.addScene(Scene)
+
+            self.select_fbo = glGenFramebuffers(1)
+            self.select_crbo, self.select_dsrbo = glGenRenderbuffers(2)
+            def_rbo = int(glGetIntegerv(GL_RENDERBUFFER_BINDING))
+            glBindFramebuffer(GL_FRAMEBUFFER, self.select_fbo)
+            glBindRenderbuffer(GL_RENDERBUFFER, self.select_crbo)
+            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, self.select_crbo)
+            glBindRenderbuffer(GL_RENDERBUFFER, self.select_dsrbo)
+            glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, self.select_dsrbo)
+            glBindRenderbuffer(GL_RENDERBUFFER, def_rbo)
+            glBindFramebuffer(GL_FRAMEBUFFER, self.context().defaultFramebufferObject())
 
             global SINGLE_OBSERVER
             SINGLE_OBSERVER = Observers.SingleObserver(self.facade, self.scene)
@@ -1683,7 +1831,7 @@ class DrawerGL(QOpenGLWidget):
             self.p_list.attach(SINGLE_OBSERVER.getObserver(Observers.SphereObserver))
             self.p_list.attach(SINGLE_OBSERVER.getObserver(Observers.LabelObserver))
             self.l_list.attach(SINGLE_OBSERVER.getObserver(Observers.LineObserver))
-            self.dl_list.attach(SINGLE_OBSERVER.getObserver(Observers.DashedLineObserver))
+            self.dl_list.attach(SINGLE_OBSERVER.getObserver(Observers.LineObserver))
             #self.l_list.attach(SINGLE_OBSERVER.getObserver(Observers.BondsObserver))
             #self.points.attach(SINGLE_OBSERVER.getObserver(Observers.LineObserver))
 
@@ -1789,6 +1937,7 @@ class DrawWidget(Drawer_model_ui.Ui_Dialog, QtWidgets.QDialog):
         drag_event = Drag(exclusive=True, exclusive_group=1)
         drag_event.attach(self.openGl_drawer)
         self.draw_event = Draw(exclusive=True, exclusive_group=1)
+        self.bt_event = ChangeBondType(exclusive=True, exclusive_group=1)
         self.cn_event = ChangeCN(exclusive=True, exclusive_group=1)
         clear_event = Clear(exclusive=True, exclusive_group=1)
         contact_event = Contact(exclusive=True, exclusive_group=1)
@@ -1820,23 +1969,21 @@ class DrawWidget(Drawer_model_ui.Ui_Dialog, QtWidgets.QDialog):
         self.pushButton_2.pressed.connect(lambda: self.changeDraw('O'))
         self.pushButton_11.pressed.connect(self.setCustomAtomType)
         self.pushButton_17.pressed.connect(self.setCN)
-        #self.pushButton_9.pressed.connect(lambda: self.checked_func.change_attr(func=1))
-        #self.pushButton_8.pressed.connect(lambda: self.checked_func.change_attr(func=2))
-        #self.dbSearchButton.pressed.connect(lambda: self.db_search(self.openGl_drawer.drawing.struct))
 
-        #self.pushButton_6.pressed.connect(lambda: parent.substr_search(self.openGl_drawer.drawing.struct,
-        #                                                               self.openGl_drawer.drawing.conditions))
-        #self.pushButton_7.pressed.connect(self.openGl_drawer.save_template)
+        self.pushButton_18.pressed.connect(lambda: self.changeBT(1))
+        self.pushButton_19.pressed.connect(lambda: self.changeBT(2))
+        self.pushButton_20.pressed.connect(lambda: self.changeBT(3))
+
         self.gridLayout.addWidget(self.pushButton_6, 0, 0, 1, 2)
         self.gridLayout.addWidget(self.pushButton_10, 1, 0, 1, 2)
         self.gridLayout.addWidget(self.pushButton_14, 2, 0, 1, 2)
         self.gridLayout.addWidget(self.pushButton, 3, 0, 1, 2)
-        self.gridLayout.addWidget(self.pushButton_11, 7, 0, 1, 2)
-        self.gridLayout.addWidget(self.pushButton_17, 8, 0, 1, 2)
-        self.gridLayout.addWidget(self.pushButton_9, 9, 0, 1, 2)
-        self.gridLayout.addWidget(self.pushButton_8, 10, 0, 1, 2)
-        self.gridLayout.addWidget(self.pushButton_12, 11, 0, 1, 2)
-        self.gridLayout.addWidget(self.pushButton_13, 12, 0, 1, 2)
+        self.gridLayout.addWidget(self.pushButton_11, 9, 0, 1, 2)
+        self.gridLayout.addWidget(self.pushButton_17, 10, 0, 1, 2)
+        self.gridLayout.addWidget(self.pushButton_9, 11, 0, 1, 2)
+        self.gridLayout.addWidget(self.pushButton_8, 12, 0, 1, 2)
+        self.gridLayout.addWidget(self.pushButton_12, 13, 0, 1, 2)
+        self.gridLayout.addWidget(self.pushButton_13, 14, 0, 1, 2)
 
         #self.tableWidget_2.itemChanged.connect(lambda x: self.asd(x, tab=1))
         #self.tableWidget_3.itemChanged.connect(lambda x: self.asd(x, tab=2))
@@ -1850,6 +1997,10 @@ class DrawWidget(Drawer_model_ui.Ui_Dialog, QtWidgets.QDialog):
     def changeCN(self, cn):
         self.cn_event.setCN(cn)
         self.cn_event.attach(self.openGl_drawer)
+
+    def changeBT(self, bt):
+        self.bt_event.setBT(bt)
+        self.bt_event.attach(self.openGl_drawer)
 
     def setCustomAtomType(self):
         dialog = QtWidgets.QDialog(parent=self)
@@ -1987,8 +2138,8 @@ class DrawWidget(Drawer_model_ui.Ui_Dialog, QtWidgets.QDialog):
                 if TREE_MODEL is None:
                     return
                 if condition_type == 'contacts':
-                    contacts_list = point_class.PointsList(parent=root, name='Contacts', color=np.array([0, 0, 0, 1], dtype=np.float32))
-                    cond_l = point_class.PointsList(parent=contacts_list, color=contacts_list, name='Pairs')
+                    contacts_list = point_class.PointsList(parent=root, name='Contacts', color=np.array([0, 0, 0, 1], dtype=np.float32), freq=10)
+                    cond_l = point_class.PointsList(parent=contacts_list, color=contacts_list, name='Pairs', freq=contacts_list)
                     labels_l = point_class.PointsList(parent=contacts_list, color=contacts_list, name='Labels')
                     for i in range(len(conditions)):
                         cond = conditions[i]
@@ -2012,7 +2163,7 @@ class DrawWidget(Drawer_model_ui.Ui_Dialog, QtWidgets.QDialog):
                     TREE_MODEL.insertRow(TREE_MODEL.rowCount(parent=mol_ind), parent=mol_ind)
                     cont_ind = TREE_MODEL.index(TREE_MODEL.rowCount(parent=mol_ind)-1, 0, parent=mol_ind)
                     ind = TREE_MODEL.index(0, 0, parent=cont_ind)
-                    TREE_MODEL.attachObserver(ind, 'Dashed line')
+                    TREE_MODEL.attachObserver(ind, 'Line')
                 if condition_type == 'angle':
                     angles_cond_l = point_class.PointsList(parent=root, name='Angles', color=np.array([0, 0, 0, 1], dtype=np.float32))
                     angles_l = point_class.PointsList(parent=angles_cond_l, color=np.array([0, 1, 0, 0.5], dtype=np.float32), name='Angles')
@@ -2100,7 +2251,7 @@ class DrawWidget(Drawer_model_ui.Ui_Dialog, QtWidgets.QDialog):
                     ind = TREE_MODEL.index(0, 0, parent=cont_ind)
                     TREE_MODEL.attachObserver(ind, 'Sphere')
                     ind = TREE_MODEL.index(1, 0, parent=cont_ind)
-                    TREE_MODEL.attachObserver(ind, 'Dashed line')
+                    TREE_MODEL.attachObserver(ind, 'Line')
                 if condition_type == 'maxMeanPlaneDiff':
                     pass
 

@@ -233,7 +233,15 @@ class OpenGlWidget(QOpenGLWidget):
                     self.selection_model.select(index, QItemSelectionModel.Select)
             self.update()
 
+        return points
+
     def eventFilter(self, obj: 'QObject', event: 'QEvent') -> bool:
+        self.eventFilterf(self, obj, event)
+
+        return super().eventFilter(obj, event)
+
+    @staticmethod
+    def eventFilterf(self, obj, event):
         if event.type() == QtCore.QEvent.MouseButtonPress:
             self.pressed = True
             self.button = event.buttons()
@@ -277,8 +285,6 @@ class OpenGlWidget(QOpenGLWidget):
                 self.scale_func(1)
             else:
                 self.scale_func(-1)
-
-        return super().eventFilter(obj, event)
 
     def getUniforms(self):
         return self.facade.getInst(self.uniforms_id)
@@ -364,6 +370,7 @@ class MainWindow(QtWidgets.QMainWindow):
         from . import Extensions
 
         self.menu = self.menuBar()
+        self.opengl_widget.setObjectName('OpenGLWidget')
         self.menu.setObjectName('MenuBar')
         self.extension_menu = Extensions.getMenu(self.model, self.uniformModel, main_widget=widget, main_menu=self.menu)
         self.uniformAction = self.menu.addAction('Uniforms')
@@ -382,6 +389,7 @@ class MainWindow(QtWidgets.QMainWindow):
     def closeEvent(self, event, *args, **kwargs):
         ret = QtWidgets.QMainWindow.closeEvent(self, event)
         sys.exit()
+
 
 def show():
     app = QtWidgets.QApplication(sys.argv)

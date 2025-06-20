@@ -140,6 +140,7 @@ class Bond:
     def __init__(self, atom1, atom2):
         self._parents = [atom1, atom2]
         self._parents.sort(key=id)
+        self._point = (None, None)
 
     def __contains__(self, item):
         return self._parents.__contains__(item)
@@ -154,12 +155,32 @@ class Bond:
     def parents(self):
         return self._parents
 
+    def assignPoint(self, point):
+        self._point = point
+        point[0]._atom = self
+        point[1]._atom = self
+
+    def point(self):
+        return self._point
+
+    def remove(self):
+        self.__del__()
+
     def __eq__(self, other):
         if isinstance(other, Bond):
             if self._parents == other.parents():
                 return True
         else:
             return False
+
+    def __del__(self):
+        for i, p in enumerate(self.point()):
+            if p:
+                p.destroy()
+        for a in self.parents():
+            if self in a.bonds():
+                a.bonds().remove(self)
+        return
 
 
 class Atom(DefaultData):
@@ -188,6 +209,12 @@ class Atom(DefaultData):
                 self.__setattr__(arg, kwargs[arg])
 
     def __del__(self):
+        if self.parent() is not None:
+            self.parent().removeChild(self)
+        while self.bonds():
+            self.bonds()[0].remove()
+        if self.point():
+            self.point().destroy()
         return
 
     def bonds(self):
@@ -206,12 +233,11 @@ class Atom(DefaultData):
         self._parent = parent
 
     def remove(self):
-        if self.parent() is not None:
-            self.parent().removeChild(self)
         self.__del__()
 
     def assignPoint(self, point):
         self._point = point
+        point._atom = self
 
     def point(self):
         return self._point
@@ -249,6 +275,7 @@ class Molecule(aEntity):
 
     def assignPoint(self, point):
         self._points_list = point
+        point._atom = self
 
     def point(self):
         return self._points_list

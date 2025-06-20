@@ -117,6 +117,7 @@ class ShaderProgramsCreator:
 
 class aShaderPipeline(ABC):
     shader_bit = {GL_VERTEX_SHADER: GL_VERTEX_SHADER_BIT,
+                  GL_GEOMETRY_SHADER: GL_GEOMETRY_SHADER_BIT,
                   GL_TESS_CONTROL_SHADER: GL_TESS_CONTROL_SHADER_BIT,
                   GL_TESS_EVALUATION_SHADER: GL_TESS_EVALUATION_SHADER_BIT,
                   GL_FRAGMENT_SHADER: GL_FRAGMENT_SHADER_BIT,
@@ -431,24 +432,55 @@ class TextShaderPipeline(aShaderPipeline):
 
 class LinesShaderPipeline(aShaderPipeline):
     def __init__(self):
+        aShaderPipeline.__init__(self)
         self.shader_data = []
-        self.VAOFormat = [(3, np.float32), (4, np.float32), (1, np.float32)]
+        self.VAOFormat = [(3, np.float32), (4, np.float32), (1, np.float32), (1, np.float32), (1, np.float32), (1, np.float32)]
         self.programs = [[GL_VERTEX_SHADER, None, open(f'{opath.dirname(__file__)}/shaders/vert/lines.vert', 'r').read()],
+                         [GL_GEOMETRY_SHADER, None, open(f'{opath.dirname(__file__)}/shaders/geom/lines.geom', 'r').read()],
                          [GL_FRAGMENT_SHADER, None, open(f'{opath.dirname(__file__)}/shaders/frag/lines.frag', 'r').read()]]
+        self.uniforms = {}
 
-        self.pipeline = glGenProgramPipelines(1)
-        glBindProgramPipeline(self.pipeline)
+        self.select_programs = [[GL_VERTEX_SHADER, None, open(f'{opath.dirname(__file__)}/shaders/vert/id_color_lines.vert', 'r').read()],
+                         [GL_GEOMETRY_SHADER, None, open(f'{opath.dirname(__file__)}/shaders/geom/id_color_lines.geom', 'r').read()],
+                         [GL_FRAGMENT_SHADER, None, open(f'{opath.dirname(__file__)}/shaders/frag/id_color.frag', 'r').read()]]
+
+        pipeline = glGenProgramPipelines(1)
+        glBindProgramPipeline(pipeline)
 
         for i, program in enumerate(self.programs):
             self.programs[i][1] = SHADER_PROGRAM_CREATOR.createProgram(program[2], program[0])[0]
-            glUseProgramStages(self.pipeline, BallsShaderPipeline.shader_bit[self.programs[i][0]], self.programs[i][1])
+            glUseProgramStages(pipeline, self.shader_bit[self.programs[i][0]], self.programs[i][1])
 
-    def draw(self, mode='DEFAULT'):
-        glBindProgramPipeline(self.pipeline)
-        if glIsEnabled(GL_LINE_STIPPLE):
-            glDisable(GL_LINE_STIPPLE)
-        for shader_data in self.shader_data:
-            shader_data.draw(GL_LINES)
+        self.pipeline = self.Program(pipeline, GL_LINES)
+
+        def func(pipeline):
+            return lambda: glBindProgramPipeline(pipeline.id)
+
+        self.pipeline.regFunc(func(self.pipeline))
+
+        self.pipelines['DEFAULT'] = self.pipeline
+
+        pipeline = glGenProgramPipelines(1)
+        glBindProgramPipeline(pipeline)
+
+        for i, program in enumerate(self.select_programs):
+            self.select_programs[i][1] = SHADER_PROGRAM_CREATOR.createProgram(program[2], program[0])[0]
+            glUseProgramStages(pipeline, self.shader_bit[self.select_programs[i][0]], self.select_programs[i][1])
+
+        self.pipeline = self.Program(pipeline, GL_LINES)
+
+        self.uniforms['pipeline_id'] = Uniform(np.uint64, 'pipeline_id', self.select_programs[2][1])
+
+        def bind_id():
+            data = np.array(id(self), dtype=np.uint64).tobytes()
+            data = np.array([int.from_bytes(data[:4], 'little'), int.from_bytes(data[4:], 'little')], dtype=np.uint32)
+            self.uniforms['pipeline_id'].set(data)
+
+        self.pipeline.regFunc(bind_id)
+        self.pipeline.regFunc(func(self.pipeline))
+
+        self.pipelines['SELECT'] = self.pipeline
+        self.pipeline = self.pipelines['DEFAULT']
 
     def changeShaderProgram(self):
         pass

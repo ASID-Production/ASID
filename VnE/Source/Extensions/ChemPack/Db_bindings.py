@@ -327,6 +327,21 @@ def structureSearch(struct, url_mod, process=None, db_string=''):
     if process is None:
         process = QProcess()
 
+    MAX_VALENCES = {
+        'H': 1, 'He': 0, 'Li': 8, 'Be': 6, 'B': 6, 'C': 4, 'N': 4, 'O': 4, 'F': 1,
+        'Ne': 0,
+        'Na': 12, 'Mg': 8, 'Al': 6, 'Si': 6, 'P': 6, 'S': 6, 'Cl': 7, 'Ar': 0,
+        'K': 12, 'Ca': 12, 'Sc': 8, 'Ti': 8, 'V': 8, 'Cr': 8, 'Mn': 8, 'Fe': 8, 'Co':
+            8, 'Ni': 6, 'Cu': 6, 'Zn': 8, 'Ga': 6, 'Ge': 6, 'As': 6, 'Se': 6, 'Br': 7, 'Kr':
+            0,
+        'Rb': 14, 'Sr': 12, 'Y': 9, 'Zr': 9, 'Nb': 8, 'Mo': 8, 'Tc': 8, 'Ru': 8,
+        'Rh': 8, 'Pd': 8, 'Ag': 8, 'Cd': 8, 'In': 8, 'Sn': 8, 'Sb': 6, 'Te': 6, 'I': 7,
+        'Xe': 0,
+        'Cs': 14, 'Ba': 12, 'La': 12, 'Ce': 12, 'Pr': 9, 'Nd': 12, 'Pm': 9, 'Sm': 12,
+        'Eu': 10, 'Gd': 9, 'Tb': 9, 'Dy': 9, 'Ho': 10, 'Er': 9, 'Tm': 9, 'Yb': 9, 'Lu': 9,
+        'Hf': 8, 'Ta': 8, 'W': 8, 'Re': 8, 'Os': 8, 'Ir': 8, 'Pt': 8, 'Au': 8, 'Hg': 8,
+        'Tl': 12, 'Pb': 12, 'Bi': 8, 'Po': 8, 'At': 7, 'Rn': 0}
+
     def getEdges(struct):
         edges = []
         mem = []
@@ -344,7 +359,9 @@ def structureSearch(struct, url_mod, process=None, db_string=''):
         return edges
     body = {'search_type': 'substructure', 'nodes': None, 'edges': None}
     h_num = lambda atom: len([x for x in struct.connections[atom] if x.atom_type == 'H'])
-    nodes = [f"[{point.seq}, {{'type': '{' '.join(point.atom_type)}', 'Hnum': {h_num(point)}, 'cord_min': {point.cn[0]}, 'cord_max': {point.cn[1]}}}]" if type(point.atom_type) is list else f"[{point.seq}, {{'type': '{point.atom_type}', 'Hnum': {h_num(point)}, 'cord_min': {point.cn[0]}, 'cord_max': {point.cn[1]}}}]" for point in struct.connections if point.atom_type != 'H']
+    neib = lambda atom: len([x for x in struct.connections[atom] if x.atom_type != 'H'])
+    sum_ord = lambda atom: sum([struct.connections[atom][x].bt for x in struct.connections[atom]])
+    nodes = [f"[{point.seq}, {{'type': '{' '.join(point.atom_type)}', 'Hnum': {h_num(point)}, 'cord_min': {point.cn[0] if point.cn[0] != 0 else neib(point)}, 'cord_max': {point.cn[1] if point.cn[1] != 0 else 14-(int(round(sum_ord(point), 0))-neib(point))}}}]" if type(point.atom_type) is list else f"[{point.seq}, {{'type': '{point.atom_type}', 'Hnum': {h_num(point)}, 'cord_min': {point.cn[0] if point.cn[0] != 0 else neib(point)}, 'cord_max': {point.cn[1] if point.cn[1] != 0 else MAX_VALENCES[point.atom_type]-(int(round(sum_ord(point), 0))-neib(point))}}}]" for point in struct.connections if point.atom_type != 'H']
     edges = getEdges(struct)
     body['nodes'] = nodes
     body['edges'] = edges
