@@ -192,9 +192,10 @@ class OpenGlWidget(QOpenGLWidget):
     def select(self, pos):
         if self.selection_model is None:
             return
-        pos_new = [int(pos.x()), self.height()-int(pos.y())]
         self.makeCurrent()
         size = glGetIntegerv(GL_VIEWPORT)
+        scale = [size[2]/self.width(), size[3]/self.height()]
+        pos_new = [int(pos.x()*scale[0]), int((self.height()-int(pos.y()))*scale[1])]
         glBindFramebuffer(GL_FRAMEBUFFER, self.select_fbo)
         glBindRenderbuffer(GL_RENDERBUFFER, self.select_crbo)
         glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA32UI, *size[2:])

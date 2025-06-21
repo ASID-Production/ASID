@@ -59,14 +59,14 @@ in float rad_geom[];
 in float freq_geom[];
 in float hfreq_geom[];
 layout(triangle_strip, max_vertices = 4) out;
-flat out vec4 origin;
 out vec4 color_frag;
 out vec4 pos;
 out vec4 hpos;
 out float freq_frag;
 out float hfreq_frag;
-out float tlen;
-out float htlen;
+flat out vec4 origin;
+flat out float tlen;
+flat out float htlen;
 
 void main() {
     vec3 n = normalize(cross(vec3(gl_in[1].gl_Position.xy/gl_in[1].gl_Position.w - gl_in[0].gl_Position.xy/gl_in[0].gl_Position.w, 0.0), vec3(0.0,0.0,1.0)));

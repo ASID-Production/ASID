@@ -679,8 +679,8 @@ class CreateBondCommand(Command):
     def payload(self, cc_point1, cc_point2, *args, **kwargs):
         point1 = cc_point1.point
         point2 = cc_point2.point
-        self.point1 = point_class.Point(parent=self.line_list, coord=point1, color=[0.4,0.4,0.4,1], rad=point1.rad/5, hfreq=point1, bt=1, create_command=self)
-        self.point2 = point_class.Point(parent=self.line_list, coord=point2, color=[0.4,0.4,0.4,1], rad=point2.rad/5, hfreq=point2, bt=1, create_command=self)
+        self.point1 = point_class.Point(parent=self.line_list, coord=point1, color=[0.4,0.4,0.4,1], rad=point1.rad/10, hfreq=point1, bt=1, create_command=self)
+        self.point2 = point_class.Point(parent=self.line_list, coord=point2, color=[0.4,0.4,0.4,1], rad=point2.rad/10, hfreq=point2, bt=1, create_command=self)
         self.drawing.add_connection((point1, self.point1), (point2, self.point2))
 
     def apply(self, cc_point1, cc_point2, *args, **kwargs):
@@ -1767,9 +1767,10 @@ class DrawerGL(QOpenGLWidget):
 
     def select(self, pos):
 
-        pos_new = [int(pos.x()), self.height() - int(pos.y())]
         self.makeCurrent()
         size = glGetIntegerv(GL_VIEWPORT)
+        scale = [size[2] / self.width(), size[3] / self.height()]
+        pos_new = [int(pos.x() * scale[0]), int((self.height() - int(pos.y())) * scale[1])]
         glBindFramebuffer(GL_FRAMEBUFFER, self.select_fbo)
         glBindRenderbuffer(GL_RENDERBUFFER, self.select_crbo)
         glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA32UI, *size[2:])

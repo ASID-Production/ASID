@@ -32,12 +32,12 @@
 in vec4 color_frag;
 in vec4 pos;
 in vec4 hpos;
-flat in vec4 origin;
-out vec4 color_out;
 in float freq_frag;
 in float hfreq_frag;
+flat in vec4 origin;
 flat in float tlen;
 flat in float htlen;
+out vec4 color_out;
 
 layout(std140, binding = 0) uniform Matrices
     {

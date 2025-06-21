@@ -29,7 +29,12 @@
 
 #version 460
 
-out gl_PerVertex { vec4 gl_Position;};
+out gl_PerVertex
+{
+  vec4 gl_Position;
+  float gl_PointSize;
+  float gl_ClipDistance[];
+};
 
 layout(location = 0) in vec3 pos_vert;
 layout(location = 1) in vec4 color;
@@ -52,7 +57,6 @@ out vec4 color_geom;
 out float rad_geom;
 out float freq_geom;
 out float hfreq_geom;
-uniform float shift;
 
 void main()
     {
