@@ -39,18 +39,16 @@ endif()
 set(COMPILE_TESTS FALSE)
 if (WIN32)
     set(COMPILE_TESTS TRUE)
-endif(WIN32)
-
-project(cpplibLib)
+    project(cpplibLib)
     if (UNIX)
-        find_package(Python COMPONENTS Interpreter Development)
+        find_package(Python3 COMPONENTS Interpreter Development)
     endif (UNIX)
 
     if (WIN32)
-        find_package(Python COMPONENTS Interpreter Development EXACT 3.10)
+        find_package(Python3 COMPONENTS Interpreter Development EXACT 3.10)
     endif (WIN32)
     include_directories(SYSTEM ${Python3_INCLUDE_DIRS})
-
+    
     add_library(cpplibLib "cpplib/src/Functions/Functions.cpp" 
                            "cpplib/src/BaseHeaders/Support.h"
                            "cpplib/src/BaseHeaders/DebugMes.h"
@@ -65,13 +63,15 @@ project(cpplibLib)
                            "cpplib/src/Functions/Functions.h"
                            "cpplib/src/Functions/AllInOneAndCurrent.h" 
                            "cpplib/src/Classes/FindGeometry.h" "cpplib/src/Functions/PythonInteface.cpp" "cpplib/src/BaseHeaders/Currents.h" "cpplib/src/Classes/Cluster.h")
-    target_link_libraries(cpplibLib ${PYTHON_LIBRARIES} Python::Python)
+    target_link_libraries(cpplibLib ${Python3_LIBRARY_DIRS})
 
     target_include_directories(cpplibLib PUBLIC 
         ${PROJECT_SOURCE_DIR}/cpplib/src/BaseHeaders
         ${PROJECT_SOURCE_DIR}/cpplib/src/Classes
         ${PROJECT_SOURCE_DIR}/cpplib/src/Platform
     )
+    
+endif(WIN32)
 
 ############################################################
 # Create a library cpplib
@@ -80,15 +80,14 @@ project(cpplibLib)
 project(cpplib)
 
     if (UNIX)
-        find_package(Python COMPONENTS Interpreter Development)
+        find_package(Python3 COMPONENTS Interpreter Development)
     endif (UNIX)
 
     if (WIN32)
-        find_package(Python COMPONENTS Interpreter Development EXACT 3.10)
+        find_package(Python3 COMPONENTS Interpreter Development EXACT 3.10)
     endif (WIN32)
 
-    include_directories(SYSTEM ${Python3_INCLUDE_DIRS})
-
+    include_directories(cpplib PRIVATE SYSTEM ${Python3_INCLUDE_DIRS})
 
     #Generate the shared library from the library sources
     if(CMAKE_BUILD_TYPE MATCHES Release)
@@ -106,17 +105,18 @@ project(cpplib)
                            "cpplib/src/Functions/Functions.h"
                            "cpplib/src/Functions/AllInOneAndCurrent.h" 
                            "cpplib/src/Classes/FindGeometry.h" "cpplib/src/Functions/PythonInteface.cpp" "cpplib/src/BaseHeaders/Currents.h" "cpplib/src/Classes/Cluster.h")
-        target_link_libraries(cpplib ${PYTHON_LIBRARIES} Python::Python)
+        if(WIN32)
+            target_link_libraries(cpplib PRIVATE ${Python3_LIBRARY_DIRS}/python3.lib)
+        else()
+            target_link_libraries(cpplib PRIVATE ${Python3_LIBRARY_DIRS})
+        endif()
         set_target_properties(cpplib PROPERTIES
             PREFIX ""
             OUTPUT_NAME "cpplib"
             LINKER_LANGUAGE C
+            POSITION_INDEPENDENT_CODE ON
         )
-        target_include_directories(cpplib PUBLIC 
-            ${PROJECT_SOURCE_DIR}/cpplib/src/BaseHeaders
-            ${PROJECT_SOURCE_DIR}/cpplib/src/Classes
-            ${PROJECT_SOURCE_DIR}/cpplib/src/Platform
-        )
+
         if (UNIX)
             add_custom_command(
                 TARGET cpplib POST_BUILD
@@ -136,3 +136,5 @@ project(cpplib)
 if((IS_DIRECTORY ${CMAKE_SOURCE_DIR}/cpplib/Tests) AND COMPILE_TESTS)
     add_subdirectory ("cpplib/Tests")
 endif((IS_DIRECTORY ${CMAKE_SOURCE_DIR}/cpplib/Tests) AND COMPILE_TESTS)
+
+

@@ -25,7 +25,7 @@
 //  ORCID:       0009-0003-5298-6836
 //
 // ******************************************************************************************
-#define PY_SSIZE_T_CLEAN
+#define Py_LIMITED_API 0x030A0000
 #include <Python.h>
 #include "AllInOneAndCurrent.h"
 #include "Functions.h"
@@ -69,7 +69,8 @@ struct Prepare_IC : public Prepare_WC {
 		deb_write("pyListToVectorCharP s =", s);
 		symm.resize(s);
 		for (Py_ssize_t i = 0; i < s; i++) {
-			symm[i] = PyUnicode_AsUTF8(PyList_GetItem(osymm, i));
+			Py_ssize_t us;
+			symm[i] = PyUnicode_AsUTF8AndSize(PyList_GetItem(osymm, i),&us);
 		}
 	}
 };
@@ -148,8 +149,8 @@ extern "C" {
 		ret.resize(s);
 		for (Py_ssize_t i = 0; i < s; i++) {
 			deb_write("pyListToVectorCharP start i = ", i);
-
-			ret[i] = PyUnicode_AsUTF8(PyList_GetItem(plist, i));
+			Py_ssize_t us;
+			ret[i] = PyUnicode_AsUTF8AndSize(PyList_GetItem(plist, i),&us);
 			deb_write("pyListToVectorCharP end   i = ", i);
 		}
 		deb_write("pyListToVectorCharP return");
@@ -177,7 +178,8 @@ extern "C" {
 			return;
 		}
 		deb_write("useDistances parse __file__");
-		std::string full(PyUnicode_AsUTF8(PyObject_GetAttrString(self, "__file__")));
+		Py_ssize_t us;
+		std::string full(PyUnicode_AsUTF8AndSize(PyObject_GetAttrString(self, "__file__"),&us));
 
 		auto found = full.find_last_of("\\/");
 		auto bond_filename = full.substr(0, found + 1) + "BondLength.ini";
@@ -221,7 +223,7 @@ extern "C" {
 			PyList_Append(lst, Py_BuildValue("(llf)",
 											 static_cast<long>(bonds[i].first),
 											 static_cast<long>(bonds[i].second),
-											 static_cast<cpplib::currents::FloatingPointType>(bonds[i].length)));
+											 static_cast<float>(bonds[i].length)));
 		}
 		return Py_BuildValue("{s:O}",
 							 "bonds", lst);
@@ -901,7 +903,8 @@ extern "C" {
 							 "xyz_block", o_xyz_block);
 	}
 	static PyObject* cpplib_SortDatabase(PyObject* self, PyObject* arg) {
-		const auto ret = cpplib::currents::SearchGraphType::DatabaseGraphType::ResortString(PyUnicode_AsUTF8(arg));
+		Py_ssize_t us;
+		const auto ret = cpplib::currents::SearchGraphType::DatabaseGraphType::ResortString(PyUnicode_AsUTF8AndSize(arg,&us));
 		return PyUnicode_FromString(ret.c_str());
 	}
 
