@@ -57,7 +57,6 @@ out gl_PerVertex
     float gl_ClipDistance[];
 };
 
-in vec4 color_tes[];
 patch in float rad_tes;
 patch in uint id_tes;
 patch in uint count_tes;

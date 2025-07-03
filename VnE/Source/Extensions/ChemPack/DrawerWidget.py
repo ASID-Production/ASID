@@ -1778,6 +1778,8 @@ class DrawerGL(QOpenGLWidget):
         glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_STENCIL, *size[2:])
 
         glBindFramebuffer(GL_FRAMEBUFFER, self.select_fbo)
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, self.select_dsrbo)
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, self.select_crbo)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
         self.facade.drawScene(self.scene, mode='SELECT')
