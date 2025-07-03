@@ -431,7 +431,7 @@ def setup(menu, model, uniform_model=None, *args, main_widget=None, **kwargs):
     #action_instruments = QAction('Instruments')
     #action_instruments.setShortcut('Ctrl+I')
     #action_instruments.triggered.connect(instrumentsFunc)
-#    cmenu.addAction(action_instruments)
+    #cmenu.addAction(action_instruments)
 
     action_polyhedron = QAction('Polyhedron')
     action_polyhedron.triggered.connect(polyhedronFunc)

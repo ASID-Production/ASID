@@ -192,9 +192,10 @@ class OpenGlWidget(QOpenGLWidget):
     def select(self, pos):
         if self.selection_model is None:
             return
-        pos_new = [int(pos.x()), self.height()-int(pos.y())]
         self.makeCurrent()
         size = glGetIntegerv(GL_VIEWPORT)
+        scale = [size[2]/self.width(), size[3]/self.height()]
+        pos_new = [int(pos.x()*scale[0]), int((self.height()-int(pos.y()))*scale[1])]
         glBindFramebuffer(GL_FRAMEBUFFER, self.select_fbo)
         glBindRenderbuffer(GL_RENDERBUFFER, self.select_crbo)
         glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA32UI, *size[2:])
@@ -202,8 +203,10 @@ class OpenGlWidget(QOpenGLWidget):
         glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_STENCIL, *size[2:])
 
         glBindFramebuffer(GL_FRAMEBUFFER, self.select_fbo)
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, self.select_dsrbo)
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, self.select_crbo)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-
+        glDrawBuffers(1, GL_COLOR_ATTACHMENT0)
         self.facade.drawScene(self.scene, mode='SELECT')
         glFlush()
         glBindFramebuffer(GL_FRAMEBUFFER, self.select_fbo)

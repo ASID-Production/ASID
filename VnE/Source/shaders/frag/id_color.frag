@@ -28,7 +28,7 @@
 
 #version 460
 
-out uvec4 out_id;
+layout(location = 0) out uvec4 out_id;
 
 flat in uint id_frag;
 flat in uint count;

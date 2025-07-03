@@ -79,26 +79,40 @@ class aScene(ABC):
 
 class Scene(aScene):
 
+
     def __init__(self, context):
         super().__init__(context=context)
         self.conf = False
+        self.last_mode = 'DEFAULT'
+        self.modes = {'DEFAULT': self.defaultMode,
+                      'SELECT': self.selectMode}
 
     def draw(self, mode='DEFAULT'):
         if self.conf:
+            if mode != self.last_mode:
+                self.modes.get(mode, self.defaultMode)()
             for buffer in self.uniform_buffers:
                 buffer.bind()
             for pipe_line in self.shader_pipelines:
                 pipe_line.draw(mode=mode)
         else:
-            glEnable(GL_DEPTH_TEST)
-            glEnable(GL_MULTISAMPLE)
-            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
-            glEnable(GL_BLEND)
-            glClearColor(1.0, 1.0, 1.0, 1.0)
+            self.defaultMode()
             glUseProgram(0)
             self.conf = True
             self.draw(mode)
 
+    def defaultMode(self):
+        glEnable(GL_DEPTH_TEST)
+        glEnable(GL_MULTISAMPLE)
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+        glEnable(GL_BLEND)
+        glClearColor(1.0, 1.0, 1.0, 1.0)
+        self.last_mode = 'DEFAULT'
+
+    def selectMode(self):
+        glEnable(GL_DEPTH_TEST)
+        glDisable(GL_BLEND)
+        self.last_mode = 'SELECT'
 
 class TestScene(aScene):
 

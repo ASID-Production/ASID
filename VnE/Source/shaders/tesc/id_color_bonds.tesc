@@ -68,12 +68,7 @@ void main()
     gl_out[gl_InvocationID].gl_Position = gl_in[gl_InvocationID].gl_Position;
     rad_tes = rad_tcs[gl_InvocationID];
     count_tes = 2;
-    id_tes = 4294967295;
-    for (int i = 0; i < 2; i++) {
-        if (id_tcs[i] < id_tes) {
-            id_tes = id_tcs[i];
-        }
-    }
+    id_tes = min(id_tcs[0], id_tcs[1]);
     float grade;
     vec4 asd = (perspective * aspect_ratio * scale * rotation * gl_in[gl_InvocationID].gl_Position);
     vec4 asdf = (perspective * aspect_ratio * scale * (rotation * gl_in[gl_InvocationID].gl_Position + vec4(rad_tcs[gl_InvocationID] * 1.0,0.0,0.0,0.0)));
