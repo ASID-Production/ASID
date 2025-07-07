@@ -37,7 +37,7 @@ namespace cpplib {
 	public:
 		// Definitions
 		using FAMStructType = currents::FAMStructType;
-		
+		using AtomTypeBase = FAMStructType::AtomTypeBase;
 		using AtomType = FAMStructType::AtomType;
 		using FloatingPointType = FAMStructType::FloatingPointType;
 		using AtomIndex = FAMStructType::AtomIndex;
@@ -50,7 +50,7 @@ namespace cpplib {
 		using tupleTorsion = ::std::tuple<AtomIndex, AtomIndex, AtomIndex, AtomIndex, FloatingPointType>;
 		using MinMaxType = ::std::pair<FloatingPointType, FloatingPointType>; 
 
-		static_assert(::std::is_same<typename DistancesType::AtomType, AtomType>::value, "AtomTypes of FAM_Struct and Distances should be the same");
+		static_assert(::std::is_same_v<typename DistancesType::AtomTypeBase, AtomTypeBase>, "AtomTypeBase of FAM_Struct and Distances should be the same");
 	private:
 		// Data
 		const FAMStructType& fs;
@@ -58,7 +58,7 @@ namespace cpplib {
 	public:
 		FindGeometry() = delete;
 		constexpr explicit FindGeometry(const FAMStructType& famstr) noexcept : fs(famstr) {};
-		auto findDistance(AtomType t1, AtomType t2, MinMaxType d12) const {
+		auto findDistance(AtomTypeBase t1, AtomTypeBase t2, MinMaxType d12) const {
 			std::vector<tupleDistance> res;
 			const bool mirror = (t1 == t2);
 			for (size_type i = 0; i < fs.sizePoints; i++)

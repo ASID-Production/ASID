@@ -45,6 +45,7 @@ namespace cpplib {
 	struct FAM_Struct {
 		// Definitions
 		using AtomType = currents::AtomTypeData;
+		using AtomTypeBase = currents::AtomTypeBase;
 		using size_type = currents::size_type;
 		using PointType = currents::PointType;
 		using FloatingPointType = PointType::value_type;
@@ -54,7 +55,7 @@ namespace cpplib {
 		static_assert(::std::is_same<typename Bond::AtomIndex, typename NodeType::AtomIndex>::value, "Bond::AtomIndex and NodeType::AtomIndex should be the same");
 		using BondExType = BondEx;
 		using AtomIndex = NodeType::AtomIndex;
-		using AtomContainerType = ::std::vector<AtomType>;
+		using AtomContainerType = ::std::vector<AtomTypeBase>;
 		using PointConteinerType = ::std::vector<PointType>;
 		using DistanceFunction = ::std::function<currents::FloatingPointType(const PointType& p1, const PointType& p2)>;
 		using ShiftType = geometry::Point<int>;
@@ -490,6 +491,7 @@ namespace cpplib {
 	public:
 		using FAMSType = FAM_Struct;
 
+		using AtomTypeBase = FAMSType::AtomTypeBase;
 		using AtomIndex = FAMSType::AtomIndex;
 		using FloatingPointType = FAMSType::FloatingPointType;
 		using AtomType = FAMSType::AtomType;
@@ -516,7 +518,7 @@ namespace cpplib {
 
 			// 1. Create Nodes in net
 			for (size_type i = 0; i < fs_.sizePoints; i++) {
-				net.emplace_back(fs_.types[i], 0, i);
+				net.emplace_back(static_cast<typename decltype(net)::value_type::AtomType>(fs_.types[i]), 0, i);
 			}
 
 			// 2. Add bonds to net
@@ -539,7 +541,7 @@ namespace cpplib {
 					negative_atoms[i] = true;
 					if (errorMsg.empty()) {
 						errorMsg = "Atom ";
-						errorMsg += mend[static_cast<char>(type)];
+						errorMsg += mend[static_cast<AtomTypeBase>(type)];
 						errorMsg += std::to_string(i);
 						errorMsg += " has too many bonds (";
 						errorMsg += std::to_string(contacts);
@@ -612,7 +614,7 @@ namespace cpplib {
 
 			for (AtomIndex i = 0; i < fs_.sizePoints; i++)
 			{
-				nodes.emplace_back(fs_.types[std::get<0>(fs_.parseIndex[i])], 0, i);
+				nodes.emplace_back(currents::AtomTypeData(fs_.types[std::get<0>(fs_.parseIndex[i])]), 0, i);
 			}
 			for (AtomIndex i = 0; i < bonds.size(); i++)
 			{
@@ -651,7 +653,7 @@ namespace cpplib {
 			std::vector<NodeType> net;
 			net.reserve(fs_.sizePoints);
 			for (size_type i = 0; i < fs_.sizePoints; i++) {
-				net.emplace_back(fs_.types[i], 0, i);
+				net.emplace_back(NodeType::AtomType(fs_.types[i]), 0, i);
 			}
 
 			// 3. Add bonds to net
@@ -726,7 +728,7 @@ namespace cpplib {
 
 					revers[std::get<0>(molecules[i])[j]] = n;
 					n++;
-					res += std::to_string(static_cast<int>(static_cast<char>(net[std::get<0>(molecules[i])[j]].getType())));
+					res += std::to_string(static_cast<int>(static_cast<AtomTypeBase>(net[std::get<0>(molecules[i])[j]].getType())));
 					res += " ";
 					res += std::to_string(calculateHAtoms(net[std::get<0>(molecules[i])[j]]));
 					res += " ";

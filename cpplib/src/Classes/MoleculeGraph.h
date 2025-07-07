@@ -78,7 +78,7 @@ namespace cpplib {
 			return true;
 		}
 	};
-	template<class A> class MoleculeGraph  {
+	template<AtomTypeConcept A> class MoleculeGraph  {
 	public:
 		// Declarations
 		using NodeType = Node<A>;
@@ -87,8 +87,9 @@ namespace cpplib {
 		using AtomIndex = currents::AtomIndex;
 		using MoleculeIndex = currents::MoleculeIndex;
 		using HType = typename NodeType::HType;
+		using AtomTypeBase = typename A::AtomTypeBase;
 
-		template <class OT>
+		template <AtomTypeConcept OT>
 		friend class MoleculeGraph;
 
 	private:
@@ -100,7 +101,7 @@ namespace cpplib {
 		constexpr MoleculeGraph() noexcept = default;
 		constexpr MoleculeGraph(const MoleculeGraph&) = delete;
 		constexpr MoleculeGraph(MoleculeGraph&&) noexcept = default;
-		explicit constexpr MoleculeGraph(NodeContainer&& other) noexcept(::std::is_nothrow_move_constructible<NodeContainer>::value)
+		explicit constexpr MoleculeGraph(NodeContainer&& other) noexcept(::std::is_nothrow_move_constructible_v<NodeContainer>)
 			: data_(::std::move(other)) {}
 		
 		static ::std::pair<MoleculeGraph, bool> ReadData(const char* str, const currents::TypeBitset& multiAtomBits, const TypeMap& map) {
@@ -125,7 +126,7 @@ namespace cpplib {
 			for (AtomIndex i = 0; i < s; i++)
 			{
 				AtomIndex last = data_.size();
-				data_.emplace_back(1, 0, last);
+				data_.emplace_back(A(1), 0, last);
 				addBond(index, last);
 				data_[last].setCoord(Coord(1,Coord::max));
 			}
@@ -138,8 +139,8 @@ namespace cpplib {
 			AtomIndex s = size();
 			for (AtomIndex i = 1; i < s; i++)
 			{
-				const auto t = static_cast<currents::AtomTypeData>(data_[i].getType());
-				const auto h = static_cast<currents::AtomTypeData>(data_[i].getHAtoms());
+				const auto t = static_cast<currents::AtomTypeBase>(data_[i].getType());
+				const auto h = data_[i].getHAtoms();
 
 				if (map[1] == AtomIndex(-1))
 					map[1] = AtomIndex(h);
@@ -154,7 +155,7 @@ namespace cpplib {
 				else {
 					for (TypeMap::indexType j = 1; j < map.size(); j++)
 					{
-						if (data_[i].getType().include(j) && map[j] == AtomIndex(-1))
+						if (data_[i].getType().contains(j) && map[j] == AtomIndex(-1))
 							map[j] = AtomIndex(0);
 					}
 				}
@@ -236,7 +237,7 @@ namespace cpplib {
 			// Convertion to Correct Neighbours
 			for (AtomIndex i = 0; i < s; i++) {
 				const auto& node = data_[i];
-				ret.data_.emplace_back(XAtom(node.getType()).get_simple(), node.getHAtoms(), node.getID());
+				ret.data_.emplace_back(static_cast<OT>(static_cast<AtomTypeBase>(node.getType())), node.getHAtoms(), node.getID());
 				ret.data_.back().addNeighboursVector(node.getNeighboursVector());
 				ret.data_.back().setCoord(std::move(node.getCoord()));
 			}
@@ -492,9 +493,10 @@ namespace cpplib {
 				}
 				for (AtomIndex i = 1; i < sn; i++)
 				{
-					if (this->operator[](i).getType().simple_eq((static_cast<char>(xty)))) {
-						this->operator[](i).setType(real);
-						if (!real.include(1)) continue;
+					if (static_cast<currents::AtomTypeBase>(data_[i].getType()) == static_cast<currents::AtomTypeBase>(xty)) {
+						// TODO upper could be incorrect. Check it
+						data_[i].setType(real);
+						if (!real.contains(1)) continue;
 
 						for (AtomIndex j = 0; j < this->operator[](i).neighboursSize(); j++)
 						{
@@ -519,11 +521,11 @@ namespace cpplib {
 			for (AtomIndex i = 1; i < sn; i++)
 			{
 				bool check;
-				if (::std::is_same<A, XAtom>::value == true) {
-					check = ((static_cast<XAtom>(data_[i].getType())).get_bitset() & bits).any();
+				if constexpr (::std::is_same_v<A, CompositeAtom> == true) {
+					check = ((static_cast<CompositeAtom>(data_[i].getType())).get_bitset() & bits).any();
 				}
 				else {
-					check = bits[(currents::AtomTypeData)(this->operator[](i).getType())];
+					check = bits[static_cast<currents::AtomTypeBase>(this->operator[](i).getType())];
 				}
 				if(check) {
 					auto hAtoms = this->operator[](i).getHAtoms();
@@ -550,7 +552,7 @@ namespace cpplib {
 			for (AtomIndex i = 1; i < ns; i++)
 			{
 				node_str += ' ';
-				node_str += std::to_string(static_cast<int>(static_cast<char>(data_[i].getType())));
+				node_str += std::to_string(static_cast<int>(static_cast<A::AtomTypeBase>(data_[i].getType())));
 				node_str += ' ';
 				node_str += std::to_string(static_cast<int>(data_[i].getHAtoms()));
 

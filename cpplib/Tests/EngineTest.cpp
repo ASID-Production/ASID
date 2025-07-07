@@ -27,172 +27,413 @@
 // ******************************************************************************************
 #include "gtest/gtest.h"
 #include "../src/Classes/Engine.h"
-//#include <vector>
+#include <vector>
 
 using namespace cpplib;
 using namespace cpplib::currents;
 
-// XAtom section
-TEST(EngineTest, XAtomType) {
-	static_assert(std::is_same<AtomTypeData, XAtom::SimpleAtomType>::value, "XAtom::SimpleAtomType != AtomTypeData");
+// SimpleAtom
+TEST(SimpleAtomTest, BasicFunctionality) {
+    SimpleAtom a1(1);
+    SimpleAtom a2(2);
 
-	ASSERT_NO_THROW({ XAtom atom; });
-	ASSERT_NO_THROW({
-		XAtom::SimpleAtomType a(6);
-		XAtom atom(a);
-	});
+    EXPECT_EQ(a1.get_bitset().count(), 1);
+    EXPECT_TRUE(a1.contains(1));
+    EXPECT_FALSE(a1.contains(2));
+    EXPECT_TRUE(a1.intersect(a1));
+    EXPECT_FALSE(a1.intersect(a2));
+    EXPECT_EQ(static_cast<SimpleAtom::AtomTypeBase>(a1), 1);
+}
+TEST(SimpleAtomTest, Comparison) {
+    SimpleAtom a1(1), a2(2), a3(1);
 
-	XAtom atom(-1);
-	atom.AddType(1);
-	atom.AddType(9);
-	auto bits = atom.get_bitset();
-
-	decltype(bits) bits2;
-	bits2.set(1);
-	bits2.set(9);
-
-	EXPECT_EQ(bits, bits2);
-
-	auto simple = atom.get_simple();
-	auto simple2 = static_cast<char>(atom.get_simple());
-	auto simple3 = static_cast<AtomTypeData>(atom);
-
-	EXPECT_EQ(simple, -1);
-	EXPECT_EQ(simple, simple2);
-	EXPECT_EQ(simple2, simple3);
-	EXPECT_TRUE(atom.simple_eq(-1));
-	EXPECT_TRUE(atom == XAtom::SimpleAtomType(9));
-	EXPECT_TRUE(atom == AtomTypeData(1));
-	EXPECT_FALSE(atom == XAtom::SimpleAtomType(6));
-
-	EXPECT_TRUE(atom.include(AtomTypeData(1)));
-	EXPECT_FALSE(atom.include(AtomTypeData(2)));
-	EXPECT_FALSE(atom.include(AtomTypeData(6)));
-	EXPECT_TRUE(atom.include(AtomTypeData(9)));
-
-
-	XAtom atom2(-2);
-	atom2.AddType(9);
-	atom2.AddType(5);
-	XAtom atom3(-3);
-	atom3.AddType(6);
-	atom3.AddType(5);
-
-	EXPECT_TRUE(atom.intersect(atom2));
-	EXPECT_FALSE(atom.intersect(atom3));
+    EXPECT_EQ(a1, a3);
+    EXPECT_NE(a1, a2);
+    EXPECT_LT(a1, a2);
+    EXPECT_GT(a2, a1);
 }
 
-// Coord section
-TEST(EngineTest, CoordType) {
-	// test argument_type
-	static_assert(Coord::innerType(-1) < Coord::innerType(0), "Coord::innerType should be signed");
-	static_assert(Coord::argumentType(-1) < Coord::argumentType(0), "Coord::argumentType should be signed");
+// CompositeAtom
+TEST(CompositeAtomTest, BasicOperations) {
+    CompositeAtom atom(1);
+    atom.AddType(2);
+    atom.AddType(3);
 
-	ASSERT_NO_THROW({ Coord c; });
-	ASSERT_NO_THROW({ Coord c(0); });
-	ASSERT_NO_THROW({ Coord c(1,2); Coord c2(0,14); });
-	Coord mono(3);
-	Coord duo1(1, 2);
-	Coord duo2(2, 3);
-	Coord duo3(2, 4);
-	Coord duo4(3, 4);
-	Coord duo5(4, 4);
-	EXPECT_FALSE(duo1.intersect(mono));
-	EXPECT_TRUE(duo2.intersect(mono));
-	EXPECT_TRUE(duo3.intersect(mono));
-	EXPECT_TRUE(duo4.intersect(mono));
-	EXPECT_FALSE(duo5.intersect(mono));
+    EXPECT_TRUE(atom.contains(1));
+    EXPECT_TRUE(atom.contains(2));
+    EXPECT_TRUE(atom.contains(3));
+    EXPECT_FALSE(atom.contains(4));
+    EXPECT_EQ(atom.get_bitset().count(), 3);
+}
+TEST(CompositeAtomTest, Intersection) {
+    CompositeAtom a1(1);
+    a1.AddType(2);
 
+    CompositeAtom a2(2);
+    a2.AddType(3);
 
-	EXPECT_FALSE(duo1.intersect(duo4));
-	EXPECT_TRUE(duo4.intersect(duo2));
-	EXPECT_TRUE(duo3.intersect(duo5));
-	EXPECT_TRUE(duo4.intersect(duo3));
-	EXPECT_FALSE(duo5.intersect(duo2));
+    CompositeAtom a3(3);
+    a3.AddType(4);
+
+    EXPECT_TRUE(a1.intersect(a2));
+    EXPECT_FALSE(a1.intersect(a3));
 }
 
+// Coord
+TEST(CoordTest, Intersection) {
+    Coord c1(5);
+    Coord c2(3, 7);
+    Coord c3(8, 10);
 
-// NeighboursType section
-TEST(EngineTest, NeighboursType) {
-	ASSERT_NO_THROW({ NeighboursType a; });
-	ASSERT_NO_THROW({ NeighboursType::ShiftType shift = 1; });
-	NeighboursType a;
-	NeighboursType::ShiftType shift = 1;
-	EXPECT_EQ(a.size(), 0);
-	a.push_back(shift);
-	EXPECT_EQ(a.size(), 1);
-	a.push_back(-shift);
-	EXPECT_EQ(a.size(), 2);
-	EXPECT_EQ(a[0], shift);
-	EXPECT_EQ(a[1], -shift);
-
-	ASSERT_NO_THROW({ a.simpleSort(); });
-	EXPECT_EQ(a.size(), 2);
-	EXPECT_EQ(a[0], -shift);
-	EXPECT_EQ(a[1], shift);
-	ASSERT_NO_THROW({ a.erase(0); });
-	EXPECT_EQ(a[0], shift);
-	EXPECT_EQ(a.size(), 1);
-	EXPECT_TRUE(a.exchange(shift, -shift));
-	EXPECT_FALSE(a.exchange(0, shift));
-	EXPECT_EQ(a[0], -shift);
-	EXPECT_EQ(a.size(), 1);
-	ASSERT_NO_THROW({ a.addShift(shift); });
-	EXPECT_EQ(a[0], 0);
-	EXPECT_EQ(a.size(), 1);
-
-	// NeighboursType::sort<A> was not tested
+    EXPECT_TRUE(c1.intersect(c2));
+    EXPECT_FALSE(c1.intersect(c3));
+    EXPECT_EQ(c1.getLow(), 5);
+    EXPECT_EQ(c1.getHigh(), 5);
+    EXPECT_EQ(c2.getLow(), 3);
+    EXPECT_EQ(c2.getHigh(), 7);
 }
 
+// NeighboursType
+TEST(NeighboursTypeTest, BasicOperations) {
+    NeighboursType neighbors;
 
-// Node Section
-using NodeData = cpplib::Node<AtomTypeData>;
-using NodeRequest = cpplib::Node<AtomTypeRequest>;
-TEST(NodeRequestTest, Constructors) {
+    neighbors.push_back(10);
+    neighbors.push_back(20);
+    neighbors.push_back(30);
 
-	EXPECT_NO_THROW({ NodeRequest a1(1, 1, 1); });
-	NodeRequest a1(1, 1, 1);
-	//NodeRequest::NeighboursType v1;
-	//v1.push_back(&a1);
-	EXPECT_NO_THROW({ NodeRequest a2(1, 1, 1); });
-	EXPECT_NO_THROW({ NodeRequest a3; });
-	//EXPECT_NO_THROW({NodeRequest a6(1,1,1,std::move(v1)); });
+    EXPECT_EQ(neighbors.size(), 3);
+    EXPECT_EQ(neighbors[0], 10);
+    EXPECT_EQ(neighbors[1], 20);
+    EXPECT_EQ(neighbors[2], 30);
+
+    neighbors.erase(1);
+    EXPECT_EQ(neighbors.size(), 2);
+    EXPECT_EQ(neighbors[0], 10);
+    EXPECT_EQ(neighbors[1], 30);
+
+    EXPECT_TRUE(neighbors.exchange(10, 15));
+    EXPECT_EQ(neighbors[0], 15);
 }
-TEST(NodeDataTest, Constructors) {
+TEST(NeighboursTypeTest, SortingAndShifting) {
+    NeighboursType neighbors;
+    neighbors.push_back(30);
+    neighbors.push_back(10);
+    neighbors.push_back(20);
 
-	EXPECT_NO_THROW({ NodeData a1(1, 1, 1); });
-	NodeData a1(1, 1, 1);
-	//NodeData::NeighboursType v1;
-	//v1.push_back(&a1);
-	EXPECT_NO_THROW({ NodeData a2(1, 1, 1); });
-	EXPECT_NO_THROW({ NodeData a3; });
-	//EXPECT_NO_THROW({NodeData a6(1,1,1,std::move(v1)); });
+    neighbors.simpleSort();
+    EXPECT_EQ(neighbors[0], 10);
+    EXPECT_EQ(neighbors[1], 20);
+    EXPECT_EQ(neighbors[2], 30);
+
+    neighbors.addShift(5);
+    EXPECT_EQ(neighbors[0], 15);
+    EXPECT_EQ(neighbors[1], 25);
+    EXPECT_EQ(neighbors[2], 35);
 }
-TEST(NodeRequestTest, EqualWithoutNeighbours) {
-	std::vector<NodeRequest> v1;
-	v1.emplace_back(1, 0, 1);
-	v1.emplace_back(2, 0, 2);
-	v1.emplace_back(1, 1, 3);
-	v1.emplace_back(1, 0, 4);
+TEST(NeighboursTypeTest, SomeEdgeCases) {
+    NeighboursType neighbors;
 
-	EXPECT_FALSE(v1[0] == v1[1]);
-	EXPECT_FALSE(v1[0] == v1[2]);
-	EXPECT_TRUE(v1[0] == v1[3]);
-	EXPECT_FALSE(v1[1] == v1[2]);
-	EXPECT_FALSE(v1[1] == v1[3]);
-	EXPECT_FALSE(v1[2] == v1[3]);
+    // Up to max
+    for (int i = 0; i < NeighboursType::maxNeighbours; i++) {
+        neighbors.push_back(i);
+    }
+
+    // wrong exchange
+    EXPECT_FALSE(neighbors.exchange(-1, 10));
 }
-TEST(NodeDataTest, EqualWithoutNeighbours) {
-	std::vector<NodeData> v1;
-	v1.emplace_back(1, 0, 1);
-	v1.emplace_back(2, 0, 2);
-	v1.emplace_back(1, 1, 3);
-	v1.emplace_back(1, 0, 4);
 
-	EXPECT_FALSE(v1[0] == v1[1]);
-	EXPECT_FALSE(v1[0] == v1[2]);
-	EXPECT_TRUE(v1[0] == v1[3]);
-	EXPECT_FALSE(v1[1] == v1[2]);
-	EXPECT_FALSE(v1[1] == v1[3]);
-	EXPECT_FALSE(v1[2] == v1[3]);
+// Node
+class NodeTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        nodes.resize(3);
+        nodes[0] = Node<SimpleAtom>(SimpleAtom(1), 0, 0);
+        nodes[1] = Node<SimpleAtom>(SimpleAtom(2), 0, 1);
+        nodes[2] = Node<SimpleAtom>(SimpleAtom(3), 0, 2);
+    }
+
+    std::vector<Node<SimpleAtom>> nodes;
+};
+TEST_F(NodeTest, BondManagement) {
+    nodes[0].addBondSimple(nodes[1]);
+    nodes[0].addBondSimple(nodes[2]);
+
+    EXPECT_EQ(nodes[0].neighboursSize(), 2);
+    EXPECT_EQ(nodes[1].neighboursSize(), 1);
+    EXPECT_EQ(nodes[2].neighboursSize(), 1);
+
+    EXPECT_TRUE(nodes[0].isNeighbour(nodes[1]));
+    EXPECT_FALSE(nodes[1].isNeighbour(nodes[2]));
+
+    nodes[0].deleteBond(nodes[1]);
+    EXPECT_EQ(nodes[0].neighboursSize(), 1);
+    EXPECT_EQ(nodes[1].neighboursSize(), 0);
+}
+TEST_F(NodeTest, ComparisonOperators) {
+    Node<SimpleAtom> n1(SimpleAtom(1), 2, 0);
+    Node<SimpleAtom> n2(SimpleAtom(1), 1, 1);
+    Node<SimpleAtom> n3(SimpleAtom(2), 1, 2);
+
+    EXPECT_TRUE(n1.RawLess(n3));
+    EXPECT_TRUE(n1.RawMore(n2));
+    EXPECT_LT(n1, n3);
+    EXPECT_GT(n1, n2);
+}
+TEST_F(NodeTest, SwapOperation) {
+    nodes[0].addBondSimple(nodes[1]);
+    auto original_neighbor = nodes[0].getNeighbour(0);
+
+    std::swap(nodes[0], nodes[2]);
+
+    EXPECT_EQ(nodes[2].getID(), 2);
+    EXPECT_EQ(original_neighbor->getID(), 1);
+    EXPECT_EQ(nodes[2].neighboursSize(), 1);
+    EXPECT_EQ(nodes[0].neighboursSize(), 0);
+}
+TEST_F(NodeTest, AddBondWithSort) {
+    nodes[0].addBondWithSort(nodes[1]);
+    nodes[0].addBondWithSort(nodes[2]);
+
+    // Sort Check
+    const auto& neighbours = nodes[0].getNeighboursVector();
+    EXPECT_TRUE(std::is_sorted(neighbours.begin(), neighbours.end()));
+}
+TEST_F(NodeTest, FindNeighbour) {
+    nodes[0].addBondSimple(nodes[1]);
+    auto* neighbour = nodes[0].getNeighbour(0);
+
+    // Positive
+    EXPECT_EQ(nodes[0].findNeighbour(neighbour), 0);
+
+    // Negative
+    EXPECT_EQ(nodes[0].findNeighbour(&nodes[2]), Node<SimpleAtom>::AtomIndex(-1));
+}
+TEST_F(NodeTest, HasNeighbours) {
+    EXPECT_FALSE(nodes[0].hasNeighbours());
+    nodes[0].addBondSimple(nodes[1]);
+    EXPECT_TRUE(nodes[0].hasNeighbours());
+}
+TEST_F(NodeTest, CalculateCoordEdgeCases) {
+    Node<SimpleAtom> node(SimpleAtom(1), 0, 0);
+
+    // 0 neighbours
+    node.calculateCoord();
+    EXPECT_EQ(node.getCoord().getLow(), 0);
+
+    // max value
+    for (int i = 0; i < Coord::max; i++) {
+        node.addBondSimple(nodes[1]);
+    }
+    node.calculateCoord();
+    EXPECT_EQ(node.getCoord().getHigh(), Coord::max);
+}
+
+//  Node with CompositeAtom
+TEST(CompositeNodeTest, BasicOperations) {
+    CompositeAtom compAtom(1);
+    compAtom.AddType(2);
+    compAtom.AddType(3);
+
+    Node<CompositeAtom> node(compAtom, 2, 100);
+
+    EXPECT_TRUE(node.getType().contains(1));
+    EXPECT_TRUE(node.getType().contains(2));
+    EXPECT_FALSE(node.getType().contains(4));
+    EXPECT_EQ(node.getHAtoms(), 2);
+    EXPECT_EQ(node.getID(), 100);
+}
+TEST(CompositeNodeTest, NeighbourManagement) {
+    std::vector<Node<CompositeAtom>> nodes(3);
+
+    CompositeAtom types[3] = {
+        CompositeAtom(1),
+        CompositeAtom(2),
+        CompositeAtom(3)
+    };
+
+    for (int i = 0; i < 3; ++i) {
+        types[i].AddType(i + 10); // Добавляем дополнительный тип
+        nodes[i] = Node<CompositeAtom>(types[i], i, i);
+    }
+
+    nodes[0].addBondSimple(nodes[1]);
+    nodes[0].addBondSimple(nodes[2]);
+
+    EXPECT_EQ(nodes[0].neighboursSize(), 2);
+    EXPECT_EQ(nodes[1].neighboursSize(), 1);
+
+    // Проверка связи между разными типами атомов
+    EXPECT_TRUE(nodes[0].isNeighbour(nodes[1]));
+    EXPECT_FALSE(nodes[1].isNeighbour(nodes[2]));
+}
+TEST(CompositeNodeTest, ComparisonOperations) {
+    CompositeAtom type1(1);
+    type1.AddType(10);
+
+    CompositeAtom type2(2);
+    type2.AddType(20);
+
+    Node<CompositeAtom> node1(type1, 2, 1);
+    Node<CompositeAtom> node2(type2, 3, 2);
+    Node<CompositeAtom> node3(type1, 2, 3); // Такой же тип как node1
+
+    // Проверка сравнения по базовому типу
+    EXPECT_TRUE(node1.RawLess(node2));
+    EXPECT_TRUE(node2.RawMore(node1));
+
+    // Проверка операторов сравнения
+    EXPECT_LT(node1, node2);
+    EXPECT_GT(node2, node1);
+
+    // Узлы с одинаковым базовым типом
+    EXPECT_EQ(node1 == node3, true);
+    EXPECT_NE(node1, node2);
+}
+TEST(CompositeNodeTest, SwapOperation) {
+    std::vector<Node<CompositeAtom>> nodes(3);
+
+    for (int i = 0; i < 3; ++i) {
+        CompositeAtom atom(i + 1);
+        atom.AddType(i + 10);
+        nodes[i] = Node<CompositeAtom>(atom, i, i);
+    }
+
+    nodes[0].addBondSimple(nodes[1]);
+    nodes[0].addBondSimple(nodes[2]);
+
+    auto original_neighbor1 = nodes[0].getNeighbour(0);
+    auto original_neighbor2 = nodes[0].getNeighbour(1);
+
+    // Сохраняем оригинальные связи
+    const auto neighbors_before = nodes[0].getNeighboursVector();
+
+    // Выполняем swap
+    std::swap(nodes[0], nodes[1]);
+
+    // Проверяем обновление связей
+    EXPECT_EQ(nodes[1].neighboursSize(), 2);
+    EXPECT_EQ(nodes[0].neighboursSize(), 1);
+
+    // Проверяем что соседи обновили свои ссылки
+    for (size_t i = 0; i < nodes[1].neighboursSize(); ++i) {
+        Node<CompositeAtom>* neighbor = nodes[1].getNeighbour(i);
+        EXPECT_TRUE(neighbor->isNeighbour(nodes[1]));
+    }
+}
+TEST(CompositeNodeTest, NotExactCompareFunctionality) {
+    // Подготовка композитного атома
+    CompositeAtom compType(1);
+    compType.AddType(2);
+    compType.AddType(3);
+
+    Node<CompositeAtom> compNode(compType, 1, 100);
+    compNode.calculateCoord(); // Координата (1+1=2, 2)
+
+    // Подходящий простой атом (входит в композитный)
+    Node<SimpleAtom> matchingSimpleNode(SimpleAtom(2), 1, 200);
+    matchingSimpleNode.calculateCoord(); // Координата (1, 1)
+
+    // Неподходящий простой атом (тип не входит)
+    Node<SimpleAtom> nonMatchingTypeNode(SimpleAtom(4), 1, 300);
+
+    // Неподходящий по количеству H-атомов
+    Node<SimpleAtom> tooManyHAtomsNode(SimpleAtom(2), 2, 400);
+
+    // Неподходящий по координатам
+    Node<SimpleAtom> nonMatchingCoordNode(SimpleAtom(2), 1, 500);
+    nonMatchingCoordNode.setCoord(Coord(10, 10));
+
+    // Проверки
+    EXPECT_TRUE(NotExactCompare(compNode, matchingSimpleNode));
+    EXPECT_FALSE(NotExactCompare(compNode, nonMatchingTypeNode));
+    EXPECT_FALSE(NotExactCompare(compNode, tooManyHAtomsNode));
+    EXPECT_FALSE(NotExactCompare(compNode, nonMatchingCoordNode));
+}
+TEST(CompositeNodeTest, EdgeCases) {
+    // Узел с пустым композитным атомом
+    CompositeAtom emptyAtom;
+    Node<CompositeAtom> emptyNode(emptyAtom, 0, 0);
+
+    // Узел с одним типом
+    CompositeAtom singleType(5);
+    Node<CompositeAtom> singleTypeNode(singleType, 3, 1);
+
+    // Проверка contains
+    EXPECT_FALSE(emptyNode.getType().contains(1));
+    EXPECT_TRUE(singleTypeNode.getType().contains(5));
+    EXPECT_FALSE(singleTypeNode.getType().contains(1));
+
+    // Проверка сравнения с пустым узлом
+    Node<CompositeAtom> anotherEmptyNode(emptyAtom, 0, 2);
+    EXPECT_EQ(emptyNode == anotherEmptyNode, true);
+
+    // Проверка NotExactCompare с пустым узлом
+    Node<SimpleAtom> simpleNode(SimpleAtom(1), 0, 3);
+    EXPECT_FALSE(NotExactCompare(emptyNode, simpleNode));
+}
+
+// Bond
+TEST(BondTest, BasicOperations) {
+    Bond b1(1, 2);
+    Bond b2(2, 1);
+    Bond b3(3, 4);
+
+    EXPECT_EQ(b1.first, 1);
+    EXPECT_EQ(b1.second, 2);
+    EXPECT_NE(b1, b2);
+    b2.validate();
+    EXPECT_EQ(b1, b2);
+    EXPECT_NE(b1, b3);
+    EXPECT_LT(b1, b3);
+
+    EXPECT_EQ(b1.ToStr(), "(1, 2)");
+}
+
+// BondEx
+TEST(BondExTest, ExtendedFunctionality) {
+    BondEx b1(1, 2, 1.5f);
+    BondEx b2(2, 1, 1.5f);
+    BondEx b3(1, 2, 2.0f);
+
+    EXPECT_EQ(b1, b2);
+    EXPECT_EQ(b1.length, 1.5f);
+    EXPECT_LT(b1, b3);
+    EXPECT_EQ(b1.ToStr(), "(1, 2, {\"distance\": 1.500000})");
+}
+
+// NotExactCompare
+TEST(NotExactCompareTest, Basic) {
+    Node<CompositeAtom> compNode;
+    CompositeAtom type(1);
+    type.AddType(2);
+    compNode.setType(type);
+    compNode.setHAtoms(1);
+    compNode.setCoord(Coord(1, 2));
+
+    Node<SimpleAtom> simpleNode(SimpleAtom(2), 2, 0);
+
+    EXPECT_TRUE(NotExactCompare(compNode, simpleNode));
+
+    Node<SimpleAtom> simpleNode2(SimpleAtom(3), 1, 0);
+    EXPECT_FALSE(NotExactCompare(compNode, simpleNode2));
+
+    Node<SimpleAtom> simpleNode3(SimpleAtom(1), 3, 0);
+    EXPECT_FALSE(NotExactCompare(compNode, simpleNode3));
+}
+
+// ExactCompare
+TEST(ExactCompareTest, Basic) {
+    CompositeAtom compType(1);
+    compType.AddType(2);
+    Node<CompositeAtom> compNode(compType, 2, 100);
+    compNode.calculateCoord();
+
+    // exactMatch
+    Node<SimpleAtom> exactMatch(SimpleAtom(2), 2, 200);
+    exactMatch.calculateCoord();
+    EXPECT_TRUE(ExactCompare(compNode, exactMatch));
+
+    // hMismatch
+    Node<SimpleAtom> hMismatch(SimpleAtom(2), 1, 300);
+    EXPECT_FALSE(ExactCompare(compNode, hMismatch));
 }

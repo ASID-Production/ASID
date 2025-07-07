@@ -37,12 +37,19 @@ namespace cpplib {
 		using MoleculeIndex = currents::MoleculeIndex;
 		using RequestGraphType = MoleculeGraph<currents::AtomTypeRequest>;
 		using DatabaseGraphType = MoleculeGraph<currents::AtomTypeData>;
+		using AtomTypeBase = currents::AtomTypeBase;
 
 		using BondType = DatabaseGraphType::BondType;
 		using RequestNodeType = RequestGraphType::NodeType;
 		using DatabaseNodeType = DatabaseGraphType::NodeType;
 		using CompareVectorType = ::std::vector<AtomIndex>;
 		using Log = ::std::list<::std::pair<BondType, BondType>>;
+
+		// Asserts
+		static_assert (::std::is_same_v<AtomTypeBase, typename RequestGraphType::NodeType::AtomType::AtomTypeBase> &&
+                       ::std::is_same_v<AtomTypeBase, typename DatabaseGraphType::NodeType::AtomType::AtomTypeBase>, 
+					   "AtomTypeBase is not the same in RequestGraphType and DatabaseGraphType");
+
 
 	private:
 		// Sizes
@@ -113,7 +120,7 @@ namespace cpplib {
 
 			AtomIndex j = 0;
 			for (AtomIndex i = 0; i < si; ++i) {
-				if (inputNode.getNeighbour(i)->getType().get_simple() < 0)
+				if (static_cast<AtomTypeBase>(inputNode.getNeighbour(i)->getType()) < 0)
 					continue;
 				bool condition = false;
 				for (; j < sn; ++j) {
@@ -128,10 +135,10 @@ namespace cpplib {
 		}
 		inline bool compareLow(const RequestNodeType& inputNode, const DatabaseNodeType& dataNode, const bool exact) const noexcept {
 			if (exact) {
-				return inputNode == dataNode;
+				return ExactCompare(inputNode, dataNode);
 			}
 			else {
-				return inputNode.notExactCompare(dataNode);
+				return NotExactCompare(inputNode, dataNode);
 			}
 		}
 
@@ -141,7 +148,7 @@ namespace cpplib {
 
 			for (AtomIndex i = 1; i < inputSize_; i++)
 			{
-				if (input_[i].getType().include(currents::AtomTypeData(1))) {
+				if (input_[i].getType().contains(AtomTypeBase(1))) {
 					for (AtomIndex j = 0; j < input_[i].neighboursSize(); j++)
 					{
 						auto nei = input_[i].getNeighbour(j);
@@ -151,11 +158,11 @@ namespace cpplib {
 			}
 			for (AtomIndex i = 1; i < dataSize_; i++)
 			{
-				if (data_[i].getType() == currents::AtomTypeData(1)) {
+				if (data_[i].getType().contains(AtomTypeBase(1))) {
 					for (AtomIndex j = 0; j < data_[i].neighboursSize(); j++)
 					{
 						auto nei = data_[i].getNeighbour(j);
-						bits[nei->getType()]= true;
+						bits[static_cast<AtomTypeBase>(nei->getType())] = true;
 					}
 				}
 			}
@@ -169,12 +176,10 @@ namespace cpplib {
 			input_.sortGraph();
 			for (AtomIndex i = 1; i < dataSize_; i++)
 			{
-				if (bits[data_[i].getType()]) {
+				if (bits[static_cast<AtomTypeBase>(data_[i].getType())]) {
 					data_.unpackHydrogens(i);
-
 				}
 			}
-			//data_.sortGraph();
 			inputSize_ = input_.size();
 			dataSize_ = data_.size();
 		}
@@ -217,9 +222,9 @@ namespace cpplib {
 			return 0;
 		}
 		inline AtomIndex findAtomWithNeighbours() const noexcept {
-			for (auto& l : log_) {
-				if (input_[l.first.first].hasNeighbours())
-					return l.first.first;
+			for (auto& [l, r] : log_) {
+				if (input_[l.first].hasNeighbours())
+					return l.first;
 			}
 			for (AtomIndex i = 1; i < inputSize_; i++) {
 				if (input_[i].hasNeighbours())

@@ -42,7 +42,7 @@ enum class ErrorState {
 	UnknownError,
 };
 struct Prepare_WC {
-	std::vector<cpplib::currents::AtomTypeData> types;
+	std::vector<cpplib::currents::AtomTypeBase> types;
 	std::vector<cpplib::currents::PointType> points;
 	explicit Prepare_WC(PyObject* otuples) {
 		Py_ssize_t s = PyList_Size(otuples);
@@ -51,7 +51,7 @@ struct Prepare_WC {
 
 		for (Py_ssize_t i = 0; i < s; i++) {
 			PyObject* o_tuple = PyList_GetItem(otuples, i);
-			types.push_back(static_cast<AtomTypeData>(PyLong_AsLong(PyTuple_GetItem(o_tuple, 0))));
+			types.push_back(static_cast<AtomTypeBase>(PyLong_AsLong(PyTuple_GetItem(o_tuple, 0))));
 			points.emplace_back(static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 1))),
 								static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 2))),
 								static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 3))));
@@ -89,12 +89,12 @@ static std::array<std::pair<cpplib::currents::FloatingPointType, cpplib::current
 
 		if (value[i].first == 0) {
 			useDistances(self);
-			value[i].first = p_distances->minDistance(static_cast<cpplib::currents::AtomTypeData>(type[i]), static_cast<cpplib::currents::AtomTypeData>(type[i + 1]));
+			value[i].first = p_distances->minDistance(static_cast<cpplib::currents::AtomTypeBase>(type[i]), static_cast<cpplib::currents::AtomTypeBase>(type[i + 1]));
 		}
 
 		if (value[i].second == 0) {
 			useDistances(self);
-			value[i].second = p_distances->maxDistance(static_cast<cpplib::currents::AtomTypeData>(type[i]), static_cast<cpplib::currents::AtomTypeData>(type[i + 1]));
+			value[i].second = p_distances->maxDistance(static_cast<cpplib::currents::AtomTypeBase>(type[i]), static_cast<cpplib::currents::AtomTypeBase>(type[i + 1]));
 		}
 	}
 	return value;
@@ -156,7 +156,7 @@ extern "C" {
 		deb_write("pyListToVectorCharP return");
 		return ErrorState::OK;
 	}
-	inline static ErrorState pyTXYZparse(PyObject* o_list, std::vector<AtomTypeData>* types, std::vector<PointType>* points) {
+	inline static ErrorState pyTXYZparse(PyObject* o_list, std::vector<AtomTypeBase>* types, std::vector<PointType>* points) {
 		Py_ssize_t s = PyList_Size(o_list);
 		types->clear();
 		types->reserve(static_cast<int>(s));
@@ -165,7 +165,7 @@ extern "C" {
 
 		for (Py_ssize_t i = 0; i < s; i++) {
 			PyObject* o_tuple = PyList_GetItem(o_list, i);
-			types->push_back(static_cast<AtomTypeData>(PyLong_AsLong(PyTuple_GetItem(o_tuple, 0))));
+			types->push_back(static_cast<AtomTypeBase>(PyLong_AsLong(PyTuple_GetItem(o_tuple, 0))));
 			points->emplace_back(static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 1))),
 								 static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 2))),
 								 static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 3))));

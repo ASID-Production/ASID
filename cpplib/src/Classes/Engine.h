@@ -26,81 +26,100 @@
 //
 // ******************************************************************************************
 #pragma once
-#include <algorithm>
+#include <algorithm> // for std::sort
 #include <type_traits> // for std::conditional
 #include <vector>
 #include <string>
-
-#include <bitset> // for std::array in XAtom
 
 #include "../BaseHeaders/Support.h"
 #include "../BaseHeaders/DebugMes.h"
 #include "../BaseHeaders/Currents.h"
 namespace cpplib {
-	class XAtom {
-	public:
-		using SimpleAtomType = currents::AtomTypeData;
+	class SimpleAtom {
 	private:
-		SimpleAtomType simple_representation = 0;
-		currents::TypeBitset types = {0};
+		using ConstRef = SimpleAtom;
 	public:
+		using AtomTypeBase = currents::AtomTypeBase;
+        using TypeBitset = currents::TypeBitset;
+
 		// Constructors
-		XAtom() = default;
-		constexpr XAtom(SimpleAtomType input) : simple_representation(input) {
+		SimpleAtom() = default;
+		constexpr explicit SimpleAtom(AtomTypeBase input) : type_(input) {
+			_ASSERT(input < currents::TypeBitset().size());
+		}
+		
+		constexpr currents::TypeBitset get_bitset() const noexcept{
+			currents::TypeBitset bits;
+			if (type_ > 0) bits.set(type_);
+			return bits;
+		}
+		constexpr bool contains(const AtomTypeBase t) const noexcept{
+			_ASSERT(t > 0 && currents::TypeBitset().size());
+			return type_ == t;
+		}
+		// Same as operator==
+		constexpr bool intersect(ConstRef other) const {
+			return type_ == other.type_;
+		}
+
+		// operators
+		constexpr bool operator==(ConstRef other) const noexcept {
+			return type_ == other.type_;
+		}
+		constexpr std::strong_ordering operator<=>(ConstRef other) const noexcept {
+			return type_ <=> other.type_;
+		}
+
+		// Converts to AtomTypeBase
+		constexpr explicit operator AtomTypeBase() const { return type_; }
+	private:
+		AtomTypeBase type_ = 0;
+	};
+
+	class CompositeAtom {
+	private:
+        using ConstRef = const CompositeAtom&;
+	public:
+		using AtomTypeBase = currents::AtomTypeBase;
+		using TypeBitset = currents::TypeBitset;
+
+		// Constructors
+		CompositeAtom() = default;
+		constexpr explicit CompositeAtom(AtomTypeBase input) : basetype(input) {
 			if (input > 0) {
 				types.set(input);
 			}
 		}
 
-		inline void AddType(const SimpleAtomType t) {
+		void AddType(const AtomTypeBase t) {
 			_ASSERT(t > 0);
 			_ASSERT(t < mend_size);
 			types.set(t);
 		}
-		inline bool include(const SimpleAtomType t) const {
+		constexpr bool contains(const AtomTypeBase t) const {
 			_ASSERT(t > 0 && t < types.size());
-			return types.test(t);
+			return types[t];
 		}
-		//inline bool include(const XAtom& t) const {
-		//	return !((types ^ t.types) & t.types).any();
-		//}
-		inline bool simple_eq(const SimpleAtomType other) const {
-			return simple_representation == other;
-		}
-		inline bool simple_eq(const XAtom& other) const {
-			return simple_representation == other.simple_representation;
-		}
-		inline const currents::TypeBitset& get_bitset() const {
+		constexpr currents::TypeBitset get_bitset() const noexcept{
 			return types;
 		}
-		inline SimpleAtomType get_simple() const {
-			return simple_representation;
-		}
-		inline bool intersect(const XAtom& other) const {
+		inline bool intersect(ConstRef other) const noexcept {
 			return (types & other.types).any();
 		}
-
 		// operators
-		inline bool operator==(const currents::AtomTypeData other) const noexcept {
-			return include(other);
+		constexpr bool operator==(ConstRef other) const noexcept {
+			return basetype == other.basetype;
 		}
-		// operator for sorting
-		inline bool operator<(const XAtom& other) const noexcept {
-			return simple_representation < other.simple_representation;
+		constexpr std::strong_ordering operator<=>(ConstRef other) const noexcept {
+			return basetype <=> other.basetype;
 		}
-		// operator for sorting
-		inline bool operator>(const XAtom& other) const noexcept {
-			return simple_representation > other.simple_representation;
-		}
-		// operator for sorting
-		inline bool operator==(const XAtom& other) const noexcept {
-			return simple_eq(other);
-		}
-		// operator for sorting
-		inline bool operator!=(const XAtom& other) const noexcept {
-			return !simple_eq(other);
-		}
-		inline explicit operator SimpleAtomType() const { return simple_representation; }
+
+		// Converts to AtomTypeBase
+		constexpr explicit operator AtomTypeBase() const noexcept { return basetype; }
+
+	private:
+		AtomTypeBase basetype = 0;
+		currents::TypeBitset types = {0};
 	};
 
 	class Coord {
@@ -112,9 +131,9 @@ namespace cpplib {
 		innerType low = 0;
 		innerType high = 0;
 	public:
-		constexpr inline Coord() noexcept {};
-		constexpr inline Coord(argumentType mono) noexcept { low = mono; high = mono; };
-		constexpr inline Coord(argumentType first, argumentType second) noexcept { low = first; high = second; };
+		constexpr Coord() noexcept = default;
+		constexpr explicit Coord(argumentType mono) noexcept : low(mono), high(mono) {}
+		constexpr Coord(argumentType first, argumentType second) noexcept : low(first), high(second) {}
 		inline bool intersect(const Coord other) const noexcept {
 			return first() <= other.second() && other.first() <= second();
 		}
@@ -135,11 +154,11 @@ namespace cpplib {
 
 	class NeighboursType {
 	public:
-		static constexpr int8_t maxNeighbours = 100;
+		static constexpr size_t maxNeighbours = 100;
 		using ShiftType = currents::AtomIndex;
 	private:
 		::std::array<ShiftType, maxNeighbours> data_{ 0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
-		int8_t size_ = 0;
+		size_t size_ = 0;
 	public:
 		NeighboursType() noexcept : data_{0} { data_.fill(0); }
 		inline void push_back(const ShiftType obj) {
@@ -175,43 +194,55 @@ namespace cpplib {
 			}
 			return false;
 		}
-		inline void simpleSort() {
-			std::sort(&(data_[0]), &(data_[size_]));
+		constexpr void simpleSort() {
+			std::sort(data_.begin(), data_.begin() + size_);
 		}
-		void addShift(ShiftType add) {
+		constexpr void addShift(ShiftType add) {
 			for (char i = 0; i < size_; i++)
 			{
 				data_[i] += add;
 			}
 		}
+
+		auto begin() const { 
+			return data_.begin(); 
+		}
+		auto end() const { 
+			return data_.begin() + size_; 
+		}
 	};
 
-	template<class A>
+	template<AtomTypeConcept A>
 	class Node {
 	public:
 		// Declarations
 		using NeighbourValueType = Node*;
 		using HType = currents::HType;
 		using AtomIndex = currents::AtomIndex;
+		using ShiftType = NeighboursType::ShiftType;
+		using AtomType = A;
 
-		template <class X>
+		template <AtomTypeConcept X>
 		friend class Node;
+
+		friend constexpr bool ExactCompare(const Node<CompositeAtom>& a, const Node< SimpleAtom>& b);
+		friend constexpr bool NotExactCompare(const Node<CompositeAtom>& a, const Node< SimpleAtom>& b);
+
 	private:
 		// Data
-		NeighboursType neighbours_; // should be first
-		A type_ = 0;
+		NeighboursType neighbours_{};
+		AtomType type_{0};
 		HType hAtoms_ = 0;
 		AtomIndex id_ = 0;
-		Coord coord_ = 0;
+		Coord coord_{0};
 	public:
 		// Constructors
-		constexpr Node(): neighbours_() {}
-		constexpr Node(const A& t1, const HType& h1, const AtomIndex& id)
-			: type_(t1), hAtoms_(h1), id_(id), coord_(h1), neighbours_() {}
+		constexpr Node() = default;
+		constexpr Node(const AtomType& t1, const HType& h1, const AtomIndex& id)
+			: type_(t1), hAtoms_(h1), id_(id), coord_(h1) {}
 
 		// Operators
-		template <class X> 
-		inline bool operator==(const Node<X>& other) const noexcept {
+		inline bool operator==(const Node& other) const noexcept {
 			return (type_ == other.type_) && 
 				(hAtoms_ == other.hAtoms_) &&
 				(neighbours_.size() == other.neighbours_.size()) &&
@@ -248,12 +279,6 @@ namespace cpplib {
 		inline bool operator>(const Node& other) const noexcept {
 			//return id_ < other.id_;
 			return RawMore(other);
-		}
-		inline bool notExactCompare(const Node<currents::AtomTypeData>& other) const noexcept {
-			return type_ == other.type_ &&
-				hAtoms_ <= other.hAtoms_ &&
-				neighbours_.size() <= other.neighbours_.size() &&
-				coord_.intersect(other.coord_);
 		}
 
 		// Methods Neighbours
@@ -343,8 +368,9 @@ namespace cpplib {
 		}
 		AtomIndex findNeighbour(NeighbourValueType other) const noexcept {
 			const auto s = neighboursSize();
+			const ShiftType shift = other - this;
 			for (AtomIndex i = 0; i < s; i++) {
-				if (neighbours_[i] == other)
+				if (neighbours_[i] == shift)
 					return i;
 			}
 			return AtomIndex(-1);
@@ -383,7 +409,43 @@ namespace cpplib {
 			bool bondExists = neighbours_.exchange(0, shift);
 			if(bondExists == true) other.neighbours_.exchange(0, -shift);
 		}
+		constexpr void swap_new(Node& other) noexcept {
+			std::swap(type_, other.type_);
+			std::swap(hAtoms_, other.hAtoms_);
+			std::swap(coord_, other.coord_);
+
+			swap_neighbor_references(other);
+			std::swap(neighbours_, other.neighbours_);
+
+			ShiftType shift = &other - this;
+			adjust_neighbor_shifts(neighbours_, shift);
+			adjust_neighbor_shifts(other.neighbours_, -shift);
+		}
 	private:
+		void update_neighbor_references(Node* old_ref, Node* new_ref) {
+			auto cur_shift = old_ref - this;
+			auto new_shift = new_ref - this;
+			[[maybe_unused]] bool updated = neighbours_.exchange(cur_shift, new_shift);
+			_ASSERT(updated == true);
+		}
+
+		void adjust_neighbor_shifts(NeighboursType& neighbours, ShiftType shift) {
+			neighbours.addShift(shift);
+			bool bond_exists = neighbours.exchange(0, shift);
+			if (bond_exists) {
+				// TODO
+			}
+		}
+		void swap_neighbor_references(Node& other) {
+			const auto n1size = this->neighboursSize();
+			const auto n2size = other.neighboursSize();
+			for (AtomIndex i = 0; i < n1size; i++) {
+				this->getNeighbour(i)->exchangeNeighbour(this, &other);
+			}
+			for (AtomIndex i = 0; i < n2size; i++) {
+				other.getNeighbour(i)->exchangeNeighbour(&other, this);
+			}
+		}
 		inline void deleteNeighbour(const Node& node) noexcept {
 			return deleteNeighbour(&node);
 		}
@@ -402,6 +464,21 @@ namespace cpplib {
 		}
 	};
 
+	constexpr bool ExactCompare(const Node<CompositeAtom>& a, const Node<SimpleAtom>& b) {
+		static_assert(std::is_same_v<SimpleAtom::AtomTypeBase, CompositeAtom::AtomTypeBase>);
+		return a.type_.contains(static_cast<typename CompositeAtom::AtomTypeBase>(b.type_)) &&
+			a.hAtoms_ == b.hAtoms_ &&
+			a.neighbours_.size() == b.neighbours_.size() &&
+			a.coord_.intersect(b.coord_);
+	}
+	constexpr bool NotExactCompare(const Node<CompositeAtom>& a, const Node<SimpleAtom>& b) {
+		static_assert(std::is_same_v<SimpleAtom::AtomTypeBase, CompositeAtom::AtomTypeBase>);
+		return a.type_.contains(static_cast<typename CompositeAtom::AtomTypeBase>(b.type_)) &&
+			a.hAtoms_ <= b.hAtoms_ &&
+			a.neighbours_.size() <= b.neighbours_.size() &&
+			a.coord_.intersect(b.coord_);
+	}
+
 	struct Bond {
 	public:
 		// Declarations
@@ -416,19 +493,7 @@ namespace cpplib {
 		constexpr Bond(const AtomIndex a1, const AtomIndex a2) noexcept : first(a1), second(a2) {};
 
 		// Operators
-		constexpr auto operator==(const Bond& other) const noexcept {
-			return first == other.first &&
-				second == other.second;
-		}
-		constexpr auto operator!=(const Bond& other) const noexcept {
-			return first != other.first ||
-				second != other.second;
-		}
-		constexpr auto operator<(const Bond& other) const noexcept {
-			if (first != other.first)
-				return first < other.first;
-			return second < other.second;
-		}
+		constexpr auto operator<=>(const Bond& other) const noexcept = default;
 
 		// Functions
 		constexpr void validate() noexcept {
@@ -454,8 +519,9 @@ namespace cpplib {
 		LengthType length = 0.0; // Bond Length 
 
 		// Constructors
-
 		constexpr BondEx() = default;
+
+		// Always uses Bond::validate function
 		constexpr BondEx(const base& bond, float len) noexcept : base(bond), length(len) {
 			base::validate();
 		}
@@ -479,11 +545,7 @@ namespace cpplib {
 		// Compares in next order:
 		// 1. "base" 
 		// 2. length
-		constexpr bool operator<(const BondEx& other) const noexcept {
-			if (base::operator!=(other))
-				return base::operator<(other);
-			return length < other.length;
-		}
+		constexpr auto operator<=>(const BondEx& other) const noexcept = default;
 
 		// to_string constant function
 		::std::string ToStr() const {
@@ -502,7 +564,7 @@ namespace cpplib {
 
 namespace std {
 	// std::swap extention for Node class
-	template<class A>
+	template<cpplib::AtomTypeConcept A>
 	constexpr void swap(cpplib::Node<A>& n1, cpplib::Node<A>& n2) noexcept {
 		n1.swap(n2);
 	}

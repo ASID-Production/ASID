@@ -36,6 +36,9 @@ if (POLICY CMP0141)
     set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<IF:$<AND:$<C_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:MSVC>>,$<$<CONFIG:Debug,RelWithDebInfo>:EditAndContinue>,$<$<CONFIG:Debug,RelWithDebInfo>:ProgramDatabase>>")
 endif()
 
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 set(COMPILE_TESTS FALSE)
 if (WIN32)
     set(COMPILE_TESTS TRUE)
@@ -63,7 +66,7 @@ if (WIN32)
                            "cpplib/src/Functions/Functions.h"
                            "cpplib/src/Functions/AllInOneAndCurrent.h" 
                            "cpplib/src/Classes/FindGeometry.h" "cpplib/src/Functions/PythonInteface.cpp" "cpplib/src/BaseHeaders/Currents.h" "cpplib/src/Classes/Cluster.h")
-    target_link_libraries(cpplibLib ${Python3_LIBRARY_DIRS})
+    target_link_libraries(cpplibLib)
 
     target_include_directories(cpplibLib PUBLIC 
         ${PROJECT_SOURCE_DIR}/cpplib/src/BaseHeaders

@@ -58,7 +58,6 @@ target_link_libraries(
     GTest::gtest_main
     cpplibLib
 )
-set_property(TARGET MyTests PROPERTY CXX_STANDARD 14)
 
 add_custom_command(
         TARGET MyTests POST_BUILD
