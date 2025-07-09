@@ -392,14 +392,11 @@ namespace cpplib {
 			::std::swap(type_, other.type_);
 			::std::swap(hAtoms_, other.hAtoms_);
 			::std::swap(coord_, other.coord_);
-			const auto n1size = this->neighboursSize();
-			const auto n2size = other.neighboursSize();
-			for (AtomIndex i = 0; i < n1size; i++) {
-				this->getNeighbour(i)->exchangeNeighbour(this, &other);
-			}
-			for (AtomIndex i = 0; i < n2size; i++) {
-				other.getNeighbour(i)->exchangeNeighbour(&other, this);
-			}
+
+			const auto pother = &other;
+			this->changeNeigboursOfNeighbours(pother);
+			pother->changeNeigboursOfNeighbours(this);
+
 			::std::swap(neighbours_, other.neighbours_);
 			NeighboursType::ShiftType shift = &other - this;
 			neighbours_.addShift(shift);
@@ -409,44 +406,14 @@ namespace cpplib {
 			bool bondExists = neighbours_.exchange(0, shift);
 			if(bondExists == true) other.neighbours_.exchange(0, -shift);
 		}
-		constexpr void swap_new(Node& other) noexcept {
-			std::swap(type_, other.type_);
-			std::swap(hAtoms_, other.hAtoms_);
-			std::swap(coord_, other.coord_);
-
-			swap_neighbor_references(other);
-			std::swap(neighbours_, other.neighbours_);
-
-			ShiftType shift = &other - this;
-			adjust_neighbor_shifts(neighbours_, shift);
-			adjust_neighbor_shifts(other.neighbours_, -shift);
-		}
 	private:
-		void update_neighbor_references(Node* old_ref, Node* new_ref) {
-			auto cur_shift = old_ref - this;
-			auto new_shift = new_ref - this;
-			[[maybe_unused]] bool updated = neighbours_.exchange(cur_shift, new_shift);
-			_ASSERT(updated == true);
-		}
-
-		void adjust_neighbor_shifts(NeighboursType& neighbours, ShiftType shift) {
-			neighbours.addShift(shift);
-			bool bond_exists = neighbours.exchange(0, shift);
-			if (bond_exists) {
-				// TODO
-			}
-		}
-		void swap_neighbor_references(Node& other) {
+		void changeNeigboursOfNeighbours(Node* other) noexcept {
 			const auto n1size = this->neighboursSize();
-			const auto n2size = other.neighboursSize();
 			for (AtomIndex i = 0; i < n1size; i++) {
-				this->getNeighbour(i)->exchangeNeighbour(this, &other);
-			}
-			for (AtomIndex i = 0; i < n2size; i++) {
-				other.getNeighbour(i)->exchangeNeighbour(&other, this);
+				this->getNeighbour(i)->exchangeNeighbour(this, other);
 			}
 		}
-		inline void deleteNeighbour(const Node& node) noexcept {
+		void deleteNeighbour(const Node& node) noexcept {
 			return deleteNeighbour(&node);
 		}
 		constexpr void deleteNeighbour(const Node* pnode) noexcept {
