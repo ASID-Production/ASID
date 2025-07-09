@@ -527,26 +527,33 @@ namespace cpplib {
 		}
 		void release_HAtoms(const currents::TypeBitset& bits) {
 			if (bits.none()) return;
-			AtomIndex hs = this->size();
-			const AtomIndex sn = hs;
+			const AtomIndex original_size = size();
+			AtomIndex new_index = original_size;
 
-			for (AtomIndex i = 1; i < sn; i++)
-			{
-				bool check;
-				if constexpr (::std::is_same_v<A, CompositeAtom> == true) {
-					check = ((static_cast<CompositeAtom>(data_[i].getType())).get_bitset() & bits).any();
+			size_t totalH = 0;
+			for (AtomIndex i = 1; i < original_size; i++) {
+				totalH += data_[i].getHAtoms();
+			}
+			data_.reserve(original_size + totalH);
+
+			for (AtomIndex i = 1; i < original_size; i++) {
+				bool check = false;
+
+				if constexpr (::std::is_same_v<A, CompositeAtom>) {
+					check = (data_[i].getType().get_bitset() & bits).any();
 				}
 				else {
-					check = bits[static_cast<currents::AtomTypeBase>(this->operator[](i).getType())];
+					const auto type = static_cast<currents::AtomTypeBase>(data_[i].getType());
+					check = (type > 0) && bits[type];
 				}
-				if(check) {
-					auto hAtoms = this->operator[](i).getHAtoms();
-					for (HType j = 0; j < hAtoms; j++)
-					{
-						data_.emplace_back(A(1), 0, hs);
+
+				if (check) {
+					const auto hAtoms = data_[i].getHAtoms();
+					for (HType j = 0; j < hAtoms; j++) {
+						data_.emplace_back(A(1), 0, new_index);
 						data_[i].addBondWithSort(data_.back());
 						data_.back().setCoord(Coord(1, Coord::max));
-						hs++;
+						new_index++;
 					}
 					data_[i].setHAtoms(0);
 				}
