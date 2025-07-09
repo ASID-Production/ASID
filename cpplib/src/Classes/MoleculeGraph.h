@@ -169,14 +169,19 @@ namespace cpplib {
 
 		// Bond functions
 		::std::vector<BondType> getBonds() const {
+
 			::std::vector<BondType> ret;
+			ret.reserve(countBonds());
 
 			AtomIndex s = size();
 			for (AtomIndex i = 1; i < s; i++) {
-				const auto neigh_s = this->operator[](i).neighboursSize();
+				const auto& node = data_[i];
+				const auto neigh_s = node.neighboursSize();
+
 				for (AtomIndex j = 0; j < neigh_s; j++) {
-					if (j > i) {
-						ret.emplace_back(i, j);
+					const AtomIndex neighbor_id = node.getNeighbour(j)->getID();
+					if (neighbor_id > i) {
+						ret.emplace_back(i, neighbor_id);
 					}
 				}
 			}
