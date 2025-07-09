@@ -31,24 +31,30 @@
 #include <vector>
 #include "../BaseHeaders/Currents.h"
 
+
+
+
+
 namespace cpplib {
 	class Distances {
 		// Order of values
 		// 1/1,1/2,1/3,1/4,1/5, 5/5, 2/2,2/3,2/4,2/5, 4/4,4/5, 3/3,3/4,3/5
 	public:
+		static constexpr size_t MAX_TYPE = cpplib::mend_size;
+
 		struct DistancesException : public ::std::runtime_error { 
 			using ::std::runtime_error::runtime_error;
 		};
+
 		using FloatingPointType = currents::FloatingPointType;
 		using base = ::std::vector<FloatingPointType>;
 		using size_type = int_fast8_t;
 		using AtomTypeBase = currents::AtomTypeBase;
+		using DataArray = std::array<std::array<std::array<FloatingPointType, 2>, MAX_TYPE + 1>, MAX_TYPE + 1>;
 	private:
-		using internal_size_type = int_fast16_t;
-		static_assert (sizeof(size_type) * 2 <= sizeof(internal_size_type), "Internal_size_type should be at least 2 times bigger than size_type");
 
+		DataArray data_{}; // [i][j][0] = min, [i][j][1] = max
 		bool isReady_ = false;
-		size_type maxType_ = 0;
 	public:
 		Distances() = delete;
 		Distances(Distances&&) = delete;
@@ -59,19 +65,16 @@ namespace cpplib {
 			int mt_temp;
 			if (!(in >> mt_temp))
 				throw DistancesException("Error while reading file " + filename);
-			maxType_ = mt_temp;
-			data_.assign(maxType_ * (maxType_ + 1), 0.0f);
+			if (mt_temp > MAX_TYPE) throw DistancesException("MAX_TYPE is greater than " + ::std::to_string(MAX_TYPE));
 			int i = 0;
 			int j = 0;
 			FloatingPointType lmin = 0.0f;
 			FloatingPointType lmax = 0.0f;
-			while (in >> i) {
-				if ((((i == 0) || !(in >> j)) || !(in >> lmin)) || !(in >> lmax))
-					return;
-				if (i > j) ::std::swap(i, j);
-				auto t = indexBond(i, j);
-				data_[t] = lmin;
-				data_[t + 1] = lmax;
+			while (in >> i >> j >> lmin >> lmax) {
+				if (i < 1 || j < 1 || i > MAX_TYPE || j > MAX_TYPE) 
+					throw DistancesException("File contains incorrect data.");
+				data_[i][j] = { lmin, lmax };
+				data_[j][i] = { lmin, lmax }; // symmetric storage
 			}
 			isReady_ = true;
 		}
@@ -79,42 +82,22 @@ namespace cpplib {
 			return isReady_;
 		}
 
-		inline char isBond(AtomTypeBase i, AtomTypeBase j, const FloatingPointType length) const noexcept {
-			_ASSERT(i <= maxType_ && j <= maxType_);
+		inline char isBond(AtomTypeBase i, AtomTypeBase j, FloatingPointType length) const noexcept {
+			_ASSERT(i <= MAX_TYPE && j <= MAX_TYPE);
 			_ASSERT(i > 0 && j > 0);
-			if (i > j) 
-				::std::swap(i, j);
-			internal_size_type n = indexBond(i, j);
-			if (length < data_[n + 1]) {
-				if (data_[n] < length) return 1; // Usual bond
-				else return -1; // Invalid bond
-			}
-			else return 0; // Not a bond
+			const auto& [min, max] = data_[i][j];
+			return (length < max) ? ((min < length) ? 1 : -1) : 0;
 		}
+
 		inline FloatingPointType minDistance(AtomTypeBase a1, AtomTypeBase a2) const noexcept {
-			_ASSERT(a1 <= maxType_ && a2 <= maxType_);
+			_ASSERT(a1 <= MAX_TYPE && a2 <= MAX_TYPE);
 			_ASSERT(a1 > 0 && a2 > 0);
-			if (a1 <= a2) return data_[indexBond(a1, a2)];
-			else return data_[indexBond(a2, a1)];
+			return data_[a1][a2][0];
 		}
 		inline FloatingPointType maxDistance(AtomTypeBase a1, AtomTypeBase a2) const noexcept {
-			_ASSERT(a1 <= maxType_ && a2 <= maxType_);
+			_ASSERT(a1 <= MAX_TYPE && a2 <= MAX_TYPE);
 			_ASSERT(a1 > 0 && a2 > 0);
-			if (a1 <= a2) return data_[indexBond(a1, a2) + 1];
-			else return data_[indexBond(a2, a1) + 1];
+			return data_[a1][a2][1];
 		}
-	private:
-		constexpr internal_size_type indexBond(size_type i, size_type j) const {
-			auto a1 = ::std::min(i - 1, maxType_ - i);
-			if (i - a1 == 1) {
-				return (a1 * (maxType_ + 1) + j - i) << 1;
-			}
-			else {
-				return ((a1 + 1) * (maxType_ + 1) - 1 - j + i) << 1;
-			}
-		}
-	private:
-		// Data
-		std::vector<FloatingPointType> data_;
 	};
 }
