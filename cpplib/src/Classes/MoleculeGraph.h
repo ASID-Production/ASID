@@ -35,6 +35,12 @@
 #include <algorithm> // for std::stable_sort
 #include <sstream>
 namespace cpplib {		
+	enum class ReserveStrategy :char {
+		None,
+		Exact,
+		Estimated
+	};
+
 	class TypeMap {
 	public:
 		using AtomIndex = currents::AtomIndex;
@@ -56,9 +62,11 @@ namespace cpplib {
 			}
 		}
 		inline AtomIndex& operator[](const indexType i) {
+			_ASSERT(i < data_.size());
 			return data_[i];
 		}
 		inline const AtomIndex& operator[](const indexType i) const {
+			_ASSERT(i < data_.size());
 			return data_[i];
 		}
 		inline void initialize(const currents::TypeBitset& bits) {
@@ -67,7 +75,7 @@ namespace cpplib {
 				if (bits[i]) data_[i] = static_cast<AtomIndex>(0);
 			}
 		}
-		inline constexpr indexType size() const {
+		constexpr indexType size() const {
 			return data_.size();
 		}
 		inline bool isFinished() const {
@@ -78,6 +86,7 @@ namespace cpplib {
 			return true;
 		}
 	};
+
 	template<AtomTypeConcept A> class MoleculeGraph  {
 	public:
 		// Declarations
@@ -168,10 +177,18 @@ namespace cpplib {
 		}
 
 		// Bond functions
-		::std::vector<BondType> getBonds() const {
-
+		::std::vector<BondType> getBonds(ReserveStrategy strategy = ReserveStrategy::Estimated) const {
 			::std::vector<BondType> ret;
-			ret.reserve(countBonds());
+			switch (strategy) {
+			case ReserveStrategy::Exact:
+				ret.reserve(countBonds());
+				break;
+			case ReserveStrategy::Estimated:
+				ret.reserve(size() * 2);
+				break;
+			default: break;
+			}
+			
 
 			AtomIndex s = size();
 			for (AtomIndex i = 1; i < s; i++) {
@@ -251,9 +268,11 @@ namespace cpplib {
 
 		// Operators
 		constexpr const NodeType& operator[](const AtomIndex s) const noexcept {
+			_ASSERT(s < data_.size());
 			return data_[s];
 		}
 		constexpr NodeType& operator[](const AtomIndex s) noexcept {
+			_ASSERT(s < data_.size());
 			return data_[s];
 		}
 		inline MoleculeGraph& operator=(const MoleculeGraph& other) noexcept = delete;
@@ -318,6 +337,7 @@ namespace cpplib {
 				}
 				if (best != i) {
 					exchange(i, best);
+					// IDs don't swap and stay actual
 				}
 			}
 			for (AtomIndex i = 1; i < s; i++)
@@ -336,38 +356,25 @@ namespace cpplib {
 		}
 
 	private:
-		bool readToNext(const char*& str) {
+		bool readToNext(const char*& str) const {
 
 			while (*str != '-' && *str != '\0' && (*str > '9' || *str < '0')) {
 				str++;
 			}
 			return *str != '\0';
 		}
-		AtomIndex readSingleInt(const char*& str) {
-			readToNext(str);
-			bool minus = false;
-			if (*str == '-') {
-				minus = true;
-				str++;
-			}
-			AtomIndex res = (*str)-'0';
-			str++;
-			while ((*str)!=' ' && (*str)!='\0')
-			{
-				res *= 10;
-				res += (*str) - '0';
-				str++;
-			}
-			if (minus)
-				return -res;
-			else
-				return res;
+		AtomIndex readSingleInt(const char*& str) const {
+			char* end;
+			long value = std::strtol(str, &end, 10);
+			str = end;
+			return static_cast<AtomIndex>(value);
 		}
 		inline ::std::vector<bool> parseAtomsBlockData(const char *& str, const AtomIndex sn, const TypeMap& argMap) {
 			data_.reserve(sn);
+			::std::vector<bool> is_used(sn, false);
 			TypeMap map(argMap);
 			data_.emplace_back(A(0), HType(0), AtomIndex(0));
-			::std::vector<bool> is_used(sn, false);
+
 			for (AtomIndex i = 1; i < sn; i++) {
 				int a = readSingleInt(str);
 				int b = readSingleInt(str);
@@ -548,12 +555,16 @@ namespace cpplib {
 		constexpr void exchange(AtomIndex a1, AtomIndex a2) {
 			data_[a1].swap(data_[a2]);
 		}
-		std::string writeDataString() const {
+		::std::string writeDataString() const {
 			AtomIndex ns = data_.size();
 			AtomIndex bs = 0;
-			std::vector<BondType> bonds;
-			std::string bond_str; // starts with ' '
-			std::string node_str;
+			::std::vector<BondType> bonds;
+			::std::string bond_str; // starts with ' '
+			::std::string node_str;
+
+			bond_str.reserve(2048);
+			node_str.reserve(2048);
+
 			for (AtomIndex i = 1; i < ns; i++)
 			{
 				node_str += ' ';
