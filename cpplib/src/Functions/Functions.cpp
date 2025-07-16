@@ -49,11 +49,12 @@ bool CompareGraph(const char* search1, const char* search2, const bool exact) {
 	SearchGraphType graph;
 
 	deb_write("CompareGraph CurrentSearchGraph start ReadInput");
-	auto&& inputpair = SearchGraphType::RequestGraphType::ReadInput(search1);
+	auto&& inputpair = cpplib::MoleculeParser<AtomTypeRequest>::Read(search1);
 	auto map = inputpair.first.getTypeMap();
 	graph.setupInput(std::move(inputpair.first));
 	deb_write("CompareGraph CurrentSearchGraph start ReadData");
-	auto&& d_pair = SearchGraphType::DatabaseGraphType::ReadData(search2, inputpair.second, map);
+	auto&& d_pair = cpplib::MoleculeParser<AtomTypeData>::Read(search2, inputpair.second, map);
+
 	if (!d_pair.second) return false;
 	graph.setupData(std::move(d_pair.first));
 	deb_write("CompareGraph CurrentSearchGraph start prepareSearch");
@@ -62,7 +63,8 @@ bool CompareGraph(const char* search1, const char* search2, const bool exact) {
 	return graph.startFullSearch(exact);
 }
 std::vector<int> SearchMain(const char* search, std::vector<const char*>&& data, const int np, const bool exact) {
-	auto&& inputpair = SearchGraphType::RequestGraphType::ReadInput(search);
+
+	auto&& inputpair = cpplib::MoleculeParser<AtomTypeRequest>::Read(search);
 	SearchDataInterfaceType databuf(std::move(data), std::move(inputpair.second));
 	std::vector<std::thread> threads;
 	const size_t nThreads = std::min(std::min(static_cast<unsigned int>(np), std::thread::hardware_concurrency()),
@@ -335,7 +337,7 @@ static void ChildThreadFunc(const SearchGraphType::RequestGraphType& input, cons
 		auto map = input.getTypeMap();
 		auto tempinput = input;
 		graph.setupInput(std::move(tempinput));
-		auto && molData = SearchGraphType::DatabaseGraphType::ReadData(next, multi, map);
+		auto&& molData = cpplib::MoleculeParser<AtomTypeData>::Read(next, multi, map);
 		if (!molData.second) continue;
 		auto id = molData.first.getID();
 		graph.setupData(std::move(molData.first));

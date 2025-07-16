@@ -41,14 +41,14 @@ namespace cpplib {
 		using NodeType = Node<A>;
 		using AtomTypeBase = typename NodeType::AtomType::AtomTypeBase;
 		using AtomIndex = currents::AtomIndex;
-		using MoleculeGraphType = MoleculeGraph<A>;
+		using MoleculeCoreType = MoleculeCore<A>;
 		using size_type = currents::AtomIndex;
 
 	private:
 		// Data
 		::std::vector<hash_full> hash;
 		template <class MI>
-		explicit constexpr Hash(const MoleculeGraphType& nodes) = delete;
+		explicit constexpr Hash(const MoleculeCoreType& nodes) = delete;
 
 	public:
 		// Constructors

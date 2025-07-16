@@ -35,8 +35,8 @@ namespace cpplib {
 		// Declarations
 		using AtomIndex = currents::AtomIndex;
 		using MoleculeIndex = currents::MoleculeIndex;
-		using RequestGraphType = MoleculeGraph<currents::AtomTypeRequest>;
-		using DatabaseGraphType = MoleculeGraph<currents::AtomTypeData>;
+		using RequestGraphType = MoleculeCore<currents::AtomTypeRequest>;
+		using DatabaseGraphType = MoleculeCore<currents::AtomTypeData>;
 		using AtomTypeBase = currents::AtomTypeBase;
 
 		using BondType = DatabaseGraphType::BondType;

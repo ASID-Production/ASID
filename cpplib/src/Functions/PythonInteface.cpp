@@ -838,11 +838,10 @@ extern "C" {
 		bool res = false;
 
 		cpplib::SearchGraph graph;
-
-		auto&& inputpair = SearchGraphType::RequestGraphType::ReadInput(s1);
+		auto&& inputpair = cpplib::MoleculeParser<AtomTypeRequest>::Read(s1);
 		graph.setupInput(std::move(inputpair.first));
 		deb_write("cpplib_SubSearch start ReadData");
-		auto datg = SearchGraphType::RequestGraphType::ReadInput(s2).first.makeCopyEx<AtomTypeData>();
+		auto datg = cpplib::MoleculeParser<AtomTypeRequest>::Read(s2).first.makeCopyEx<AtomTypeData>();
 		graph.setupData(std::move(datg));
 		deb_write("cpplib_SubSearch start prepareSearch");
 		graph.prepareToSearch();
@@ -904,7 +903,7 @@ extern "C" {
 	}
 	static PyObject* cpplib_SortDatabase(PyObject* self, PyObject* arg) {
 		Py_ssize_t us;
-		const auto ret = cpplib::currents::SearchGraphType::DatabaseGraphType::ResortString(PyUnicode_AsUTF8AndSize(arg,&us));
+		const auto ret = cpplib::MoleculeParser<cpplib::currents::AtomTypeData>::ResortString(PyUnicode_AsUTF8AndSize(arg, &us));
 		return PyUnicode_FromString(ret.c_str());
 	}
 

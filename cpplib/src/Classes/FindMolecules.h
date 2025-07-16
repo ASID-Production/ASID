@@ -603,7 +603,7 @@ namespace cpplib {
 				right.emplace_back(std::move(oneMol), std::get<1>(molecules[i]), std::move(std::get<2>(molecules[i])));
 			}
 			auto outputStr = output(molecules, net);
-			auto res = cpplib::currents::SearchGraphType::DatabaseGraphType::ResortString(outputStr.c_str()).substr(2);
+			auto res = MoleculeParser<AtomType>::ResortString(outputStr.c_str()).substr(2);
 			return std::make_tuple(res, errorMsg, std::move(right));
 		}
 		std::tuple<std::vector<AtomIndex>, std::vector<MoleculeType>> separateGraphs(std::vector<BondType>& bonds) {

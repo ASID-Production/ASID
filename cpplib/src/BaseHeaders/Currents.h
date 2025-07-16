@@ -44,7 +44,7 @@ namespace cpplib {
 	struct BondEx;
 	class Coord;
 	template<AtomTypeConcept A> class Node;
-	template<AtomTypeConcept A> class MoleculeGraph;
+	template<AtomTypeConcept A> class MoleculeCore;
 	class SearchGraph;
 	class Distances;
 	class FindMolecules;
