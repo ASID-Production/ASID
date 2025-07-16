@@ -33,6 +33,9 @@
 #include <type_traits> // for std::fundamental
 #include <numeric> // for std::iota
 #include <algorithm> // for std::stable_sort
+#include <cctype> // for isdigit
+#include <ranges>
+#include <charconv>
 #include <sstream>
 namespace cpplib {		
 	enum class ReserveStrategy :char {
@@ -50,10 +53,7 @@ namespace cpplib {
 	public:
 		static_assert (INT8_MAX >= mend_size, "mend_size chould be less than INT8_MAX");
 		constexpr TypeMap() {
-			for (indexType i = 0; i < mend_size; i++)
-			{
-				data_[i] = static_cast<AtomIndex>(-1);
-			}
+			std::ranges::fill(data_, AtomIndex(-1));
 		}
 		constexpr explicit TypeMap(const AtomIndex value) {
 			for (indexType i = 0; i < mend_size; i++)
@@ -72,7 +72,7 @@ namespace cpplib {
 		inline void initialize(const currents::TypeBitset& bits) {
 			for (indexType i = 1; i < mend_size; i++)
 			{
-				if (bits[i]) data_[i] = static_cast<AtomIndex>(0);
+				if (bits[i]) data_[i] = AtomIndex(0);
 			}
 		}
 		constexpr indexType size() const {
@@ -87,7 +87,8 @@ namespace cpplib {
 		}
 	};
 
-	template<AtomTypeConcept A> class MoleculeGraph  {
+	template<AtomTypeConcept A> 
+	class MoleculeGraph {
 	public:
 		// Declarations
 		using NodeType = Node<A>;
@@ -108,71 +109,11 @@ namespace cpplib {
 
 	public:
 		constexpr MoleculeGraph() noexcept = default;
-		constexpr MoleculeGraph(const MoleculeGraph&) = delete;
-		constexpr MoleculeGraph(MoleculeGraph&&) noexcept = default;
 		explicit constexpr MoleculeGraph(NodeContainer&& other) noexcept(::std::is_nothrow_move_constructible_v<NodeContainer>)
 			: data_(::std::move(other)) {}
 		
-		static ::std::pair<MoleculeGraph, bool> ReadData(const char* str, const currents::TypeBitset& multiAtomBits, const TypeMap& map) {
-			MoleculeGraph mg;
-			const auto sn = mg.parseMainstringData(str, map);
-			if (sn == 0) return ::std::make_pair<MoleculeGraph, bool>(std::move(mg), false);
-			mg.release_HAtoms(multiAtomBits);
-			return ::std::make_pair<MoleculeGraph, bool>(std::move(mg), true);
-		}
 
-		static ::std::pair<MoleculeGraph, currents::TypeBitset> ReadInput(const char* str) {
-			MoleculeGraph mg;
-			const auto sn = mg.parseMainstringRequest(str);
-			auto multiAtomBits = mg.parseMultiatom(str, sn);
-			mg.release_HAtoms(multiAtomBits);
-			mg.sortGraph();
-			return ::std::make_pair(std::move(mg), ::std::move(multiAtomBits));
-		}
-		
-		void unpackHydrogens(AtomIndex index) {
-			auto s = data_[index].getHAtoms();
-			for (AtomIndex i = 0; i < s; i++)
-			{
-				AtomIndex last = data_.size();
-				data_.emplace_back(A(1), 0, last);
-				addBond(index, last);
-				data_[last].setCoord(Coord(1,Coord::max));
-			}
-			data_[index].setHAtoms(0);
-		}
-
-		TypeMap getTypeMap() const {
-			TypeMap map;
-			static_assert(map.size() == mend_size);
-			AtomIndex s = size();
-			for (AtomIndex i = 1; i < s; i++)
-			{
-				const auto t = static_cast<currents::AtomTypeBase>(data_[i].getType());
-				const auto h = data_[i].getHAtoms();
-
-				if (map[1] == AtomIndex(-1))
-					map[1] = AtomIndex(h);
-				else
-					map[1]+=h;
-				if (t > 0) {
-					if (map[t] == AtomIndex(-1))
-						map[t] = AtomIndex(1);
-					else
-						map[t]++;
-				}
-				else {
-					for (TypeMap::indexType j = 1; j < map.size(); j++)
-					{
-						if (data_[i].getType().contains(j) && map[j] == AtomIndex(-1))
-							map[j] = AtomIndex(0);
-					}
-				}
-			}
-			return map;
-		}
-
-		inline AtomIndex size() const noexcept {
+		constexpr AtomIndex size() const noexcept {
 			return static_cast<AtomIndex>(data_.size());
 		}
 
@@ -221,34 +162,7 @@ namespace cpplib {
 			data_[a].deleteBond(data_[b]);
 		}
 
-		// For Search
-		constexpr AtomIndex findStart() const {
-			return 1;
-		}
-		constexpr AtomIndex getNeighbourId(AtomIndex cur, AtomIndex neighbourIt) const noexcept {
-			return data_[cur].getNeighbour(neighbourIt)->getID();
-		}
-		constexpr const NodeType& getNeighbourReference(AtomIndex cur, AtomIndex neighbourIt) const noexcept {
-			return *(data_[cur].getNeighbour(neighbourIt));
-		}
-		constexpr const NodeType* getNeighbourPointer(AtomIndex cur, AtomIndex neighbourIt) const noexcept {
-			return data_[cur].getNeighbour(neighbourIt);
-		}
-
 		// Copy functions
-		[[nodiscard]] constexpr MoleculeGraph makeCopy() const noexcept(false) {
-			// Copy
-			MoleculeGraph ret;
-			ret.id_ = id_;
-			AtomIndex s = size();
-			ret.data_.reserve(s);
-			// Convertion to Correct Neighbours
-			for (AtomIndex i = 0; i < s; i++) {
-				const auto& node = data_[i];
-				ret.data_.emplace_back(node);
-			}
-			return ret;
-		}
 		template <class OT>
 		[[nodiscard]] constexpr MoleculeGraph<OT> makeCopyEx() const noexcept(false) {
 			// Copy
@@ -275,8 +189,6 @@ namespace cpplib {
 			_ASSERT(s < data_.size());
 			return data_[s];
 		}
-		inline MoleculeGraph& operator=(const MoleculeGraph& other) noexcept = delete;
-		inline MoleculeGraph& operator=(MoleculeGraph&& other) noexcept = default;
 
 		// Iterators
 		constexpr auto begin() noexcept {
@@ -296,11 +208,71 @@ namespace cpplib {
 			return id_;
 		}
 
+
+
+		static ::std::pair<MoleculeGraph, bool> ReadData(const char* str, const currents::TypeBitset& multiAtomBits, const TypeMap& map) {
+			MoleculeGraph mg;
+			const auto sn = mg.parseMainstringData(str, map);
+			if (sn == 0) return ::std::make_pair<MoleculeGraph, bool>(std::move(mg), false);
+			mg.release_HAtoms(multiAtomBits);
+			return ::std::make_pair<MoleculeGraph, bool>(std::move(mg), true);
+		}
+
+		static ::std::pair<MoleculeGraph, currents::TypeBitset> ReadInput(const char* str) {
+			MoleculeGraph mg;
+			const auto sn = mg.parseMainstringRequest(str);
+			auto multiAtomBits = mg.parseMultiatom(str, sn);
+			mg.release_HAtoms(multiAtomBits);
+			mg.sortGraph();
+			return ::std::make_pair(std::move(mg), ::std::move(multiAtomBits));
+		}
+
+		void unpackHydrogens(AtomIndex index) {
+			auto s = data_[index].getHAtoms();
+			for (AtomIndex i = 0; i < s; i++)
+			{
+				AtomIndex last = data_.size();
+				data_.emplace_back(A(1), 0, last);
+				addBond(index, last);
+				data_[last].setCoord(Coord(1, Coord::max));
+			}
+			data_[index].setHAtoms(0);
+		}
+		constexpr TypeMap getTypeMap() const {
+			TypeMap map;
+			static_assert(map.size() == mend_size);
+			AtomIndex s = size();
+			for (AtomIndex i = 1; i < s; i++)
+			{
+				const auto t = static_cast<currents::AtomTypeBase>(data_[i].getType());
+				const auto h = data_[i].getHAtoms();
+
+				if (map[1] == AtomIndex(-1))
+					map[1] = AtomIndex(h);
+				else
+					map[1] += h;
+				if (t > 0) {
+					if (map[t] == AtomIndex(-1))
+						map[t] = AtomIndex(1);
+					else
+						map[t]++;
+				}
+				else {
+					for (TypeMap::indexType j = 1; j < map.size(); j++)
+					{
+						if (data_[i].getType().contains(j) && map[j] == AtomIndex(-1))
+							map[j] = AtomIndex(0);
+					}
+				}
+			}
+			return map;
+		}
+
 		// static section for old tests
 		static ::std::string _ParseOldInputString(const char* str)  {
 			::std::string ret(str);
-			int na;
-			int no;
+			long na;
+			long no;
 			{
 				::std::stringstream ss(ret);
 				ss >> no;
@@ -356,18 +328,19 @@ namespace cpplib {
 		}
 
 	private:
-		bool readToNext(const char*& str) const {
-
+		constexpr bool readToNext(const char*& str) const noexcept {
 			while (*str != '-' && *str != '\0' && (*str > '9' || *str < '0')) {
 				str++;
 			}
 			return *str != '\0';
 		}
-		AtomIndex readSingleInt(const char*& str) const {
-			char* end;
-			long value = std::strtol(str, &end, 10);
-			str = end;
-			return static_cast<AtomIndex>(value);
+		constexpr AtomIndex readSingleInt(const char*& str) const {
+			// TODO check performance
+			readToNext(str);
+			AtomIndex value;
+			auto [ptr, ec] = std::from_chars(str, str + 15, value);
+			if (ec == std::errc()) str = ptr;
+			return value;
 		}
 		inline ::std::vector<bool> parseAtomsBlockData(const char *& str, const AtomIndex sn, const TypeMap& argMap) {
 			data_.reserve(sn);
@@ -506,7 +479,6 @@ namespace cpplib {
 				for (AtomIndex i = 1; i < sn; i++)
 				{
 					if (static_cast<currents::AtomTypeBase>(data_[i].getType()) == static_cast<currents::AtomTypeBase>(xty)) {
-						// TODO upper could be incorrect. Check it
 						data_[i].setType(real);
 						if (!real.contains(1)) continue;
 
@@ -559,8 +531,8 @@ namespace cpplib {
 				}
 			}
 		}
-		constexpr void exchange(AtomIndex a1, AtomIndex a2) {
-			data_[a1].swap(data_[a2]);
+		constexpr void exchange(AtomIndex a1, AtomIndex a2) noexcept {
+			if(a1!=a2) data_[a1].swap(data_[a2]);
 		}
 		::std::string writeDataString() const {
 			AtomIndex ns = data_.size();
@@ -582,7 +554,7 @@ namespace cpplib {
 				int8_t neis = data_[i].neighboursSize();
 				for (int8_t j = 0; j < neis; j++)
 				{
-					AtomIndex neindex = getNeighbourId(i, j);
+					AtomIndex neindex = data_[i].getNeighbour(j)->getID();
 					if(neindex > i) {
 						bond_str += ' ';
 						bond_str += std::to_string(i);

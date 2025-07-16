@@ -98,8 +98,7 @@ namespace cpplib {
 			return false;
 		}
 		// destroys all data, need reinitialization!
-		bool startFullSearch(const bool exact, AtomIndex startAtom = 0) {
-			if (startAtom == 0) startAtom = input_.findStart();
+		bool startFullSearch(const bool exact, AtomIndex startAtom = 1) {
 			for (AtomIndex i = 1; i < dataSize_; i++) {
 				if (compare(input_[startAtom], data_[i], exact) == false) {
 					continue;
@@ -311,7 +310,7 @@ namespace cpplib {
 			const AtomIndex neiSize = input_[curI].neighboursSize();
 			const AtomIndex curD = comp_[curI];
 			for (AtomIndex i = 0; i < neiSize; i++) {
-				const AtomIndex neiID = input_.getNeighbourId(curI, i);
+				const AtomIndex neiID = input_[curI].getNeighbour(i)->getID();
 
 				if (comp_[neiID] == 0)
 					continue;
@@ -331,14 +330,14 @@ namespace cpplib {
 			}
 
 			// Check neighbours
-			const AtomIndex nextI = input_.getNeighbourId(curI, 0);
+			const AtomIndex nextI = input_[curI].getNeighbour(0)->getID();
 			const AtomIndex neiDataSize = data_[curD].neighboursSize();
 			for (AtomIndex i = 0; i < neiDataSize; i++) {
-				const auto& neiData = data_.getNeighbourReference(curD, i);
-				const AtomIndex neiID = neiData.getID();
+				const auto neiData = data_[curD].getNeighbour(i);
+				const AtomIndex neiID = neiData->getID();
 				if (usedInComp_[neiID] == true)
 					continue;
-				if (compare(input_[nextI], neiData, exact) == false)
+				if (compare(input_[nextI], *neiData, exact) == false)
 					continue;
 				addComp(nextI, neiID);
 				prepareLogAndNodes(curI, nextI);

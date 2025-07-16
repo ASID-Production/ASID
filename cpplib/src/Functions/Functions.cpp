@@ -68,7 +68,7 @@ std::vector<int> SearchMain(const char* search, std::vector<const char*>&& data,
 	const size_t nThreads = std::min(std::min(static_cast<unsigned int>(np), std::thread::hardware_concurrency()),
 									 static_cast<unsigned int>(databuf.size())) - 1;
 	threads.reserve(nThreads);
-	auto ma = inputpair.first.findStart();
+	auto ma = 1;
 
 	for (size_t i = 0; i < nThreads; i++) {
 		threads.emplace_back(ChildThreadFunc, std::cref(inputpair.first), ma, std::ref(databuf), exact);
@@ -333,7 +333,8 @@ static void ChildThreadFunc(const SearchGraphType::RequestGraphType& input, cons
 		}
 		const auto& multi = dataInterface.getMulty();
 		auto map = input.getTypeMap();
-		graph.setupInput(input.makeCopy()); 
+		auto tempinput = input;
+		graph.setupInput(std::move(tempinput));
 		auto && molData = SearchGraphType::DatabaseGraphType::ReadData(next, multi, map);
 		if (!molData.second) continue;
 		auto id = molData.first.getID();
