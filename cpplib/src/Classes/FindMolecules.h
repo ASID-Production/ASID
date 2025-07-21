@@ -52,7 +52,6 @@ namespace cpplib {
 		using NodeType = Node<AtomType>;
 		using DistancesType = Distances;
 		using BondType = Bond;
-		static_assert(::std::is_same<typename Bond::AtomIndex, typename NodeType::AtomIndex>::value, "Bond::AtomIndex and NodeType::AtomIndex should be the same");
 		using BondExType = BondEx;
 		using AtomIndex = NodeType::AtomIndex;
 		using AtomContainerType = ::std::vector<AtomTypeBase>;
@@ -62,18 +61,19 @@ namespace cpplib {
 		using SymmRef = unsigned int;
 		using ParseIndexType = ::std::vector<std::tuple<AtomIndex, SymmRef, ShiftType>>;
 
+		static_assert(::std::is_same_v<typename Bond::AtomIndex, typename NodeType::AtomIndex>, "Bond::AtomIndex and NodeType::AtomIndex should be the same");
+
 		// Data
 		AtomContainerType types;
 		PointConteinerType points;
 		ParseIndexType parseIndex;
 
-
 		size_type sizeUnique = 0;
 		size_type sizePoints = 0;
 
 		// Constructors
-		inline FAM_Struct() noexcept = default;
-		inline FAM_Struct(AtomContainerType&& t, PointConteinerType&& p) noexcept : types(std::move(t)), points(std::move(p)) {
+		constexpr FAM_Struct() noexcept = default;
+		constexpr FAM_Struct(AtomContainerType&& t, PointConteinerType&& p) noexcept : types(std::move(t)), points(std::move(p)) {
 			sizeUnique = types.size();
 			sizePoints = points.size();
 			parseIndex.resize(sizeUnique);
@@ -176,19 +176,7 @@ namespace cpplib {
 				auto var = distances.maxDistance(types[i], types[i]);
 				if (var > ret) ret = var;
 			}
-			return std::fma(ret, static_cast<FloatingPointType>(2), static_cast<FloatingPointType>(0.0001));
-		}
-
-
-		// Debug Method
-		void writeXYZ(const std::string& name) {
-			std::ofstream out;
-			const auto size = std::min(types.size(), points.size());
-			for (size_t i = 0; i < size; i++)
-			{
-				out << types[i] << ' ' << points[i].get(0) << ' ' << points[i].get(1) << ' ' << points[i].get(2) << '\n';
-			}
-			out.close();
+			return ::std::fma(ret, static_cast<FloatingPointType>(2), static_cast<FloatingPointType>(0.0001));
 		}
 	};
 
@@ -217,7 +205,7 @@ namespace cpplib {
 				for (FAM_Struct::AtomIndex p = 0; p < p_s; p++) {
 					if (unique[p] == false) // skip non unique atoms
 						continue;
-					const FAM_Struct::AtomIndex p_start = fs.points.size();
+
 					PointType newpoint = symm[s].GenSymm(fs.points[p]);
 					PointType shift = (PointType(0.5, 0.5, 0.5) - newpoint).round();
 					if (intoCell) newpoint += shift;
@@ -354,7 +342,7 @@ namespace cpplib {
 					case  1:
 					{
 						bonds.emplace_back(Bond(i, j), toShift((fs.points[i] - fs.points[j]).round()));
-						auto & curbond = bonds.back();
+						const auto & curbond = bonds.back();
 						AtomIndex k1 = 0;
 						for (; k1 < allMolecules.size(); k1++)
 						{
@@ -633,7 +621,7 @@ namespace cpplib {
 			}
 			return std::make_tuple(refs, molecules);
 		}
-		PointConteinerType& compaq(const DistancesType& distances, std::vector<BondType>& bonds) {
+		PointConteinerType& compaq(std::vector<BondType>& bonds) {
 
 			// 1. Find closest atoms
 			deb_write("FM::compaq Phase 1. Find closest atoms");
@@ -676,7 +664,7 @@ namespace cpplib {
 				std::vector<AtomIndex> singleTable = findNextUniquePart(closest[i], net, seen);
 				deb_write("FM::compaq Phase 4.0. FM::findNextUniquePart successful");
 
-				size_type singleTableSize = static_cast<size_type>(singleTable.size());
+				auto singleTableSize = static_cast<size_type>(singleTable.size());
 
 				// 4.1. Shift Center of Mass
 				deb_write("FM::compaq Phase 4.1. Shift Center of Mass");
@@ -817,5 +805,149 @@ namespace cpplib {
 			}
 			return res;
 		}
+	};
+
+	class HashedSpace {
+	public:
+		using AtomIndex = currents::AtomIndex;
+		using PointType = currents::PointType;
+		using CellType = currents::CellType;
+		using BondList = ::std::vector<currents::BondType>;
+		using FloatingPointType = typename CellType::value_type;
+		using DimentionType = unsigned char;
+
+		using SupListType = ::std::list<AtomIndex>;
+		using SupType = ::std::array<::std::array<::std::array<SupListType, 3>, 3>, 3>;
+		using SupPoint = geometry::Point<size_t>;
+
+		constexpr HashedSpace(const CellType& cell, FloatingPointType maxbond) noexcept :
+			cell_(cell) {
+			calculateSep(maxbond);
+		}
+		constexpr bool is_effective() const noexcept {
+			return sep_[0] > 3 || sep_[1] > 3 || sep_[2] > 3;
+		}
+		BondList create_hash_bonds(const ::std::vector<PointType>& points) const {
+			BondList ret;
+			size_t estimated_size = points.size() * points.size() * sizemod();
+			ret.reserve(estimated_size);
+			SupType supply_table;
+
+			// Fill supply_table
+			for (AtomIndex i = 0; i < points.size(); i++)
+			{
+				auto c = coordintate_of_point(points[i]);
+				supply_table[c.get(0)][c.get(1)][c.get(2)].emplace_back(i);
+			}
+
+			// Create all bonds
+			for (size_t i = 0; i < sep_[0]; i++) {
+				for (size_t j = 0; j < sep_[1]; j++) {
+					for (size_t k = 0; k < sep_[2]; k++) {
+						box_working(ret, supply_table, i, j, k);
+					}
+				}
+			}
+			return ret;
+		}
+
+	private:
+		void box_working(BondList& ret, const SupType& supply_table, size_t i, size_t j, size_t k) const {
+			create_bonds_in_box(ret, supply_table[i][j][k]);
+
+			bool is_x = sep_[0] != 1;
+			bool is_y = sep_[1] != 1;
+			bool is_z = sep_[2] != 1;
+
+			auto dx = (i + 1 == sep_[0]) ? 0 : i + 1;
+			auto dy = (j + 1 == sep_[1]) ? 0 : j + 1;
+			auto dz = (k + 1 == sep_[2]) ? 0 : k + 1;
+
+			// dx
+			if (is_x) {
+				create_bonds_between_boxes(ret, supply_table[i][j][k], supply_table[dx][j][k]);
+			}
+			// dy
+			if (is_y) {
+				create_bonds_between_boxes(ret, supply_table[i][j][k], supply_table[i][dy][k]);
+			}
+			// dz
+			if (is_z) {
+				create_bonds_between_boxes(ret, supply_table[i][j][k], supply_table[i][j][dz]);
+			}
+
+			// dxdy
+			if (is_x && is_y) {
+				create_bonds_between_boxes(ret, supply_table[i][j][k], supply_table[dx][dy][k]);
+			}
+			// dxdz
+			if (is_x && is_z) {
+				create_bonds_between_boxes(ret, supply_table[i][j][k], supply_table[dx][j][dz]);
+			}
+			// dydz
+			if (is_y && is_z) {
+				create_bonds_between_boxes(ret, supply_table[i][j][k], supply_table[i][dy][dz]);
+			}
+
+			// dxdydz
+			if (is_x && is_y && is_z) {
+				create_bonds_between_boxes(ret, supply_table[i][j][k], supply_table[dx][dy][dz]);
+			}
+		}
+		void create_bonds_in_box(BondList& ret, const SupListType& l) const {
+			for (auto iter1 = l.begin(); iter1 != l.end(); iter1++)
+			{
+				auto iter2 = iter1;
+				iter2++;
+				for (; iter2 != l.end(); iter2++)
+				{
+					ret.emplace_back(*iter1, *iter2);
+				}
+			}
+		}		
+		constexpr void create_bonds_between_boxes(BondList& ret, const SupListType& l1, const SupListType& l2) const {
+			for (auto v1 : l1)
+			{
+				for (auto v2 : l2)
+				{
+					ret.emplace_back(v1, v2);
+					ret.back().validate();
+				}
+			}
+		}
+
+		static constexpr FloatingPointType modifier_ = 1.05;
+
+		constexpr SupPoint coordintate_of_point(const PointType& p) const noexcept {
+			return {
+				static_cast<size_t>(std::floor(p.get(0) * sep_[0])),
+				static_cast<size_t>(std::floor(p.get(1) * sep_[1])),
+				static_cast<size_t>(std::floor(p.get(2) * sep_[2]))
+			};
+		}
+		constexpr FloatingPointType sizemod() const noexcept {
+			FloatingPointType ret = 1;
+			for (DimentionType i = 0; i < 3; i++)
+			{
+				if (sep_[i] > 3) {
+					ret *= 3;
+					ret /= sep_[i];
+					ret *= modifier_;
+				}
+			}
+			return ret;
+		}
+		constexpr void calculateSep(FloatingPointType maxbond) {
+			maxbond *= modifier_;
+			for (DimentionType i = 0; i < 3; i++) {
+				sep_[i] = static_cast<size_t>(floor(cell_.lat_dir(i) / maxbond));
+				if (sep_[i] == 0) sep_[i] = 1;
+			}
+		}
+
+	private:
+		// Data
+		const CellType& cell_;
+		::std::array<size_t, 3> sep_;
 	};
 }

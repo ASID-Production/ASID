@@ -461,7 +461,7 @@ std::tuple<std::vector<cpplib::currents::PointType>, std::list<std::string>> Com
 	deb_write("Compaq create fm");
 	FindMoleculesType fm(std::move(fs));
 	deb_write("Compaq call fm.compaq");
-	auto & compaqed = fm.compaq(distances, res.first);
+	auto & compaqed = fm.compaq(res.first);
 	compaqed.resize(su);
 	deb_write("Compaq return");
 	return std::make_tuple(std::move(compaqed), res_errors);
