@@ -300,9 +300,9 @@ extern "C" {
 			PyObject* o_molecule = PyList_New(0);
 			for (auto& atom : std::get<0>(mol)) {
 				PyObject* o_atom = Py_BuildValue("{s:f,s:f,s:f,s:l}",
-												 "x", cpplib::currents::FloatingPointType(std::get<0>(atom).get(0)),
-												 "y", cpplib::currents::FloatingPointType(std::get<0>(atom).get(1)),
-												 "z", cpplib::currents::FloatingPointType(std::get<0>(atom).get(2)),
+												 "x", cpplib::currents::FloatingPointType(std::get<0>(atom)[0]),
+												 "y", cpplib::currents::FloatingPointType(std::get<0>(atom)[1]),
+												 "z", cpplib::currents::FloatingPointType(std::get<0>(atom)[2]),
 												 "init_idx", long(std::get<1>(atom)));
 				PyList_Append(o_molecule, o_atom);
 			}
@@ -337,9 +337,9 @@ extern "C" {
 			PyObject* o_molecule = PyList_New(0);
 			for (auto& atom : std::get<0>(mol)) {
 				PyObject* o_atom = Py_BuildValue("{s:f,s:f,s:f,s:l}",
-												 "x", cpplib::currents::FloatingPointType(std::get<0>(atom).get(0)),
-												 "y", cpplib::currents::FloatingPointType(std::get<0>(atom).get(1)),
-												 "z", cpplib::currents::FloatingPointType(std::get<0>(atom).get(2)),
+												 "x", cpplib::currents::FloatingPointType(std::get<0>(atom)[0]),
+												 "y", cpplib::currents::FloatingPointType(std::get<0>(atom)[1]),
+												 "z", cpplib::currents::FloatingPointType(std::get<0>(atom)[2]),
 												 "init_idx", long(std::get<1>(atom)));
 				PyList_Append(o_molecule, o_atom);
 			}
@@ -363,15 +363,15 @@ extern "C" {
 	static PyObject* cpplib_GenSymm(PyObject* self, PyObject* args) {
 		PyObject* osymm = NULL;
 		PyObject* otuples = NULL;
-		unsigned char flags;
+		std::byte flags;
 
 		deb_write("cpplib_GenSymm: Parsing start");
 		if (!PyArg_ParseTuple(args, "OBO", &otuples, &flags, &osymm)) {
 			deb_write("! Critic Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
-		bool movetocell = flags & 1;
-		bool movemasstocell = flags & 2;
+		bool movetocell = (flags & std::byte(1)) != std::byte(0);
+		bool movemasstocell = (flags & std::byte(2)) != std::byte(0);
 
 		Prepare_WC all(otuples);
 		deb_write("cpplib_GenSymm: atom parsing ended");
@@ -400,16 +400,16 @@ extern "C" {
 				centerofmass += all.points[i];
 			}
 			centerofmass /= sf_points;
-			PointType ceilmass(std::ceil(centerofmass.get(0)),
-							   std::ceil(centerofmass.get(1)),
-							   std::ceil(centerofmass.get(2)));
+			PointType ceilmass(std::ceil(centerofmass[0]),
+							   std::ceil(centerofmass[1]),
+							   std::ceil(centerofmass[2]));
 
 			for (size_t i = 0; i < ss; i++)
 			{
 				PointType movedcenter = symm[i].GenSymm(centerofmass);
-				PointType ceilmoved(std::ceil(movedcenter.get(0)),
-									std::ceil(movedcenter.get(1)),
-									std::ceil(movedcenter.get(2)));
+				PointType ceilmoved(std::ceil(movedcenter[0]),
+									std::ceil(movedcenter[1]),
+									std::ceil(movedcenter[2]));
 				symm[i].point += ceilmass - ceilmoved;
 			}
 
@@ -429,9 +429,9 @@ extern "C" {
 		{
 			PyList_Append(otuples, Py_BuildValue("(Ifff)",
 												 static_cast<unsigned int>(famstr.types[std::get<0>(famstr.parseIndex[i])]),
-												 static_cast<cpplib::currents::FloatingPointType>(famstr.points[i].get(0)),
-												 static_cast<cpplib::currents::FloatingPointType>(famstr.points[i].get(1)),
-												 static_cast<cpplib::currents::FloatingPointType>(famstr.points[i].get(2))));
+												 static_cast<cpplib::currents::FloatingPointType>(famstr.points[i][0]),
+												 static_cast<cpplib::currents::FloatingPointType>(famstr.points[i][1]),
+												 static_cast<cpplib::currents::FloatingPointType>(famstr.points[i][2])));
 		}
 		Py_INCREF(otuples);
 		return otuples;
@@ -473,7 +473,7 @@ extern "C" {
 			PyList_Append(lst, Py_BuildValue("(IIf)",
 											 static_cast<unsigned int>(std::get<0>(res[i])),
 											 static_cast<unsigned int>(std::get<1>(res[i])),
-											 static_cast<cpplib::currents::FloatingPointType>(std::get<2>(res[i]))));
+											 static_cast<float>(std::get<2>(res[i]))));
 		}
 		deb_write("cpplib_FindDistanceIC: List[...] completed. size = ", res_s);
 		return Py_BuildValue("{s:O}", "distances", lst);
@@ -511,7 +511,7 @@ extern "C" {
 			PyList_Append(lst, Py_BuildValue("(IIf)",
 											 static_cast<unsigned int>(std::get<0>(res[i])),
 											 static_cast<unsigned int>(std::get<1>(res[i])),
-											 static_cast<cpplib::currents::FloatingPointType>(std::get<2>(res[i]))));
+											 static_cast<float>(std::get<2>(res[i]))));
 		}
 		deb_write("cpplib_FindDistanceWC: List[...] completed. size = ", res_s);
 		return Py_BuildValue("{s:O}", "distances", lst);
@@ -549,7 +549,7 @@ extern "C" {
 											 static_cast<unsigned int>(std::get<0>(res[i])),
 											 static_cast<unsigned int>(std::get<1>(res[i])),
 											 static_cast<unsigned int>(std::get<2>(res[i])),
-											 static_cast<cpplib::currents::FloatingPointType>(cpplib::geometry::RadtoGrad(std::get<3>(res[i])))));
+											 static_cast<float>(cpplib::geometry::RadtoGrad(std::get<3>(res[i])))));
 		}
 		deb_write("cpplib_FindAngleIC: List[...] completed. size = ", res_s);
 		return Py_BuildValue("{s:O}", "angles", lst);
@@ -585,7 +585,7 @@ extern "C" {
 											 static_cast<unsigned int>(std::get<0>(res[i])),
 											 static_cast<unsigned int>(std::get<1>(res[i])),
 											 static_cast<unsigned int>(std::get<2>(res[i])),
-											 static_cast<cpplib::currents::FloatingPointType>(cpplib::geometry::RadtoGrad(std::get<3>(res[i])))));
+											 static_cast<float>(cpplib::geometry::RadtoGrad(std::get<3>(res[i])))));
 		}
 		deb_write("cpplib_FindAngleWC: List[...] completed. size = ", res_s);
 		return Py_BuildValue("{s:O}", "angles", lst);
@@ -813,9 +813,9 @@ extern "C" {
 		for (int i = 0; i < s; i++)
 		{
 			PyObject* o_atom = Py_BuildValue("(fff)",
-											 static_cast<cpplib::currents::FloatingPointType>(all.points[i].get(0)),
-											 static_cast<cpplib::currents::FloatingPointType>(all.points[i].get(1)),
-											 static_cast<cpplib::currents::FloatingPointType>(all.points[i].get(2)));
+											 static_cast<float>(all.points[i][0]),
+											 static_cast<float>(all.points[i][1]),
+											 static_cast<float>(all.points[i][2]));
 			PyList_Append(o_xyz_block, o_atom);
 		}
 		// returns List[Tuple(atom1, atom2), ...] 
@@ -883,9 +883,9 @@ extern "C" {
 		for (int i = 0; i < std::get<0>(ret).size(); i++)
 		{
 			PyObject* o_atom = Py_BuildValue("(fff)",
-											 static_cast<cpplib::currents::FloatingPointType>(std::get<0>(ret)[i].get(0)),
-											 static_cast<cpplib::currents::FloatingPointType>(std::get<0>(ret)[i].get(1)),
-											 static_cast<cpplib::currents::FloatingPointType>(std::get<0>(ret)[i].get(2)));
+											 static_cast<cpplib::currents::FloatingPointType>(std::get<0>(ret)[i][0]),
+											 static_cast<cpplib::currents::FloatingPointType>(std::get<0>(ret)[i][1]),
+											 static_cast<cpplib::currents::FloatingPointType>(std::get<0>(ret)[i][2]));
 			PyList_Append(o_xyz_block, o_atom);
 		}
 
@@ -938,14 +938,14 @@ extern "C" {
 		for (size_t i = 0; i < ret_s; i++)
 		{
 			PyList_Append(o_ret, Py_BuildValue("(ffflllll)",
-											   static_cast<cpplib::currents::FloatingPointType>(std::get<0>(ret[i]).get(0)), // px
-											   static_cast<cpplib::currents::FloatingPointType>(std::get<0>(ret[i]).get(1)), // py
-											   static_cast<cpplib::currents::FloatingPointType>(std::get<0>(ret[i]).get(2)), // pz
+											   static_cast<float>(std::get<0>(ret[i])[0]), // px
+											   static_cast<float>(std::get<0>(ret[i])[1]), // py
+											   static_cast<float>(std::get<0>(ret[i])[2]), // pz
 											   static_cast<long>(std::get<1>(ret[i])),         // index
 											   static_cast<long>(std::get<2>(ret[i])),         // symmref
-											   static_cast<long>(std::get<3>(ret[i]).get(0)),  // sx
-											   static_cast<long>(std::get<3>(ret[i]).get(1)),  // sy
-											   static_cast<long>(std::get<3>(ret[i]).get(2))));// sz
+											   static_cast<long>(std::get<3>(ret[i])[0]),  // sx
+											   static_cast<long>(std::get<3>(ret[i])[1]),  // sy
+											   static_cast<long>(std::get<3>(ret[i])[2])));// sz
 		}
 		return Py_BuildValue("{s:O,s:O}",
 							 "points", o_ret,

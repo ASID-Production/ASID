@@ -54,7 +54,7 @@ namespace cpplib {
 	class SearchDataInterface;
 	class ParseData;
 	namespace geometry {
-		template<class T> class Point;
+		template<class T> struct Point;
 		template<class T> class Matrix;
 		template<class T> struct Cell;
 		template<class T> struct Symm;

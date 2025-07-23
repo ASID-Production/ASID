@@ -77,8 +77,7 @@ namespace cpplib {
 			sizeUnique = types.size();
 			sizePoints = points.size();
 			parseIndex.resize(sizeUnique);
-			for (decltype(sizeUnique) i = 0; i < sizeUnique; i++)
-			{
+			for (decltype(sizeUnique) i = 0; i < sizeUnique; i++) {
 				std::get<0>(parseIndex[i]) = i;
 				std::get<1>(parseIndex[i]) = static_cast<SymmRef>(0);
 				std::get<2>(parseIndex[i]) = ShiftType(0,0,0);
@@ -220,9 +219,9 @@ namespace cpplib {
 						}
 					}
 					fs.points.push_back(newpoint);
-					fs.parseIndex.emplace_back(p, s, FAM_Struct::ShiftType(static_cast<int>(shift.get(0)), 
-																		   static_cast<int>(shift.get(1)),
-																		   static_cast<int>(shift.get(2))));
+					fs.parseIndex.emplace_back(p, s, FAM_Struct::ShiftType(static_cast<int>(shift[0]), 
+																		   static_cast<int>(shift[1]),
+																		   static_cast<int>(shift[2])));
 				}
 			}
 			fs.sizePoints = fs.points.size();
@@ -266,11 +265,11 @@ namespace cpplib {
 
 			auto super = base::template findOptimalSupercell<SuperCellCounter>(cutoff, minimum);
 			// super_ is ready. Next step is resizing of actual points
-			SuperCellCounter mult_super_cell = super.get(2) * super.get(1) * super.get(0);
+			SuperCellCounter mult_super_cell = super[2] * super[1] * super[0];
 			size_t sizePoints = points.size();
 			points.reserve(static_cast<typename PointConteinerType::size_type>(sizePoints) * mult_super_cell);
 			for (DimmentionType i = 0; i < static_cast<DimmentionType>(3); i++) {
-				SuperCellCounter cur_mult_minus1 = (super.get(i) - SuperCellCounter(1));
+				SuperCellCounter cur_mult_minus1 = (super[i] - SuperCellCounter(1));
 				if (cur_mult_minus1 == 0)
 				{
 					continue;
@@ -281,9 +280,9 @@ namespace cpplib {
 					for (size_t k = 0; k < sizePoints; k++)
 					{
 						points.emplace_back(points[k]);
-						points.back().set(i, (points.back().get(i) + static_cast<FloatingPointType>(j)));
+						points.back()[i] = points.back()[i] + static_cast<FloatingPointType>(j);
 						points.emplace_back(points[k]);
-						points.back().set(i, (points.back().get(i) - static_cast<FloatingPointType>(j)));
+						points.back()[i] = points.back()[i] + static_cast<FloatingPointType>(j);
 					}
 				}
 
@@ -291,21 +290,21 @@ namespace cpplib {
 					for (size_t k = 0; k < sizePoints; k++)
 					{
 						points.emplace_back(points[k]);
-						if (points[k].get(i) < 0.5)
+						if (points[k][i] < 0.5)
 						{
-							points.back().set(i, (points.back().get(i) + static_cast<FloatingPointType>(div2 + 1)));
+							points.back()[i] = points.back()[i] + static_cast<FloatingPointType>(div2 + 1);
 						}
 						else {
-							points.back().set(i, (points.back().get(i) - static_cast<FloatingPointType>(div2 + 1)));
+							points.back()[i] = points.back()[i] + static_cast<FloatingPointType>(div2 + 1);
 						}
 					}
 				}
 				sizePoints = points.size();
 				// Shrink cell
 				for (size_t j = 0; j < sizePoints; j++) {
-					points[j].set(i, (points[j].get(i) - (static_cast<FloatingPointType>(0.5))) / static_cast<FloatingPointType>(super.get(i)) + static_cast<FloatingPointType>(0.5));
+					points[j][i] = (points[j][i] - (static_cast<FloatingPointType>(0.5))) / static_cast<FloatingPointType>(super[i]) + static_cast<FloatingPointType>(0.5);
 				}
-				base::lat_dir(i) *= super.get(i);
+				base::lat_dir(i) *= super[i];
 			}
 			// Update base cell
 			base::create(base::lat_dir(0), base::lat_dir(1), base::lat_dir(2), base::getAngleGrad(0), base::getAngleGrad(1), base::getAngleGrad(2), true);
@@ -314,9 +313,9 @@ namespace cpplib {
 			PointType dp = (p1 - p2).MoveToCell();
 			FloatingPointType ret = 0;
 			for (DimmentionType i = 0; i < static_cast<DimmentionType>(3); i++) {
-				FloatingPointType val = dp.get(i);
+				FloatingPointType val = dp[i];
 				if (val > 0.5)
-					dp.set(i, val - 1);
+					dp[i] = val - 1;
 			}
 			return (base::fracToCart() * dp).r();
 		}
@@ -398,9 +397,9 @@ namespace cpplib {
 		}
 		static inline currents::FAMStructType::ShiftType toShift(const PointType& a1) {
 			using namespace currents;
-			return FAMStructType::ShiftType(static_cast<FAMStructType::ShiftType::value_type>((a1.get(0))),
-											static_cast<FAMStructType::ShiftType::value_type>((a1.get(1))),
-											static_cast<FAMStructType::ShiftType::value_type>((a1.get(2))));
+			return FAMStructType::ShiftType(static_cast<FAMStructType::ShiftType::value_type>((a1[0])),
+											static_cast<FAMStructType::ShiftType::value_type>((a1[1])),
+											static_cast<FAMStructType::ShiftType::value_type>((a1[2])));
 		}
 
 	private:
@@ -473,7 +472,7 @@ namespace cpplib {
 			return static_cast<size_t>(-1);
 		}
 	};
-	
+
 
 	class FindMolecules {
 	public:
@@ -499,6 +498,10 @@ namespace cpplib {
 
 	public:
 		FindMolecules() noexcept = delete;
+		/// <summary>
+		/// "Relocate" constructor
+		/// </summary>
+		/// <param name="fs"> - basic FAM_Struct</param>
 		explicit FindMolecules(FAMSType&& fs) : fs_(std::move(fs)) {}
 		std::tuple<std::string, std::string, RightType> findMolecules(const DistancesType& distances, std::vector<BondType>& bonds, const std::vector<AtomIndex>& invalids, std::string& errorMsg) {
 			std::vector<NodeType> net;
@@ -820,13 +823,29 @@ namespace cpplib {
 		using SupType = ::std::array<::std::array<::std::array<SupListType, 3>, 3>, 3>;
 		using SupPoint = geometry::Point<size_t>;
 
+		/// <summary>
+		/// Constructor
+		/// </summary>
+		/// <param name="cell"> - Unit cell</param>
+		/// <param name="maxbond"> - calculated in Distances</param>
 		constexpr HashedSpace(const CellType& cell, FloatingPointType maxbond) noexcept :
 			cell_(cell) {
 			calculateSep(maxbond);
 		}
+
+		/// <summary>
+		/// Constant function to estimate theoretic effectivness of HashedSpace
+		/// </summary>
+		/// <returns>true if effective</returns>
 		constexpr bool is_effective() const noexcept {
 			return sep_[0] > 3 || sep_[1] > 3 || sep_[2] > 3;
 		}
+
+		/// <summary>
+		/// Creates theoretical overestimated vector of Bonds
+		/// </summary>
+		/// <param name="points"> - vector of Points</param>
+		/// <returns>vector with all bonds in boxes and between adjacent ones</returns>
 		BondList create_hash_bonds(const ::std::vector<PointType>& points) const {
 			BondList ret;
 			size_t estimated_size = points.size() * points.size() * sizemod();
@@ -837,7 +856,7 @@ namespace cpplib {
 			for (AtomIndex i = 0; i < points.size(); i++)
 			{
 				auto c = coordintate_of_point(points[i]);
-				supply_table[c.get(0)][c.get(1)][c.get(2)].emplace_back(i);
+				supply_table[c[0]][c[1]][c[2]].emplace_back(i);
 			}
 
 			// Create all bonds
@@ -852,6 +871,8 @@ namespace cpplib {
 		}
 
 	private:
+		static constexpr FloatingPointType modifier_ = 1.05;
+
 		void box_working(BondList& ret, const SupType& supply_table, size_t i, size_t j, size_t k) const {
 			create_bonds_in_box(ret, supply_table[i][j][k]);
 
@@ -905,7 +926,7 @@ namespace cpplib {
 				}
 			}
 		}		
-		constexpr void create_bonds_between_boxes(BondList& ret, const SupListType& l1, const SupListType& l2) const {
+		void create_bonds_between_boxes(BondList& ret, const SupListType& l1, const SupListType& l2) const {
 			for (auto v1 : l1)
 			{
 				for (auto v2 : l2)
@@ -916,13 +937,11 @@ namespace cpplib {
 			}
 		}
 
-		static constexpr FloatingPointType modifier_ = 1.05;
-
 		constexpr SupPoint coordintate_of_point(const PointType& p) const noexcept {
 			return {
-				static_cast<size_t>(std::floor(p.get(0) * sep_[0])),
-				static_cast<size_t>(std::floor(p.get(1) * sep_[1])),
-				static_cast<size_t>(std::floor(p.get(2) * sep_[2]))
+				static_cast<size_t>(std::floor(p[0] * sep_[0])),
+				static_cast<size_t>(std::floor(p[1] * sep_[1])),
+				static_cast<size_t>(std::floor(p[2] * sep_[2]))
 			};
 		}
 		constexpr FloatingPointType sizemod() const noexcept {

@@ -37,9 +37,9 @@ constexpr Matrix<float> m({ 10.4804f, -5.2402f, 0.f, 0.f, 9.076292642f, 0.f, 0.f
 TEST(PointTest, OperatorMult_Point_Matrix) {
 	Point<float> res;
 	ASSERT_NO_THROW({ res = m * a; });
-	EXPECT_NEAR(res.get(0), -1.28259146, 0.00001);
-	EXPECT_NEAR(res.get(1), 2.47982478, 0.00001);
-	EXPECT_NEAR(res.get(2), 0.428184122, 0.00001);
+	EXPECT_NEAR(res[0], -1.28259146, 0.00001);
+	EXPECT_NEAR(res[1], 2.47982478, 0.00001);
+	EXPECT_NEAR(res[2], 0.428184122, 0.00001);
 }
 
 TEST(PointTest, CreationNothrow) {

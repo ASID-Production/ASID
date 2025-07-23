@@ -29,11 +29,10 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <functional>
+#include <list>
 #include "../BaseHeaders/Currents.h"
-
-
-
-
+#include "../Classes/Engine.h"
 
 namespace cpplib {
 	class Distances {
@@ -50,7 +49,8 @@ namespace cpplib {
 		using base = ::std::vector<FloatingPointType>;
 		using size_type = int_fast8_t;
 		using AtomTypeBase = currents::AtomTypeBase;
-		using DataArray = std::array<std::array<std::array<FloatingPointType, 2>, MAX_TYPE + 1>, MAX_TYPE + 1>;
+		using PointType = currents::PointType;
+		using DataArray = ::std::array<::std::array<::std::array<FloatingPointType, 2>, MAX_TYPE + 1>, MAX_TYPE + 1>;
 	private:
 
 		DataArray data_{}; // [i][j][0] = min, [i][j][1] = max
@@ -94,10 +94,32 @@ namespace cpplib {
 			_ASSERT(a1 > 0 && a2 > 0);
 			return data_[a1][a2][0];
 		}
-		inline FloatingPointType maxDistance(AtomTypeBase a1, AtomTypeBase a2) const noexcept {
+		constexpr FloatingPointType maxDistance(AtomTypeBase a1, AtomTypeBase a2) const noexcept {
 			_ASSERT(a1 <= MAX_TYPE && a2 <= MAX_TYPE);
 			_ASSERT(a1 > 0 && a2 > 0);
 			return data_[a1][a2][1];
+		}
+
+		template<::std::function<FloatingPointType(const PointType& p1, const PointType& p2)>& dist>
+		void filter_bond_list(::std::list<Bond>& bondlist,
+							  const ::std::vector<AtomTypeBase>& types,
+							  const ::std::vector<PointType>& points) const noexcept
+		{
+			auto iter = bondlist.begin();
+
+			while (iter != bondlist.end()) {
+				const auto l1 = iter->first;
+				const auto l2 = iter->second;
+
+				bool is_real_bond = isBond(types[l1], types[l2], dist(points[l1], points[l2]));
+
+				if (is_real_bond) {
+					iter++;
+				}
+				else {
+					bondlist.erase(iter);
+				}
+			}
 		}
 	};
 }
