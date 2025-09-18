@@ -43,9 +43,9 @@ set(COMPILE_TESTS FALSE)
 if (WIN32)
     set(COMPILE_TESTS TRUE)
     project(cpplibLib)
-    if (UNIX)
+    if (UNIX OR APPLE)
         find_package(Python3 COMPONENTS Interpreter Development)
-    endif (UNIX)
+    endif (UNIX OR APPLE)
 
     if (WIN32)
         find_package(Python3 COMPONENTS Interpreter Development EXACT 3.10)
@@ -82,9 +82,9 @@ endif(WIN32)
 
 project(cpplib)
 
-    if (UNIX)
+    if (UNIX OR APPLE)
         find_package(Python3 COMPONENTS Interpreter Development)
-    endif (UNIX)
+    endif (UNIX OR APPLE)
 
     if (WIN32)
         find_package(Python3 COMPONENTS Interpreter Development EXACT 3.10)
@@ -120,13 +120,13 @@ project(cpplib)
             POSITION_INDEPENDENT_CODE ON
         )
 
-        if (UNIX)
+        if (UNIX OR APPLE)
             add_custom_command(
                 TARGET cpplib POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy
                     $<TARGET_FILE:cpplib>
                     ${CMAKE_SOURCE_DIR}/module/cpplib.so)
-        endif (UNIX)
+        endif (UNIX OR APPLE)
         if (WIN32)
             add_custom_command(
                 TARGET cpplib POST_BUILD

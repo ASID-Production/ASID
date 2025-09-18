@@ -282,7 +282,7 @@ namespace cpplib {
 						points.emplace_back(points[k]);
 						points.back()[i] = points.back()[i] + static_cast<FloatingPointType>(j);
 						points.emplace_back(points[k]);
-						points.back()[i] = points.back()[i] + static_cast<FloatingPointType>(j);
+						points.back()[i] = points.back()[i] - static_cast<FloatingPointType>(j);
 					}
 				}
 
@@ -295,7 +295,7 @@ namespace cpplib {
 							points.back()[i] = points.back()[i] + static_cast<FloatingPointType>(div2 + 1);
 						}
 						else {
-							points.back()[i] = points.back()[i] + static_cast<FloatingPointType>(div2 + 1);
+							points.back()[i] = points.back()[i] - static_cast<FloatingPointType>(div2 + 1);
 						}
 					}
 				}
@@ -311,7 +311,6 @@ namespace cpplib {
 		}
 		FloatingPointType distanceInCell(const PointType& p1, const PointType& p2) const noexcept {
 			PointType dp = (p1 - p2).MoveToCell();
-			FloatingPointType ret = 0;
 			for (DimmentionType i = 0; i < static_cast<DimmentionType>(3); i++) {
 				FloatingPointType val = dp[i];
 				if (val > 0.5)
@@ -503,7 +502,7 @@ namespace cpplib {
 		/// </summary>
 		/// <param name="fs"> - basic FAM_Struct</param>
 		explicit FindMolecules(FAMSType&& fs) : fs_(std::move(fs)) {}
-		std::tuple<std::string, std::string, RightType> findMolecules(const DistancesType& distances, std::vector<BondType>& bonds, const std::vector<AtomIndex>& invalids, std::string& errorMsg) {
+		std::tuple<std::string, std::string, RightType> findMolecules(std::vector<BondType>& bonds, const std::vector<AtomIndex>& invalids, std::string& errorMsg) {
 			std::vector<NodeType> net;
 			net.reserve(fs_.sizePoints);
 

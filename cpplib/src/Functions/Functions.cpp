@@ -104,7 +104,7 @@ std::tuple<std::string, std::string, FindMoleculesType::RightType> FindMolecules
 	
 	FindMoleculesType fm(std::move(fs));
 
-	auto ret = fm.findMolecules(distances, res.first, res.second, errorMsg);
+	auto ret = fm.findMolecules(res.first, res.second, errorMsg);
 
 	// For Petr's enjoyment
 	auto mol_s = std::get<2>(ret).size();
@@ -152,7 +152,7 @@ std::tuple<std::string, std::string, FindMoleculesType::RightType>  FindMolecule
 
 	FindMoleculesType fm(std::move(fs));
 	
-	return fm.findMolecules(distances, res.first, res.second, errorMsg);
+	return fm.findMolecules(res.first, res.second, errorMsg);
 }
 
 std::vector<FindGeometryType::tupleDistance> FindDistanceWC(cpplib::currents::FAMStructType::AtomContainerType& types,
