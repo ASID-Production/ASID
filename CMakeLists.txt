@@ -44,11 +44,11 @@ if (WIN32)
     set(COMPILE_TESTS TRUE)
     project(cpplibLib)
     if (UNIX OR APPLE)
-        find_package(Python3 COMPONENTS Interpreter Development)
+        find_package(Python COMPONENTS Interpreter Development)
     endif (UNIX OR APPLE)
 
     if (WIN32)
-        find_package(Python3 COMPONENTS Interpreter Development EXACT 3.10)
+        find_package(Python COMPONENTS Interpreter Development EXACT 3.10)
     endif (WIN32)
     include_directories(SYSTEM ${Python3_INCLUDE_DIRS})
     
@@ -109,9 +109,9 @@ project(cpplib)
                            "cpplib/src/Functions/AllInOneAndCurrent.h" 
                            "cpplib/src/Classes/FindGeometry.h" "cpplib/src/Functions/PythonInteface.cpp" "cpplib/src/BaseHeaders/Currents.h" "cpplib/src/Classes/Cluster.h")
         if(WIN32)
-            target_link_libraries(cpplib PRIVATE ${Python3_LIBRARY_DIRS}/python3.lib)
+            target_link_libraries(cpplib PRIVATE ${Python_LIBRARY_DIRS}/python3.lib)
         else()
-            target_link_libraries(cpplib PRIVATE ${Python3_LIBRARY_DIRS})
+            target_link_libraries(cpplib PRIVATE ${Python_LIBRARY_DIRS})
         endif()
         set_target_properties(cpplib PROPERTIES
             PREFIX ""

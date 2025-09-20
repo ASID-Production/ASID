@@ -248,10 +248,10 @@ namespace cpplib::geometry {
 		}
 		explicit constexpr Matrix(const_array_type& in) noexcept : A(in) {}
 		explicit constexpr Matrix(array_type&& in) noexcept : A(std::move(in)) {}
-		[[nodiscard]] inline constexpr T& El(const size_t a, const size_t b) noexcept {
+		[[nodiscard]] constexpr T& El(const size_t a, const size_t b) noexcept {
 			return A[a][b];
 		}
-		[[nodiscard]] inline constexpr T El(const size_t a, const size_t b) const noexcept {
+		[[nodiscard]] constexpr T El(const size_t a, const size_t b) const noexcept {
 			return A[a][b];
 		}
 		template<class T2>
@@ -360,6 +360,30 @@ namespace cpplib::geometry {
 						a2[0] * (a3[1] * a1[2] - a1[1] * a3[2]) +
 						a3[0] * (a1[1] * a2[2] - a2[1] * a1[2]));
 		}
+
+		constexpr Plane(const Point<T>& start, const Point<T>& end) noexcept {
+			Point<T> normal = end - start;
+
+			// If the normal is zero, the plane is undefined
+			if (normal == Point<T>(0, 0, 0)) {
+				a[0] = 0;
+				a[1] = 0;
+				a[2] = 0;
+				a[3] = 0;
+				return;
+			}
+
+			// Normalize
+			T length = normal.r();
+			normal = normal / length;
+
+			// Set plane
+			a[0] = normal[0];
+			a[1] = normal[1];
+			a[2] = normal[2];
+			a[3] = -(normal[0] * start[0] + normal[1] * start[1] + normal[2] * start[2]);
+		}
+
 		constexpr Plane(const Plane& p, const Point<T>& a1) noexcept {
 			a[0] = p.a[0];
 			a[1] = p.a[1];
@@ -374,8 +398,200 @@ namespace cpplib::geometry {
 		T distance(const Point<T>& p) const {
 			return abs(a[0] * p[0] + a[1] * p[1] + a[2] * p[2] + a[3]) / sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2]);
 		}
+
+		constexpr Point<T> normal() const noexcept {
+			Point<T> norm(a[0], a[1], a[2]);
+			if( T norm_length = norm.r(); norm_length > 1e-10)
+				return norm / norm_length;
+			else {
+				return Point<T>(0, 0, 1);
+			}
+		}
+
+		T side(const Point<T>& p) const {
+			return a[0] * p[0] + a[1] * p[1] + a[2] * p[2] + a[3];
+		}
 	};
 
+	template<class T>
+	class Polygon {
+	public:
+		using PointType = Point<T>;
+		using PlaneType = Plane<T>;
+	private:
+		std::vector<PointType> vertices_;
+		PlaneType plane_;
+		bool is_valid_;
+
+	public:
+		// Default Constructor
+		Polygon() = default;
+
+		// Construct from vector of vertices
+		explicit Polygon(const std::vector<PointType>& verts) : vertices_(verts) {
+			if (verts.size() >= 3) {
+				plane_ = PlaneType(verts[0], verts[1], verts[2]);
+				is_valid_ = true;
+			}
+			else {
+				is_valid_ = false;
+			}
+		}
+
+		Polygon(const PlaneType& plane, const PointType& center, T side_length)
+			: plane_(plane), is_valid_(true) {
+			// Create normal vector by hand (need to check initial length)
+			PointType normal(plane.a[0], plane.a[1], plane.a[2]);
+
+			if (T normal_length = normal.r(); normal_length > 1e-10) {
+				normal = normal / normal_length;
+			}
+			else {
+				// if normal is zero, the plane is XY plane
+				normal = PointType(0, 0, 1);
+				plane_ = PlaneType(PointType(0, 0, 0), PointType(1, 0, 0), PointType(0, 1, 0));
+			}
+
+			// Find first vector in plane
+			PointType u;
+			if (std::abs(normal[0]) > std::abs(normal[1])) {
+				u = PointType(-normal[2], 0, normal[0]);
+			}
+			else {
+				u = PointType(0, normal[2], -normal[1]);
+			}
+			u = u / u.r();
+
+			// Find second vector in plane
+			PointType v = PointType::Vector(normal, u);
+			v = v / v.r();
+
+			// Resize to half side length
+			T half_side = side_length / 2;
+			u = u * half_side;
+			v = v * half_side;
+
+			// Create vertices of square
+			vertices_.reserve(4);
+			vertices_.push_back(center + u + v);
+			vertices_.push_back(center + u - v);
+			vertices_.push_back(center - u - v);
+			vertices_.push_back(center - u + v);
+		}
+
+		Polygon(const std::vector<PointType>& verts, const PlaneType & pl)
+			: vertices_(verts), plane_(pl), is_valid_(true) {
+			_ASSERT(isConvex());
+		}
+
+
+		// Method to clip the polygon by a plane
+		void clipByPlane(const PlaneType& clipping_plane) {
+			if (!is_valid_ || vertices_.empty()) return;
+
+			std::vector<Point<T>> new_vertices;
+			// Reserve space for new vertices
+			new_vertices.reserve(vertices_.size() + 4);
+
+			const size_t n = vertices_.size();
+			Point<T> prev_vertex = vertices_.back();
+			T prev_dist = clipping_plane.side(prev_vertex);
+
+			for (size_t i = 0; i < n; i++) {
+				const Point<T>& current_vertex = vertices_[i];
+				const T current_dist = clipping_plane.side(current_vertex);
+
+				// If the previous vertex is on the positive side of the plane - take it
+				if (current_dist >= 0) {
+					new_vertices.push_back(current_vertex);
+				}
+
+				// If the both vertices are on opposite sides of the plane - take the intersection
+				if (prev_dist * current_dist < 0) {
+					const T t = prev_dist / (prev_dist - current_dist);
+					const Point<T> intersection = prev_vertex + (current_vertex - prev_vertex) * t;
+					new_vertices.push_back(intersection);
+				}
+
+				prev_vertex = current_vertex;
+				prev_dist = current_dist;
+			}
+
+			vertices_ = std::move(new_vertices);
+			is_valid_ = vertices_.size() >= 3;
+		}
+
+		bool isConvex() const {
+			if (vertices_.size() < 3) return false;
+			auto normal = plane_.normal();
+			for (size_t i = 0; i < vertices_.size(); i++) {
+				PointType current = vertices_[i];
+				PointType next = vertices_[(i + 1) % vertices_.size()];
+				PointType nextNext = vertices_[(i + 2) % vertices_.size()];
+
+				PointType edge1 = next - current;
+				PointType edge2 = nextNext - next;
+
+				PointType cross = PointType::Vector(edge1, edge2);
+				if (PointType::Scalar(cross, normal) < 0) {
+					return false;
+				}
+			}
+			return true;
+		}
+	};
+
+	template<class T>
+	class VoronoiCell {
+	public:
+		using PointType = Point<T>;
+		using Face = Polygon<T>;
+
+	private:
+		std::vector<Face> faces_;
+		PointType seed_ = PointType(0, 0, 0);
+
+	public:
+		constexpr VoronoiCell() noexcept {
+			initiate_cube_faces_on_seed();
+		}
+		constexpr explicit VoronoiCell(const PointType& seed) noexcept : seed_(seed) {
+			initiate_cube_faces_on_seed();
+		}
+
+	private:
+		constexpr void initiate_cube_faces_on_seed() {
+			std::array<PointType, 8> cube;
+			for (int i = 0; i < 8; ++i) {
+				cube[i] = base_vertices[i] + seed_;
+			}
+			for (int i = 0; i < 6; ++i) {
+				faces_[i] = Face({ cube[face_indices[i][0]], cube[face_indices[i][1]], cube[face_indices[i][2]], cube[face_indices[i][3]] });
+			}
+		}
+
+		// Base array of vertices for a cube
+		static constexpr std::array<PointType, 8> base_vertices = { {
+			PointType{-0.5, -0.5, -0.5}, // 0
+			PointType{ 0.5, -0.5, -0.5}, // 1
+			PointType{ 0.5,  0.5, -0.5}, // 2
+			PointType{-0.5,  0.5, -0.5}, // 3
+			PointType{-0.5, -0.5,  0.5}, // 4
+			PointType{ 0.5, -0.5,  0.5}, // 5
+			PointType{ 0.5,  0.5,  0.5}, // 6
+			PointType{-0.5,  0.5,  0.5}  // 7
+		} };
+
+		// Indexes for each face of the cube (conter-clockwise from outside)
+		static constexpr std::array<std::array<int, 4>, 6> face_indices = { {
+			{4, 7, 6, 5}, // front face
+			{0, 3, 2, 1}, // back face
+			{0, 4, 7, 3}, // left face
+			{1, 5, 6, 2}, // right face
+			{0, 1, 5, 4}, // bottom face
+			{3, 7, 6, 2}  // top face
+		} };
+	};
 
 	template<class T> struct Cell {
 	public:
@@ -599,7 +815,7 @@ namespace cpplib::geometry {
 				point[0] == 0 && point[1] == 0 && point[2] == 0;
 		}
 	private:
-		size_t findcomma(const char* str) {
+		size_t findcomma(const char* str) const {
 			size_t n = 0;
 			for (; str[n] != ',' && str[n] != '\0'; n++);
 			return n;
@@ -608,30 +824,30 @@ namespace cpplib::geometry {
 			point_t p{ 0,0,0 };
 			T shift = 0;
 			bool minus = false;
-			for (unsigned int i = 0; i < len; i++)
+			for (unsigned int i = 0; i < len; i++) // iterator "i" modifies in parseshift function
 			{
 				switch (str[i]) {
-				case 'x': // [[fallthrough]];
+				case 'x': [[fallthrough]];
 				case 'X':
 					if (minus == true) p[0] = -1;
 					else p[0] = 1;
 					minus = false;
 					break;
-				case 'y': // [[fallthrough]];
+				case 'y': [[fallthrough]];
 				case 'Y':
 					if (minus == true) p[1] = -1;
 					else p[1] = 1;
 					minus = false;
 					break;
-				case 'z': // [[fallthrough]];
+				case 'z': [[fallthrough]];
 				case 'Z':
 					if (minus == true) p[2] = -1;
 					else p[2] = 1;
 					minus = false;
 					break;
-				case ' ': // [[fallthrough]];
-				case '\'': // [[fallthrough]];
-				case '\"': // [[fallthrough]];
+				case ' ': [[fallthrough]];
+				case '\'': [[fallthrough]];
+				case '\"': [[fallthrough]];
 				case '+':
 					break;
 				case '-':
@@ -639,7 +855,7 @@ namespace cpplib::geometry {
 					break;
 				default:
 
-					T partshift = parseshift(str, i, len);
+					T partshift = parseshift(str, i, len); // Modifies "i"
 					if (minus) shift -= partshift;
 					else shift += partshift;
 					minus = false;
@@ -694,4 +910,3 @@ namespace cpplib::geometry {
 		}
 
 	};
-}
