@@ -36,7 +36,8 @@ namespace cpplib::geometry {
 	template <class T> inline T GradtoRad(T a) { return a * static_cast<T>(0.0174532925199432957692); }
 	template <class T> inline T RadtoGrad(T a) { return a * static_cast<T>(57.295779513082320877); }
 
-	template<class T> struct Point {
+	template<class T>
+	struct Point {
 	public:
 		using value_type = T;
 		using array_type = ::std::array<value_type, 3>;
@@ -196,7 +197,8 @@ namespace cpplib::geometry {
 		constexpr auto operator<=>(const Point& other) const noexcept = default;
 	};
 
-	template<class T> class Matrix {
+	template<class T>
+	class Matrix {
 	public:
 		using size_t = unsigned char;
 		using value_type = T;
@@ -345,9 +347,11 @@ namespace cpplib::geometry {
 	};
 
 
-	template<class T> constexpr Matrix<T> EqualMatrix(static_cast<T>(1));
+	template<class T>
+	constexpr Matrix<T> EqualMatrix(static_cast<T>(1));
 
-	template<class T> struct Plane {
+	template<class T>
+	struct Plane {
 		using value_type = T; // the same as T
 		std::array<T, 4> a = { T(0), T(0), T(0), T(0) }; // [ A, B, C, D]
 
@@ -551,7 +555,7 @@ namespace cpplib::geometry {
 		/// <summary>
 		/// Cut both VoronoiCells by each other
 		/// </summary>
-		/// <returns> 0 - if correct, 1 - if points too close</returns>
+		/// <returns> 0 - if correct, 1 - if Cells are too close</returns>
 		static int interact(VoronoiCell& a, VoronoiCell& b) {
 			PointType d = b.seed_ - a.seed_;
 
@@ -620,7 +624,67 @@ namespace cpplib::geometry {
 		} };
 	};
 
-	template<class T> struct Cell {
+	template<class T, class AI> class HashedSpace;
+
+	template<class T>
+	class VoronoiDiagram {
+	public:
+		using PointType = Point<T>;
+		using Cell = VoronoiCell<T>;
+
+		template <class AI>
+		using BondList = HashedSpace<T,AI>::BondList;
+
+		enum class State : unsigned char {
+			Uninitialized = 0,
+			Cubic_cells = 1,
+			Correct_cells = 2
+		};
+	private:
+		//Data
+		::std::vector<Cell> cells_;
+		State state = State::Uninitialized;
+	public:
+		constexpr VoronoiDiagram() noexcept = default;
+		constexpr explicit VoronoiDiagram(const ::std::vector<PointType>& points) noexcept {
+			addPoints(points);
+		}
+		template<class AI>
+		constexpr VoronoiDiagram(const ::std::vector<PointType>& points,
+										  const BondList<AI>& bonds) noexcept {
+			addPoints(points);
+			calculateFaces<AI>(bonds);
+		}
+
+		void addPoints(const ::std::vector<PointType>& points) noexcept {
+			cells_.reserve(points.size());
+			for (const auto& point : points) {
+				cells_.emplace_back(point);
+			}
+			state = State::Cubic_cells;
+		}
+
+		template <class AI>
+		int calculateFaces(const BondList<AI>& bonds) {
+			if (state == State::Uninitialized) return 1; // Error: VoronoiDiagram not initialized
+			for (auto& bond : bonds) {
+				auto interaction_result = Cell::interact(cells_[bond.first], cells_[bond.second]);
+				if (interaction_result != 0) return 2; // Error: Cells too close
+			}
+			state = State::Correct_cells;
+		}
+
+		::std::vector<Cell> extractCells() noexcept {
+			if (state != State::Uninitialized) {
+				return {};
+			}
+			state = State::Uninitialized;
+            return std::move(cells_);
+		}
+	};
+
+	template<class T>
+	struct Cell {
 	public:
 		using value_type = T;
 		using array_type = ::std::array<T, 3>;
@@ -792,7 +856,8 @@ namespace cpplib::geometry {
 		}
 	};
 
-	template<class T> struct Symm
+	template<class T>
+	struct Symm
 	{
 		using matrix_t = geometry::Matrix<T>;
 		using point_t = geometry::Point<T>;
@@ -937,4 +1002,166 @@ namespace cpplib::geometry {
 		}
 
 	};
+
+	template<class T, class AI>
+	class HashedSpace {
+	public:
+		using AtomIndex = AI;
+		using PointType = Point<T>;
+		using CellType = Cell<T>;
+		using BondList = ::std::vector<::std::pair<AtomIndex,AtomIndex>>;
+		using FloatingPointType = typename CellType::value_type;
+		using DimentionType = unsigned char;
+
+		using SupListType = ::std::list<AtomIndex>;
+		using SupType = ::std::array<::std::array<::std::array<SupListType, 3>, 3>, 3>;
+		using SupPoint = geometry::Point<size_t>;
+
+		/// <summary>
+		/// Constructor
+		/// </summary>
+		/// <param name="cell"> - Unit cell</param>
+		/// <param name="maxbond"> - calculated in Distances</param>
+		constexpr HashedSpace(const CellType& cell, FloatingPointType maxbond) noexcept :
+			cell_(cell) {
+			calculateSep(maxbond);
+		}
+
+		/// <summary>
+		/// Constant function to estimate theoretic effectivness of HashedSpace
+		/// </summary>
+		/// <returns>true if effective</returns>
+		constexpr bool is_effective() const noexcept {
+			return sep_[0] > 3 || sep_[1] > 3 || sep_[2] > 3;
+		}
+
+		/// <summary>
+		/// Creates theoretical overestimated vector of Bonds
+		/// </summary>
+		/// <param name="points"> - vector of Points</param>
+		/// <returns>vector with all bonds in boxes and between adjacent ones</returns>
+		BondList create_hash_bonds(const ::std::vector<PointType>& points) const {
+			BondList ret;
+			size_t estimated_size = points.size() * points.size() * sizemod();
+			ret.reserve(estimated_size);
+			SupType supply_table;
+
+			// Fill supply_table
+			for (AtomIndex i = 0; i < points.size(); i++)
+			{
+				auto c = coordintate_of_point(points[i]);
+				supply_table[c[0]][c[1]][c[2]].emplace_back(i);
+			}
+
+			// Create all bonds
+			for (size_t i = 0; i < sep_[0]; i++) {
+				for (size_t j = 0; j < sep_[1]; j++) {
+					for (size_t k = 0; k < sep_[2]; k++) {
+						box_working(ret, supply_table, i, j, k);
+					}
+				}
+			}
+			return ret;
+		}
+
+	private:
+		static constexpr FloatingPointType modifier_ = 1.05;
+
+		void box_working(BondList& ret, const SupType& supply_table, size_t i, size_t j, size_t k) const {
+			create_bonds_in_box(ret, supply_table[i][j][k]);
+
+			bool is_x = sep_[0] != 1;
+			bool is_y = sep_[1] != 1;
+			bool is_z = sep_[2] != 1;
+
+			auto dx = (i + 1 == sep_[0]) ? 0 : i + 1;
+			auto dy = (j + 1 == sep_[1]) ? 0 : j + 1;
+			auto dz = (k + 1 == sep_[2]) ? 0 : k + 1;
+
+			// dx
+			if (is_x) {
+				create_bonds_between_boxes(ret, supply_table[i][j][k], supply_table[dx][j][k]);
+			}
+			// dy
+			if (is_y) {
+				create_bonds_between_boxes(ret, supply_table[i][j][k], supply_table[i][dy][k]);
+			}
+			// dz
+			if (is_z) {
+				create_bonds_between_boxes(ret, supply_table[i][j][k], supply_table[i][j][dz]);
+			}
+
+			// dxdy
+			if (is_x && is_y) {
+				create_bonds_between_boxes(ret, supply_table[i][j][k], supply_table[dx][dy][k]);
+			}
+			// dxdz
+			if (is_x && is_z) {
+				create_bonds_between_boxes(ret, supply_table[i][j][k], supply_table[dx][j][dz]);
+			}
+			// dydz
+			if (is_y && is_z) {
+				create_bonds_between_boxes(ret, supply_table[i][j][k], supply_table[i][dy][dz]);
+			}
+
+			// dxdydz
+			if (is_x && is_y && is_z) {
+				create_bonds_between_boxes(ret, supply_table[i][j][k], supply_table[dx][dy][dz]);
+			}
+		}
+		void create_bonds_in_box(BondList& ret, const SupListType& l) const {
+			for (auto iter1 = l.begin(); iter1 != l.end(); iter1++)
+			{
+				auto iter2 = iter1;
+				iter2++;
+				for (; iter2 != l.end(); iter2++)
+				{
+					ret.emplace_back(*iter1, *iter2);
+				}
+			}
+		}
+		void create_bonds_between_boxes(BondList& ret, const SupListType& l1, const SupListType& l2) const {
+			for (auto v1 : l1)
+			{
+				for (auto v2 : l2)
+				{
+					ret.emplace_back(v1, v2);
+					ret.back().validate();
+				}
+			}
+		}
+
+		constexpr SupPoint coordintate_of_point(const PointType& p) const noexcept {
+			return {
+				static_cast<size_t>(std::floor(p[0] * sep_[0])),
+				static_cast<size_t>(std::floor(p[1] * sep_[1])),
+				static_cast<size_t>(std::floor(p[2] * sep_[2]))
+			};
+		}
+		constexpr FloatingPointType sizemod() const noexcept {
+			FloatingPointType ret = 1;
+			for (DimentionType i = 0; i < 3; i++)
+			{
+				if (sep_[i] > 3) {
+					ret *= 3;
+					ret /= sep_[i];
+					ret *= modifier_;
+				}
+			}
+			return ret;
+		}
+		constexpr void calculateSep(FloatingPointType maxbond) {
+			maxbond *= modifier_;
+			for (DimentionType i = 0; i < 3; i++) {
+				sep_[i] = static_cast<size_t>(floor(cell_.lat_dir(i) / maxbond));
+				if (sep_[i] == 0) sep_[i] = 1;
+			}
+		}
+
+	private:
+		// Data
+		const CellType& cell_;
+		::std::array<size_t, 3> sep_;
+	};
+
 }
