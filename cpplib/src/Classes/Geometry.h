@@ -116,7 +116,7 @@ namespace cpplib::geometry {
 		}
 		template<class OT> friend constexpr auto operator+(const Point& left, const Point<OT>& right) {
 			using RT = typename std::conditional_t<std::is_same_v<T, OT>, T, decltype(left[0] + right[0])>;
-			return Point<RT>(left.a[0] + right.a[0], 
+			return Point<RT>(left.a[0] + right.a[0],
 							 left.a[1] + right.a[1],
 							 left.a[2] + right.a[2]);
 		}
@@ -141,9 +141,9 @@ namespace cpplib::geometry {
 			return Point(left.a[0] * b, left.a[1] * b, left.a[2] * b);
 		}
 		friend constexpr Point operator/(const Point& left, const Point& right) noexcept {
-			return Point(left.a[0] / right.a[0], 
-							left.a[1] / right.a[1], 
-							left.a[2] / right.a[2]);
+			return Point(left.a[0] / right.a[0],
+						 left.a[1] / right.a[1],
+						 left.a[2] / right.a[2]);
 		}
 
 		friend constexpr Point operator/(const Point& left, const value_type b) noexcept {
@@ -187,7 +187,7 @@ namespace cpplib::geometry {
 			return *this;
 		}
 		constexpr bool operator==(const Point& other) const noexcept {
-			if(std::is_floating_point_v<T>)
+			if (std::is_floating_point_v<T>)
 				return abs(a[0] - other.a[0]) < T(0.00001) && abs(a[1] - other.a[1]) < T(0.00001) && abs(a[2] - other.a[2]) < T(0.00001);
 			else
 				return a[0] == other.a[0] && a[1] == other.a[1] && a[2] == other.a[2];
@@ -357,31 +357,17 @@ namespace cpplib::geometry {
 			a[1] = a1[2] * (a2[0] - a3[0]) + a2[2] * (a3[0] - a1[0]) + a3[2] * (a1[0] - a2[0]);
 			a[2] = a1[0] * (a2[1] - a3[1]) + a2[0] * (a3[1] - a1[1]) + a3[0] * (a1[1] - a2[1]);
 			a[3] = -(a1[0] * (a2[1] * a3[2] - a3[1] * a2[2]) +
-						a2[0] * (a3[1] * a1[2] - a1[1] * a3[2]) +
-						a3[0] * (a1[1] * a2[2] - a2[1] * a1[2]));
+					 a2[0] * (a3[1] * a1[2] - a1[1] * a3[2]) +
+					 a3[0] * (a1[1] * a2[2] - a2[1] * a1[2]));
 		}
 
-		constexpr Plane(const Point<T>& start, const Point<T>& end) noexcept {
-			Point<T> normal = end - start;
-
-			// If the normal is zero, the plane is undefined
-			if (normal == Point<T>(0, 0, 0)) {
-				a[0] = 0;
-				a[1] = 0;
-				a[2] = 0;
-				a[3] = 0;
-				return;
-			}
-
-			// Normalize
-			T length = normal.r();
-			normal = normal / length;
-
+		// Construct a plane from a point and a normal
+		constexpr Plane(const Point<T>& point, const Point<T>& normal) noexcept {
 			// Set plane
 			a[0] = normal[0];
 			a[1] = normal[1];
 			a[2] = normal[2];
-			a[3] = -(normal[0] * start[0] + normal[1] * start[1] + normal[2] * start[2]);
+			a[3] = -(normal[0] * point[0] + normal[1] * point[1] + normal[2] * point[2]);
 		}
 
 		constexpr Plane(const Plane& p, const Point<T>& a1) noexcept {
@@ -401,7 +387,7 @@ namespace cpplib::geometry {
 
 		constexpr Point<T> normal() const noexcept {
 			Point<T> norm(a[0], a[1], a[2]);
-			if( T norm_length = norm.r(); norm_length > 1e-10)
+			if (T norm_length = norm.r(); norm_length > 1e-10)
 				return norm / norm_length;
 			else {
 				return Point<T>(0, 0, 1);
@@ -479,7 +465,7 @@ namespace cpplib::geometry {
 			vertices_.push_back(center - u + v);
 		}
 
-		Polygon(const std::vector<PointType>& verts, const PlaneType & pl)
+		Polygon(const std::vector<PointType>& verts, const PlaneType& pl)
 			: vertices_(verts), plane_(pl), is_valid_(true) {
 			_ASSERT(isConvex());
 		}
@@ -546,20 +532,61 @@ namespace cpplib::geometry {
 	public:
 		using PointType = Point<T>;
 		using Face = Polygon<T>;
+		using PlaneType = typename Face::PlaneType;
 
 	private:
 		std::vector<Face> faces_;
 		PointType seed_ = PointType(0, 0, 0);
 
 	public:
+		// Default constructor creates cube around [0,0,0]
 		constexpr VoronoiCell() noexcept {
 			initiate_cube_faces_on_seed();
 		}
+		// Creates cube around seed
 		constexpr explicit VoronoiCell(const PointType& seed) noexcept : seed_(seed) {
 			initiate_cube_faces_on_seed();
 		}
 
+		/// <summary>
+		/// Cut both VoronoiCells by each other
+		/// </summary>
+		/// <returns> 0 - if correct, 1 - if points too close</returns>
+		static int interact(VoronoiCell& a, VoronoiCell& b) {
+			PointType d = b.seed_ - a.seed_;
+
+			// Move interval "d" to [-0.5; 0.5]
+			for (int i = 0; i < 3; ++i) {
+				if (d[i] > 0.5) d[i] -= 1.0;
+				else if (d[i] < -0.5) d[i] += 1.0;
+			}
+
+			// If points too close - stop
+			T d_length = d.r();
+			if (d_length < 1e-10) return 1;
+
+			PointType normal = d / d_length;
+			PointType half_d = d * 0.5;
+
+			// Calculate different midpoints
+			PointType midpoint_a = a.seed_ + half_d;
+			PointType midpoint_b = b.seed_ - half_d;
+
+			// Create plane and clip a by it
+			PlaneType plane(midpoint_a, normal);
+			a.clipByPlane(plane);
+
+			// Using inverted plane for b
+			PlaneType inverted_plane(midpoint_b, -normal);
+			b.clipByPlane(inverted_plane);
+			return 0;
+		}
 	private:
+		inline void clipByPlane(const PlaneType& clipping_plane) {
+			for (auto& face : faces_) {
+				face.clipByPlane(clipping_plane);
+			}
+		}
 		constexpr void initiate_cube_faces_on_seed() {
 			std::array<PointType, 8> cube;
 			for (int i = 0; i < 8; ++i) {
@@ -801,7 +828,7 @@ namespace cpplib::geometry {
 		{
 			return point + (mat * in);
 		}
-		inline point_t GenSymmNorm(const point_t & in) const
+		inline point_t GenSymmNorm(const point_t& in) const
 		{
 			point_t res = GenSymm(in);
 			res.MoveToCell();
@@ -809,7 +836,7 @@ namespace cpplib::geometry {
 		}
 		inline bool is_Eq() const noexcept
 		{
-			return mat.El(0, 0) == 1 && mat.El(1, 0) == 0 && mat.El(2, 0) == 0 && 
+			return mat.El(0, 0) == 1 && mat.El(1, 0) == 0 && mat.El(2, 0) == 0 &&
 				mat.El(0, 1) == 0 && mat.El(1, 1) == 1 && mat.El(2, 1) == 0 &&
 				mat.El(0, 2) == 0 && mat.El(1, 2) == 0 && mat.El(2, 2) == 1 &&
 				point[0] == 0 && point[1] == 0 && point[2] == 0;
@@ -910,3 +937,4 @@ namespace cpplib::geometry {
 		}
 
 	};
+}
