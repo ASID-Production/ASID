@@ -30,6 +30,7 @@
 #include <type_traits>
 #include <array>
 #include <vector>
+#include <list> // for std::list
 #include <cmath> // for std::sqrt and std::floor
 #include <utility> //for std::move
 namespace cpplib::geometry {
@@ -537,9 +538,10 @@ namespace cpplib::geometry {
 		using PointType = Point<T>;
 		using Face = Polygon<T>;
 		using PlaneType = typename Face::PlaneType;
+		using FaceVector = ::std::vector<Face>;
 
 	private:
-		std::vector<Face> faces_;
+		FaceVector faces_;
 		PointType seed_ = PointType(0, 0, 0);
 
 	public:
@@ -548,15 +550,23 @@ namespace cpplib::geometry {
 			initiate_cube_faces_on_seed();
 		}
 		// Creates cube around seed
-		constexpr explicit VoronoiCell(const PointType& seed) noexcept : seed_(seed) {
-			initiate_cube_faces_on_seed();
+		constexpr explicit VoronoiCell(const PointType& seed, bool init = true) noexcept : seed_(seed) {
+			if (init) { initiate_cube_faces_on_seed(); }
 		}
 
 		/// <summary>
 		/// Cut both VoronoiCells by each other
 		/// </summary>
-		/// <returns> 0 - if correct, 1 - if Cells are too close</returns>
+		/// <returns> 0 - if correct even if any of the cells are empty, 
+		///           1 - if Cells are too close</returns>
 		static int interact(VoronoiCell& a, VoronoiCell& b) {
+			// Define if faces are not empty
+			bool empty_a = a.faces_.size() == 0;
+			bool empty_b = b.faces_.size() == 0;
+
+			if (empty_a && empty_b) 
+				return 0; // Both cells are empty
+
 			PointType d = b.seed_ - a.seed_;
 
 			// Move interval "d" to [-0.5; 0.5]
@@ -567,24 +577,28 @@ namespace cpplib::geometry {
 
 			// If points too close - stop
 			T d_length = d.r();
-			if (d_length < 1e-10) return 1;
+			if (d_length < 1e-10) 
+				return 1;
 
 			PointType normal = d / d_length;
 			PointType half_d = d * 0.5;
 
-			// Calculate different midpoints
-			PointType midpoint_a = a.seed_ + half_d;
-			PointType midpoint_b = b.seed_ - half_d;
-
 			// Create plane and clip a by it
-			PlaneType plane(midpoint_a, normal);
-			a.clipByPlane(plane);
+			if (!empty_a) {
+				PointType midpoint_a = a.seed_ + half_d;
+				PlaneType plane(midpoint_a, normal);
+				a.clipByPlane(plane);
+			}
 
 			// Using inverted plane for b
-			PlaneType inverted_plane(midpoint_b, -normal);
-			b.clipByPlane(inverted_plane);
+			if (!empty_b) {
+				PointType midpoint_b = b.seed_ - half_d;
+				PlaneType inverted_plane(midpoint_b, -normal);
+				b.clipByPlane(inverted_plane);
+			}
 			return 0;
 		}
+		
 	private:
 		inline void clipByPlane(const PlaneType& clipping_plane) {
 			for (auto& face : faces_) {
@@ -634,6 +648,9 @@ namespace cpplib::geometry {
 
 		template <class AI>
 		using BondList = HashedSpace<T,AI>::BondList;
+		using PointVector = ::std::vector<PointType>;
+		using CellVector = ::std::vector<Cell>;
+		using BoolVector = ::std::vector<bool>;
 
 		enum class State : unsigned char {
 			Uninitialized = 0,
@@ -642,39 +659,44 @@ namespace cpplib::geometry {
 		};
 	private:
 		//Data
-		::std::vector<Cell> cells_;
+		BoolVector flags_;
+		CellVector cells_;
 		State state = State::Uninitialized;
 	public:
 		constexpr VoronoiDiagram() noexcept = default;
-		constexpr explicit VoronoiDiagram(const ::std::vector<PointType>& points) noexcept {
-			addPoints(points);
+		constexpr explicit VoronoiDiagram(const PointVector& points, const BoolVector& flags = BoolVector(true, points.size())) noexcept {
+			addPoints(points, flags);
 		}
+		
 		template<class AI>
-		constexpr VoronoiDiagram(const ::std::vector<PointType>& points,
-										  const BondList<AI>& bonds) noexcept {
-			addPoints(points);
+		constexpr VoronoiDiagram(const PointVector& points, const BondList<AI>& bonds, const BoolVector& flags = BoolVector(true, points.size())) noexcept {
+			addPoints(point, flags);
 			calculateFaces<AI>(bonds);
 		}
 
-		void addPoints(const ::std::vector<PointType>& points) noexcept {
+		void addPoints(const PointVector& points, const BoolVector& flags) noexcept {
 			cells_.reserve(points.size());
-			for (const auto& point : points) {
-				cells_.emplace_back(point);
+			for (size_t i = 0; i < points.size(); i++)
+			{
+				cells_.emplace_back(points[i], flags[i]);
 			}
 			state = State::Cubic_cells;
 		}
 
 		template <class AI>
-		int calculateFaces(const BondList<AI>& bonds) {
-			if (state == State::Uninitialized) return 1; // Error: VoronoiDiagram not initialized
+		int calculateFaces(const BondList<AI>& bonds) noexcept {
+			if (state == State::Uninitialized) 
+				return 1; // Error: VoronoiDiagram not initialized
 			for (auto& bond : bonds) {
 				auto interaction_result = Cell::interact(cells_[bond.first], cells_[bond.second]);
-				if (interaction_result != 0) return 2; // Error: Cells too close
+				if (interaction_result != 0) 
+					return 2; // Error: Cells too close
 			}
 			state = State::Correct_cells;
+			return 0;
 		}
 
-		::std::vector<Cell> extractCells() noexcept {
+		CellVector extractCells() noexcept {
 			if (state != State::Uninitialized) {
 				return {};
 			}

@@ -952,6 +952,21 @@ extern "C" {
 							 "hasPolymer", b ? Py_True : Py_False);
 	}
 
+	/// 
+	/// Args: [cell, symm, tuples, bools]
+	static PyObject* cpplib_Voronoi(PyObject* self, PyObject* args) {
+		PyObject* ocell = NULL;
+		PyObject* osymm = NULL;
+		PyObject* otuples = NULL;
+		PyObject* obools = NULL;
+		cpplib::currents::FloatingPointType over_radius = 0;
+		if (!PyArg_ParseTuple(args, "OOOO", &ocell, &osymm, &otuples, &obools)) {
+			deb_write("! Critic Error: Parse Error - return None");
+			Py_RETURN_NONE;
+		}
+
+		Prepare_IC all(ocell, osymm, otuples);
+	}
 
 	static struct PyMethodDef methods[] = {
 		{ "GenBonds", cpplib_GenBonds, METH_O, "Generate bond list"},
@@ -974,6 +989,7 @@ extern "C" {
 		{ "compaq", cpplib_compaq, METH_VARARGS, "Do the same as Olex2 'compaq' function"},
 		{ "SortDatabase", cpplib_SortDatabase, METH_O, "Sort graph"},
 		{ "Cluster", cpplib_ClusterCreate, METH_VARARGS, "Create cluster"},
+		{ "VoronoiCalculation", cpplib_Voronoi, METH_VARARGS, "Calculate Voronoi cells"},
 
 
 		{ NULL, NULL, 0, NULL }
