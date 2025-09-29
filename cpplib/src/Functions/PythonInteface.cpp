@@ -292,34 +292,34 @@ extern "C" {
 
 		Prepare_IC all(ocell, osymm, otuple);
 
-		auto ret = FindMoleculesInCell(all.cell, all.symm, all.types, all.points);
+		auto [graph, error, ret] = FindMoleculesInCell(all.cell, all.symm, all.types, all.points);
 		PyObject* o_xyz_block = PyList_New(0);
 
-		for (auto& mol : std::get<2>(ret))
+		for (const auto& [atoms, id, bonds] : ret)
 		{
 			PyObject* o_molecule = PyList_New(0);
-			for (auto& atom : std::get<0>(mol)) {
+			for (auto& [point,type] : atoms) {
 				PyObject* o_atom = Py_BuildValue("{s:f,s:f,s:f,s:l}",
-												 "x", cpplib::currents::FloatingPointType(std::get<0>(atom)[0]),
-												 "y", cpplib::currents::FloatingPointType(std::get<0>(atom)[1]),
-												 "z", cpplib::currents::FloatingPointType(std::get<0>(atom)[2]),
-												 "init_idx", long(std::get<1>(atom)));
+												 "x", cpplib::currents::FloatingPointType(point[0]),
+												 "y", cpplib::currents::FloatingPointType(point[1]),
+												 "z", cpplib::currents::FloatingPointType(point[2]),
+												 "init_idx", long(id));
 				PyList_Append(o_molecule, o_atom);
 			}
 			PyObject* o_bonds = PyList_New(0);
-			for (auto& bond : std::get<2>(mol)) {
+			for (const auto& bond : bonds) {
 				PyObject* o_bond1 = Py_BuildValue("(ii)", int(bond.first), int(bond.second));
 				PyList_Append(o_bonds, o_bond1);
 			}
 
 			PyList_Append(o_xyz_block, Py_BuildValue("{s:l,s:O,s:O}",
-													 "count", long(std::get<1>(mol)),
+													 "count", long(id),
 													 "atoms", o_molecule,
 													 "bonds", o_bonds));
 		}
 		return Py_BuildValue("{s:s,s:s,s:O}",
-							 "graph_str", std::get<0>(ret).c_str(),
-							 "error_str", std::get<1>(ret).c_str(),
+							 "graph_str", graph.c_str(),
+							 "error_str", error.c_str(),
 							 "xyz_block", o_xyz_block);
 	}
 	static PyObject* cpplib_FindMoleculesWithoutCell(PyObject* self, PyObject* otuple) {
@@ -953,19 +953,79 @@ extern "C" {
 	}
 
 	/// 
-	/// Args: [cell, symm, tuples, bools]
+	/// Args: [cell, symm, tuples, bools<int>, cutoff]
 	static PyObject* cpplib_Voronoi(PyObject* self, PyObject* args) {
+		using Diagram = cpplib::geometry::VoronoiDiagram<FloatingPointType>;
+
 		PyObject* ocell = NULL;
 		PyObject* osymm = NULL;
 		PyObject* otuples = NULL;
 		PyObject* obools = NULL;
-		cpplib::currents::FloatingPointType over_radius = 0;
-		if (!PyArg_ParseTuple(args, "OOOO", &ocell, &osymm, &otuples, &obools)) {
+		float cutoff = 6.0;
+		if (!PyArg_ParseTuple(args, "OOOOf", &ocell, &osymm, &otuples, &obools, &cutoff)) {
 			deb_write("! Critic Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
 
 		Prepare_IC all(ocell, osymm, otuples);
+		auto ps = all.points.size();
+		std::vector<int> intbools;
+		intbools.reserve(ps);
+		pyListToVectorInt(obools, &intbools);
+		std::vector<bool> bools(ps);
+
+		for (int i = 0; i < ps; i++) {
+			bools[i] = intbools[i] != 0;
+		}
+
+		FAMCellType fcell(CellType(all.cell));
+		auto supercell_indexes = fcell.CreateSupercell(all.points, cutoff, 1);
+		bools.resize(all.points.size(), false);
+
+		cpplib::geometry::HashedSpace<FloatingPointType, long> space(fcell, cutoff);
+		auto bonds = space.create_hash_bonds(all.points);
+
+		Diagram diag;
+		diag.addPoints(all.points, bools);
+		diag.calculateFaces<long>(bonds);
+
+		auto ret = diag.extractCells();
+		
+		PyObject* retlist = PyList_New(0);
+		
+		for (size_t i = 0; i < ps; i++)
+		{
+			auto& faces = ret[i].getFaces();
+			auto fs = faces.size();
+			PyObject* plist = PyList_New(0);
+			for (size_t j = 0; j < fs; j++)
+			{
+				// Create list of points of one face
+				PyObject* flist = PyList_New(0);
+				
+				for (size_t k = 0; k < faces[j].size(); k++) {
+					PointType point_on_face((faces[j][k][0] * supercell_indexes[0]),
+											(faces[j][k][1] * supercell_indexes[1]),
+											(faces[j][k][2] * supercell_indexes[2]));
+					point_on_face = point_on_face.MoveToCell();
+					PyList_Append(flist, Py_BuildValue("(fff)",
+													   static_cast<float>(point_on_face[0]),  // px
+													   static_cast<float>(point_on_face[1]),  // py
+													   static_cast<float>(point_on_face[2])));// pz
+
+					
+				}
+
+				// Add new face lo list of faces
+				PyList_Append(plist, flist);
+			}
+			// Add new cell to list of cells
+			PyList_Append(retlist, plist);
+		}
+
+		//auto ret = VoronoiCalculation(all.cell, all.symm, all.types, all.points, 8);
+		return Py_BuildValue("{s:O}",
+							 "cells", retlist);
 	}
 
 	static struct PyMethodDef methods[] = {

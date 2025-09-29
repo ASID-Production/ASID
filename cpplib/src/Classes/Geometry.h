@@ -512,6 +512,13 @@ namespace cpplib::geometry {
 			is_valid_ = vertices_.size() >= 3;
 		}
 
+		constexpr const PointType& operator[](size_t i) const noexcept {
+			return vertices_[i];
+		}
+		constexpr size_t size() const noexcept {
+			return vertices_.size();
+		}
+
 		bool isConvex() const {
 			if (vertices_.size() < 3) return false;
 			auto normal = plane_.normal();
@@ -598,7 +605,10 @@ namespace cpplib::geometry {
 			}
 			return 0;
 		}
-		
+
+		constexpr const PointType& getSeed() const noexcept { return seed_; }
+		constexpr const FaceVector& getFaces() const noexcept { return faces_; }
+
 	private:
 		inline void clipByPlane(const PlaneType& clipping_plane) {
 			for (auto& face : faces_) {
@@ -670,7 +680,7 @@ namespace cpplib::geometry {
 		
 		template<class AI>
 		constexpr VoronoiDiagram(const PointVector& points, const BondList<AI>& bonds, const BoolVector& flags = BoolVector(true, points.size())) noexcept {
-			addPoints(point, flags);
+			addPoints(points, flags);
 			calculateFaces<AI>(bonds);
 		}
 
@@ -1147,8 +1157,12 @@ namespace cpplib::geometry {
 			{
 				for (auto v2 : l2)
 				{
-					ret.emplace_back(v1, v2);
-					ret.back().validate();
+					if (v2 > v1) {
+						ret.emplace_back(v1, v2);
+					}
+					else {
+						ret.emplace_back(v2, v1);
+					}
 				}
 			}
 		}
