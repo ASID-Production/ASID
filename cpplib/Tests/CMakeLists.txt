@@ -52,7 +52,7 @@ add_executable(
     ${PROJECT_NAME}
     "EngineTest.cpp"
     "MainTest.cpp"
-    "Includes.cpp")
+     "GeometryTest.cpp")
 target_link_libraries(
     ${PROJECT_NAME} 
     GTest::gtest_main

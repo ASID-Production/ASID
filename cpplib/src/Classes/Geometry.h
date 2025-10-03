@@ -32,7 +32,9 @@
 #include <vector>
 #include <list> // for std::list
 #include <cmath> // for std::sqrt and std::floor
-#include <utility> //for std::move
+#include <utility> // for std::move
+#include <algorithm> // for std::sort
+#include <ranges>
 namespace cpplib::geometry {
 	template <class T> inline T GradtoRad(T a) { return a * static_cast<T>(0.0174532925199432957692); }
 	template <class T> inline T RadtoGrad(T a) { return a * static_cast<T>(57.295779513082320877); }
@@ -465,9 +467,9 @@ namespace cpplib::geometry {
 			// Create vertices of square
 			vertices_.reserve(4);
 			vertices_.push_back(center + u + v);
-			vertices_.push_back(center + u - v);
-			vertices_.push_back(center - u - v);
 			vertices_.push_back(center - u + v);
+			vertices_.push_back(center - u - v);
+			vertices_.push_back(center + u - v);
 		}
 
 		Polygon(const std::vector<PointType>& verts, const PlaneType& pl)
@@ -475,13 +477,11 @@ namespace cpplib::geometry {
 			_ASSERT(isConvex());
 		}
 
-
 		// Method to clip the polygon by a plane
 		void clipByPlane(const PlaneType& clipping_plane) {
 			if (!is_valid_ || vertices_.empty()) return;
 
 			std::vector<Point<T>> new_vertices;
-			// Reserve space for new vertices
 			new_vertices.reserve(vertices_.size() + 4);
 
 			const size_t n = vertices_.size();
@@ -492,16 +492,16 @@ namespace cpplib::geometry {
 				const Point<T>& current_vertex = vertices_[i];
 				const T current_dist = clipping_plane.side(current_vertex);
 
-				// If the previous vertex is on the positive side of the plane - take it
-				if (current_dist >= 0) {
-					new_vertices.push_back(current_vertex);
-				}
-
-				// If the both vertices are on opposite sides of the plane - take the intersection
-				if (prev_dist * current_dist < 0) {
+				// If the segment intersects the plane, add the intersection point
+				if ((prev_dist < 0 && current_dist >= 0) || (prev_dist >= 0 && current_dist < 0)) {
 					const T t = prev_dist / (prev_dist - current_dist);
 					const Point<T> intersection = prev_vertex + (current_vertex - prev_vertex) * t;
 					new_vertices.push_back(intersection);
+				}
+
+				// If current vertex is on the positive side of the plane (or on plane), add it
+				if (current_dist >= 0) {
+					new_vertices.push_back(current_vertex);
 				}
 
 				prev_vertex = current_vertex;
@@ -509,7 +509,6 @@ namespace cpplib::geometry {
 			}
 
 			vertices_ = std::move(new_vertices);
-			is_valid_ = vertices_.size() >= 3;
 		}
 
 		constexpr const PointType& operator[](size_t i) const noexcept {
@@ -537,6 +536,41 @@ namespace cpplib::geometry {
 			}
 			return true;
 		}
+		void fixVertexOrder() {
+			if (vertices_.size() < 3) return;
+
+			// Calculate the center of the polygon 
+			Point<T> center(0, 0, 0);
+			for (const auto& vertex : vertices_) {
+				center += vertex;
+			}
+			center = center / static_cast<T>(vertices_.size());
+
+			// Calculate the normal vector of the plane
+			Point<T> normal = plane_.normal();
+
+			// Sort the vertices in counter-clockwise order around the center
+			std::ranges::sort(vertices_,
+							  [&](const Point<T>& a, const Point<T>& b) {
+								  Point<T> vecA = a - center;
+								  Point<T> vecB = b - center;
+
+								  // ¬ычисл€ем угол через векторное произведение
+								  Point<T> cross = Point<T>::Vector(vecA, vecB);
+								  T dot_with_normal = Point<T>::Scalar(cross, normal);
+
+								  return dot_with_normal > 0;
+							  });
+		}
+
+		bool isValid() const {
+			return is_valid_ && vertices_.size() >= 3;
+		}
+
+		const std::vector<PointType>& getVertices() const {
+			return vertices_;
+		}
+
 	};
 
 	template<class T>
@@ -568,10 +602,10 @@ namespace cpplib::geometry {
 		///           1 - if Cells are too close</returns>
 		static int interact(VoronoiCell& a, VoronoiCell& b) {
 			// Define if faces are not empty
-			bool empty_a = a.faces_.size() == 0;
-			bool empty_b = b.faces_.size() == 0;
+			bool empty_a = a.faces_.empty();
+			bool empty_b = b.faces_.empty();
 
-			if (empty_a && empty_b) 
+			if (empty_a && empty_b)
 				return 0; // Both cells are empty
 
 			PointType d = b.seed_ - a.seed_;
@@ -584,7 +618,7 @@ namespace cpplib::geometry {
 
 			// If points too close - stop
 			T d_length = d.r();
-			if (d_length < 1e-10) 
+			if (d_length < 1e-6)
 				return 1;
 
 			PointType normal = d / d_length;
@@ -594,22 +628,176 @@ namespace cpplib::geometry {
 			if (!empty_a) {
 				PointType midpoint_a = a.seed_ + half_d;
 				PlaneType plane(midpoint_a, normal);
-				a.clipByPlane(plane);
+				a.clipByPlaneAndAddNewFace(plane);
 			}
 
 			// Using inverted plane for b
 			if (!empty_b) {
 				PointType midpoint_b = b.seed_ - half_d;
 				PlaneType inverted_plane(midpoint_b, -normal);
-				b.clipByPlane(inverted_plane);
+				b.clipByPlaneAndAddNewFace(inverted_plane);
 			}
+
 			return 0;
 		}
-
 		constexpr const PointType& getSeed() const noexcept { return seed_; }
 		constexpr const FaceVector& getFaces() const noexcept { return faces_; }
 
 	private:
+		void clipByPlaneAndAddNewFace(const PlaneType& clipping_plane) {
+			std::vector<PointType> intersection_points;
+			std::vector<Face> new_faces;
+
+			// Collect all intersection points and create new faces
+			for (auto& face : faces_) {
+				// Save original vertices for intersection detection
+				std::vector<PointType> original_vertices;
+				for (size_t i = 0; i < face.size(); ++i) {
+					original_vertices.push_back(face[i]);
+				}
+
+				// Clip the face
+				face.clipByPlane(clipping_plane);
+
+				// If face remains valid, add it
+				if (face.size() >= 3) {
+					new_faces.push_back(face);
+
+					// Collect intersection points with this face
+					collectIntersectionPoints(original_vertices, clipping_plane, intersection_points);
+				}
+				// If face becomes invalid (less than 3 vertices), it is not added - thus removed
+			}
+
+			// Replace old faces with new ones
+			faces_ = std::move(new_faces);
+
+			// Create new face from intersection points if there are enough
+			if (intersection_points.size() >= 3) {
+				createNewFaceFromIntersections(intersection_points, clipping_plane);
+			}
+		}
+
+		void collectIntersectionPoints(const std::vector<PointType>& vertices,
+									   const PlaneType& plane,
+									   std::vector<PointType>& intersection_points) {
+			const size_t n = vertices.size();
+			if (n < 3) return;
+
+			PointType prev_vertex = vertices.back();
+			T prev_dist = plane.side(prev_vertex);
+
+			for (size_t i = 0; i < n; i++) {
+				const PointType& current_vertex = vertices[i];
+				const T current_dist = plane.side(current_vertex);
+
+				// If edge intersects the plane, find intersection point
+				if (prev_dist * current_dist < 0) {
+					const T t = prev_dist / (prev_dist - current_dist);
+					const PointType intersection = prev_vertex + (current_vertex - prev_vertex) * t;
+					intersection_points.push_back(intersection);
+				}
+
+				prev_vertex = current_vertex;
+				prev_dist = current_dist;
+			}
+		}
+
+		void createNewFaceFromIntersections(std::vector<PointType>& points,
+											const PlaneType& plane) {
+			if (points.size() < 3) return;
+
+
+			if (points.size() < 3) return;
+
+			// Order points in correct order (counter-clockwise relative to normal)
+			orderPointsOnPlane(points, plane);
+			// Remove duplicates
+			removeDuplicatePoints(points);
+
+			// Create new face
+			Face new_face(points, plane);
+			if (new_face.isConvex()) {
+				faces_.push_back(new_face);
+			}
+		}
+
+		void removeDuplicatePoints(std::vector<PointType>& points) const {
+			auto points_equal = [](const PointType& a, const PointType& b) {
+				if constexpr (std::is_floating_point_v<T>) {
+					return PointType::distance(a, b) < static_cast<T>(1e-6);
+				}
+				else {
+					return a == b;
+				}
+				};
+
+			// Remove consecutive duplicates
+			auto last = std::unique(points.begin(), points.end(), points_equal);
+			points.erase(last, points.end());
+
+			// Check first and last element
+			if (points.size() > 1 && points_equal(points.front(), points.back())) {
+				points.pop_back();
+			}
+		}
+
+		void orderPointsOnPlane(std::vector<PointType>& points, const PlaneType& plane) {
+			if (points.size() < 3) return;
+
+			// Find center of mass of points
+			PointType center(0, 0, 0);
+			for (const auto& p : points) {
+				center += p;
+			}
+			center = center / static_cast<T>(points.size());
+
+			// Get plane normal
+			PointType normal = plane.normal();
+
+			// Choose arbitrary vector in plane (perpendicular to normal)
+			PointType reference_vector;
+			if (std::abs(normal[0]) > std::abs(normal[1])) {
+				reference_vector = PointType(-normal[2], 0, normal[0]);
+			}
+			else {
+				reference_vector = PointType(0, normal[2], -normal[1]);
+			}
+			reference_vector = reference_vector / reference_vector.r();
+
+			// Sort points by angle relative to center
+			std::ranges::sort(points,
+							  [&](const PointType& a, const PointType& b)
+							  {
+								  PointType vecA = a - center;
+								  PointType vecB = b - center;
+
+								  // Project onto plane
+								  PointType projA = vecA - normal * PointType::Scalar(vecA, normal);
+								  PointType projB = vecB - normal * PointType::Scalar(vecB, normal);
+
+								  if (projA.r() < 1e-10 || projB.r() < 1e-10) {
+									  return false; // Points too close to center
+								  }
+
+								  // Normalize
+								  projA = projA / projA.r();
+								  projB = projB / projB.r();
+
+								  // Calculate angles using scalar and vector products
+								  T cosA = PointType::Scalar(reference_vector, projA);
+								  T sinA = PointType::Scalar(PointType::Vector(reference_vector, projA), normal);
+								  T angleA = std::atan2(sinA, cosA);
+
+								  T cosB = PointType::Scalar(reference_vector, projB);
+								  T sinB = PointType::Scalar(PointType::Vector(reference_vector, projB), normal);
+								  T angleB = std::atan2(sinB, cosB);
+
+								  return angleA < angleB;
+							  });
+		}
+
+
 		inline void clipByPlane(const PlaneType& clipping_plane) {
 			for (auto& face : faces_) {
 				face.clipByPlane(clipping_plane);
@@ -620,8 +808,9 @@ namespace cpplib::geometry {
 			for (int i = 0; i < 8; ++i) {
 				cube[i] = base_vertices[i] + seed_;
 			}
+			faces_.reserve(6);
 			for (int i = 0; i < 6; ++i) {
-				faces_[i] = Face({ cube[face_indices[i][0]], cube[face_indices[i][1]], cube[face_indices[i][2]], cube[face_indices[i][3]] });
+				faces_.emplace_back(Face({ cube[face_indices[i][0]], cube[face_indices[i][1]], cube[face_indices[i][2]], cube[face_indices[i][3]] }));
 			}
 		}
 
@@ -654,12 +843,12 @@ namespace cpplib::geometry {
 	class VoronoiDiagram {
 	public:
 		using PointType = Point<T>;
-		using Cell = VoronoiCell<T>;
+		using VoronCell = VoronoiCell<T>;
 
 		template <class AI>
 		using BondList = HashedSpace<T,AI>::BondList;
 		using PointVector = ::std::vector<PointType>;
-		using CellVector = ::std::vector<Cell>;
+		using CellVector = ::std::vector<VoronCell>;
 		using BoolVector = ::std::vector<bool>;
 
 		enum class State : unsigned char {
@@ -674,13 +863,19 @@ namespace cpplib::geometry {
 		State state = State::Uninitialized;
 	public:
 		constexpr VoronoiDiagram() noexcept = default;
-		constexpr explicit VoronoiDiagram(const PointVector& points, const BoolVector& flags = BoolVector(true, points.size())) noexcept {
-			addPoints(points, flags);
+		constexpr explicit VoronoiDiagram(const PointVector& points, const BoolVector& flags = BoolVector()) noexcept : flags_(flags) {
+			if (flags.empty()) {
+				flags_.resize(points.size(), true);
+			}
+			addPoints(points, flags_);
 		}
 		
 		template<class AI>
-		constexpr VoronoiDiagram(const PointVector& points, const BondList<AI>& bonds, const BoolVector& flags = BoolVector(true, points.size())) noexcept {
-			addPoints(points, flags);
+		constexpr VoronoiDiagram(const PointVector& points, const BondList<AI>& bonds, const BoolVector& flags = BoolVector(true, points.size())) noexcept : flags_(flags) {
+			if (flags.empty()) {
+				flags_.resize(points.size(), true);
+			}			
+			addPoints(points, flags_);
 			calculateFaces<AI>(bonds);
 		}
 
@@ -698,7 +893,7 @@ namespace cpplib::geometry {
 			if (state == State::Uninitialized) 
 				return 1; // Error: VoronoiDiagram not initialized
 			for (auto& bond : bonds) {
-				auto interaction_result = Cell::interact(cells_[bond.first], cells_[bond.second]);
+				auto interaction_result = VoronCell::interact(cells_[bond.first], cells_[bond.second]);
 				if (interaction_result != 0) 
 					return 2; // Error: Cells too close
 			}
@@ -706,8 +901,23 @@ namespace cpplib::geometry {
 			return 0;
 		}
 
+		constexpr T calculateLongestDiagonal(const Matrix<T>& mat) const noexcept {
+			T ret = 0;
+			for (auto& vcell : cells_) {
+				const PointType seed = vcell.getSeed();
+				for (const auto& face : vcell.getFaces()) {
+					for (size_t i = 0; i < face.size(); i++)
+					{
+						T val = (mat*(face[i] - seed)).r();
+						if (val > ret) ret = val;
+					}
+				}
+			}
+			return ret*2;
+		}
+
 		CellVector extractCells() noexcept {
-			if (state != State::Uninitialized) {
+			if (state == State::Uninitialized) {
 				return {};
 			}
 			state = State::Uninitialized;
