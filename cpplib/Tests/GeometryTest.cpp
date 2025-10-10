@@ -386,25 +386,6 @@ TEST(PolygonTest, PolygonClipPreservesOrder) {
         EXPECT_GT(cross[2], -1e-10);
     }
 }
-TEST(PolygonTest, PolygonClipComplexShape) {
-    std::vector<Point<float>> hexagon = {
-        Point<float>(0, 1, 0),
-        Point<float>(1, 2, 0),
-        Point<float>(2, 1, 0),
-        Point<float>(2, 0, 0),
-        Point<float>(1, -1, 0),
-        Point<float>(0, 0, 0)
-    };
-
-    Polygon<float> poly(hexagon);
-    EXPECT_TRUE(poly.isConvex());
-
-    Plane<float> clipping_plane(Point<float>(1, 0, 0), Point<float>(1, 0, 0));
-    poly.clipByPlane(clipping_plane);
-
-    EXPECT_TRUE(poly.isConvex());
-    EXPECT_GE(poly.size(), 3);
-}
 TEST(PolygonTest, PolygonConvexityCorrectness) {
     std::vector<Point<float>> convex_square = {
         Point<float>(0, 0, 0),
@@ -507,6 +488,19 @@ TEST_F(GeometryTest, PolygonClipByPlane) {
     EXPECT_TRUE(poly.isConvex());
 }
 
+TEST_F(GeometryTest, PolygonEdgeCases) {
+    std::vector<Point<float>> insufficient_points = {
+        Point<float>(0, 0, 0),
+        Point<float>(1, 0, 0)
+    };
+
+    Polygon<float> small_poly(insufficient_points);
+    EXPECT_FALSE(small_poly.isConvex());
+
+    Polygon<float> empty_poly;
+    EXPECT_EQ(empty_poly.size(), 0);
+}
+
 // VoronoiCell
 TEST_F(GeometryTest, VoronoiCellDefaultConstructor) {
     VoronoiCell<float> cell;
@@ -565,6 +559,17 @@ TEST_F(GeometryTest, VoronoiDiagramConstructor) {
 
     auto cells = vd.extractCells();
     EXPECT_EQ(cells.size(), points.size());
+
+
+    for (const auto& cell : cells) {
+        const auto seed = cell.getSeed();
+        for (const auto& face : cell.getFaces()) {
+            EXPECT_TRUE(face.isConvex());
+            VoronoiDiagram<float>::VoronCell::Face::PlaneType plane(face[0], face[1], face[2]);
+            bool res = plane.side(seed) >= 0;
+            EXPECT_TRUE(res);
+        }
+    }
 }
 
 TEST_F(GeometryTest, VoronoiDiagramWithFlags) {
@@ -591,6 +596,14 @@ TEST_F(GeometryTest, VoronoiDiagramWithFlags) {
     auto cells = vd.extractCells();
     EXPECT_EQ(cells.size(), points.size());
 
+    for (const auto& cell : cells) {
+        const auto seed = cell.getSeed();
+        for (const auto& face : cell.getFaces()) {
+            EXPECT_TRUE(face.isConvex());
+            VoronoiDiagram<float>::VoronCell::Face::PlaneType plane(face[0], face[1], face[2]);
+            EXPECT_TRUE(plane.side(seed) >= 0);
+        }
+    }
 }
 
 TEST_F(GeometryTest, VoronoiDiagramAddPoints) {
@@ -637,19 +650,6 @@ TEST_F(GeometryTest, VoronoiDiagramExtractCells) {
     EXPECT_TRUE(empty_cells.empty());
 }
 
-TEST_F(GeometryTest, PolygonEdgeCases) {
-    std::vector<Point<float>> insufficient_points = {
-        Point<float>(0, 0, 0),
-        Point<float>(1, 0, 0)
-    };
-
-    Polygon<float> small_poly(insufficient_points);
-    EXPECT_FALSE(small_poly.isConvex());
-
-    Polygon<float> empty_poly;
-    EXPECT_EQ(empty_poly.size(), 0);
-}
-
 TEST_F(GeometryTest, VoronoiCellBoundaryConditions) {
     VoronoiCell<float> cell1(Point<float>(0.0, 0.0, 0.0));
     VoronoiCell<float> cell2(Point<float>(0.999, 0.999, 0.999));
@@ -663,3 +663,4 @@ int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
+

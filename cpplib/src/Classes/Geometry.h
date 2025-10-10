@@ -35,6 +35,7 @@
 #include <utility> // for std::move
 #include <algorithm> // for std::sort
 #include <ranges>
+#include <optional>
 namespace cpplib::geometry {
 	template <class T> inline T GradtoRad(T a) { return a * static_cast<T>(0.0174532925199432957692); }
 	template <class T> inline T RadtoGrad(T a) { return a * static_cast<T>(57.295779513082320877); }
@@ -411,6 +412,7 @@ namespace cpplib::geometry {
 	public:
 		using PointType = Point<T>;
 		using PlaneType = Plane<T>;
+		static constexpr T limit = ::std::numeric_limits<T>::epsilon();
 	private:
 		std::vector<PointType> vertices_;
 		PlaneType plane_;
@@ -474,41 +476,62 @@ namespace cpplib::geometry {
 
 		Polygon(const std::vector<PointType>& verts, const PlaneType& pl)
 			: vertices_(verts), plane_(pl), is_valid_(true) {
+			bool t = isConvex();
 			_ASSERT(isConvex());
 		}
 
 		// Method to clip the polygon by a plane
-		void clipByPlane(const PlaneType& clipping_plane) {
-			if (!is_valid_ || vertices_.empty()) return;
+		std::optional<std::pair<PointType,PointType>> clipByPlane(const PlaneType& clipping_plane) {
+			if (!is_valid_ || vertices_.empty()) 
+				return std::optional<std::pair<PointType, PointType>>();
 
-			std::vector<Point<T>> new_vertices;
-			new_vertices.reserve(vertices_.size() + 4);
+			auto intersect = [](const PointType& a, const PointType& b, const PlaneType& plane)->PointType {
+				PointType d = b - a;
+				T denominator = d[0] * plane.a[0] + d[1] * plane.a[1] + d[2] * plane.a[2];
+				T t = -plane.side(a) / denominator;
+				return a + d * t;
+				};
+			auto vs = vertices_.size();
 
-			const size_t n = vertices_.size();
-			Point<T> prev_vertex = vertices_.back();
-			T prev_dist = clipping_plane.side(prev_vertex);
+			auto [e1, e2] = findIntersectionionPoints(clipping_plane);
 
-			for (size_t i = 0; i < n; i++) {
-				const Point<T>& current_vertex = vertices_[i];
-				const T current_dist = clipping_plane.side(current_vertex);
-
-				// If the segment intersects the plane, add the intersection point
-				if ((prev_dist < 0 && current_dist >= 0) || (prev_dist >= 0 && current_dist < 0)) {
-					const T t = prev_dist / (prev_dist - current_dist);
-					const Point<T> intersection = prev_vertex + (current_vertex - prev_vertex) * t;
-					new_vertices.push_back(intersection);
+			// Check: all points are on the same side of the plane?
+			if (e1 == vs) {
+				if (clipping_plane.side(vertices_[0]) < 0) {
+					vertices_.clear();
+					is_valid_ = false;
 				}
-
-				// If current vertex is on the positive side of the plane (or on plane), add it
-				if (current_dist >= 0) {
-					new_vertices.push_back(current_vertex);
+				return std::optional<std::pair<PointType, PointType>>();
+			}
+			else 
+			{
+				// erase from e1 (including) to e2 (excluding)
+				// find intersection points
+				PointType inter1 = intersect(vertices_[(e1 + vs - 1) % vs], vertices_[e1], clipping_plane);
+				PointType inter2 = intersect(vertices_[(e2 + vs - 1) % vs], vertices_[e2], clipping_plane);
+				if (e1 > e2) {
+					vertices_.erase(vertices_.begin() + e1, vertices_.end());
+					vertices_.erase(vertices_.begin(), vertices_.begin() + e2);
+					vertices_.push_back(inter1);
+					vertices_.push_back(inter2);
 				}
-
-				prev_vertex = current_vertex;
-				prev_dist = current_dist;
+				else if (e2 > e1) {
+					vertices_[e1] = inter1;
+					vertices_[e2] = inter2;
+					if ((e2 - e1) > 2) {
+						vertices_.erase(vertices_.begin() + e1 + 1, vertices_.begin() + e2 - 1);
+					}
+				}
+				else if (e1 == e2) {
+					// overwrite e1 and add one more point
+					vertices_[e1] = inter1;
+					vertices_.insert(vertices_.begin() + e1 + 1, inter2);
+				}
+				return std::make_optional(std::pair<PointType, PointType>(inter1, inter2));
 			}
 
-			vertices_ = std::move(new_vertices);
+
+			return std::optional<std::pair<PointType, PointType>>();
 		}
 
 		constexpr const PointType& operator[](size_t i) const noexcept {
@@ -530,7 +553,7 @@ namespace cpplib::geometry {
 				PointType edge2 = nextNext - next;
 
 				PointType cross = PointType::Vector(edge1, edge2);
-				if (PointType::Scalar(cross, normal) < 0) {
+				if (PointType::Scalar(cross, normal) < -limit) {
 					return false;
 				}
 			}
@@ -570,7 +593,47 @@ namespace cpplib::geometry {
 		const std::vector<PointType>& getVertices() const {
 			return vertices_;
 		}
+	private:
+		std::pair<size_t,size_t> findIntersectionionPoints(const PlaneType& clipping_plane) const {
+			size_t e1 = vertices_.size();
+			size_t e2 = vertices_.size();
+			size_t vs = vertices_.size();
 
+			PointType inter1;
+			PointType inter2;
+
+			// Prepare dist to plane vector
+			::std::vector<T> dists(vs, 0);
+			for (size_t iter = 0; iter < vs; iter++)
+			{
+				dists[iter] = clipping_plane.side(vertices_[iter]);
+			}
+
+			if (dists.front() < 0 && dists.back() > 0)
+			{
+				e1 = 0;
+			}
+
+			if (dists.front() > 0 && dists.back() < 0)
+			{
+				e2 = 0;
+			}
+
+			for (size_t i = 1; i < vs; i++)
+			{
+				if (dists[i - 1] > 0 && dists[i] < 0)
+				{
+					e1 = i;
+				}
+
+				if (dists[i - 1] < 0 && dists[i] > 0)
+				{
+					e2 = i;
+				}
+			}
+
+			return std::make_pair(e1, e2);
+		}
 	};
 
 	template<class T>
@@ -627,14 +690,14 @@ namespace cpplib::geometry {
 			// Create plane and clip a by it
 			if (!empty_a) {
 				PointType midpoint_a = a.seed_ + half_d;
-				PlaneType plane(midpoint_a, normal);
+				PlaneType plane(midpoint_a, -normal);
 				a.clipByPlaneAndAddNewFace(plane);
 			}
 
 			// Using inverted plane for b
 			if (!empty_b) {
 				PointType midpoint_b = b.seed_ - half_d;
-				PlaneType inverted_plane(midpoint_b, -normal);
+				PlaneType inverted_plane(midpoint_b, normal);
 				b.clipByPlaneAndAddNewFace(inverted_plane);
 			}
 
@@ -707,9 +770,6 @@ namespace cpplib::geometry {
 											const PlaneType& plane) {
 			if (points.size() < 3) return;
 
-
-			if (points.size() < 3) return;
-
 			// Order points in correct order (counter-clockwise relative to normal)
 			orderPointsOnPlane(points, plane);
 			// Remove duplicates
@@ -723,21 +783,18 @@ namespace cpplib::geometry {
 		}
 
 		void removeDuplicatePoints(std::vector<PointType>& points) const {
-			auto points_equal = [](const PointType& a, const PointType& b) {
-				if constexpr (std::is_floating_point_v<T>) {
-					return PointType::distance(a, b) < static_cast<T>(1e-6);
-				}
-				else {
-					return a == b;
-				}
-				};
+			const auto s = points.size();
 
 			// Remove consecutive duplicates
-			auto last = std::unique(points.begin(), points.end(), points_equal);
-			points.erase(last, points.end());
+			for (size_t i = s - 1; i > 0; --i)
+			{
+				if (PointType::distance(points[i], points[i - 1]) < static_cast<T>(1e-6)) {
+					points.erase(points.begin() + i);
+				}
+			}
 
 			// Check first and last element
-			if (points.size() > 1 && points_equal(points.front(), points.back())) {
+			if (PointType::distance(points.front(), points.back()) < static_cast<T>(1e-6)) {
 				points.pop_back();
 			}
 		}
@@ -810,7 +867,10 @@ namespace cpplib::geometry {
 			}
 			faces_.reserve(6);
 			for (int i = 0; i < 6; ++i) {
-				faces_.emplace_back(Face({ cube[face_indices[i][0]], cube[face_indices[i][1]], cube[face_indices[i][2]], cube[face_indices[i][3]] }));
+				faces_.emplace_back(Face({ cube[face_indices[i][0]], 
+										   cube[face_indices[i][1]], 
+										   cube[face_indices[i][2]], 
+										   cube[face_indices[i][3]] }));
 			}
 		}
 
@@ -829,11 +889,11 @@ namespace cpplib::geometry {
 		// Indexes for each face of the cube (conter-clockwise from outside)
 		static constexpr std::array<std::array<int, 4>, 6> face_indices = { {
 			{4, 7, 6, 5}, // front face
-			{0, 3, 2, 1}, // back face
-			{0, 4, 7, 3}, // left face
+			{0, 1, 2, 3}, // back face
+			{0, 3, 7, 4}, // left face
 			{1, 5, 6, 2}, // right face
-			{0, 1, 5, 4}, // bottom face
-			{3, 7, 6, 2}  // top face
+			{0, 4, 5, 1}, // bottom face
+			{3, 2, 6, 7}  // top face
 		} };
 	};
 
@@ -874,7 +934,7 @@ namespace cpplib::geometry {
 		constexpr VoronoiDiagram(const PointVector& points, const BondList<AI>& bonds, const BoolVector& flags = BoolVector(true, points.size())) noexcept : flags_(flags) {
 			if (flags.empty()) {
 				flags_.resize(points.size(), true);
-			}			
+			}
 			addPoints(points, flags_);
 			calculateFaces<AI>(bonds);
 		}
