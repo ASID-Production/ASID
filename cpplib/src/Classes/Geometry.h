@@ -488,12 +488,13 @@ namespace cpplib::geometry {
 			auto intersect = [](const PointType& a, const PointType& b, const PlaneType& plane)->PointType {
 				PointType d = b - a;
 				T denominator = d[0] * plane.a[0] + d[1] * plane.a[1] + d[2] * plane.a[2];
+				_ASSERT(abs(denominator) > limit);
 				T t = -plane.side(a) / denominator;
 				return a + d * t;
 				};
 			auto vs = vertices_.size();
 
-			auto [e1, e2] = findIntersectionionPoints(clipping_plane);
+			auto [e1, e2] = findIntersectionPoints(clipping_plane);
 
 			// Check: all points are on the same side of the plane?
 			if (e1 == vs) {
@@ -527,6 +528,7 @@ namespace cpplib::geometry {
 					vertices_[e1] = inter1;
 					vertices_.insert(vertices_.begin() + e1 + 1, inter2);
 				}
+				_ASSERT(isConvex());
 				return std::make_optional(std::pair<PointType, PointType>(inter1, inter2));
 			}
 
@@ -594,7 +596,7 @@ namespace cpplib::geometry {
 			return vertices_;
 		}
 	private:
-		std::pair<size_t,size_t> findIntersectionionPoints(const PlaneType& clipping_plane) const {
+		std::pair<size_t,size_t> findIntersectionPoints(const PlaneType& clipping_plane) const {
 			size_t e1 = vertices_.size();
 			size_t e2 = vertices_.size();
 			size_t vs = vertices_.size();
