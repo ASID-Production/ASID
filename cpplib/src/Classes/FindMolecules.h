@@ -310,7 +310,7 @@ namespace cpplib {
 			base::create(base::lat_dir(0), base::lat_dir(1), base::lat_dir(2), base::getAngleGrad(0), base::getAngleGrad(1), base::getAngleGrad(2), true);
 			return super;
 		}
-		FloatingPointType distanceInCell(const PointType& p1, const PointType& p2) const noexcept {
+		[[deprecated("use geometry::Cell::distance_in_01")]] FloatingPointType distanceInCell(const PointType& p1, const PointType& p2) const noexcept {
 			PointType dp = (p1 - p2).MoveToCell();
 			for (DimmentionType i = 0; i < static_cast<DimmentionType>(3); i++) {
 				FloatingPointType val = dp[i];

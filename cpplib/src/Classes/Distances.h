@@ -51,6 +51,7 @@ namespace cpplib {
 		using AtomTypeBase = currents::AtomTypeBase;
 		using PointType = currents::PointType;
 		using DataArray = ::std::array<::std::array<::std::array<FloatingPointType, 2>, MAX_TYPE + 1>, MAX_TYPE + 1>;
+		using AI = currents::AtomIndex;
 	private:
 
 		DataArray data_{}; // [i][j][0] = min, [i][j][1] = max
@@ -86,7 +87,17 @@ namespace cpplib {
 			_ASSERT(i <= MAX_TYPE && j <= MAX_TYPE);
 			_ASSERT(i > 0 && j > 0);
 			const auto& [min, max] = data_[i][j];
-			return (length < max) ? ((min < length) ? 1 : -1) : 0;
+			if (length < max) {
+				if (min < length) {
+					return 1;
+				}
+				else {
+					return -1;
+				}
+			}
+			else {
+				return 0;
+			}
 		}
 
 		inline FloatingPointType minDistance(AtomTypeBase a1, AtomTypeBase a2) const noexcept {
@@ -100,10 +111,13 @@ namespace cpplib {
 			return data_[a1][a2][1];
 		}
 
-		template<::std::function<FloatingPointType(const PointType& p1, const PointType& p2)>& dist>
-		void filter_bond_list(::std::list<Bond>& bondlist,
+		template<typename Func>
+			requires std::invocable<Func, const PointType&, const PointType&>&&
+		std::same_as<std::invoke_result_t<Func, const PointType&, const PointType&>, FloatingPointType>
+		void filter_bond_list(::std::list<std::pair<AI,AI>>& bondlist,
 							  const ::std::vector<AtomTypeBase>& types,
-							  const ::std::vector<PointType>& points) const noexcept
+							  const ::std::vector<PointType>& points,
+							  Func dist) const noexcept
 		{
 			auto iter = bondlist.begin();
 
@@ -111,9 +125,9 @@ namespace cpplib {
 				const auto l1 = iter->first;
 				const auto l2 = iter->second;
 
-				bool is_real_bond = isBond(types[l1], types[l2], dist(points[l1], points[l2]));
+				char is_real_bond = isBond(types[l1], types[l2], dist(points[l1], points[l2]));
 
-				if (is_real_bond) {
+				if (is_real_bond != 0) {
 					iter++;
 				}
 				else {

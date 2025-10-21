@@ -35,13 +35,19 @@
 #include <utility> // for std::move
 #include <algorithm> // for std::sort
 #include <ranges>
+#include <numbers>
 #include <optional>
 namespace cpplib::geometry {
 	template <class T> inline T GradtoRad(T a) { return a * static_cast<T>(0.0174532925199432957692); }
 	template <class T> inline T RadtoGrad(T a) { return a * static_cast<T>(57.295779513082320877); }
 
+	constexpr double crystallography_eq_position_eps_realspace = 0.01; // Angstrom
+	constexpr double crystallography_eq_position_eps_fractalspace = crystallography_eq_position_eps_realspace / 100;
+
 	template<class T>
 	struct Point {
+	private:
+		static constexpr T eq_pos = static_cast<T>(crystallography_eq_position_eps_fractalspace);
 	public:
 		using value_type = T;
 		using array_type = ::std::array<value_type, 3>;
@@ -991,6 +997,7 @@ namespace cpplib::geometry {
 	struct Cell {
 	public:
 		using value_type = T;
+		using PointType = Point<T>;
 		using array_type = ::std::array<T, 3>;
 		using matrix_type = geometry::Matrix<T>;
 	private:
@@ -1102,6 +1109,14 @@ namespace cpplib::geometry {
 		}
 		[[nodiscard]] constexpr const matrix_type& cartToFrac() const noexcept {
 			return cartToFrac_;
+		}
+
+		value_type distance_in_01(const PointType& a, const PointType& b) const {
+			PointType d = (a - b).MoveToCell();
+			if (d[0] > 0.5) d[0] = 1 - d[0];
+			if (d[1] > 0.5) d[1] = 1 - d[1];
+			if (d[2] > 0.5) d[2] = 1 - d[2];
+			return (fracToCart_*d).r();
 		}
 
 		template <class I>
@@ -1311,10 +1326,10 @@ namespace cpplib::geometry {
 	class HashedSpace {
 	public:
 		using AtomIndex = AI;
+		using FloatingPointType = T;
 		using PointType = Point<T>;
 		using CellType = Cell<T>;
 		using BondList = ::std::vector<::std::pair<AtomIndex,AtomIndex>>;
-		using FloatingPointType = typename CellType::value_type;
 		using DimentionType = unsigned char;
 
 		using SupListType = ::std::list<AtomIndex>;
@@ -1346,8 +1361,7 @@ namespace cpplib::geometry {
 		/// <returns>vector with all bonds in boxes and between adjacent ones</returns>
 		BondList create_hash_bonds(const ::std::vector<PointType>& points) const {
 			BondList ret;
-			size_t estimated_size = points.size() * points.size() * sizemod();
-			ret.reserve(estimated_size);
+			//size_t estimated_size = points.size() * points.size() * sizemod();
 			SupType supply_table;
 
 			// Fill supply_table
@@ -1473,3 +1487,15 @@ namespace cpplib::geometry {
 	};
 
 }
+
+template<class T>
+struct std::hash<cpplib::geometry::Point<T>>
+{
+	std::size_t operator()(const cpplib::geometry::Point<T>& s) const noexcept
+	{
+		std::size_t h1 = std::hash<T>{}(s[0]);
+		std::size_t h2 = std::hash<T>{}(s[1]);
+		std::size_t h3 = std::hash<T>{}(s[2]);
+		return h1 ^ (h2 << 2) ^ (h3 << 4);
+	}
+};
