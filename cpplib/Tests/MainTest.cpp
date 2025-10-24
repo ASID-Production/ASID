@@ -127,6 +127,18 @@ TEST(CreateClusterTest, AADRIB) {
 }
 
 
+TEST(SearchMainTest, butenSearch) {
+	const char search[]{ "1 4 3 6 0 4 14 6 0 0 14 6 0 0 3 6 0 0 14 1 2 2 3 3 4" };
+
+
+
+	std::vector<const char*> dat(1, "1 4 3 6 3 6 2 6 1 6 2 1 2 2 3 3 4");
+
+	std::vector<int> res;
+	ASSERT_NO_THROW({ res = SearchMain(search, std::move(dat), 1, false); });
+	EXPECT_EQ(res.size(), 1);
+}
+
 TEST(SearchMainTest, Tricycle52245t) {
 	const char search[]{ "1 7 7 7 0 3 3 6 1 3 3 6 1 3 3 6 1 3 3 6 1 3 3 6 1 3 3 6 3 4 14 1 2 1 6 1 7 2 3 3 4 4 5 5 6" };
 	std::vector<const char*> dat(1, "1809719 31 38 83 0 83 0 53 0 53 0 53 0 53 0 53 0 53 0 53 0 53 0 53 0 7 0 7 0 6 0 6 3 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 1 6 1 1 0 1 0 1 0 1 0 1 0 1 0 1 3 1 4 1 5 1 6 1 7 1 8 2 3 2 4 2 5 2 9 2 10 2 11 12 14 12 16 12 25 13 15 13 20 13 21 14 26 14 27 14 28 14 29 14 30 14 31 16 18 17 18 17 19 19 25 20 22 21 23 22 24 23 24 26 27 26 29 27 31 28 30 28 31 29 30");

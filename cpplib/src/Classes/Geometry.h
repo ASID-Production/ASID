@@ -38,6 +38,9 @@
 #include <numbers>
 #include <optional>
 #include <concepts>
+
+#include "../BaseHeaders/Concepts.h"
+
 namespace cpplib::geometry {
 	template <class T> inline T GradtoRad(T a) { return a * static_cast<T>(0.0174532925199432957692); }
 	template <class T> inline T RadtoGrad(T a) { return a * static_cast<T>(57.295779513082320877); }
@@ -923,7 +926,7 @@ namespace cpplib::geometry {
 		using VoronCell = VoronoiCell<T>;
 
 		template <class AI>
-		using BondList = HashedSpace<T,AI>::BondList;
+		using BondList = ::std::vector<::std::pair<AI, AI>>;
 		using PointVector = ::std::vector<PointType>;
 		using CellVector = ::std::vector<VoronCell>;
 		using BoolVector = ::std::vector<bool>;
@@ -1338,7 +1341,6 @@ namespace cpplib::geometry {
 		using FloatingPointType = T;
 		using PointType = Point<T>;
 		using CellType = Cell<T>;
-		using BondList = ::std::vector<::std::pair<AtomIndex,AtomIndex>>;
 		using DimentionType = unsigned char;
 
 		using SupListType = ::std::list<AtomIndex>;
@@ -1368,8 +1370,9 @@ namespace cpplib::geometry {
 		/// </summary>
 		/// <param name="points"> - vector of Points</param>
 		/// <returns>vector with all bonds in boxes and between adjacent ones</returns>
-		BondList create_hash_bonds(const ::std::vector<PointType>& points) const {
-			BondList ret;
+		template<BondConcept BondType>
+		::std::vector<BondType> create_hash_bonds(const ::std::vector<PointType>& points) const {
+			::std::vector<BondType> ret;
 			//size_t estimated_size = points.size() * points.size() * sizemod();
 			SupType supply_table;
 
@@ -1394,7 +1397,8 @@ namespace cpplib::geometry {
 	private:
 		static constexpr FloatingPointType modifier_ = 1.05;
 
-		void box_working(BondList& ret, const SupType& supply_table, size_t i, size_t j, size_t k) const {
+		template<BondConcept BondType>
+		void box_working(::std::vector<BondType>& ret, const SupType& supply_table, size_t i, size_t j, size_t k) const {
 			create_bonds_in_box(ret, supply_table[i][j][k]);
 
 			bool is_x = sep_[0] != 1;
@@ -1436,7 +1440,8 @@ namespace cpplib::geometry {
 				create_bonds_between_boxes(ret, supply_table[i][j][k], supply_table[dx][dy][dz]);
 			}
 		}
-		void create_bonds_in_box(BondList& ret, const SupListType& l) const {
+		template<BondConcept BondType>
+		void create_bonds_in_box(::std::vector<BondType>& ret, const SupListType& l) const {
 			for (auto iter1 = l.begin(); iter1 != l.end(); iter1++)
 			{
 				auto iter2 = iter1;
@@ -1447,7 +1452,8 @@ namespace cpplib::geometry {
 				}
 			}
 		}
-		void create_bonds_between_boxes(BondList& ret, const SupListType& l1, const SupListType& l2) const {
+		template<BondConcept BondType>
+		void create_bonds_between_boxes(::std::vector<BondType>& ret, const SupListType& l1, const SupListType& l2) const {
 			for (auto v1 : l1)
 			{
 				for (auto v2 : l2)

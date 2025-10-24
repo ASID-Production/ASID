@@ -112,27 +112,8 @@ namespace cpplib {
 		}
 	private:
 		// Node comparision
-		bool compare(const RequestNodeType& inputNode, const DatabaseNodeType& dataNode, const bool exact) const noexcept {
-			if (compareLow(inputNode, dataNode, exact) == false)
-				return false;
-
-			auto si = inputNode.neighboursSize();
-			auto sn = dataNode.neighboursSize();
-
-			AtomIndex j = 0;
-			for (AtomIndex i = 0; i < si; ++i) {
-				if (static_cast<AtomTypeBase>(inputNode.getNeighbour(i)->getType()) < 0)
-					continue;
-				bool condition = false;
-				for (; j < sn; ++j) {
-					condition = compareLow(*(inputNode.getNeighbour(i)), *(dataNode.getNeighbour(j)), exact);
-					if (condition) {
-						break;
-					}
-				}
-				if (condition == false) return false;
-			}
-			return true;
+		inline bool compare(const RequestNodeType& inputNode, const DatabaseNodeType& dataNode, const bool exact) const noexcept {
+			return compareLow(inputNode, dataNode, exact);
 		}
 		inline bool compareLow(const RequestNodeType& inputNode, const DatabaseNodeType& dataNode, const bool exact) const noexcept {
 			if (exact) {

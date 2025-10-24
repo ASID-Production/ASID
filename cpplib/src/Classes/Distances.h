@@ -110,10 +110,10 @@ namespace cpplib {
 			return data_[a1][a2][1];
 		}
 
-		template<typename Func>
+		template<typename Func, typename BondConteiner>
 			requires std::invocable<Func, const PointType&, const PointType&>&&
 		std::same_as<std::invoke_result_t<Func, const PointType&, const PointType&>, FloatingPointType>
-		void filter_bond_list(::std::list<std::pair<AI,AI>>& bondlist,
+		void filter_bond_list(BondConteiner& bondlist,
 							  const ::std::vector<AtomTypeBase>& types,
 							  const ::std::vector<PointType>& points,
 							  Func dist) const noexcept

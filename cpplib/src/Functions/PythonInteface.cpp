@@ -986,7 +986,7 @@ extern "C" {
 		bools.resize(all.points.size(), false);
 
 		cpplib::geometry::HashedSpace<FloatingPointType, long> space(fcell, cutoff);
-		auto bonds = space.create_hash_bonds(all.points);
+		auto bonds = space.create_hash_bonds<::std::pair<long,long>>(all.points);
 
 		Diagram diag;
 		diag.addPoints(all.points, bools);

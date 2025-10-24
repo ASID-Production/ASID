@@ -192,8 +192,11 @@ namespace cpplib {
 		using SymmType = geometry::Symm<FloatingPointType>;
 		using AtomTypeBase = basic_types::AtomTypeBase;
 		using DistancesType = Distances;
-		using BondList = typename geometry::HashedSpace<FloatingPointType, AtomIndex>::BondList;
 
+		struct BondWithShift : public Bond {
+			ShiftType shift;
+		};
+		using BondList = ::std::vector<BondWithShift>;
 		struct AnchorType {
 			PointType point;
 			FloatingPointType radius;
@@ -262,24 +265,9 @@ namespace cpplib {
 				points.emplace_back(atom.point);
 				types.emplace_back(atom.type);
 			}
-			auto bonds = hashed_space.create_hash_bonds(points);
+			auto bonds = hashed_space.create_hash_bonds<BondWithShift>(points);
 
-			auto iter = bonds.begin();
-
-			while (iter != bonds.end()) {
-				const auto l1 = iter->first;
-				const auto l2 = iter->second;
-
-				char is_real_bond = distances.isBond(types[l1], types[l2], cell.distance_in_01(points[l1], points[l2]));
-
-				if (is_real_bond != 0) {
-					iter++;
-				}
-				else {
-					bonds.erase(iter);
-				}
-			}
-
+			distances.filter_bond_list(bonds, types, points, [this](const PointType& a, const PointType& b) {return cell.distance_in_01(a, b); });
 
 
 
@@ -327,10 +315,10 @@ namespace cpplib {
 									   });
 		}
 
-		//::std::vector<Molecule> reconstructMolecules(const std::vector<ClusterAtom>& unit01,
-		//											 const BondList& bonds) const {
-		//	
-		//}
+		::std::vector<Molecule> reconstructMolecules(const std::vector<ClusterAtom>& unit01,
+													 const BondList& bonds) const {
+			
+		}
 
 		//inline void Merge(const FAM_Struct& fs,
 		//				  const std::vector<std::vector<FAM_Struct::ShiftType>>& molO /*i*/,
