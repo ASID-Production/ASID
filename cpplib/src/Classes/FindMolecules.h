@@ -45,10 +45,10 @@ namespace cpplib {
 	struct FAM_Struct {
 		// Definitions
 		using AtomType = currents::AtomTypeData;
-		using AtomTypeBase = currents::AtomTypeBase;
-		using size_type = currents::size_type;
-		using PointType = currents::PointType;
-		using FloatingPointType = PointType::value_type;
+		using AtomTypeBase = basic_types::AtomTypeBase;
+		using size_type = basic_types::size_type;
+		using FloatingPointType = basic_types::FloatingPointType;
+		using PointType = geometry::Point<FloatingPointType>;
 		using NodeType = Node<AtomType>;
 		using DistancesType = Distances;
 		using BondType = Bond;
@@ -56,7 +56,7 @@ namespace cpplib {
 		using AtomIndex = NodeType::AtomIndex;
 		using AtomContainerType = ::std::vector<AtomTypeBase>;
 		using PointConteinerType = ::std::vector<PointType>;
-		using DistanceFunction = ::std::function<currents::FloatingPointType(const PointType& p1, const PointType& p2)>;
+		using DistanceFunction = ::std::function<basic_types::FloatingPointType(const PointType& p1, const PointType& p2)>;
 		using ShiftType = geometry::Point<int>;
 		using SymmRef = unsigned int;
 		using ParseIndexType = ::std::vector<std::tuple<AtomIndex, SymmRef, ShiftType>>;
@@ -103,10 +103,10 @@ namespace cpplib {
 						// Incorrect Bond marked, but also added to results
 						if (errorMSG.empty()) {
 							errorMSG = "Too short bond between ";
-							errorMSG += mend[type_i];
+							errorMSG += constants::mend[type_i];
 							errorMSG += std::to_string(indexI);
 							errorMSG += " and ";
-							errorMSG += mend[type_j];
+							errorMSG += constants::mend[type_j];
 							errorMSG += std::to_string(indexJ);
 							errorMSG += ", which is ";
 							errorMSG += std::to_string(dist);
@@ -145,10 +145,10 @@ namespace cpplib {
 						// Incorrect Bond marked, but also added to results
 						if (errorMSG.empty()) {
 							errorMSG = "Too short bond between ";
-							errorMSG += mend[type_i];
+							errorMSG += constants::mend[type_i];
 							errorMSG += std::to_string(indexI);
 							errorMSG += " and ";
-							errorMSG += mend[type_j];
+							errorMSG += constants::mend[type_j];
 							errorMSG += std::to_string(indexJ);
 							errorMSG += ", which is ";
 							errorMSG += std::to_string(dist);
@@ -179,8 +179,8 @@ namespace cpplib {
 		}
 	};
 
-	struct FAM_Cell : public geometry::Cell<currents::FloatingPointType> {
-		using FloatingPointType = currents::FloatingPointType;
+	struct FAM_Cell : public geometry::Cell<basic_types::FloatingPointType> {
+		using FloatingPointType = basic_types::FloatingPointType;
 		using base = geometry::Cell<FloatingPointType>;
 		using PointType = geometry::Point<FloatingPointType>;
 		using PointConteinerType = ::std::vector<PointType>;
@@ -188,7 +188,7 @@ namespace cpplib {
 		using DimmentionType = uint_fast8_t;
 		using SymmType = geometry::Symm<FloatingPointType>;
 		using DistancesType = Distances;
-		using AtomIndex = currents::AtomIndex;
+		using AtomIndex = basic_types::AtomIndex;
 
 		explicit FAM_Cell(base&& cell) : base(::std::move(cell)) {}
 		void GenerateSymm(FAM_Struct& fs, const std::vector<SymmType>& symm, const bool intoCell, const bool force_unique) const {
@@ -340,7 +340,7 @@ namespace cpplib {
 						//[[fallthrough]]
 					case  1:
 					{
-						bonds.emplace_back(Bond(i, j), toShift((fs.points[i] - fs.points[j]).round()));
+						bonds.emplace_back(Bond(i, j), ShiftType((fs.points[i] - fs.points[j]).round()));
 						const auto & curbond = bonds.back();
 						AtomIndex k1 = 0;
 						for (; k1 < allMolecules.size(); k1++)
@@ -394,12 +394,6 @@ namespace cpplib {
 				}
 			}
 			return allMolecules;
-		}
-		static inline currents::FAMStructType::ShiftType toShift(const PointType& a1) {
-			using namespace currents;
-			return FAMStructType::ShiftType(static_cast<FAMStructType::ShiftType::value_type>((a1[0])),
-											static_cast<FAMStructType::ShiftType::value_type>((a1[1])),
-											static_cast<FAMStructType::ShiftType::value_type>((a1[2])));
 		}
 
 	private:
@@ -532,7 +526,7 @@ namespace cpplib {
 					negative_atoms[i] = true;
 					if (errorMsg.empty()) {
 						errorMsg = "Atom ";
-						errorMsg += mend[static_cast<AtomTypeBase>(type)];
+						errorMsg += constants::mend[static_cast<AtomTypeBase>(type)];
 						errorMsg += std::to_string(i);
 						errorMsg += " has too many bonds (";
 						errorMsg += std::to_string(contacts);
@@ -807,6 +801,14 @@ namespace cpplib {
 				low_pos++;
 			}
 			return res;
+		}
+		template<class T2> [[nodiscard]] auto is_member(const T2 u, const std::vector<T2>& v, typename std::vector<T2>::size_type max = 0) const noexcept {
+			if (max == 0)
+				max = v.size();
+			for (typename std::vector<T2>::size_type i = 0; i < max; i++) {
+				if (v[i] == u) return i;
+			}
+			return  static_cast<typename std::vector<T2>::size_type>(-1);
 		}
 	};
 }

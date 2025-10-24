@@ -17,80 +17,80 @@ std::vector<int> SearchMain(const char* search,
 							const bool exact);
 
 std::tuple<std::string, std::string, cpplib::FindMolecules::RightType>
-	FindMoleculesInCell(const std::array<cpplib::currents::FloatingPointType, 6>& unit_cell,
+	FindMoleculesInCell(const std::array<cpplib::basic_types::FloatingPointType, 6>& unit_cell,
 						std::vector<const char*>& symm,
-						cpplib::currents::FAMStructType::AtomContainerType& types,
-						cpplib::currents::FAMStructType::PointConteinerType& points);
+						cpplib::FAM_Struct::AtomContainerType& types,
+						cpplib::FAM_Struct::PointConteinerType& points);
 std::tuple<std::string, std::string, cpplib::FindMolecules::RightType>
-	FindMoleculesWithoutCell(cpplib::currents::FAMStructType::AtomContainerType& types,
-							 cpplib::currents::FAMStructType::PointConteinerType& points);
+	FindMoleculesWithoutCell(cpplib::FAM_Struct::AtomContainerType& types,
+							 cpplib::FAM_Struct::PointConteinerType& points);
 
 
-std::vector<cpplib::currents::FindGeometryType::tupleDistance> 
-	FindDistanceWC(cpplib::currents::FAMStructType::AtomContainerType& types,
-				   cpplib::currents::FAMStructType::PointConteinerType& points,
+std::vector<cpplib::FindGeometry::tupleDistance> 
+	FindDistanceWC(cpplib::FAM_Struct::AtomContainerType& types,
+				   cpplib::FAM_Struct::PointConteinerType& points,
 				   const std::array<int, 2>& type,
-				   const std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>& value);
+				   const std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>& value);
 
-std::vector<cpplib::currents::FindGeometryType::tupleDistance>
-	FindDistanceIC(const std::array<cpplib::currents::FloatingPointType, 6>& unit_cell,
+std::vector<cpplib::FindGeometry::tupleDistance>
+	FindDistanceIC(const std::array<cpplib::basic_types::FloatingPointType, 6>& unit_cell,
 				   std::vector<const char*>& symm,
-				   cpplib::currents::FAMStructType::AtomContainerType& types,
-				   cpplib::currents::FAMStructType::PointConteinerType& points,
+				   cpplib::FAM_Struct::AtomContainerType& types,
+				   cpplib::FAM_Struct::PointConteinerType& points,
 				   const std::array<int, 2>& type,
-				   const std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>& value);
+				   const std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>& value);
 
-std::vector<cpplib::currents::FindGeometryType::tupleAngle> 
-	FindAngleWC(cpplib::currents::FAMStructType::AtomContainerType& types,
-				cpplib::currents::FAMStructType::PointConteinerType& points,
+std::vector<cpplib::FindGeometry::tupleAngle> 
+	FindAngleWC(cpplib::FAM_Struct::AtomContainerType& types,
+				cpplib::FAM_Struct::PointConteinerType& points,
 				const std::array<int, 3>& type,
-				const std::array<std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>, 2>& value_d,
-				const std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>& value_a);
+				const std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>, 2>& value_d,
+				const std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>& value_a);
 
-std::vector<cpplib::currents::FindGeometryType::tupleAngle> 
-	FindAngleIC(const std::array<cpplib::currents::FloatingPointType, 6>& unit_cell,
+std::vector<cpplib::FindGeometry::tupleAngle> 
+	FindAngleIC(const std::array<cpplib::basic_types::FloatingPointType, 6>& unit_cell,
 				std::vector<const char*>& symm, 
-				cpplib::currents::FAMStructType::AtomContainerType& types,
-				cpplib::currents::FAMStructType::PointConteinerType& points,
+				cpplib::FAM_Struct::AtomContainerType& types,
+				cpplib::FAM_Struct::PointConteinerType& points,
 				const std::array<int, 3>& type,
-				const std::array<std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>, 2>& value_d,
-				const std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>& value_a);
+				const std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>, 2>& value_d,
+				const std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>& value_a);
 
-std::vector<cpplib::currents::FindGeometryType::tupleTorsion> 
-	FindTorsionWC(cpplib::currents::FAMStructType::AtomContainerType& types,
-				  cpplib::currents::FAMStructType::PointConteinerType& points,
+std::vector<cpplib::FindGeometry::tupleTorsion> 
+	FindTorsionWC(cpplib::FAM_Struct::AtomContainerType& types,
+				  cpplib::FAM_Struct::PointConteinerType& points,
 	              const std::array<int, 4>& type,
-				  const std::array<std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>, 3>& value_d,
-				  const std::array<std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>, 2>& value_a,
-				  const std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>& value_t);
+				  const std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>, 3>& value_d,
+				  const std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>, 2>& value_a,
+				  const std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>& value_t);
 
-std::vector<cpplib::currents::FindGeometryType::tupleTorsion> 
-	FindTorsionIC(const std::array<cpplib::currents::FloatingPointType, 6>& unit_cell,
+std::vector<cpplib::FindGeometry::tupleTorsion> 
+	FindTorsionIC(const std::array<cpplib::basic_types::FloatingPointType, 6>& unit_cell,
 				  std::vector<const char*>& symm, 
-				  cpplib::currents::FAMStructType::AtomContainerType& types,
-				  cpplib::currents::FAMStructType::PointConteinerType& points,
+				  cpplib::FAM_Struct::AtomContainerType& types,
+				  cpplib::FAM_Struct::PointConteinerType& points,
 				  const std::array<int, 4>& type,
-				  const std::array<std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>, 3>& value_d,
-				  const std::array<std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>, 2>& value_a,
-				  const std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>& value_t);
+				  const std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>, 3>& value_d,
+				  const std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>, 2>& value_a,
+				  const std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>& value_t);
 
-cpplib::DATTuple FindDAT_IC(const std::array<cpplib::currents::FloatingPointType, 6>& unit_cell,
+cpplib::DATTuple FindDAT_IC(const std::array<cpplib::basic_types::FloatingPointType, 6>& unit_cell,
 							std::vector<const char*>& symm,
-							cpplib::currents::FAMStructType::AtomContainerType& types,
-							cpplib::currents::FAMStructType::PointConteinerType& points);
-cpplib::DATTuple FindDAT_WC(cpplib::currents::FAMStructType::AtomContainerType& types,
-							cpplib::currents::FAMStructType::PointConteinerType& points);
+							cpplib::FAM_Struct::AtomContainerType& types,
+							cpplib::FAM_Struct::PointConteinerType& points);
+cpplib::DATTuple FindDAT_WC(cpplib::FAM_Struct::AtomContainerType& types,
+							cpplib::FAM_Struct::PointConteinerType& points);
 
-std::tuple<std::vector<cpplib::currents::PointType>, std::list<std::string>> Compaq(const std::array<cpplib::currents::FloatingPointType, 6>& unit_cell,
+std::tuple<std::vector<cpplib::geometry::Point<cpplib::basic_types::FloatingPointType>>, std::list<std::string>> Compaq(const std::array<cpplib::basic_types::FloatingPointType, 6>& unit_cell,
 												const std::vector<const char*>& symm,
-												cpplib::currents::FAMStructType::AtomContainerType& types,
-												cpplib::currents::FAMStructType::PointConteinerType& points);
+												cpplib::FAM_Struct::AtomContainerType& types,
+												cpplib::FAM_Struct::PointConteinerType& points);
 
-std::vector<std::tuple<cpplib::currents::PointType, cpplib::currents::AtomIndex, long, cpplib::FAM_Struct::ShiftType>>
-	ClusterCreate(std::array<cpplib::currents::FloatingPointType, 6> cell,
+std::vector<std::tuple<cpplib::geometry::Point<cpplib::basic_types::FloatingPointType>, cpplib::basic_types::AtomIndex, long, cpplib::FAM_Struct::ShiftType>>
+	ClusterCreate(std::array<cpplib::basic_types::FloatingPointType, 6> cell,
 				  const std::vector<const char*>& symm,
-				  cpplib::currents::FAMStructType::AtomContainerType& types,
-				  cpplib::currents::FAMStructType::PointConteinerType& points,
-				  const std::vector<std::pair<cpplib::currents::PointType, cpplib::currents::FloatingPointType>>& anchors,
-				  cpplib::currents::FloatingPointType over_radius,
+				  cpplib::FAM_Struct::AtomContainerType& types,
+				  cpplib::FAM_Struct::PointConteinerType& points,
+				  const std::vector<std::pair<cpplib::geometry::Point<cpplib::basic_types::FloatingPointType>, cpplib::basic_types::FloatingPointType>>& anchors,
+				  cpplib::basic_types::FloatingPointType over_radius,
 				  bool& hasPolymer);

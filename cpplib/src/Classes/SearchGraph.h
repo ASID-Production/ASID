@@ -26,18 +26,20 @@
 //
 // ******************************************************************************************
 #pragma once
-#include "MoleculeGraph.h"
 #include <list>
 #include <vector>
+
+#include "MoleculeGraph.h"
+#include "../BaseHeaders/Currents.h"
 namespace cpplib {
 	class SearchGraph {
 	public:
 		// Declarations
-		using AtomIndex = currents::AtomIndex;
-		using MoleculeIndex = currents::MoleculeIndex;
+		using AtomIndex = basic_types::AtomIndex;
+		using MoleculeIndex = basic_types::MoleculeIndex;
 		using RequestGraphType = MoleculeCore<currents::AtomTypeRequest>;
 		using DatabaseGraphType = MoleculeCore<currents::AtomTypeData>;
-		using AtomTypeBase = currents::AtomTypeBase;
+		using AtomTypeBase = basic_types::AtomTypeBase;
 
 		using BondType = DatabaseGraphType::BondType;
 		using RequestNodeType = RequestGraphType::NodeType;
@@ -46,8 +48,8 @@ namespace cpplib {
 		using Log = ::std::list<::std::pair<BondType, BondType>>;
 
 		// Asserts
-		static_assert (::std::is_same_v<AtomTypeBase, typename RequestGraphType::NodeType::AtomType::AtomTypeBase> &&
-                       ::std::is_same_v<AtomTypeBase, typename DatabaseGraphType::NodeType::AtomType::AtomTypeBase>, 
+		static_assert (::std::is_same_v<AtomTypeBase, typename RequestNodeType::AtomType::AtomTypeBase> &&
+                       ::std::is_same_v<AtomTypeBase, typename DatabaseNodeType::AtomType::AtomTypeBase>,
 					   "AtomTypeBase is not the same in RequestGraphType and DatabaseGraphType");
 
 
@@ -143,7 +145,7 @@ namespace cpplib {
 
 		void prepareHAtoms() {
 
-			currents::TypeBitset bits;
+			basic_types::TypeBitset bits;
 
 			for (AtomIndex i = 1; i < inputSize_; i++)
 			{

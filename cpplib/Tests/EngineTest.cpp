@@ -27,6 +27,7 @@
 // ******************************************************************************************
 #include "gtest/gtest.h"
 #include "../src/Classes/Engine.h"
+#include "../src/BaseHeaders/Currents.h"
 #include <vector>
 
 using namespace cpplib;
@@ -221,11 +222,11 @@ TEST_F(NodeTest, CalculateCoordEdgeCases) {
     EXPECT_EQ(node.getCoord().getLow(), 0);
 
     // max value
-    for (int i = 0; i < Coord::max; i++) {
+    for (int i = 0; i < constants::maxNeighbours; i++) {
         node.addBondSimple(nodes[1]);
     }
     node.calculateCoord();
-    EXPECT_EQ(node.getCoord().getHigh(), Coord::max);
+    EXPECT_EQ(node.getCoord().getHigh(), constants::maxNeighbours);
 }
 
 //  Node with CompositeAtom

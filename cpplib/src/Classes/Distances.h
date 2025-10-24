@@ -31,27 +31,26 @@
 #include <vector>
 #include <functional>
 #include <list>
-#include "../BaseHeaders/Currents.h"
-#include "../Classes/Engine.h"
+#include "Engine.h"
+#include "Geometry.h"
 
 namespace cpplib {
 	class Distances {
 		// Order of values
 		// 1/1,1/2,1/3,1/4,1/5, 5/5, 2/2,2/3,2/4,2/5, 4/4,4/5, 3/3,3/4,3/5
 	public:
-		static constexpr size_t MAX_TYPE = cpplib::mend_size;
+		static constexpr size_t MAX_TYPE = cpplib::constants::mend_size - 1;
 
 		struct DistancesException : public ::std::runtime_error { 
 			using ::std::runtime_error::runtime_error;
 		};
 
-		using FloatingPointType = currents::FloatingPointType;
-		using base = ::std::vector<FloatingPointType>;
+		using FloatingPointType = basic_types::FloatingPointType;
 		using size_type = int_fast8_t;
-		using AtomTypeBase = currents::AtomTypeBase;
-		using PointType = currents::PointType;
+		using AtomTypeBase = basic_types::AtomTypeBase;
+		using PointType = geometry::Point<FloatingPointType>;
 		using DataArray = ::std::array<::std::array<::std::array<FloatingPointType, 2>, MAX_TYPE + 1>, MAX_TYPE + 1>;
-		using AI = currents::AtomIndex;
+		using AI = basic_types::AtomIndex;
 	private:
 
 		DataArray data_{}; // [i][j][0] = min, [i][j][1] = max

@@ -37,6 +37,7 @@
 #include <ranges>
 #include <numbers>
 #include <optional>
+#include <concepts>
 namespace cpplib::geometry {
 	template <class T> inline T GradtoRad(T a) { return a * static_cast<T>(0.0174532925199432957692); }
 	template <class T> inline T RadtoGrad(T a) { return a * static_cast<T>(57.295779513082320877); }
@@ -61,6 +62,14 @@ namespace cpplib::geometry {
 		constexpr Point(value_type x, value_type y, value_type z) noexcept : a{ x, y, z } {};
 		explicit constexpr Point(const array_type& other) noexcept : a(other) {};
 		explicit constexpr Point(array_type&& other) noexcept : a(::std::move(other)) {};
+
+		template <typename T2> 
+			requires ((::std::integral<T2> || ::std::floating_point<T2>) && ::std::is_convertible<T2,T>::value)
+		explicit constexpr Point(const Point<T2>& other) noexcept {
+			a[0] = static_cast<T>(other[0]);
+			a[1] = static_cast<T>(other[1]);
+			a[2] = static_cast<T>(other[2]);
+		}
 
 		constexpr value_type r() const noexcept {
 			return sqrt(fma(a[0], a[0], fma(a[1], a[1], a[2] * a[2])));

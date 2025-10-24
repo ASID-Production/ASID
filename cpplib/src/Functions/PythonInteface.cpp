@@ -33,7 +33,10 @@
 #include "../BaseHeaders/DebugMes.h"
 #include <list>
 
+using namespace cpplib;
 using namespace cpplib::currents;
+using namespace cpplib::basic_types;
+using PointType = cpplib::FAM_Cell::PointType;
 
 // Utilities section
 
@@ -42,8 +45,8 @@ enum class ErrorState {
 	UnknownError,
 };
 struct Prepare_WC {
-	std::vector<cpplib::currents::AtomTypeBase> types;
-	std::vector<cpplib::currents::PointType> points;
+	std::vector<cpplib::basic_types::AtomTypeBase> types;
+	std::vector<cpplib::geometry::Point<FloatingPointType>> points;
 	explicit Prepare_WC(PyObject* otuples) {
 		Py_ssize_t s = PyList_Size(otuples);
 		types.reserve(static_cast<size_t>(s));
@@ -52,14 +55,14 @@ struct Prepare_WC {
 		for (Py_ssize_t i = 0; i < s; i++) {
 			PyObject* o_tuple = PyList_GetItem(otuples, i);
 			types.push_back(static_cast<AtomTypeBase>(PyLong_AsLong(PyTuple_GetItem(o_tuple, 0))));
-			points.emplace_back(static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 1))),
-								static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 2))),
-								static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 3))));
+			points.emplace_back(static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 1))),
+								static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 2))),
+								static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 3))));
 		}
 	}
 };
 struct Prepare_IC : public Prepare_WC {
-	std::array<cpplib::currents::FloatingPointType, 6> cell;
+	std::array<cpplib::basic_types::FloatingPointType, 6> cell;
 	std::vector<const char*> symm;
 	Prepare_IC(PyObject* ocell, PyObject* osymm, PyObject* otuples) : Prepare_WC(otuples) {
 		for (Py_ssize_t i = 0; i < 6; i++) {
@@ -80,43 +83,43 @@ inline static void useDistances(PyObject * self);
 }
 
 template <char times>
-static std::array<std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>, times> FindDParamsParse(PyObject* self, PyObject* oparams, const std::array<int, times+1> type, char& d) {
-	std::array<std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>, times> value;
+static std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>, times> FindDParamsParse(PyObject* self, PyObject* oparams, const std::array<int, times+1> type, char& d) {
+	std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>, times> value;
 	for (char i = 0; i < times; i++, d += 2)
 	{
-		value[i].first = static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(oparams, d)));
-		value[i].second = static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(oparams, d + 1)));
+		value[i].first = static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(oparams, d)));
+		value[i].second = static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(oparams, d + 1)));
 
 		if (value[i].first == 0) {
 			useDistances(self);
-			value[i].first = p_distances->minDistance(static_cast<cpplib::currents::AtomTypeBase>(type[i]), static_cast<cpplib::currents::AtomTypeBase>(type[i + 1]));
+			value[i].first = p_distances->minDistance(static_cast<cpplib::basic_types::AtomTypeBase>(type[i]), static_cast<cpplib::basic_types::AtomTypeBase>(type[i + 1]));
 		}
 
 		if (value[i].second == 0) {
 			useDistances(self);
-			value[i].second = p_distances->maxDistance(static_cast<cpplib::currents::AtomTypeBase>(type[i]), static_cast<cpplib::currents::AtomTypeBase>(type[i + 1]));
+			value[i].second = p_distances->maxDistance(static_cast<cpplib::basic_types::AtomTypeBase>(type[i]), static_cast<cpplib::basic_types::AtomTypeBase>(type[i + 1]));
 		}
 	}
 	return value;
 }
 template <char times>
-static std::array<std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>, times> FindATParamsParse(PyObject* oparams, char& d) {
-	std::array<std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>, times> value;
+static std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>, times> FindATParamsParse(PyObject* oparams, char& d) {
+	std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>, times> value;
 	for (char i = 0; i < times; i++, d += 2)
 	{
-		value[i].first = static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(oparams, d)));
-		value[i].second = static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(oparams, d + 1)));
+		value[i].first = static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(oparams, d)));
+		value[i].second = static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(oparams, d + 1)));
 	}
 	return value;
 }
 extern "C" {
 
-	inline static ErrorState pyListToVectorFloat(PyObject* plist, std::vector<cpplib::currents::FloatingPointType>* pret) {
+	inline static ErrorState pyListToVectorFloat(PyObject* plist, std::vector<cpplib::basic_types::FloatingPointType>* pret) {
 		const Py_ssize_t s = PyList_Size(plist);
-		std::vector<cpplib::currents::FloatingPointType>& ret = *pret;
+		std::vector<cpplib::basic_types::FloatingPointType>& ret = *pret;
 		ret.resize(s);
 		for (Py_ssize_t i = 0; i < s; i++) {
-			ret[i] = static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(plist, i)));
+			ret[i] = static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(plist, i)));
 		}
 		return ErrorState::OK;
 	}
@@ -166,9 +169,9 @@ extern "C" {
 		for (Py_ssize_t i = 0; i < s; i++) {
 			PyObject* o_tuple = PyList_GetItem(o_list, i);
 			types->push_back(static_cast<AtomTypeBase>(PyLong_AsLong(PyTuple_GetItem(o_tuple, 0))));
-			points->emplace_back(static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 1))),
-								 static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 2))),
-								 static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 3))));
+			points->emplace_back(static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 1))),
+								 static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 2))),
+								 static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 3))));
 		}
 		return ErrorState::OK;
 	}
@@ -185,7 +188,7 @@ extern "C" {
 		auto bond_filename = full.substr(0, found + 1) + "BondLength.ini";
 
 		deb_write("Create dist");
-		static DistancesType dist(bond_filename);
+		static Distances dist(bond_filename);
 		p_distances = &dist;
 	}
 
@@ -195,7 +198,7 @@ extern "C" {
 		auto& distances = *p_distances;
 		Prepare_WC all(arg);
 
-		FAMStructType famstr(std::move(all.types), std::move(all.points));
+		FAM_Struct famstr(std::move(all.types), std::move(all.points));
 		std::string errM;
 		auto&& bonds = famstr.findBonds(distances, errM, [](const PointType& p1, const PointType& p2) {return (p1 - p2).r(); }).first;
 
@@ -213,7 +216,7 @@ extern "C" {
 		useDistances(self);
 		auto& distances = *p_distances;
 		Prepare_WC all(arg);
-		FAMStructType famstr(std::move(all.types), std::move(all.points));
+		FAM_Struct famstr(std::move(all.types), std::move(all.points));
 		std::string errM;
 		auto&& bonds = famstr.findBondsEx(distances, errM, [](const PointType& p1, const PointType& p2) {return (p1 - p2).r(); }).first;
 
@@ -300,9 +303,9 @@ extern "C" {
 			PyObject* o_molecule = PyList_New(0);
 			for (auto& [point,type] : atoms) {
 				PyObject* o_atom = Py_BuildValue("{s:f,s:f,s:f,s:l}",
-												 "x", cpplib::currents::FloatingPointType(point[0]),
-												 "y", cpplib::currents::FloatingPointType(point[1]),
-												 "z", cpplib::currents::FloatingPointType(point[2]),
+												 "x", cpplib::basic_types::FloatingPointType(point[0]),
+												 "y", cpplib::basic_types::FloatingPointType(point[1]),
+												 "z", cpplib::basic_types::FloatingPointType(point[2]),
 												 "init_idx", long(id));
 				PyList_Append(o_molecule, o_atom);
 			}
@@ -337,9 +340,9 @@ extern "C" {
 			PyObject* o_molecule = PyList_New(0);
 			for (auto& atom : std::get<0>(mol)) {
 				PyObject* o_atom = Py_BuildValue("{s:f,s:f,s:f,s:l}",
-												 "x", cpplib::currents::FloatingPointType(std::get<0>(atom)[0]),
-												 "y", cpplib::currents::FloatingPointType(std::get<0>(atom)[1]),
-												 "z", cpplib::currents::FloatingPointType(std::get<0>(atom)[2]),
+												 "x", cpplib::basic_types::FloatingPointType(std::get<0>(atom)[0]),
+												 "y", cpplib::basic_types::FloatingPointType(std::get<0>(atom)[1]),
+												 "z", cpplib::basic_types::FloatingPointType(std::get<0>(atom)[2]),
 												 "init_idx", long(std::get<1>(atom)));
 				PyList_Append(o_molecule, o_atom);
 			}
@@ -381,7 +384,7 @@ extern "C" {
 		deb_write("cpplib_GenSymm: pyListToVectorCharP returned");
 
 		deb_write("cpplib_GenSymm: symm parsing started");
-		std::vector<SymmType> symm;
+		std::vector<geometry::Symm<FloatingPointType>> symm;
 		const size_t ss = nsymm.size();
 		for (size_t i = 0; i < ss; i++)
 		{
@@ -416,8 +419,8 @@ extern "C" {
 			deb_write("cpplib_GenSymm: Move center of mass ended");
 		}
 
-		FAMStructType famstr(std::move(all.types), std::move(all.points));
-		FAMCellType fcell(FAMCellType::base(32, 32, 32, 90, 90, 90, true));
+		FAM_Struct famstr(std::move(all.types), std::move(all.points));
+		FAM_Cell fcell(FAM_Cell::base(32, 32, 32, 90, 90, 90, true));
 		fcell.GenerateSymm(famstr, symm, movetocell, true);
 
 		deb_write("cpplib_GenSymm: famstr.types.size() = ", famstr.types.size());
@@ -429,9 +432,9 @@ extern "C" {
 		{
 			PyList_Append(otuples, Py_BuildValue("(Ifff)",
 												 static_cast<unsigned int>(famstr.types[std::get<0>(famstr.parseIndex[i])]),
-												 static_cast<cpplib::currents::FloatingPointType>(famstr.points[i][0]),
-												 static_cast<cpplib::currents::FloatingPointType>(famstr.points[i][1]),
-												 static_cast<cpplib::currents::FloatingPointType>(famstr.points[i][2])));
+												 static_cast<cpplib::basic_types::FloatingPointType>(famstr.points[i][0]),
+												 static_cast<cpplib::basic_types::FloatingPointType>(famstr.points[i][1]),
+												 static_cast<cpplib::basic_types::FloatingPointType>(famstr.points[i][2])));
 		}
 		Py_INCREF(otuples);
 		return otuples;
@@ -626,7 +629,7 @@ extern "C" {
 											 static_cast<unsigned int>(std::get<1>(res[i])),
 											 static_cast<unsigned int>(std::get<2>(res[i])),
 											 static_cast<unsigned int>(std::get<3>(res[i])),
-											 static_cast<cpplib::currents::FloatingPointType>(cpplib::geometry::RadtoGrad(std::get<4>(res[i])))));
+											 static_cast<cpplib::basic_types::FloatingPointType>(cpplib::geometry::RadtoGrad(std::get<4>(res[i])))));
 		}
 		deb_write("cpplib_FindTorsionIC: List[...] completed. size = ", res_s);
 		return Py_BuildValue("{s:O}", "tors", lst);
@@ -665,7 +668,7 @@ extern "C" {
 											 static_cast<unsigned int>(std::get<1>(res[i])),
 											 static_cast<unsigned int>(std::get<2>(res[i])),
 											 static_cast<unsigned int>(std::get<3>(res[i])),
-											 static_cast<cpplib::currents::FloatingPointType>(cpplib::geometry::RadtoGrad(std::get<4>(res[i])))));
+											 static_cast<cpplib::basic_types::FloatingPointType>(cpplib::geometry::RadtoGrad(std::get<4>(res[i])))));
 		}
 		deb_write("cpplib_FindTorsionWC: List[...] completed. size = ", res_s);
 		return Py_BuildValue("{s:O}", "tors", lst);
@@ -692,7 +695,7 @@ extern "C" {
 			PyList_Append(list_d, Py_BuildValue("(IIf)",
 												static_cast<unsigned int>(std::get<0>(datdist[i])),
 												static_cast<unsigned int>(std::get<1>(datdist[i])),
-												static_cast<cpplib::currents::FloatingPointType>(std::get<2>(datdist[i]))));
+												static_cast<cpplib::basic_types::FloatingPointType>(std::get<2>(datdist[i]))));
 		}
 		PyDict_SetItemString(ret, "bonds", list_d);
 
@@ -702,7 +705,7 @@ extern "C" {
 												static_cast<unsigned int>(std::get<0>(datang[i])),
 												static_cast<unsigned int>(std::get<1>(datang[i])),
 												static_cast<unsigned int>(std::get<2>(datang[i])),
-												static_cast<cpplib::currents::FloatingPointType>(cpplib::geometry::RadtoGrad(std::get<3>(datang[i])))));
+												static_cast<cpplib::basic_types::FloatingPointType>(cpplib::geometry::RadtoGrad(std::get<3>(datang[i])))));
 		}
 		PyDict_SetItemString(ret, "angles", list_a);
 
@@ -713,7 +716,7 @@ extern "C" {
 												static_cast<unsigned int>(std::get<1>(dattor[i])),
 												static_cast<unsigned int>(std::get<2>(dattor[i])),
 												static_cast<unsigned int>(std::get<3>(dattor[i])),
-												static_cast<cpplib::currents::FloatingPointType>(cpplib::geometry::RadtoGrad(std::get<4>(dattor[i])))));
+												static_cast<cpplib::basic_types::FloatingPointType>(cpplib::geometry::RadtoGrad(std::get<4>(dattor[i])))));
 		}
 		PyDict_SetItemString(ret, "tors", list_t);
 
@@ -735,7 +738,7 @@ extern "C" {
 			PyList_Append(list_d, Py_BuildValue("(IIf)",
 												static_cast<unsigned int>(std::get<0>(datdist[i])),
 												static_cast<unsigned int>(std::get<1>(datdist[i])),
-												static_cast<cpplib::currents::FloatingPointType>(std::get<2>(datdist[i]))));
+												static_cast<cpplib::basic_types::FloatingPointType>(std::get<2>(datdist[i]))));
 		}
 		PyDict_SetItemString(ret, "bonds", list_d);
 
@@ -745,7 +748,7 @@ extern "C" {
 												static_cast<unsigned int>(std::get<0>(datang[i])),
 												static_cast<unsigned int>(std::get<1>(datang[i])),
 												static_cast<unsigned int>(std::get<2>(datang[i])),
-												static_cast<cpplib::currents::FloatingPointType>(cpplib::geometry::RadtoGrad(std::get<3>(datang[i])))));
+												static_cast<cpplib::basic_types::FloatingPointType>(cpplib::geometry::RadtoGrad(std::get<3>(datang[i])))));
 		}
 		PyDict_SetItemString(ret, "angles", list_a);
 
@@ -756,7 +759,7 @@ extern "C" {
 												static_cast<unsigned int>(std::get<1>(dattor[i])),
 												static_cast<unsigned int>(std::get<2>(dattor[i])),
 												static_cast<unsigned int>(std::get<3>(dattor[i])),
-												static_cast<cpplib::currents::FloatingPointType>(cpplib::geometry::RadtoGrad(std::get<4>(dattor[i])))));
+												static_cast<cpplib::basic_types::FloatingPointType>(cpplib::geometry::RadtoGrad(std::get<4>(dattor[i])))));
 		}
 		PyDict_SetItemString(ret, "tors", list_t);
 
@@ -765,7 +768,7 @@ extern "C" {
 
 	static PyObject* cpplib_himp(PyObject* self, PyObject* args) {
 		// args [2] = [(type,x,y,z), ... ], 
-		//            length : cpplib::currents::FloatingPointType or [cpplib::currents::FloatingPointType, ...]
+		//            length : cpplib::basic_types::FloatingPointType or [cpplib::basic_types::FloatingPointType, ...]
 
 		PyObject* o_tuple = NULL;
 		PyObject* o_himp = NULL;
@@ -779,7 +782,7 @@ extern "C" {
 
 		bool simplehimp = PyFloat_CheckExact(o_himp);
 		if (simplehimp) {
-			himp.resize(cpplib::mend_size, static_cast<FloatingPointType>(PyFloat_AsDouble(o_himp)));
+			himp.resize(cpplib::constants::mend_size, static_cast<FloatingPointType>(PyFloat_AsDouble(o_himp)));
 		}
 		else {
 			pyListToVectorFloat(o_himp, &himp);
@@ -883,9 +886,9 @@ extern "C" {
 		for (int i = 0; i < std::get<0>(ret).size(); i++)
 		{
 			PyObject* o_atom = Py_BuildValue("(fff)",
-											 static_cast<cpplib::currents::FloatingPointType>(std::get<0>(ret)[i][0]),
-											 static_cast<cpplib::currents::FloatingPointType>(std::get<0>(ret)[i][1]),
-											 static_cast<cpplib::currents::FloatingPointType>(std::get<0>(ret)[i][2]));
+											 static_cast<cpplib::basic_types::FloatingPointType>(std::get<0>(ret)[i][0]),
+											 static_cast<cpplib::basic_types::FloatingPointType>(std::get<0>(ret)[i][1]),
+											 static_cast<cpplib::basic_types::FloatingPointType>(std::get<0>(ret)[i][2]));
 			PyList_Append(o_xyz_block, o_atom);
 		}
 
@@ -913,7 +916,7 @@ extern "C" {
 		PyObject* osymm = NULL;
 		PyObject* otuples = NULL;
 		PyObject* ocoords = NULL;
-		cpplib::currents::FloatingPointType over_radius = 0;
+		cpplib::basic_types::FloatingPointType over_radius = 0;
 		if (!PyArg_ParseTuple(args, "OOOOf", &ocell, &osymm, &otuples, &ocoords, &over_radius)) {
 			deb_write("! Critic Error: Parse Error - return None");
 			Py_RETURN_NONE;
@@ -921,15 +924,15 @@ extern "C" {
 		Prepare_IC all(ocell, osymm, otuples);
 
 		Py_ssize_t s = PyList_Size(ocoords);
-		std::vector<std::pair<cpplib::currents::PointType, cpplib::currents::FloatingPointType> > anchors;
+		std::vector<std::pair<cpplib::geometry::Point<FloatingPointType>, cpplib::basic_types::FloatingPointType> > anchors;
 		anchors.reserve(static_cast<size_t>(s));
 
 		for (Py_ssize_t i = 0; i < s; i++) {
 			PyObject* o_tuple = PyList_GetItem(ocoords, i);
-			anchors.emplace_back(cpplib::currents::PointType(static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 0))),
-															 static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 1))),
-															 static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 2)))),
-								 static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 3))));
+			anchors.emplace_back(cpplib::geometry::Point<FloatingPointType>(static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 0))),
+															 static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 1))),
+															 static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 2)))),
+								 static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 3))));
 		}
 		bool b = false;
 		auto ret = ClusterCreate(all.cell, all.symm, all.types, all.points, anchors, over_radius, b);
@@ -978,7 +981,7 @@ extern "C" {
 			bools[i] = intbools[i] != 0;
 		}
 
-		FAMCellType fcell(CellType(all.cell));
+		FAM_Cell fcell(FAM_Cell::base(all.cell));
 		auto supercell_indexes = fcell.CreateSupercell(all.points, cutoff, 1);
 		bools.resize(all.points.size(), false);
 

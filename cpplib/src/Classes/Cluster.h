@@ -32,13 +32,15 @@
 #include <algorithm>
 
 #include "../BaseHeaders/Currents.h"
+#include "../BaseHeaders/Currents.h"
 #include "Geometry.h"
 
 namespace cpplib {
+
 	class Cluster {
 	private:
-		using FAMS = currents::FAMStructType;
-		using FAMC = currents::FAMCellType;
+		using FAMS = FAM_Struct;
+		using FAMC = FAM_Cell;
 	public:
 		using ShiftType = FAMS::ShiftType;
 		using BoxValueType = std::pair<ShiftType, std::vector<bool>>;
@@ -78,7 +80,7 @@ namespace cpplib {
 
 			for (const auto& pair : anchors)
 			{
-				auto b = FAMC::toShift(pair.first.floor());
+				ShiftType b(pair.first.floor());
 				std::array < FloatingPointType, 3> low{
 					plane[0].distance(fc.fracToCart() * pair.first) - b[0] * dp[0],
 					plane[1].distance(fc.fracToCart() * pair.first) - b[1] * dp[1],
@@ -178,18 +180,18 @@ namespace cpplib {
 
 	class Cluster_New {
 	public:
-		using FloatingPointType = currents::FloatingPointType;
+		using FloatingPointType = basic_types::FloatingPointType;
 		using PointType = geometry::Point<FloatingPointType>;
-		using ShiftType = geometry::Point<int>;
+		using ShiftType = geometry::Point<int8_t>;
 		using Box = ::std::vector<bool>;
 		using BoxMap = ::std::map<ShiftType, Box>;
 		using SymmIndex = int;
 		using CellType = geometry::Cell<FloatingPointType>;
 		using Matrix = typename CellType::matrix_type;
-		using AtomIndex = currents::AtomIndex;
+		using AtomIndex = basic_types::AtomIndex;
 		using SymmType = geometry::Symm<FloatingPointType>;
-		using AtomTypeBase = currents::AtomTypeBase;
-		using DistancesType = currents::DistancesType;
+		using AtomTypeBase = basic_types::AtomTypeBase;
+		using DistancesType = Distances;
 		using BondList = typename geometry::HashedSpace<FloatingPointType, AtomIndex>::BondList;
 
 		struct AnchorType {
@@ -200,6 +202,25 @@ namespace cpplib {
 			AtomTypeBase type;
 			PointType point;
 			SymmIndex symm;
+			ShiftType shift;
+		};
+		struct TranslatedAtom{
+			AtomIndex id;
+			ShiftType shift;
+
+			constexpr bool operator==(const TranslatedAtom& other) const noexcept = default;
+
+			struct Hash {
+				size_t operator()(const TranslatedAtom& ta) const noexcept {
+					using ST = typename ShiftType::value_type;
+					return std::hash<AtomIndex>()(ta.id) ^
+						(std::hash<ST>()(ta.shift[0]) << 1) ^
+						(std::hash<ST>()(ta.shift[1]) << 2) ^
+						(std::hash<ST>()(ta.shift[2]) << 3);
+				}
+			};
+		};
+		struct ExtendedBond : public ::std::pair<AtomIndex,AtomIndex> {
 			ShiftType shift;
 		};
 		struct Molecule {
@@ -263,7 +284,7 @@ namespace cpplib {
 
 
 			// Construct molecules from unit cell and bonds
-			auto moleculles = reconstructMolecules(unit_01, bonds);
+			//auto moleculles = reconstructMolecules(unit_01, bonds);
 			// move molecules to [0,1)
 
 			// make Boxes
@@ -306,121 +327,115 @@ namespace cpplib {
 									   });
 		}
 
-		::std::vector<Molecule> reconstructMolecules(const std::vector<ClusterAtom>& unit01,
-													 const BondList& bonds) const {
-			
-		}
+		//::std::vector<Molecule> reconstructMolecules(const std::vector<ClusterAtom>& unit01,
+		//											 const BondList& bonds) const {
+		//	
+		//}
 
-		inline void Merge(const FAM_Struct& fs,
-						  const std::vector<std::vector<FAM_Struct::ShiftType>>& molO /*i*/,
-						  std::vector<std::vector<FAM_Struct::ShiftType>>& molN /*j*/,
-						  const std::pair<Bond, FAM_Struct::ShiftType>& bond) const {
-			// calculate shift
-			FAM_Struct::ShiftType s_o, s_n, s;
-			if (molO[bond.first.first].empty()) {
-				s_n = molN[bond.first.first][0];
-				s_o = molO[bond.first.second][0];
-				s = s_n - s_o + bond.second;
-			}
-			else {
-				s_o = molO[bond.first.first][0];
-				s_n = molN[bond.first.second][0];
-				s = s_n - s_o - bond.second;
-			}
+		//inline void Merge(const FAM_Struct& fs,
+		//				  const std::vector<std::vector<FAM_Struct::ShiftType>>& molO /*i*/,
+		//				  std::vector<std::vector<FAM_Struct::ShiftType>>& molN /*j*/,
+		//				  const std::pair<Bond, FAM_Struct::ShiftType>& bond) const {
+		//	// calculate shift
+		//	FAM_Struct::ShiftType s_o, s_n, s;
+		//	if (molO[bond.first.first].empty()) {
+		//		s_n = molN[bond.first.first][0];
+		//		s_o = molO[bond.first.second][0];
+		//		s = s_n - s_o + bond.second;
+		//	}
+		//	else {
+		//		s_o = molO[bond.first.first][0];
+		//		s_n = molN[bond.first.second][0];
+		//		s = s_n - s_o - bond.second;
+		//	}
 
-			for (AtomIndex i = 0; i < fs.sizePoints; i++)
-			{
-				for (AtomIndex j = 0; j < molO[i].size(); j++)
-				{
-					molN[i].emplace_back(molO[i][j] + s);
-				}
-			}
-		}
+		//	for (AtomIndex i = 0; i < fs.sizePoints; i++)
+		//	{
+		//		for (AtomIndex j = 0; j < molO[i].size(); j++)
+		//		{
+		//			molN[i].emplace_back(molO[i][j] + s);
+		//		}
+		//	}
+		//}
 
 
 
-		auto findMoleculesForCluster(const FAM_Struct& fs, const DistancesType& distances, bool& hasPoymer) const {
-			using ShiftType = FAM_Struct::ShiftType;
-			using MolType = std::vector<std::vector<ShiftType>>; // mol[atomIndex][0-...?]
-			hasPoymer = false;
-			std::vector<std::pair<Bond, ShiftType>> bonds; // Shift-type bond container
-			std::list<AtomIndex> polis;
+		//auto findMoleculesForCluster(const FAM_Struct& fs, const DistancesType& distances, bool& hasPoymer) const {
+		//	using ShiftType = FAM_Struct::ShiftType;
+		//	using MolType = std::vector<std::vector<ShiftType>>; // mol[atomIndex][0-...?]
+		//	hasPoymer = false;
+		//	std::vector<std::pair<Bond, ShiftType>> bonds; // Shift-type bond container
+		//	std::list<AtomIndex> polis;
 
-			std::vector<AtomIndex> ref(fs.sizePoints, 0);
-			std::vector<std::pair<MolType, bool>> allMolecules(1, std::make_pair(std::vector<std::vector<ShiftType>>(fs.sizePoints), false)); // Molecules start from [1]. Value [0] is always empty
+		//	std::vector<AtomIndex> ref(fs.sizePoints, 0);
+		//	std::vector<std::pair<MolType, bool>> allMolecules(1, std::make_pair(std::vector<std::vector<ShiftType>>(fs.sizePoints), false)); // Molecules start from [1]. Value [0] is always empty
 
-			for (AtomIndex i = 0; i < fs.sizePoints; i++) {
-				const auto type_i = fs.types[std::get<0>(fs.parseIndex[i])];
-				for (AtomIndex j = i + 1; j < fs.sizePoints; j++) {
-					const auto type_j = fs.types[std::get<0>(fs.parseIndex[j])];
-					FloatingPointType dist = cell.distance_in_01(fs.points[i], fs.points[j]);
-					char isbond = distances.isBond(type_i, type_j, dist);
-					switch (isbond) {
-					case -1:
-						//[[fallthrough]]
-					case  1:
-					{
-						bonds.emplace_back(Bond(i, j), toShift((fs.points[i] - fs.points[j]).round()));
-						const auto& curbond = bonds.back();
-						AtomIndex k1 = 0;
-						for (; k1 < allMolecules.size(); k1++)
-						{
-							if (!allMolecules[k1].first[i].empty()) break;
-						}
-						bool k1f = k1 != allMolecules.size(); // k1 found
-						AtomIndex k2 = 0;
-						for (; k2 < allMolecules.size(); k2++)
-						{
-							if (!allMolecules[k2].first[j].empty()) break;
-						}
-						bool k2f = k2 != allMolecules.size(); // k2 found
+		//	for (AtomIndex i = 0; i < fs.sizePoints; i++) {
+		//		const auto type_i = fs.types[std::get<0>(fs.parseIndex[i])];
+		//		for (AtomIndex j = i + 1; j < fs.sizePoints; j++) {
+		//			const auto type_j = fs.types[std::get<0>(fs.parseIndex[j])];
+		//			FloatingPointType dist = cell.distance_in_01(fs.points[i], fs.points[j]);
+		//			char isbond = distances.isBond(type_i, type_j, dist);
+		//			switch (isbond) {
+		//			case -1:
+		//				//[[fallthrough]]
+		//			case  1:
+		//			{
+		//				bonds.emplace_back(Bond(i, j), toShift((fs.points[i] - fs.points[j]).round()));
+		//				const auto& curbond = bonds.back();
+		//				AtomIndex k1 = 0;
+		//				for (; k1 < allMolecules.size(); k1++)
+		//				{
+		//					if (!allMolecules[k1].first[i].empty()) break;
+		//				}
+		//				bool k1f = k1 != allMolecules.size(); // k1 found
+		//				AtomIndex k2 = 0;
+		//				for (; k2 < allMolecules.size(); k2++)
+		//				{
+		//					if (!allMolecules[k2].first[j].empty()) break;
+		//				}
+		//				bool k2f = k2 != allMolecules.size(); // k2 found
 
-						switch ((k1f ? 1 : 0) + (k2f ? 2 : 0))
-						{
-						case 0: // None
-							allMolecules.emplace_back(std::vector<std::vector<ShiftType>>(fs.sizePoints), false);
-							allMolecules.back().first[i].push_back(std::get<2>(fs.parseIndex[i]));
-							allMolecules.back().first[j].push_back(std::get<2>(fs.parseIndex[i]) + curbond.second);
-							break;
-						case 1: // Only k1 found
-							_ASSERT(!allMolecules[k1].first[i].empty());
-							allMolecules[k1].first[j].push_back(allMolecules[k1].first[i][0] + curbond.second);
-							_ASSERT(allMolecules[k1].first[j].size() == 1);
-							break;
-						case 2: // Only k2 found
-							_ASSERT(!allMolecules[k2].first[j].empty());
-							allMolecules[k2].first[i].push_back(allMolecules[k2].first[j][0] - curbond.second);
-							_ASSERT(allMolecules[k2].first[i].size() == 1);
-							break;
-						case 3: // Both found
-							if (k1 != k2) { // different molecules
-								Merge(fs, allMolecules[k1].first, allMolecules[k2].first, curbond);
-								allMolecules.erase(allMolecules.begin() + k1);
-							}
-							else {
-								if (!(allMolecules[k1].first[i][0] + curbond.second == allMolecules[k2].first[j][0])) { // It's a polymer!
-									allMolecules[k1].first[j].push_back(allMolecules[k1].first[i][0] + curbond.second);
-									allMolecules[k1].second = true;
-									hasPoymer = true;
-								}
-							}
-							break;
-						}
-					}
-					break;
-					default:
-						break;
-					}
-				}
-			}
-			return allMolecules;
-		}
-		static inline currents::FAMStructType::ShiftType toShift(const PointType& a1) {
-			using namespace currents;
-			return FAMStructType::ShiftType(static_cast<FAMStructType::ShiftType::value_type>((a1[0])),
-											static_cast<FAMStructType::ShiftType::value_type>((a1[1])),
-											static_cast<FAMStructType::ShiftType::value_type>((a1[2])));
-		}
+		//				switch ((k1f ? 1 : 0) + (k2f ? 2 : 0))
+		//				{
+		//				case 0: // None
+		//					allMolecules.emplace_back(std::vector<std::vector<ShiftType>>(fs.sizePoints), false);
+		//					allMolecules.back().first[i].push_back(std::get<2>(fs.parseIndex[i]));
+		//					allMolecules.back().first[j].push_back(std::get<2>(fs.parseIndex[i]) + curbond.second);
+		//					break;
+		//				case 1: // Only k1 found
+		//					_ASSERT(!allMolecules[k1].first[i].empty());
+		//					allMolecules[k1].first[j].push_back(allMolecules[k1].first[i][0] + curbond.second);
+		//					_ASSERT(allMolecules[k1].first[j].size() == 1);
+		//					break;
+		//				case 2: // Only k2 found
+		//					_ASSERT(!allMolecules[k2].first[j].empty());
+		//					allMolecules[k2].first[i].push_back(allMolecules[k2].first[j][0] - curbond.second);
+		//					_ASSERT(allMolecules[k2].first[i].size() == 1);
+		//					break;
+		//				case 3: // Both found
+		//					if (k1 != k2) { // different molecules
+		//						Merge(fs, allMolecules[k1].first, allMolecules[k2].first, curbond);
+		//						allMolecules.erase(allMolecules.begin() + k1);
+		//					}
+		//					else {
+		//						if (!(allMolecules[k1].first[i][0] + curbond.second == allMolecules[k2].first[j][0])) { // It's a polymer!
+		//							allMolecules[k1].first[j].push_back(allMolecules[k1].first[i][0] + curbond.second);
+		//							allMolecules[k1].second = true;
+		//							hasPoymer = true;
+		//						}
+		//					}
+		//					break;
+		//				}
+		//			}
+		//			break;
+		//			default:
+		//				break;
+		//			}
+		//		}
+		//	}
+		//	return allMolecules;
+		//}
 
 
 

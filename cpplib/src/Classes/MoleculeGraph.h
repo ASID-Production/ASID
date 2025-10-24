@@ -26,8 +26,6 @@
 //
 // ******************************************************************************************
 #pragma once
-#include "Engine.h" // for Node and Bond
-#include "../BaseHeaders/Support.h" // for mend_size
 #include <vector> // for using std::vector
 #include <list> // for using std::list
 #include <type_traits> // for std::fundamental
@@ -38,6 +36,12 @@
 #include <charconv>
 #include <sstream>
 #include <optional>
+
+#include "../BaseHeaders/BaseTypes.h" // for constants::mend_size
+#include "../BaseHeaders/Concepts.h"
+#include "../BaseHeaders/Currents.h"
+#include "Engine.h" // for Node and Bond
+
 namespace cpplib {		
 	enum class ReserveStrategy :char {
 		None,
@@ -47,17 +51,17 @@ namespace cpplib {
 
 	class TypeMap {
 	public:
-		using AtomIndex = currents::AtomIndex;
+		using AtomIndex = basic_types::AtomIndex;
 		using indexType = int8_t;
 	private:
-		std::array<AtomIndex, mend_size> data_{};
+		std::array<AtomIndex, constants::mend_size> data_{};
 	public:
-		static_assert (INT8_MAX >= mend_size, "mend_size chould be less than INT8_MAX");
+		static_assert (INT8_MAX >= constants::mend_size, "mend_size chould be less than INT8_MAX");
 		constexpr TypeMap() {
 			std::ranges::fill(data_, AtomIndex(-1));
 		}
 		constexpr explicit TypeMap(const AtomIndex value) {
-			for (indexType i = 0; i < mend_size; i++)
+			for (indexType i = 0; i < constants::mend_size; i++)
 			{
 				data_[i] = value;
 			}
@@ -70,8 +74,8 @@ namespace cpplib {
 			_ASSERT(i < data_.size());
 			return data_[i];
 		}
-		inline void initialize(const currents::TypeBitset& bits) {
-			for (indexType i = 1; i < mend_size; i++)
+		inline void initialize(const basic_types::TypeBitset& bits) {
+			for (indexType i = 1; i < constants::mend_size; i++)
 			{
 				if (bits[i]) data_[i] = AtomIndex(0);
 			}
@@ -80,7 +84,7 @@ namespace cpplib {
 			return data_.size();
 		}
 		inline bool isFinished() const {
-			for (indexType i = 1; i < mend_size; i++)
+			for (indexType i = 1; i < constants::mend_size; i++)
 			{
 				if (data_[i] > 0) return false;
 			}
@@ -97,9 +101,9 @@ namespace cpplib {
 		// Definitions
 		using NodeType = Node<A>;
 		using NodeContainer = ::std::vector<NodeType>;
-		using BondType = currents::BondType;
-		using AtomIndex = currents::AtomIndex;
-		using MoleculeIndex = currents::MoleculeIndex;
+		using BondType = Bond;
+		using AtomIndex = basic_types::AtomIndex;
+		using MoleculeIndex = basic_types::MoleculeIndex;
 		using HType = typename NodeType::HType;
 		using AtomTypeBase = typename A::AtomTypeBase;
 
@@ -216,11 +220,11 @@ namespace cpplib {
 
 		constexpr TypeMap getTypeMap() const {
 			TypeMap map;
-			static_assert(map.size() == mend_size);
+			static_assert(map.size() == constants::mend_size);
 			AtomIndex s = size();
 			for (AtomIndex i = 1; i < s; i++)
 			{
-				const auto t = static_cast<currents::AtomTypeBase>(data_[i].getType());
+				const auto t = static_cast<basic_types::AtomTypeBase>(data_[i].getType());
 				const auto h = data_[i].getHAtoms();
 
 				if (map[1] == AtomIndex(-1))
@@ -250,7 +254,7 @@ namespace cpplib {
 				AtomIndex last = data_.size();
 				data_.emplace_back(A(1), 0, last);
 				addBond(index, last);
-				data_[last].setCoord(Coord(1, Coord::max));
+				data_[last].setCoord(Coord(1, constants::maxNeighbours));
 			}
 			data_[index].setHAtoms(0);
 		}
@@ -326,7 +330,7 @@ namespace cpplib {
 		}
 
 		template<typename T = A> requires std::is_same_v<T, currents::AtomTypeRequest>
-		static ::std::pair<GraphType, currents::TypeBitset> Read(const char* str) {
+		static ::std::pair<GraphType, basic_types::TypeBitset> Read(const char* str) {
 			GraphType mg;
 			MoleculeParser p(mg);
 
@@ -337,7 +341,7 @@ namespace cpplib {
 			return { mg, multiAtomBits };
 		}
 		template<typename T = A> requires std::is_same_v<T, currents::AtomTypeData>
-		static ::std::pair<GraphType, bool> Read(const char* str, const currents::TypeBitset& multiAtomBits, const TypeMap& map) {
+		static ::std::pair<GraphType, bool> Read(const char* str, const basic_types::TypeBitset& multiAtomBits, const TypeMap& map) {
 			GraphType mg;
 			MoleculeParser p(mg);
 
@@ -485,9 +489,9 @@ namespace cpplib {
 		}
 
 		template<typename T = A> requires std::is_same_v<T, currents::AtomTypeRequest>
-		currents::TypeBitset parseMultiatom(const char* str, const AtomIndex sn) {
+		basic_types::TypeBitset parseMultiatom(const char* str, const AtomIndex sn) {
 			AtomIndex xty;
-			currents::TypeBitset multiAtomBits;
+			basic_types::TypeBitset multiAtomBits;
 			if (readToNext(str))
 				xty = readSingleInt(str);
 			else {
@@ -497,7 +501,7 @@ namespace cpplib {
 			while (xty != 0) {
 				A real(static_cast<char>(xty));
 				int next_xty = 0;
-				for (char i = 0; i < mend_size; i++)
+				for (char i = 0; i < constants::mend_size; i++)
 				{
 					next_xty = readSingleInt(str);
 					if (next_xty <= 0) break;
@@ -505,7 +509,7 @@ namespace cpplib {
 				}
 				for (AtomIndex i = 1; i < sn; i++)
 				{
-					if (static_cast<currents::AtomTypeBase>(graph_.data_[i].getType()) == static_cast<currents::AtomTypeBase>(xty)) {
+					if (static_cast<basic_types::AtomTypeBase>(graph_.data_[i].getType()) == static_cast<basic_types::AtomTypeBase>(xty)) {
 						graph_.data_[i].setType(real);
 						if (!real.contains(1)) continue;
 
@@ -525,7 +529,7 @@ namespace cpplib {
 			return multiAtomBits;
 		}
 
-		void release_HAtoms(const currents::TypeBitset& bits) {
+		void release_HAtoms(const basic_types::TypeBitset& bits) {
 			auto& data_ = graph_.data_;
 			if (bits.none()) return;
 			const AtomIndex original_size = graph_.size();
@@ -544,7 +548,7 @@ namespace cpplib {
 					check = (data_[i].getType().get_bitset() & bits).any();
 				}
 				else {
-					const auto type = static_cast<currents::AtomTypeBase>(data_[i].getType());
+					const auto type = static_cast<basic_types::AtomTypeBase>(data_[i].getType());
 					check = (type > 0) && bits[type];
 				}
 
@@ -553,7 +557,7 @@ namespace cpplib {
 					for (HType j = 0; j < hAtoms; j++) {
 						data_.emplace_back(A(1), 0, new_index);
 						data_[i].addBondWithSort(data_.back());
-						data_.back().setCoord(Coord(1, Coord::max));
+						data_.back().setCoord(Coord(1, constants::maxNeighbours));
 						new_index++;
 					}
 					data_[i].setHAtoms(0);

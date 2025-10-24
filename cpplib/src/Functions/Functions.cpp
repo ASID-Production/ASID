@@ -36,17 +36,20 @@
 #include <set>
 #include <functional>
 
+using namespace cpplib;
 using namespace cpplib::currents;
+using namespace cpplib::basic_types;
+using PointType = FAM_Cell::PointType;
 
-static void ChildThreadFunc(const SearchGraphType::RequestGraphType& input, const SearchGraphType::AtomIndex MaxAtom, SearchDataInterfaceType& dataInterface, const bool exact); 
-static cpplib::DATTuple& ConvertDATTuple(cpplib::DATTuple& dat, const cpplib::currents::FAMStructType& fs);
+static void ChildThreadFunc(const SearchGraph::RequestGraphType& input, const SearchGraph::AtomIndex MaxAtom, SearchDataInterface& dataInterface, const bool exact); 
+static cpplib::DATTuple& ConvertDATTuple(cpplib::DATTuple& dat, const cpplib::FAM_Struct& fs);
 
 
-const DistancesType* p_distances = nullptr;
+const Distances* p_distances = nullptr;
 
 bool CompareGraph(const char* search1, const char* search2, const bool exact) {
 	deb_write("CompareGraph start");
-	SearchGraphType graph;
+	SearchGraph graph;
 
 	deb_write("CompareGraph CurrentSearchGraph start ReadInput");
 	auto&& inputpair = cpplib::MoleculeParser<AtomTypeRequest>::Read(search1);
@@ -65,7 +68,7 @@ bool CompareGraph(const char* search1, const char* search2, const bool exact) {
 std::vector<int> SearchMain(const char* search, std::vector<const char*>&& data, const int np, const bool exact) {
 
 	auto&& inputpair = cpplib::MoleculeParser<AtomTypeRequest>::Read(search);
-	SearchDataInterfaceType databuf(std::move(data), std::move(inputpair.second));
+	SearchDataInterface databuf(std::move(data), std::move(inputpair.second));
 	std::vector<std::thread> threads;
 	const size_t nThreads = std::min(std::min(static_cast<unsigned int>(np), std::thread::hardware_concurrency()),
 									 static_cast<unsigned int>(databuf.size())) - 1;
@@ -84,25 +87,25 @@ std::vector<int> SearchMain(const char* search, std::vector<const char*>&& data,
 	return databuf.getAllResults();
 }
 
-std::tuple<std::string, std::string, FindMoleculesType::RightType> FindMoleculesInCell(const std::array<cpplib::currents::FloatingPointType, 6>& unit_cell,
+std::tuple<std::string, std::string, FindMolecules::RightType> FindMoleculesInCell(const std::array<cpplib::basic_types::FloatingPointType, 6>& unit_cell,
 																		 std::vector<const char*>& symm, 
-																		 cpplib::currents::FAMStructType::AtomContainerType& types,
-																		 cpplib::currents::FAMStructType::PointConteinerType& points) {
+																		 cpplib::FAM_Struct::AtomContainerType& types,
+																		 cpplib::FAM_Struct::PointConteinerType& points) {
 	auto& distances = *p_distances;
 	if (p_distances->isReady() == false) {
 		return std::make_tuple(std::string(),std::string("Error! Could not open BondLength.ini"),
-							  FindMoleculesType::RightType());
+							  FindMolecules::RightType());
 	}
-	FAMStructType fs;
-	FAMCellType fc(FAMCellType::base(unit_cell, true));
-	ParseDataType(fs, fc, symm, std::move(types), std::move(points));
+	FAM_Struct fs;
+	FAM_Cell fc(geometry::Cell(unit_cell, true));
+	ParseData(fs, fc, symm, std::move(types), std::move(points));
 
 	fc.CreateSupercell(fs.points, fs.findCutoff(distances));
 
 	std::string errorMsg;
 	auto res = fs.findBonds(distances, errorMsg, [fc](const PointType& p1, const PointType& p2) {return fc.distanceInCell(p1, p2); });
 	
-	FindMoleculesType fm(std::move(fs));
+	FindMolecules fm(std::move(fs));
 
 	auto ret = fm.findMolecules(res.first, res.second, errorMsg);
 
@@ -136,91 +139,91 @@ std::tuple<std::string, std::string, FindMoleculesType::RightType> FindMolecules
 	}
 	return ret;
 }
-std::tuple<std::string, std::string, FindMoleculesType::RightType>  FindMoleculesWithoutCell(cpplib::currents::FAMStructType::AtomContainerType& types,
-																			  cpplib::currents::FAMStructType::PointConteinerType& points) {
+std::tuple<std::string, std::string, FindMolecules::RightType>  FindMoleculesWithoutCell(cpplib::FAM_Struct::AtomContainerType& types,
+																			  cpplib::FAM_Struct::PointConteinerType& points) {
 	auto& distances = *p_distances;
 
 	if (p_distances->isReady() == false) {
 		return std::make_tuple(std::string(), std::string("Error! Could not open BondLength.ini"),
-							   FindMoleculesType::RightType());
+							   FindMolecules::RightType());
 	}
 
-	FAMStructType fs;
-	ParseDataType(fs, std::move(types), std::move(points));
+	FAM_Struct fs;
+	ParseData(fs, std::move(types), std::move(points));
 	std::string errorMsg;
 	auto res = fs.findBonds(distances, errorMsg, PointType::distance);
 
-	FindMoleculesType fm(std::move(fs));
+	FindMolecules fm(std::move(fs));
 	
 	return fm.findMolecules(res.first, res.second, errorMsg);
 }
 
-std::vector<FindGeometryType::tupleDistance> FindDistanceWC(cpplib::currents::FAMStructType::AtomContainerType& types,
-						   cpplib::currents::FAMStructType::PointConteinerType& points,
+std::vector<FindGeometry::tupleDistance> FindDistanceWC(cpplib::FAM_Struct::AtomContainerType& types,
+						   cpplib::FAM_Struct::PointConteinerType& points,
 						   const std::array<int, 2>& type,
-						   const std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>& value) {
-	FAMStructType fs;
-	ParseDataType(fs, std::move(types), std::move(points));
-	FindGeometryType fg(fs);
-	const auto raw = fg.findDistance(static_cast<FindGeometryType::AtomTypeBase>(type[0]),
-										static_cast<FindGeometryType::AtomTypeBase>(type[1]),
+						   const std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>& value) {
+	FAM_Struct fs;
+	ParseData(fs, std::move(types), std::move(points));
+	FindGeometry fg(fs);
+	const auto raw = fg.findDistance(static_cast<FindGeometry::AtomTypeBase>(type[0]),
+										static_cast<FindGeometry::AtomTypeBase>(type[1]),
 										value);
 	return raw;
 }
 
-std::vector<FindGeometryType::tupleDistance> FindDistanceIC(const std::array<cpplib::currents::FloatingPointType, 6>& unit_cell,
+std::vector<FindGeometry::tupleDistance> FindDistanceIC(const std::array<cpplib::basic_types::FloatingPointType, 6>& unit_cell,
 						   std::vector<const char*>& symm,
-						   cpplib::currents::FAMStructType::AtomContainerType& types,
-						   cpplib::currents::FAMStructType::PointConteinerType& points,
+						   cpplib::FAM_Struct::AtomContainerType& types,
+						   cpplib::FAM_Struct::PointConteinerType& points,
 						   const std::array<int, 2>& type,
-						   const std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>& value) {
-	FAMStructType fs;
-	FAMCellType fc(FAMCellType::base(unit_cell, true));
-	ParseDataType(fs, fc, symm, std::move(types), std::move(points));
+						   const std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>& value) {
+	FAM_Struct fs;
+	FAM_Cell fc(FAM_Cell::base(unit_cell, true));
+	ParseData(fs, fc, symm, std::move(types), std::move(points));
 
-	fc.CreateSupercell(fs.points, static_cast<FloatingPointType>(8.5), 2);
+	fc.CreateSupercell(fs.points, static_cast<basic_types::FloatingPointType>(8.5), 2);
 
 	for (size_t i = 0; i < fs.sizePoints; i++)
 	{
 		fs.points[i] = fc.fracToCart() * fs.points[i];
 	}
 
-	FindGeometryType fg(fs);
-	const auto raw = fg.findDistance(static_cast<FindGeometryType::AtomTypeBase>(std::get<0>(type)),
-										static_cast<FindGeometryType::AtomTypeBase>(std::get<1>(type)),
+	FindGeometry fg(fs);
+	const auto raw = fg.findDistance(static_cast<FindGeometry::AtomTypeBase>(std::get<0>(type)),
+										static_cast<FindGeometry::AtomTypeBase>(std::get<1>(type)),
 										value);
 	return raw;
 }
 
-std::vector<FindGeometryType::tupleAngle> FindAngleWC(cpplib::currents::FAMStructType::AtomContainerType& types,
-						                              cpplib::currents::FAMStructType::PointConteinerType& points,
+std::vector<FindGeometry::tupleAngle> FindAngleWC(cpplib::FAM_Struct::AtomContainerType& types,
+						                              cpplib::FAM_Struct::PointConteinerType& points,
 						                              const std::array<int, 3>& type,
-						                              const std::array<std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>, 2>& value_d,
-						                              const std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>& value_a) {
-	FAMStructType fs;
-	ParseDataType(fs, std::move(types), std::move(points));
-	FindGeometryType fg(fs);
-	const auto raw12 = fg.findDistance(static_cast<FindGeometryType::AtomTypeBase>(std::get<0>(type)),
-										static_cast<FindGeometryType::AtomTypeBase>(std::get<1>(type)),
+						                              const std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>, 2>& value_d,
+						                              const std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>& value_a) {
+	FAM_Struct fs;
+	ParseData(fs, std::move(types), std::move(points));
+	FindGeometry fg(fs);
+	const auto raw12 = fg.findDistance(static_cast<FindGeometry::AtomTypeBase>(std::get<0>(type)),
+										static_cast<FindGeometry::AtomTypeBase>(std::get<1>(type)),
 										value_d[0]);
-	const auto raw23 = fg.findDistance(static_cast<FindGeometryType::AtomTypeBase>(std::get<1>(type)),
-										static_cast<FindGeometryType::AtomTypeBase>(std::get<2>(type)),
+	const auto raw23 = fg.findDistance(static_cast<FindGeometry::AtomTypeBase>(std::get<1>(type)),
+										static_cast<FindGeometry::AtomTypeBase>(std::get<2>(type)),
 										value_d[1]);
 	const auto raw = fg.findAngle(raw12, raw23, std::make_pair(cpplib::geometry::GradtoRad(value_a.first), cpplib::geometry::GradtoRad(value_a.second)));
 	return raw;
 }
 
-std::vector<FindGeometryType::tupleAngle> FindAngleIC(const std::array<cpplib::currents::FloatingPointType, 6>& unit_cell,
+std::vector<FindGeometry::tupleAngle> FindAngleIC(const std::array<cpplib::basic_types::FloatingPointType, 6>& unit_cell,
 						                              std::vector<const char*>& symm, 
-						                              cpplib::currents::FAMStructType::AtomContainerType& types,
-						                              cpplib::currents::FAMStructType::PointConteinerType& points,
+						                              cpplib::FAM_Struct::AtomContainerType& types,
+						                              cpplib::FAM_Struct::PointConteinerType& points,
 						                              const std::array<int, 3>& type,
-						                              const std::array<std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>, 2>& value_d,
-						                              const std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>& value_a)
+						                              const std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>, 2>& value_d,
+						                              const std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>& value_a)
 {
-	FAMStructType fs;
-	FAMCellType fc(FAMCellType::base(unit_cell, true));
-	ParseDataType(fs, fc, symm, std::move(types), std::move(points));
+	FAM_Struct fs;
+	FAM_Cell fc(FAM_Cell::base(unit_cell, true));
+	ParseData(fs, fc, symm, std::move(types), std::move(points));
 
 	fc.CreateSupercell(fs.points, static_cast<FloatingPointType>(8.5), 2);
 
@@ -229,31 +232,31 @@ std::vector<FindGeometryType::tupleAngle> FindAngleIC(const std::array<cpplib::c
 		fs.points[i] = fc.fracToCart() * fs.points[i];
 	}
 
-	FindGeometryType fg(fs);
-	const auto raw12 = fg.findDistance(static_cast<FindGeometryType::AtomTypeBase>(std::get<0>(type)),
-										static_cast<FindGeometryType::AtomTypeBase>(std::get<1>(type)),
+	FindGeometry fg(fs);
+	const auto raw12 = fg.findDistance(static_cast<FindGeometry::AtomTypeBase>(std::get<0>(type)),
+										static_cast<FindGeometry::AtomTypeBase>(std::get<1>(type)),
 										value_d[0]);
-	const auto raw23 = fg.findDistance(static_cast<FindGeometryType::AtomTypeBase>(std::get<1>(type)),
-										static_cast<FindGeometryType::AtomTypeBase>(std::get<2>(type)),
+	const auto raw23 = fg.findDistance(static_cast<FindGeometry::AtomTypeBase>(std::get<1>(type)),
+										static_cast<FindGeometry::AtomTypeBase>(std::get<2>(type)),
 										value_d[1]);
 	auto raw = fg.findAngle(raw12, raw23, std::make_pair(cpplib::geometry::GradtoRad(value_a.first), cpplib::geometry::GradtoRad(value_a.second)));
 	return raw;
 }
 
-std::vector<FindGeometryType::tupleTorsion> FindTorsionWC(cpplib::currents::FAMStructType::AtomContainerType& types,
-						                                  cpplib::currents::FAMStructType::PointConteinerType& points,
+std::vector<FindGeometry::tupleTorsion> FindTorsionWC(cpplib::FAM_Struct::AtomContainerType& types,
+						                                  cpplib::FAM_Struct::PointConteinerType& points,
 							                              const std::array<int, 4>& type,
-							                              const std::array<std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>, 3>& value_d,
-							                              const std::array<std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>, 2>& value_a,
-							                              const std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>& value_t)
+							                              const std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>, 3>& value_d,
+							                              const std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>, 2>& value_a,
+							                              const std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>& value_t)
 {
-	FAMStructType fs;
-	ParseDataType(fs, std::move(types), std::move(points));
-	FindGeometryType fg(fs);
+	FAM_Struct fs;
+	ParseData(fs, std::move(types), std::move(points));
+	FindGeometry fg(fs);
 
-	const auto raw12 = fg.findDistance(static_cast<FindGeometryType::AtomTypeBase>(type[0]), static_cast<FindGeometryType::AtomTypeBase>(type[1]), value_d[0]);
-	const auto raw23 = fg.findDistance(static_cast<FindGeometryType::AtomTypeBase>(type[1]), static_cast<FindGeometryType::AtomTypeBase>(type[2]), value_d[1]);
-	const auto raw34 = fg.findDistance(static_cast<FindGeometryType::AtomTypeBase>(type[2]), static_cast<FindGeometryType::AtomTypeBase>(type[3]), value_d[2]);
+	const auto raw12 = fg.findDistance(static_cast<FindGeometry::AtomTypeBase>(type[0]), static_cast<FindGeometry::AtomTypeBase>(type[1]), value_d[0]);
+	const auto raw23 = fg.findDistance(static_cast<FindGeometry::AtomTypeBase>(type[1]), static_cast<FindGeometry::AtomTypeBase>(type[2]), value_d[1]);
+	const auto raw34 = fg.findDistance(static_cast<FindGeometry::AtomTypeBase>(type[2]), static_cast<FindGeometry::AtomTypeBase>(type[3]), value_d[2]);
 	const auto raw123 = fg.findAngle(raw12, raw23,
 									 std::make_pair(cpplib::geometry::GradtoRad(value_a[0].first), cpplib::geometry::GradtoRad(value_a[0].second)));
 	const auto raw234 = fg.findAngle(raw23, raw34,
@@ -262,17 +265,17 @@ std::vector<FindGeometryType::tupleTorsion> FindTorsionWC(cpplib::currents::FAMS
 							  std::make_pair(cpplib::geometry::GradtoRad(value_t.first), cpplib::geometry::GradtoRad(value_t.second)));
 	return raw;
 }
-std::vector<FindGeometryType::tupleTorsion> FindTorsionIC(const std::array<cpplib::currents::FloatingPointType, 6>& unit_cell,
+std::vector<FindGeometry::tupleTorsion> FindTorsionIC(const std::array<cpplib::basic_types::FloatingPointType, 6>& unit_cell,
 						                                  std::vector<const char*>& symm,
-						                                  cpplib::currents::FAMStructType::AtomContainerType& types,
-						                                  cpplib::currents::FAMStructType::PointConteinerType& points,
+						                                  cpplib::FAM_Struct::AtomContainerType& types,
+						                                  cpplib::FAM_Struct::PointConteinerType& points,
 						                                  const std::array<int, 4>& type,
-						                                  const std::array<std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>, 3>& value_d,
-						                                  const std::array<std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>, 2>& value_a,
-						                                  const std::pair<cpplib::currents::FloatingPointType, cpplib::currents::FloatingPointType>& value_t) {
-	FAMStructType fs;
-	FAMCellType fc(FAMCellType::base(unit_cell, true));
-	ParseDataType(fs, fc, symm, std::move(types), std::move(points));
+						                                  const std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>, 3>& value_d,
+						                                  const std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>, 2>& value_a,
+						                                  const std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>& value_t) {
+	FAM_Struct fs;
+	FAM_Cell fc(FAM_Cell::base(unit_cell, true));
+	ParseData(fs, fc, symm, std::move(types), std::move(points));
 
 	fc.CreateSupercell(fs.points, static_cast<FloatingPointType>(8.5), 2);
 
@@ -281,11 +284,11 @@ std::vector<FindGeometryType::tupleTorsion> FindTorsionIC(const std::array<cppli
 		fs.points[i] = fc.fracToCart() * fs.points[i];
 	}
 
-	FindGeometryType fg(fs);
+	FindGeometry fg(fs);
 
-	const auto raw12 = fg.findDistance(static_cast<FindGeometryType::AtomTypeBase>(type[0]), static_cast<FindGeometryType::AtomTypeBase>(type[1]), value_d[0]);
-	const auto raw23 = fg.findDistance(static_cast<FindGeometryType::AtomTypeBase>(type[1]), static_cast<FindGeometryType::AtomTypeBase>(type[2]), value_d[1]);
-	const auto raw34 = fg.findDistance(static_cast<FindGeometryType::AtomTypeBase>(type[2]), static_cast<FindGeometryType::AtomTypeBase>(type[3]), value_d[2]);
+	const auto raw12 = fg.findDistance(static_cast<FindGeometry::AtomTypeBase>(type[0]), static_cast<FindGeometry::AtomTypeBase>(type[1]), value_d[0]);
+	const auto raw23 = fg.findDistance(static_cast<FindGeometry::AtomTypeBase>(type[1]), static_cast<FindGeometry::AtomTypeBase>(type[2]), value_d[1]);
+	const auto raw34 = fg.findDistance(static_cast<FindGeometry::AtomTypeBase>(type[2]), static_cast<FindGeometry::AtomTypeBase>(type[3]), value_d[2]);
 	const auto raw123 = fg.findAngle(raw12, raw23,
 									 std::make_pair(cpplib::geometry::GradtoRad(value_a[0].first), cpplib::geometry::GradtoRad(value_a[0].second)));
 	const auto raw234 = fg.findAngle(raw23, raw34,
@@ -295,13 +298,13 @@ std::vector<FindGeometryType::tupleTorsion> FindTorsionIC(const std::array<cppli
 	return raw;
 }
 
-cpplib::DATTuple FindDAT_IC(const std::array<cpplib::currents::FloatingPointType, 6>& unit_cell,
+cpplib::DATTuple FindDAT_IC(const std::array<cpplib::basic_types::FloatingPointType, 6>& unit_cell,
 							std::vector<const char*>& symm,
-							cpplib::currents::FAMStructType::AtomContainerType& types,
-							cpplib::currents::FAMStructType::PointConteinerType& points) {
-	FAMStructType fs;
-	FAMCellType fc(FAMCellType::base(unit_cell, true));
-	ParseDataType(fs, fc, symm, std::move(types), std::move(points));
+							cpplib::FAM_Struct::AtomContainerType& types,
+							cpplib::FAM_Struct::PointConteinerType& points) {
+	FAM_Struct fs;
+	FAM_Cell fc(FAM_Cell::base(unit_cell, true));
+	ParseData(fs, fc, symm, std::move(types), std::move(points));
 
 
 	fc.CreateSupercell(fs.points, static_cast<FloatingPointType>(8.5), 2);
@@ -311,23 +314,23 @@ cpplib::DATTuple FindDAT_IC(const std::array<cpplib::currents::FloatingPointType
 		fs.points[i] = fc.fracToCart() * fs.points[i];
 	}
 
-	FindGeometryType fg(fs);
+	FindGeometry fg(fs);
 	auto Moldat = fg.findMolDAT_Rad(*p_distances);
 	return ConvertDATTuple(Moldat, fs);
 }
 
-cpplib::DATTuple FindDAT_WC(cpplib::currents::FAMStructType::AtomContainerType& types,
-							cpplib::currents::FAMStructType::PointConteinerType& points) {
-	FAMStructType fs;
-	ParseDataType(fs, std::move(types), std::move(points));
-	FindGeometryType fg(fs);
+cpplib::DATTuple FindDAT_WC(cpplib::FAM_Struct::AtomContainerType& types,
+							cpplib::FAM_Struct::PointConteinerType& points) {
+	FAM_Struct fs;
+	ParseData(fs, std::move(types), std::move(points));
+	FindGeometry fg(fs);
 	auto Moldat = fg.findMolDAT_Rad(*p_distances);
 	return ConvertDATTuple(Moldat, fs);
 }
 
 // Single thread function
-static void ChildThreadFunc(const SearchGraphType::RequestGraphType& input, const SearchGraphType::AtomIndex MaxAtom, SearchDataInterfaceType& dataInterface, const bool exact) {
-	SearchGraphType graph;
+static void ChildThreadFunc(const SearchGraph::RequestGraphType& input, const SearchGraph::AtomIndex MaxAtom, SearchDataInterface& dataInterface, const bool exact) {
+	SearchGraph graph;
 	while (true) {
 		auto next = dataInterface.getNext();
 		if (next == nullptr) {
@@ -348,14 +351,14 @@ static void ChildThreadFunc(const SearchGraphType::RequestGraphType& input, cons
 	}
 }
 
-static void reorder(cpplib::FindGeometry::tupleDistance& d, const cpplib::currents::FAMStructType& fs) {
+static void reorder(cpplib::FindGeometry::tupleDistance& d, const cpplib::FAM_Struct& fs) {
 	std::get<0>(d) = std::get<0>(fs.parseIndex[std::get<0>(d)]);
 	std::get<1>(d) = std::get<0>(fs.parseIndex[std::get<1>(d)]);
 
 	if (std::get<0>(d) > std::get<1>(d))
 		std::swap(std::get<0>(d), std::get<1>(d));
 }
-static void reorder(cpplib::FindGeometry::tupleAngle& d, const cpplib::currents::FAMStructType& fs) {
+static void reorder(cpplib::FindGeometry::tupleAngle& d, const cpplib::FAM_Struct& fs) {
 	std::get<0>(d) = std::get<0>(fs.parseIndex[std::get<0>(d)]);
 	std::get<1>(d) = std::get<0>(fs.parseIndex[std::get<1>(d)]);
 	std::get<2>(d) = std::get<0>(fs.parseIndex[std::get<2>(d)]);
@@ -363,7 +366,7 @@ static void reorder(cpplib::FindGeometry::tupleAngle& d, const cpplib::currents:
 	if (std::get<0>(d) > std::get<2>(d))
 		std::swap(std::get<0>(d), std::get<2>(d));
 }
-static void reorder(cpplib::FindGeometry::tupleTorsion& d, const cpplib::currents::FAMStructType& fs) {
+static void reorder(cpplib::FindGeometry::tupleTorsion& d, const cpplib::FAM_Struct& fs) {
 	std::get<0>(d) = std::get<0>(fs.parseIndex[std::get<0>(d)]);
 	std::get<1>(d) = std::get<0>(fs.parseIndex[std::get<1>(d)]);
 	std::get<2>(d) = std::get<0>(fs.parseIndex[std::get<2>(d)]);
@@ -394,7 +397,7 @@ static void eraseDoubles(std::vector<T>& vec,
 		}
 	}
 }
-static cpplib::DATTuple& ConvertDATTuple(cpplib::DATTuple& dat, const cpplib::currents::FAMStructType& fs) {
+static cpplib::DATTuple& ConvertDATTuple(cpplib::DATTuple& dat, const cpplib::FAM_Struct& fs) {
 	auto& dists = std::get<0>(dat);
 	auto s_dists = dists.size();
 	auto& angles = std::get<1>(dat);
@@ -435,21 +438,21 @@ static cpplib::DATTuple& ConvertDATTuple(cpplib::DATTuple& dat, const cpplib::cu
 	return dat;
 }
 
-std::tuple<std::vector<cpplib::currents::PointType>, std::list<std::string>> Compaq(const std::array<cpplib::currents::FloatingPointType, 6>& unit_cell,
+std::tuple<std::vector<cpplib::geometry::Point<FloatingPointType>>, std::list<std::string>> Compaq(const std::array<cpplib::basic_types::FloatingPointType, 6>& unit_cell,
 												const std::vector<const char*>& symm,
-												cpplib::currents::FAMStructType::AtomContainerType& types,
-												cpplib::currents::FAMStructType::PointConteinerType& points) {
+												cpplib::FAM_Struct::AtomContainerType& types,
+												cpplib::FAM_Struct::PointConteinerType& points) {
 	deb_write("Compaq invoked");
 	auto& distances = *p_distances;
 	if (p_distances->isReady() == false) {
-		return std::make_tuple(std::vector<cpplib::currents::PointType>(), std::list<std::string>(1, "Error!Could not open BondLength.ini"));
+		return std::make_tuple(std::vector<cpplib::geometry::Point<FloatingPointType>>(), std::list<std::string>(1, "Error!Could not open BondLength.ini"));
 	}
 	deb_write("Compaq p_distances prepared");
-	FAMStructType fs;
-	deb_write("Compaq FAMCellType creation start");
-	FAMCellType fc(FAMCellType::base(unit_cell, true));
-	deb_write("Compaq call constructor ParseDataType");
-	ParseDataType(fs, fc, symm, std::move(types), std::move(points), false);
+	FAM_Struct fs;
+	deb_write("Compaq FAM_Cell creation start");
+	FAM_Cell fc(FAM_Cell::base(unit_cell, true));
+	deb_write("Compaq call constructor ParseData");
+	ParseData(fs, fc, symm, std::move(types), std::move(points), false);
 
 	const auto su = fs.sizeUnique;
 	std::string errorMsg;
@@ -459,7 +462,7 @@ std::tuple<std::vector<cpplib::currents::PointType>, std::list<std::string>> Com
 	if (!errorMsg.empty()) res_errors.emplace_back(std::move(errorMsg));
 
 	deb_write("Compaq create fm");
-	FindMoleculesType fm(std::move(fs));
+	FindMolecules fm(std::move(fs));
 	deb_write("Compaq call fm.compaq");
 	auto & compaqed = fm.compaq(res.first);
 	compaqed.resize(su);
@@ -467,22 +470,22 @@ std::tuple<std::vector<cpplib::currents::PointType>, std::list<std::string>> Com
 	return std::make_tuple(std::move(compaqed), res_errors);
 }
 
-std::vector<std::tuple<cpplib::currents::PointType, cpplib::currents::AtomIndex, long, cpplib::FAM_Struct::ShiftType>> 
-	ClusterCreate(std::array<cpplib::currents::FloatingPointType, 6> unit_cell,
+std::vector<std::tuple<cpplib::geometry::Point<FloatingPointType>, cpplib::basic_types::AtomIndex, long, cpplib::FAM_Struct::ShiftType>> 
+	ClusterCreate(std::array<cpplib::basic_types::FloatingPointType, 6> unit_cell,
 				  const std::vector<const char*>& symm,
-				  cpplib::currents::FAMStructType::AtomContainerType& types,
-				  cpplib::currents::FAMStructType::PointConteinerType& points,
-				  const std::vector<std::pair<cpplib::currents::PointType, cpplib::currents::FloatingPointType>>& anchors,
-				  cpplib::currents::FloatingPointType over_radius,
+				  cpplib::FAM_Struct::AtomContainerType& types,
+				  cpplib::FAM_Struct::PointConteinerType& points,
+				  const std::vector<std::pair<cpplib::geometry::Point<FloatingPointType>, cpplib::basic_types::FloatingPointType>>& anchors,
+				  cpplib::basic_types::FloatingPointType over_radius,
 				  bool& hasPolymer) {
 	deb_write("ClusterCreate invoked");
 	
-	using ShiftType = FAMStructType::ShiftType;
+	using ShiftType = FAM_Struct::ShiftType;
 
-	FAMStructType fs;
-	FAMCellType fc(FAMCellType::base(unit_cell, true));
+	FAM_Struct fs;
+	FAM_Cell fc(FAM_Cell::base(unit_cell, true));
 	
-	ParseDataType(fs, fc, symm, std::move(types), std::move(points), false);
+	ParseData(fs, fc, symm, std::move(types), std::move(points), false);
 
 	deb_write("ClusterCreate: call findMoleculesForCluster");
 	auto molecules = fc.findMoleculesForCluster(fs, *p_distances, hasPolymer); // [0] is empty
@@ -498,7 +501,7 @@ std::vector<std::tuple<cpplib::currents::PointType, cpplib::currents::AtomIndex,
 	decltype(box) newbox;
 	std::vector<bool> polyflags(molecules.size(),false);
 	for (auto& pair : box) {
-		for (FAMStructType::size_type i = 0; i < fs.sizePoints; i++) {
+		for (FAM_Struct::size_type i = 0; i < fs.sizePoints; i++) {
 			if (pair.second[i]) continue;
 			for (const auto& anch: anchors) {
 				auto da = anch.first - fs.points[i];
@@ -536,7 +539,7 @@ std::vector<std::tuple<cpplib::currents::PointType, cpplib::currents::AtomIndex,
 
 	deb_write("ClusterCreate: concatination end");
 
-	std::vector<std::tuple<PointType, cpplib::currents::AtomIndex, long, ShiftType>> ret; // Vector of (AtomIndex, SymmIndex, dx, dy, dz)
+	std::vector<std::tuple<PointType, cpplib::basic_types::AtomIndex, long, ShiftType>> ret; // Vector of (AtomIndex, SymmIndex, dx, dy, dz)
 	//prepare ret
 	for (auto& pair : box) {
 		for (AtomIndex i = 0; i < fs.sizePoints; i++) {
