@@ -505,6 +505,8 @@ namespace cpplib {
 			}
 		}
 
+		constexpr BondEx(AtomIndex a1, AtomIndex a2) noexcept : Bond(a1, a2) {}
+
 		// Compares only "base". Ignores length.
 		constexpr bool operator==(const BondEx& other) const noexcept {
 			return base::operator==(other);

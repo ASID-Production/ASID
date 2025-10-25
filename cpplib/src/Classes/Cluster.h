@@ -194,7 +194,8 @@ namespace cpplib {
 		using DistancesType = Distances;
 
 		struct BondWithShift : public Bond {
-			ShiftType shift;
+			ShiftType shift{0, 0, 0};
+			BondWithShift(AtomIndex a, AtomIndex b) : Bond(a, b) {}
 		};
 		using BondList = ::std::vector<BondWithShift>;
 		struct AnchorType {
@@ -222,9 +223,6 @@ namespace cpplib {
 						(std::hash<ST>()(ta.shift[2]) << 3);
 				}
 			};
-		};
-		struct ExtendedBond : public ::std::pair<AtomIndex,AtomIndex> {
-			ShiftType shift;
 		};
 		struct Molecule {
 			::std::vector<ClusterAtom> nodes{};

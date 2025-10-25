@@ -27,7 +27,10 @@ namespace cpplib {
     template<typename T>
     concept BondConcept = requires(const T & bond) {
         requires std::integral<decltype(concept_support::getAtom1(bond))>;
-        requires std::integral<decltype(concept_support::getAtom2(bond))>;
+        requires std::same_as<decltype(concept_support::getAtom1(bond)), decltype(concept_support::getAtom2(bond))>;
+        requires std::constructible_from<T,
+            decltype(concept_support::getAtom1(bond)),
+            decltype(concept_support::getAtom2(bond))>;
     };
 
     template<typename T>
