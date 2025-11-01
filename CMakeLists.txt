@@ -65,7 +65,7 @@ if (WIN32)
                            "cpplib/src/Classes/SearchGraph.h"
                            "cpplib/src/Functions/Functions.h"
                            "cpplib/src/Functions/AllInOneAndCurrent.h" 
-                           "cpplib/src/Classes/FindGeometry.h" "cpplib/src/Functions/PythonInteface.cpp" "cpplib/src/BaseHeaders/Currents.h" "cpplib/src/Classes/Cluster.h" "cpplib/src/BaseHeaders/Concepts.h" "cpplib/src/BaseHeaders/BaseTypes.h")
+                           "cpplib/src/Classes/FindGeometry.h" "cpplib/src/Functions/PythonInteface.cpp" "cpplib/src/BaseHeaders/Currents.h" "cpplib/src/Classes/Cluster.h" "cpplib/src/BaseHeaders/Concepts.h" "cpplib/src/BaseHeaders/BaseTypes.h" "cpplib/src/Classes/DSU.h")
     target_link_libraries(cpplibLib)
 
     target_include_directories(cpplibLib PUBLIC 

@@ -1373,7 +1373,8 @@ namespace cpplib::geometry {
 		template<BondConcept BondType>
 		::std::vector<BondType> create_hash_bonds(const ::std::vector<PointType>& points) const {
 			::std::vector<BondType> ret;
-			//size_t estimated_size = points.size() * points.size() * sizemod();
+			size_t estimated_size = points.size() * points.size() * sizemod();
+			ret.reserve(estimated_size);
 			SupType supply_table;
 
 			// Fill supply_table

@@ -32,8 +32,8 @@
 #include <algorithm>
 
 #include "../BaseHeaders/Currents.h"
-#include "../BaseHeaders/Currents.h"
 #include "Geometry.h"
+#include "DSU.h"
 
 namespace cpplib {
 
@@ -196,6 +196,7 @@ namespace cpplib {
 		struct BondWithShift : public Bond {
 			ShiftType shift{0, 0, 0};
 			BondWithShift(AtomIndex a, AtomIndex b) : Bond(a, b) {}
+			BondWithShift(Bond a, ShiftType b) : Bond(a), shift(b) {}
 		};
 		using BondList = ::std::vector<BondWithShift>;
 		struct AnchorType {
@@ -226,7 +227,7 @@ namespace cpplib {
 		};
 		struct Molecule {
 			::std::vector<ClusterAtom> nodes{};
-			::std::vector<bool> atoms_in_molecule{};
+			//::std::vector<bool> atoms_in_molecule{};
 			bool is_polymer = false;
 		};
 
@@ -242,17 +243,12 @@ namespace cpplib {
 
 		void create(const DistancesType& distances) {
 			auto unit_01 = construct_unit_01();
-			auto molecules = constructMolecules(unit_01, distances);
+			auto molecules = constructMoleculesInUnit01(unit_01, distances);
 
-			size_t anch_s = anchors_frac.size();
-			for (size_t i = 0; i < anch_s; i++)
-			{
-
-			}
 		}
 
 	private:
-		::std::vector<Molecule> constructMolecules(const ::std::vector<ClusterAtom>& unit_01, const DistancesType& distances) const {
+		::std::vector<Molecule> constructMoleculesInUnit01(const ::std::vector<ClusterAtom>& unit_01, const DistancesType& distances) const {
 			// based on union-find
 			geometry::HashedSpace<FloatingPointType, AtomIndex> hashed_space(cell, 4.0);
 			::std::vector<PointType> points;
@@ -267,11 +263,18 @@ namespace cpplib {
 
 			distances.filter_bond_list(bonds, types, points, [this](const PointType& a, const PointType& b) {return cell.distance_in_01(a, b); });
 
+			// add shift to bonds
+			for (auto& bond : bonds) {
+				PointType floatshift = (unit_01[bond.first].point - unit_01[bond.second].point).round();
+				bond.shift = ShiftType(floatshift[0], floatshift[1], floatshift[2]);
+			}
 
+			// reconstruct molecules
 
 			// Construct molecules from unit cell and bonds
-			//auto moleculles = reconstructMolecules(unit_01, bonds);
-			// move molecules to [0,1)
+			// auto moleculles = reconstructMolecules(unit_01, bonds);
+
+			// move molecules to [0,1]
 
 			// make Boxes
 
@@ -279,9 +282,8 @@ namespace cpplib {
 
 
 
-
+			return{};
 		}
-
 
 		::std::vector<ClusterAtom> construct_unit_01() const {
 			auto au_s = asymmetric_unit.size();
@@ -313,208 +315,62 @@ namespace cpplib {
 									   });
 		}
 
-		::std::vector<Molecule> reconstructMolecules(const std::vector<ClusterAtom>& unit01,
+		::std::vector<Molecule> create_molecules_near_unit01(const std::vector<ClusterAtom>& unit01,
 													 const BondList& bonds) const {
-			
+			auto atomsize = unit01.size();
+			constexpr ShiftType zeroShift{ 0, 0, 0 };
+			DSU dsu(atomsize);
+
+			BondList filteredbonds;
+			filteredbonds.reserve(bonds.size());
+
+			for (const auto& bond : bonds) {
+
+				// check if bond is correct and is in unit cell
+				if (bond.first == bond.second)
+					continue;
+
+				if (bond.shift != zeroShift) {
+					filteredbonds.emplace_back(bond);
+					continue;
+				}
+
+				dsu.unite(bond.first, bond.second);
+			}
+
+			::std::vector<Molecule> molecules(dsu.get_count_components());
+
+
+			for (const auto& bond : filteredbonds) {
+				
+				
+			}
+
+
+
+
+
+			// TODO
+
+
+
+
+			return {};
 		}
 
-		//inline void Merge(const FAM_Struct& fs,
-		//				  const std::vector<std::vector<FAM_Struct::ShiftType>>& molO /*i*/,
-		//				  std::vector<std::vector<FAM_Struct::ShiftType>>& molN /*j*/,
-		//				  const std::pair<Bond, FAM_Struct::ShiftType>& bond) const {
-		//	// calculate shift
-		//	FAM_Struct::ShiftType s_o, s_n, s;
-		//	if (molO[bond.first.first].empty()) {
-		//		s_n = molN[bond.first.first][0];
-		//		s_o = molO[bond.first.second][0];
-		//		s = s_n - s_o + bond.second;
-		//	}
-		//	else {
-		//		s_o = molO[bond.first.first][0];
-		//		s_n = molN[bond.first.second][0];
-		//		s = s_n - s_o - bond.second;
-		//	}
-
-		//	for (AtomIndex i = 0; i < fs.sizePoints; i++)
-		//	{
-		//		for (AtomIndex j = 0; j < molO[i].size(); j++)
-		//		{
-		//			molN[i].emplace_back(molO[i][j] + s);
-		//		}
-		//	}
-		//}
+		void mergeMolecules(std::vector<Molecule>& molecules_unique,
+							std::vector<AtomIndex>& atom_ref_to_molecule,
+							const AtomIndex a_ref,
+							const AtomIndex b_ref) const {
 
 
 
-		//auto findMoleculesForCluster(const FAM_Struct& fs, const DistancesType& distances, bool& hasPoymer) const {
-		//	using ShiftType = FAM_Struct::ShiftType;
-		//	using MolType = std::vector<std::vector<ShiftType>>; // mol[atomIndex][0-...?]
-		//	hasPoymer = false;
-		//	std::vector<std::pair<Bond, ShiftType>> bonds; // Shift-type bond container
-		//	std::list<AtomIndex> polis;
+			atom_ref_to_molecule.insert(atom_ref_to_molecule.end(),
+										std::make_move_iterator(atom_ref_to_molecule.begin()),
+										std::make_move_iterator(atom_ref_to_molecule.end()));
+			// TODO
 
-		//	std::vector<AtomIndex> ref(fs.sizePoints, 0);
-		//	std::vector<std::pair<MolType, bool>> allMolecules(1, std::make_pair(std::vector<std::vector<ShiftType>>(fs.sizePoints), false)); // Molecules start from [1]. Value [0] is always empty
-
-		//	for (AtomIndex i = 0; i < fs.sizePoints; i++) {
-		//		const auto type_i = fs.types[std::get<0>(fs.parseIndex[i])];
-		//		for (AtomIndex j = i + 1; j < fs.sizePoints; j++) {
-		//			const auto type_j = fs.types[std::get<0>(fs.parseIndex[j])];
-		//			FloatingPointType dist = cell.distance_in_01(fs.points[i], fs.points[j]);
-		//			char isbond = distances.isBond(type_i, type_j, dist);
-		//			switch (isbond) {
-		//			case -1:
-		//				//[[fallthrough]]
-		//			case  1:
-		//			{
-		//				bonds.emplace_back(Bond(i, j), toShift((fs.points[i] - fs.points[j]).round()));
-		//				const auto& curbond = bonds.back();
-		//				AtomIndex k1 = 0;
-		//				for (; k1 < allMolecules.size(); k1++)
-		//				{
-		//					if (!allMolecules[k1].first[i].empty()) break;
-		//				}
-		//				bool k1f = k1 != allMolecules.size(); // k1 found
-		//				AtomIndex k2 = 0;
-		//				for (; k2 < allMolecules.size(); k2++)
-		//				{
-		//					if (!allMolecules[k2].first[j].empty()) break;
-		//				}
-		//				bool k2f = k2 != allMolecules.size(); // k2 found
-
-		//				switch ((k1f ? 1 : 0) + (k2f ? 2 : 0))
-		//				{
-		//				case 0: // None
-		//					allMolecules.emplace_back(std::vector<std::vector<ShiftType>>(fs.sizePoints), false);
-		//					allMolecules.back().first[i].push_back(std::get<2>(fs.parseIndex[i]));
-		//					allMolecules.back().first[j].push_back(std::get<2>(fs.parseIndex[i]) + curbond.second);
-		//					break;
-		//				case 1: // Only k1 found
-		//					_ASSERT(!allMolecules[k1].first[i].empty());
-		//					allMolecules[k1].first[j].push_back(allMolecules[k1].first[i][0] + curbond.second);
-		//					_ASSERT(allMolecules[k1].first[j].size() == 1);
-		//					break;
-		//				case 2: // Only k2 found
-		//					_ASSERT(!allMolecules[k2].first[j].empty());
-		//					allMolecules[k2].first[i].push_back(allMolecules[k2].first[j][0] - curbond.second);
-		//					_ASSERT(allMolecules[k2].first[i].size() == 1);
-		//					break;
-		//				case 3: // Both found
-		//					if (k1 != k2) { // different molecules
-		//						Merge(fs, allMolecules[k1].first, allMolecules[k2].first, curbond);
-		//						allMolecules.erase(allMolecules.begin() + k1);
-		//					}
-		//					else {
-		//						if (!(allMolecules[k1].first[i][0] + curbond.second == allMolecules[k2].first[j][0])) { // It's a polymer!
-		//							allMolecules[k1].first[j].push_back(allMolecules[k1].first[i][0] + curbond.second);
-		//							allMolecules[k1].second = true;
-		//							hasPoymer = true;
-		//						}
-		//					}
-		//					break;
-		//				}
-		//			}
-		//			break;
-		//			default:
-		//				break;
-		//			}
-		//		}
-		//	}
-		//	return allMolecules;
-		//}
-
-
-
-
-
-
-
-
-		class DSU {
-		private:
-			std::vector<AtomIndex> parent;
-			std::vector<uint16_t> size;
-			AtomIndex count;
-
-		public:
-			explicit DSU(AtomIndex n) : parent(n), size(n, 1), count(n) {
-				for (AtomIndex i = 0; i < n; ++i) parent[i] = i;
-			}
-
-			AtomIndex find(AtomIndex x) noexcept {
-				// Ultra-fast iterative path compression
-				AtomIndex root = x;
-				while (root != parent[root]) {
-					root = parent[root];
-				}
-
-				// Path compression in single pass
-				while (x != root) {
-					AtomIndex next = parent[x];
-					parent[x] = root;
-					x = next;
-				}
-				return root;
-			}
-
-			bool unite(AtomIndex x, AtomIndex y) noexcept {
-				x = find(x);
-				y = find(y);
-
-				if (x == y) return false;
-
-				// Union by size
-				if (size[x] < size[y]) {
-					parent[x] = y;
-					size[y] += size[x];
-				}
-				else {
-					parent[y] = x;
-					size[x] += size[y];
-				}
-				count--;
-				return true;
-			}
-
-			AtomIndex getCount() const noexcept { return count; }
-		};
-
-		std::vector<std::vector<AtomIndex>> findComponents(AtomIndex n, 
-														   const std::list<std::pair<AtomIndex, AtomIndex>>& edges) const {
-
-			if (edges.empty()) {
-				std::vector<std::vector<AtomIndex>> result;
-				result.reserve(n);
-				for (AtomIndex i = 0; i < n; ++i) {
-					result.push_back({ i });
-				}
-				return result;
-			}
-
-			DSU dsu(n);
-
-			// One-pass union-find
-			for (const auto& [u, v] : edges) {
-				dsu.unite(u, v);
-			}
-
-			
-			std::vector<std::vector<AtomIndex>> components;
-			components.reserve(dsu.getCount());
-
-			std::vector<AtomIndex> root_to_index(n, -1);
-
-			for (AtomIndex i = 0; i < n; ++i) {
-				AtomIndex root = dsu.find(i);
-				if (root_to_index[root] == -1) {
-					root_to_index[root] = components.size();
-					components.emplace_back();
-					components.back().reserve(std::min(n / dsu.getCount() + 10, n));
-				}
-				components[root_to_index[root]].push_back(i);
-			}
-
-			return components;
+			return;
 		}
 	};
 }
