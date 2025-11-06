@@ -126,12 +126,12 @@ namespace cpplib {
 
 				char is_real_bond = isBond(types[l1], types[l2], dist(points[l1], points[l2]));
 
-				if (is_real_bond != 0) {
-					iter++;
+				if (is_real_bond == 0) {
+					iter->first = 0;
+					iter->second = 0;
 				}
-				else {
-					bondlist.erase(iter);
-				}
+
+				iter++;
 			}
 		}
 	};

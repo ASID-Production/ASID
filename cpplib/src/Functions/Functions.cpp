@@ -470,87 +470,40 @@ std::tuple<std::vector<cpplib::geometry::Point<FloatingPointType>>, std::list<st
 	return std::make_tuple(std::move(compaqed), res_errors);
 }
 
-std::vector<std::tuple<cpplib::geometry::Point<FloatingPointType>, cpplib::basic_types::AtomIndex, long, cpplib::FAM_Struct::ShiftType>> 
+std::vector<Cluster::ClusterAtom> 
 	ClusterCreate(std::array<cpplib::basic_types::FloatingPointType, 6> unit_cell,
 				  const std::vector<const char*>& symm,
 				  cpplib::FAM_Struct::AtomContainerType& types,
 				  cpplib::FAM_Struct::PointConteinerType& points,
-				  const std::vector<std::pair<cpplib::geometry::Point<FloatingPointType>, cpplib::basic_types::FloatingPointType>>& anchors,
-				  cpplib::basic_types::FloatingPointType over_radius,
+				  std::vector<cpplib::Cluster::AnchorType>& anchors,
+				  cpplib::basic_types::FloatingPointType polymer_cutoff,
 				  bool& hasPolymer) {
 	deb_write("ClusterCreate invoked");
-	
-	using ShiftType = FAM_Struct::ShiftType;
 
-	FAM_Struct fs;
-	FAM_Cell fc(FAM_Cell::base(unit_cell, true));
-	
-	ParseData(fs, fc, symm, std::move(types), std::move(points), false);
-
-	deb_write("ClusterCreate: call findMoleculesForCluster");
-	auto molecules = fc.findMoleculesForCluster(fs, *p_distances, hasPolymer); // [0] is empty
-	deb_write("ClusterCreate: findMoleculesForCluster returns");
-	for(const auto &m:molecules) {
-		if(m.second) deb_write("ClusterCreate: poly true");
-	}
-
-	cpplib::Cluster cluster(fs, fc, anchors);
-	cpplib::Cluster::BoxType box;
-	cluster.CreateBox(box);
-	deb_write("ClusterCreate: CreateBox returns");
-	decltype(box) newbox;
-	std::vector<bool> polyflags(molecules.size(),false);
-	for (auto& pair : box) {
-		for (FAM_Struct::size_type i = 0; i < fs.sizePoints; i++) {
-			if (pair.second[i]) continue;
-			for (const auto& anch: anchors) {
-				auto da = anch.first - fs.points[i];
-				auto db = da - pair.first;
-				if (anch.second >= (fc.fracToCart() * db).r()) {
-					pair.second[i] = true;
-					// find molecule
-					MoleculeIndex m = 1;
-					for (; m < molecules.size(); m++)
-					{
-						if (molecules[m].first[i].empty() == false) {
-							break;
-						}
-					}
-					_ASSERT(m != molecules.size());
-					if(m == molecules.size()) {
-						deb_write("ClusterCreate: m == molecules.size(): m = ", m);						
-					}
-					if (molecules[m].second == false) {
-						cluster.Grow(box, newbox, molecules[m].first, i, pair.first);
-					}
-					else {
-						polyflags[m] = true;
-					}
-				}
-			}
+	using ShiftType = Cluster::ShiftType;
+	deb_write("Compaq invoked");
+	auto& distances = *p_distances;
+	if (p_distances->isReady() == false) {
+		{
+			return {};
 		}
 	}
 
-	deb_write("ClusterCreate: concatination start");
-	// concatinate boxes
-	box.insert(newbox.begin(), newbox.end());
-	
-	cluster.GrowPoly(box, molecules, polyflags, over_radius);
 
-	deb_write("ClusterCreate: concatination end");
 
-	std::vector<std::tuple<PointType, cpplib::basic_types::AtomIndex, long, ShiftType>> ret; // Vector of (AtomIndex, SymmIndex, dx, dy, dz)
-	//prepare ret
-	for (auto& pair : box) {
-		for (AtomIndex i = 0; i < fs.sizePoints; i++) {
-			if (pair.second[i] == false) continue;
-			auto point = pair.first + fs.points[i];
-			auto shift = pair.first + std::get<2>(fs.parseIndex[i]);
-			ret.emplace_back(pair.first + fs.points[i],
-							 std::get<0>(fs.parseIndex[i]),
-							 static_cast<long>(std::get<1>(fs.parseIndex[i])),
-							 pair.first + std::get<2>(fs.parseIndex[i]));
-		}
+	cpplib::geometry::Cell cell(unit_cell);
+	std::vector<geometry::Symm<FloatingPointType>> symms;
+	symms.reserve(symm.size());
+	for (const auto& s : symm) {
+		symms.emplace_back(s);
+	}
+
+	Cluster cluster(cell,symms, std::move(anchors),points,types, polymer_cutoff);
+
+	auto ret = cluster.execute(distances);
+
+	for (auto& i : ret) {
+		i.point = cell.fracToCart() * i.point;
 	}
 
 	deb_write("ClusterCreate return");

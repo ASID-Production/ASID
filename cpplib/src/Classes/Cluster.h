@@ -28,8 +28,11 @@
 #pragma once
 #include <array>
 #include <vector>
+#include <ranges>
 #include <tuple>
 #include <algorithm>
+#include <unordered_set>
+#include <cassert>
 
 #include "../BaseHeaders/Currents.h"
 #include "Geometry.h"
@@ -38,153 +41,12 @@
 namespace cpplib {
 
 	class Cluster {
-	private:
-		using FAMS = FAM_Struct;
-		using FAMC = FAM_Cell;
-	public:
-		using ShiftType = FAMS::ShiftType;
-		using BoxValueType = std::pair<ShiftType, std::vector<bool>>;
-		using BoxType = std::map<ShiftType, std::vector<bool>>;
-		using BoxValueTypeConst = BoxType::value_type;
-		using PointType = FAMS::PointType;
-		using FloatingPointType = PointType::value_type;
-		using FracToCartMatrixType = cpplib::geometry::Matrix<FloatingPointType>;
-		using Plane = cpplib::geometry::Plane<FloatingPointType>;
-		using AnchorType = std::pair<PointType, FloatingPointType>;
-
-	private:
-		FAMS& fs;
-		const FAMC& fc;
-		const std::vector<AnchorType>& anchors;
-		std::array<PointType, 3> e;
-		std::array<Plane, 3> plane;
-		std::vector<AnchorType::first_type> r_anchors;
-
-	public:
-		Cluster() = delete;
-		Cluster(FAMS& f_str, const FAMC& f_cell, const std::vector<AnchorType>& anch) noexcept : fs(f_str), fc(f_cell), anchors(anch) {
-			e = { fc.fracToCart() * ShiftType(1,0,0), fc.fracToCart() * ShiftType(0,1,0), fc.fracToCart() * ShiftType(0,0,1) };
-			constexpr PointType zeroPoint(0, 0, 0);
-			plane = { Plane(zeroPoint, e[1], e[2]), Plane(zeroPoint, e[0], e[2]), Plane(zeroPoint, e[0], e[1]) };
-			r_anchors.reserve(anchors.size());
-			for (const auto& a : anchors) {
-				r_anchors.emplace_back(fc.fracToCart() * a.first);
-			}
-		};
-
-		void CreateBox(BoxType& box, FloatingPointType over_radius = 0.0) {
-			auto rp111 = fc.fracToCart() * ShiftType(1, 1, 1);
-			std::array<FloatingPointType, 3> dp = { plane[0].distance(rp111),
-													plane[1].distance(rp111),
-													plane[2].distance(rp111) };
-
-			for (const auto& pair : anchors)
-			{
-				ShiftType b(pair.first.floor());
-				std::array < FloatingPointType, 3> low{
-					plane[0].distance(fc.fracToCart() * pair.first) - b[0] * dp[0],
-					plane[1].distance(fc.fracToCart() * pair.first) - b[1] * dp[1],
-					plane[2].distance(fc.fracToCart() * pair.first) - b[2] * dp[2] };
-
-				std::array < FloatingPointType, 3> high{
-					dp[0] - low[0],
-					dp[1] - low[1],
-					dp[2] - low[2] };
-
-				auto radius = over_radius < 0.01 ? pair.second : over_radius;
-
-				// [ -x, +x, -y, +y, -z, +z ]
-				const std::array<ShiftType::value_type, 6> maxr{
-					b[0] - static_cast<ShiftType::value_type>(ceil((radius - low[0]) / dp[0])),
-					b[0] + static_cast<ShiftType::value_type>(ceil((radius - high[0]) / dp[0])),
-					b[1] - static_cast<ShiftType::value_type>(ceil((radius - low[1]) / dp[1])),
-					b[1] + static_cast<ShiftType::value_type>(ceil((radius - high[1]) / dp[1])),
-					b[2] - static_cast<ShiftType::value_type>(ceil((radius - low[2]) / dp[2])),
-					b[2] + static_cast<ShiftType::value_type>(ceil((radius - high[2]) / dp[2])), };
-				constructBox(maxr, box);
-			}
-		}
-
-
-		void Grow(BoxType& basebox,
-						 BoxType& newbox,
-						 const std::vector<std::vector<ShiftType>>& molecule,
-						 FAMS::AtomIndex ai,
-						 const ShiftType& curshift) {
-			auto baseshift = curshift - molecule[ai][0];
-			for (FAMS::AtomIndex i = 0; i < molecule.size(); i++)
-			{
-				if (molecule[i].empty())
-					continue;
-				auto newshift = baseshift + molecule[i][0];
-				auto it = basebox.find(newshift);
-				if (it == basebox.end()) { // did not find
-					auto newit = newbox.insert(std::make_pair(newshift, std::vector<bool>(molecule.size()))).first;
-					newit->second[i] = true;
-				}
-				else { // found
-					it->second[i] = true;
-				}
-			}
-		}
-
-		void GrowPoly(BoxType& box,
-							 const std::vector<std::pair<std::vector<std::vector<ShiftType>>, bool>>& molecules,
-							 const std::vector<bool>& polyflags,
-							 const FloatingPointType over_radius) {
-
-			if (std::none_of(polyflags.begin(), polyflags.end(), [](bool a) {return a; })) return;
-
-			CreateBox(box, over_radius);
-
-			std::vector<bool> polyatoms(fs.sizePoints, false);
-			for (size_t i = 1; i < polyflags.size(); i++)
-			{
-				if (polyflags[i] == false) continue;
-				for (FAMS::AtomIndex j = 0; j < fs.sizePoints; j++)
-				{
-					polyatoms[j] = polyatoms[j] || (!(molecules[i].first[j].empty()));
-				}
-			}
-
-			for (FAMS::AtomIndex i = 0; i < fs.sizePoints; i++) {
-				if (polyatoms[i] == false)
-					continue;
-				polyFill(box, i, over_radius);
-			}
-		}
-	private:
-		inline void polyFill(BoxType& box, const FAMS::AtomIndex i, const FloatingPointType over_radius) {
-			for (auto& pair : box) {
-				auto r_point = fc.fracToCart() * (pair.first + fs.points[i]);
-				for (const auto& ranch : r_anchors)
-				{
-					if ((ranch - r_point).r() <= over_radius) {
-						pair.second[i] = true;
-						break;
-					}
-				}
-			}
-		}
-		void constructBox(const std::array<ShiftType::value_type, 6>& maxr, BoxType& box) const {
-			for (char i = maxr[0]; i <= maxr[1]; i++) {
-				for (char j = maxr[2]; j <= maxr[3]; j++) {
-					for (char k = maxr[4]; k <= maxr[5]; k++) {
-						box.emplace(ShiftType(i, j, k), std::vector<bool>(fs.sizePoints, false));
-					}
-				}
-			}
-		}
-	};
-
-
-	class Cluster_New {
 	public:
 		using FloatingPointType = basic_types::FloatingPointType;
 		using PointType = geometry::Point<FloatingPointType>;
 		using ShiftType = geometry::Point<int8_t>;
-		using Box = ::std::vector<bool>;
-		using BoxMap = ::std::map<ShiftType, Box>;
+		using Plane = geometry::Plane<FloatingPointType>;
+		using BoxSet = ::std::unordered_set<ShiftType>;
 		using SymmIndex = int;
 		using CellType = geometry::Cell<FloatingPointType>;
 		using Matrix = typename CellType::matrix_type;
@@ -204,6 +66,7 @@ namespace cpplib {
 			FloatingPointType radius;
 		};
 		struct ClusterAtom {
+			AtomIndex index;
 			AtomTypeBase type;
 			PointType point;
 			SymmIndex symm;
@@ -226,29 +89,97 @@ namespace cpplib {
 			};
 		};
 		struct Molecule {
-			::std::vector<ClusterAtom> nodes{};
-			//::std::vector<bool> atoms_in_molecule{};
+			::std::vector<TranslatedAtom> nodes{};
 			bool is_polymer = false;
 		};
 
 	private:
-		CellType cell;
+		CellType& cell;
+		::std::vector<SymmType>& symm;
 		::std::vector<AnchorType> anchors_frac;
 		::std::vector<ClusterAtom> asymmetric_unit;
-		::std::vector<SymmType> symm;
 		FloatingPointType polymer_cutoff_radius;
+		::std::array<Plane, 3> plane;
+		bool has_poly = false;
 
 	public:
-		Cluster_New() = delete;
+		Cluster() = delete;
+		Cluster(CellType& unit_cell,
+				::std::vector<SymmType>& symms,
+				::std::vector<AnchorType>&& anchors_fractal,
+				const ::std::vector<PointType>& points,
+				const ::std::vector<AtomTypeBase>& types,
+				FloatingPointType polymer_cutoff)
+			: cell(unit_cell), symm(symms), anchors_frac(::std::move(anchors_fractal)), polymer_cutoff_radius(polymer_cutoff) 
+		{
+			auto s = points.size();
+			assert(types.size() == s);
+			asymmetric_unit.reserve(s);
+			for (size_t i = 0; i < s; i++) {
+				asymmetric_unit.emplace_back(i, types[i], points[i], 0, ShiftType(0, 0, 0));
+			}
 
-		void create(const DistancesType& distances) {
+			constexpr PointType zeroPoint(0, 0, 0);
+			::std::array<PointType, 3> e = {
+				cell.fracToCart() * ShiftType(1,0,0),
+				cell.fracToCart() * ShiftType(0,1,0),
+				cell.fracToCart() * ShiftType(0,0,1)
+			};
+			plane = { Plane(zeroPoint, e[1], e[2]), Plane(zeroPoint, e[0], e[2]), Plane(zeroPoint, e[0], e[1]) };
+
+
+		}
+		::std::vector<ClusterAtom> execute(const DistancesType& distances)  
+		{
 			auto unit_01 = construct_unit_01();
-			auto molecules = constructMoleculesInUnit01(unit_01, distances);
+			auto molecules01 = constructMoleculesInUnit01(unit_01, distances);
 
+			auto molecule_pass = analyseMolecules(molecules01);
+			auto unit01_molecule_indexes = molecule_indexes_create(molecules01, unit_01.size());
+			// make Boxes
+			BoxSet boxes = create_boxes();
+
+			// Find nessesary molecules
+			auto moleculeBoxes = create_molecule_boxes_nonpoly(molecules01,
+															   unit_01,
+															   molecule_pass,
+															   boxes);
+
+			// Grow polymers
+			std::unordered_set<TranslatedAtom, TranslatedAtom::Hash> atoms;
+			for (auto& molecule : molecules01) {
+				if (molecule.is_polymer == true) {
+					atoms.merge(grow_polymer(molecule, unit_01));
+				}
+			}
+
+			// add nonpolymer molecules
+			for (AtomIndex i = 0; i < moleculeBoxes.size(); i++) {
+				for (const auto& shift : moleculeBoxes[i]) {
+					for (const auto& atom : molecules01[i].nodes) {
+						auto id = atom.id;
+						auto sumshift = shift + atom.shift;
+						atoms.emplace(id, sumshift);
+					}
+				}
+			}
+
+			// Create output vector
+			::std::vector<ClusterAtom> ret;
+			ret.reserve(atoms.size());
+
+			for (const auto& atom : atoms) {
+				ret.emplace_back(unit_01[atom.id].index,
+								 unit_01[atom.id].type,
+								 unit_01[atom.id].point + atom.shift,
+								 unit_01[atom.id].symm,
+								 unit_01[atom.id].shift + atom.shift);
+			}
+			return ret;
 		}
 
 	private:
-		::std::vector<Molecule> constructMoleculesInUnit01(const ::std::vector<ClusterAtom>& unit_01, const DistancesType& distances) const {
+		::std::vector<Molecule> constructMoleculesInUnit01(const ::std::vector<ClusterAtom>& unit_01, const DistancesType& distances) {
 			// based on union-find
 			geometry::HashedSpace<FloatingPointType, AtomIndex> hashed_space(cell, 4.0);
 			::std::vector<PointType> points;
@@ -269,20 +200,10 @@ namespace cpplib {
 				bond.shift = ShiftType(floatshift[0], floatshift[1], floatshift[2]);
 			}
 
-			// reconstruct molecules
-
 			// Construct molecules from unit cell and bonds
-			// auto moleculles = reconstructMolecules(unit_01, bonds);
+			auto moleculles = create_molecules_near_unit01(unit_01, bonds);
 
-			// move molecules to [0,1]
-
-			// make Boxes
-
-			// fill Boxes
-
-
-
-			return{};
+			return moleculles;
 		}
 
 		::std::vector<ClusterAtom> construct_unit_01() const {
@@ -302,7 +223,7 @@ namespace cpplib {
 					ShiftType shift(static_cast<ShiftType::value_type>(floating_shift[0]),
 									static_cast<ShiftType::value_type>(floating_shift[1]),
 									static_cast<ShiftType::value_type>(floating_shift[2]));
-					unit.emplace_back(asymmetric_unit[j].type, temp_point, i, shift);
+					unit.emplace_back(j, asymmetric_unit[j].type, temp_point, i, shift);
 				}
 			}
 			return unit;
@@ -316,7 +237,7 @@ namespace cpplib {
 		}
 
 		::std::vector<Molecule> create_molecules_near_unit01(const std::vector<ClusterAtom>& unit01,
-													 const BondList& bonds) const {
+															 const BondList& bonds) {
 			auto atomsize = unit01.size();
 			constexpr ShiftType zeroShift{ 0, 0, 0 };
 			DSU dsu(atomsize);
@@ -338,39 +259,264 @@ namespace cpplib {
 				dsu.unite(bond.first, bond.second);
 			}
 
-			::std::vector<Molecule> molecules(dsu.get_count_components());
+			::std::vector<Molecule> molecules;
+			molecules.reserve(dsu.get_count_components());
+			const auto& components = dsu.get_components_ref();
+			::std::vector<AtomIndex> unit_ref_to_molecule(atomsize);
 
+			// Create Molecules based on components
+			for (const auto& component : components) {
+				if (component.empty())
+					continue;
 
-			for (const auto& bond : filteredbonds) {
-				
-				
+				// Temporary vector to store nodes of the molecule
+				decltype(Molecule::nodes) nodes;
+				nodes.reserve(component.size());
+				for (const auto& i : component) {
+					// Create nodes in molecules
+					nodes.emplace_back(i, unit01[i].shift);
+
+					// Add reference to molecule for each atom
+					unit_ref_to_molecule[i] = molecules.size();
+				}
+				// Add molecule to the vector
+				molecules.emplace_back(::std::move(nodes), false);
 			}
 
+			// Check bonds outside unit cell
+			for (const auto& bond : filteredbonds) {
+				auto a_ref = unit_ref_to_molecule[bond.first];
+				auto b_ref = unit_ref_to_molecule[bond.second];
 
+				if (a_ref == b_ref) { // is already in the same molecule
 
+					// so it is polymer
+					molecules[a_ref].is_polymer = true;
+					has_poly = true;
+					continue;
+				}
 
+				if (check_intersection(molecules[a_ref], molecules[b_ref])) {
+					// is already combined
+					continue;
+				}
 
-			// TODO
+				if (molecules[a_ref].is_polymer || molecules[b_ref].is_polymer)
+				{
+					molecules[a_ref].is_polymer = true;
+					molecules[b_ref].is_polymer = true;
+				}
 
+				// combine molecules
+				AtomIndex current_size_a = molecules[a_ref].nodes.size();
+				AtomIndex current_size_b = molecules[b_ref].nodes.size();
 
+				molecules[a_ref].nodes.insert(molecules[a_ref].nodes.end(),
+											  molecules[b_ref].nodes.begin(),
+											  molecules[b_ref].nodes.end());
 
+				molecules[b_ref].nodes.insert(molecules[b_ref].nodes.end(),
+											  molecules[a_ref].nodes.begin(),
+											  molecules[a_ref].nodes.begin() + current_size_a);
 
-			return {};
+				// TODO: Check correctness.
+				//change_shift(molecules[a_ref], current_size_a, bond.shift);
+				//change_shift(molecules[b_ref], current_size_b, -bond.shift);
+			}
+
+			return molecules;
+		}
+		bool check_intersection(const Molecule& mol1, const Molecule& mol2) const {
+			auto s1 = mol1.nodes.size();
+			auto s2 = mol2.nodes.size();
+			if (s2 > s1) 
+				return check_intersection(mol2, mol1); // Call method with swapped arguments
+
+			// TODO: Maybe useless check
+			if (s2 == 0)
+				return false;
+
+			AtomIndex id = mol1.nodes[0].id;
+			return std::ranges::any_of(mol2.nodes, [id](const TranslatedAtom& node) {return id == node.id; });
+		}
+		void change_shift(Molecule& mol, AtomIndex startIndex, ShiftType shift) const {
+			AtomIndex s = mol.nodes.size();
+			for (AtomIndex i = startIndex; i < s; i++) {
+				mol.nodes[i].shift += shift;
+			}
 		}
 
-		void mergeMolecules(std::vector<Molecule>& molecules_unique,
-							std::vector<AtomIndex>& atom_ref_to_molecule,
-							const AtomIndex a_ref,
-							const AtomIndex b_ref) const {
+		BoxSet create_boxes() const {
+			BoxSet boxes;
+			auto rp111 = cell.fracToCart() * ShiftType(1, 1, 1);
+
+			std::array<FloatingPointType, 3> dp = { plane[0].distance(rp111),
+													plane[1].distance(rp111),
+													plane[2].distance(rp111) };
+
+			for (const auto& anchor : anchors_frac) {
+
+				FloatingPointType cutoff = anchor.radius;
+				constructBox(anchor, cutoff, dp, boxes);
+			}
+			return boxes;
+		}
 
 
 
-			atom_ref_to_molecule.insert(atom_ref_to_molecule.end(),
-										std::make_move_iterator(atom_ref_to_molecule.begin()),
-										std::make_move_iterator(atom_ref_to_molecule.end()));
-			// TODO
 
-			return;
+		std::vector<TranslatedAtom> analyseMolecules(const ::std::vector<Molecule>& molecules) const {
+			std::vector<TranslatedAtom> ret;
+			ret.resize(molecules.size(), { AtomIndex(0), ShiftType(0, 0, 0) });
+			for (size_t i = 0; i < molecules.size(); i++)
+			{
+				ret[i].id = i;
+			}
+
+			// TODO: Need check (logic)
+
+			for (AtomIndex i = 1; i < molecules.size(); i++) {
+				auto nodeid = molecules[i].nodes[0].id;
+				for (AtomIndex j = 0; j < i; j++) {
+					auto iter = std::ranges::find_if(molecules[j].nodes, [nodeid](const TranslatedAtom& atom) {return atom.id == nodeid; });
+					if (iter!= molecules[j].nodes.end())
+					{
+						// TODO: Need check (logic)
+						ret[i].shift = iter->shift - molecules[i].nodes[0].shift;
+						ret[i].id = ret[j].id;
+						break;
+					}
+				}
+			}
+			return ret;
+		}
+		void constructBox(const AnchorType& anchor, 
+						  FloatingPointType cutoff,
+						  const std::array<FloatingPointType, 3>& dp,
+						  BoxSet& box) const {
+
+			ShiftType b(anchor.point.floor());
+			std::array < FloatingPointType, 3> low{
+				plane[0].distance(cell.fracToCart() * anchor.point) - b[0] * dp[0],
+				plane[1].distance(cell.fracToCart() * anchor.point) - b[1] * dp[1],
+				plane[2].distance(cell.fracToCart() * anchor.point) - b[2] * dp[2] };
+
+			std::array < FloatingPointType, 3> high{
+				dp[0] - low[0],
+				dp[1] - low[1],
+				dp[2] - low[2] };
+
+			// [ -x, +x, -y, +y, -z, +z ]
+			const std::array<ShiftType::value_type, 6> maxr{
+				b[0] - static_cast<ShiftType::value_type>(ceil((cutoff - low[0]) / dp[0])),
+				b[0] + static_cast<ShiftType::value_type>(ceil((cutoff - high[0]) / dp[0])),
+				b[1] - static_cast<ShiftType::value_type>(ceil((cutoff - low[1]) / dp[1])),
+				b[1] + static_cast<ShiftType::value_type>(ceil((cutoff - high[1]) / dp[1])),
+				b[2] - static_cast<ShiftType::value_type>(ceil((cutoff - low[2]) / dp[2])),
+				b[2] + static_cast<ShiftType::value_type>(ceil((cutoff - high[2]) / dp[2])), };
+
+
+			for (char i = maxr[0]; i <= maxr[1]; i++) {
+				for (char j = maxr[2]; j <= maxr[3]; j++) {
+					for (char k = maxr[4]; k <= maxr[5]; k++) {
+						box.emplace(i, j, k);
+					}
+				}
+			}
+		}
+		
+		::std::vector<AtomIndex> molecule_indexes_create(const std::vector<Molecule>& molecules, AtomIndex size) const {
+			::std::vector<AtomIndex> ret(size, 0);
+			constexpr ShiftType zeroshift(0, 0, 0);
+
+			for (AtomIndex i = molecules.size() - 1; i > 0; i--)
+			{
+				for (AtomIndex j = 0; j < molecules[i].nodes.size(); j++)
+				{
+					if (molecules[i].nodes[j].shift == zeroshift) {
+						ret[j] = i;
+					}
+				}
+			}
+			return ret;
+		}
+		::std::vector<BoxSet> create_molecule_boxes_nonpoly(const ::std::vector<Molecule>& molecules,
+													const ::std::vector<ClusterAtom>& unit01,
+													const ::std::vector<TranslatedAtom>& molecule_pass,
+													const BoxSet& boxes) const
+		{
+			// Construct phantom of each possible molecule
+			::std::vector<BoxSet> ret(molecule_pass.size());
+			for (AtomIndex i = 0; i < molecule_pass.size(); i++) {
+				if (molecules[i].is_polymer == true)
+					continue;
+				if (molecule_pass[i].id == i) {
+
+					ret[i] = boxes;
+				}
+				else {
+					for (const auto& box : boxes) {
+						ret[molecule_pass[i].id].emplace(box + molecule_pass[i].shift);
+					}
+				}
+			}
+
+			// Check each combination of molecule, anchor and box
+			for (AtomIndex i = 0; i < molecule_pass.size(); i++) 
+			{
+				std::erase_if(ret[i], [this, i, &molecules, &unit01](const ShiftType& shift) {
+					return !(this->check_molecule(shift, molecules[i], unit01)); });
+			}
+			
+			return ret;
+		}
+
+		bool check_molecule(const ShiftType& shift, const Molecule& mol, const ::std::vector<ClusterAtom>& unit01) const {
+			for (const auto& anchor : anchors_frac) {
+				for (const auto& node : mol.nodes) {
+					// Calculate distance to anchor
+					PointType vec = unit01[node.id].point + node.shift + shift - anchor.point;
+
+					if (vec.r() < anchor.radius) {
+						return true;
+					}
+				}
+			}
+			return false;
+		}
+
+
+		std::unordered_set<TranslatedAtom, TranslatedAtom::Hash> 
+			grow_polymer(const Molecule& molecule,
+						 const ::std::vector<ClusterAtom>& unit01) const
+		{
+			std::unordered_set<TranslatedAtom, TranslatedAtom::Hash> ret;
+
+			BoxSet boxes;
+			auto rp111 = cell.fracToCart() * ShiftType(1, 1, 1);
+
+			std::array<FloatingPointType, 3> dp = { plane[0].distance(rp111),
+													plane[1].distance(rp111),
+													plane[2].distance(rp111) };
+
+			for (const auto& anchor : anchors_frac) {
+				constructBox(anchor, polymer_cutoff_radius, dp, boxes);
+			}
+
+			for (const auto& shift : boxes) {
+				for (const auto& node : molecule.nodes) {
+					for (const auto& anchor : anchors_frac) {
+						PointType vec = unit01[node.id].point + shift - anchor.point;
+
+						if (vec.r() < polymer_cutoff_radius) {
+							ret.emplace(node.id, shift);
+						}
+					}
+				}
+			}
+
+			return ret;
 		}
 	};
+
 }

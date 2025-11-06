@@ -56,6 +56,25 @@ namespace cpplib::geometry {
 		using value_type = T;
 		using array_type = ::std::array<value_type, 3>;
 
+		struct Hash {
+			std::size_t operator()(const std::array<T, 3>& point) const {
+				if constexpr (std::is_floating_point_v<T>) {
+					std::size_t hx = std::hash<T>{}(point[0]);
+					std::size_t hy = std::hash<T>{}(point[1]);
+					std::size_t hz = std::hash<T>{}(point[2]);
+
+					return hx ^ (hy << 1) ^ (hz << 2) ^ (hx >> 31);
+				}
+				else {
+					return 
+						(point[0] * std::size_t(73856093)) ^ 
+						(point[1] * std::size_t(19349663)) ^ 
+						(point[2] * std::size_t(83492791));
+				}
+			}
+		};
+
+
 	public:
 		array_type a = { 0,0,0 };
 
@@ -1344,7 +1363,7 @@ namespace cpplib::geometry {
 		using DimentionType = unsigned char;
 
 		using SupListType = ::std::list<AtomIndex>;
-		using SupType = ::std::array<::std::array<::std::array<SupListType, 3>, 3>, 3>;
+		using SupType = ::std::vector<::std::vector<::std::vector<SupListType>>>;
 		using SupPoint = geometry::Point<size_t>;
 
 		/// <summary>
@@ -1375,7 +1394,9 @@ namespace cpplib::geometry {
 			::std::vector<BondType> ret;
 			size_t estimated_size = points.size() * points.size() * sizemod();
 			ret.reserve(estimated_size);
-			SupType supply_table;
+			SupType supply_table(sep_[0],
+								 SupType::value_type(sep_[1],
+													 SupType::value_type::value_type(sep_[2])));
 
 			// Fill supply_table
 			for (AtomIndex i = 0; i < points.size(); i++)

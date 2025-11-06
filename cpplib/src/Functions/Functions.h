@@ -86,11 +86,10 @@ std::tuple<std::vector<cpplib::geometry::Point<cpplib::basic_types::FloatingPoin
 												cpplib::FAM_Struct::AtomContainerType& types,
 												cpplib::FAM_Struct::PointConteinerType& points);
 
-std::vector<std::tuple<cpplib::geometry::Point<cpplib::basic_types::FloatingPointType>, cpplib::basic_types::AtomIndex, long, cpplib::FAM_Struct::ShiftType>>
-	ClusterCreate(std::array<cpplib::basic_types::FloatingPointType, 6> cell,
-				  const std::vector<const char*>& symm,
-				  cpplib::FAM_Struct::AtomContainerType& types,
-				  cpplib::FAM_Struct::PointConteinerType& points,
-				  const std::vector<std::pair<cpplib::geometry::Point<cpplib::basic_types::FloatingPointType>, cpplib::basic_types::FloatingPointType>>& anchors,
-				  cpplib::basic_types::FloatingPointType over_radius,
-				  bool& hasPolymer);
+std::vector<cpplib::Cluster::ClusterAtom> ClusterCreate(std::array<cpplib::basic_types::FloatingPointType, 6> unit_cell,
+														const std::vector<const char*>& symm,
+														cpplib::FAM_Struct::AtomContainerType& types,
+														cpplib::FAM_Struct::PointConteinerType& points,
+														std::vector<cpplib::Cluster::AnchorType>& anchors,
+														cpplib::basic_types::FloatingPointType polymer_cutoff,
+														bool& hasPolymer);

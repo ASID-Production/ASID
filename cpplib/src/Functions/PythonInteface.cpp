@@ -924,7 +924,7 @@ extern "C" {
 		Prepare_IC all(ocell, osymm, otuples);
 
 		Py_ssize_t s = PyList_Size(ocoords);
-		std::vector<std::pair<cpplib::geometry::Point<FloatingPointType>, cpplib::basic_types::FloatingPointType> > anchors;
+		std::vector<Cluster::AnchorType> anchors;
 		anchors.reserve(static_cast<size_t>(s));
 
 		for (Py_ssize_t i = 0; i < s; i++) {
@@ -940,15 +940,22 @@ extern "C" {
 		auto ret_s = ret.size();
 		for (size_t i = 0; i < ret_s; i++)
 		{
-			PyList_Append(o_ret, Py_BuildValue("(ffflllll)",
-											   static_cast<float>(std::get<0>(ret[i])[0]), // px
-											   static_cast<float>(std::get<0>(ret[i])[1]), // py
-											   static_cast<float>(std::get<0>(ret[i])[2]), // pz
-											   static_cast<long>(std::get<1>(ret[i])),         // index
-											   static_cast<long>(std::get<2>(ret[i])),         // symmref
-											   static_cast<long>(std::get<3>(ret[i])[0]),  // sx
-											   static_cast<long>(std::get<3>(ret[i])[1]),  // sy
-											   static_cast<long>(std::get<3>(ret[i])[2])));// sz
+			auto py_point = Py_BuildValue("(fff)",
+										  static_cast<float>(ret[i].point[0]), // px
+										  static_cast<float>(ret[i].point[1]), // py
+										  static_cast<float>(ret[i].point[2]));// pz 
+
+			auto py_shift = Py_BuildValue("(lll)",
+										  static_cast<long>(ret[i].shift[0]),  // sx
+										  static_cast<long>(ret[i].shift[1]),  // sy
+										  static_cast<long>(ret[i].shift[2])); // sz
+
+			PyList_Append(o_ret, Py_BuildValue("{s:l,s:l,s:O,s:l,s:O}",
+											   "index", static_cast<long>(ret[i].index),
+											   "type", static_cast<long>(ret[i].type),
+											   "point_cart", py_point,
+											   "symmref", static_cast<long>(ret[i].symm),
+											   "shift", py_shift));
 		}
 		return Py_BuildValue("{s:O,s:O}",
 							 "points", o_ret,

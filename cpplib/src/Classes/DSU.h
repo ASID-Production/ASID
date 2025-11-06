@@ -67,12 +67,14 @@ namespace cpplib {
             return set_id[element];
         }
 
-        inline const std::vector<AtomIndex>& get_elements(AtomIndex id) const {
-            return set_elements[id];
+        inline const std::vector<AtomIndex>& get_elements(AtomIndex setid) const {
+            return set_elements[setid];
         }
         inline AtomIndex get_count_components() const noexcept {
             return count_components;
         }
-
+        const std::vector<std::vector<AtomIndex>>& get_components_ref() const noexcept {
+            return set_elements;
+        }
     };
 } // namespace cpplib
