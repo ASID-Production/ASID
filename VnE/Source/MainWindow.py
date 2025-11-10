@@ -47,7 +47,6 @@ from PySide6.QtCore import *
 from . import QtModels
 from .QtModels import ListView, UniformListModel, TreeView, QtPointsTreeModel, SelectionModel, QtPointsPropertyModel
 
-import debug
 
 class OpenGlWidget(QOpenGLWidget):
 
@@ -57,7 +56,7 @@ class OpenGlWidget(QOpenGLWidget):
         self.surface_format.setSamples(4)
         self.surface_format.setOption(QtGui.QSurfaceFormat.DebugContext)
         self.surface_format.setRenderableType(QtGui.QSurfaceFormat.OpenGL)
-        self.surface_format.setProfile(QtGui.QSurfaceFormat.CompatibilityProfile)
+        self.surface_format.setProfile(QtGui.QSurfaceFormat.CoreProfile)
         self.surface_format.setMajorVersion(4)
         self.surface_format.setMinorVersion(6)
         self.setFormat(self.surface_format)

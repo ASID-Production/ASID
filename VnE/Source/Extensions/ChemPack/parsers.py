@@ -32,7 +32,6 @@ from ..ChemPack import PALETTE, MOLECULE_SYSTEMS
 import os
 from . import MoleculeClass
 
-import debug
 
 
 class FileParser:
@@ -502,50 +501,50 @@ class FileParser:
         a = point_class.Point(parent=cell_list, name='a', coord=cell_dec_coords[1], color=[1, 0, 0, 1], label='a')
         b = point_class.Point(parent=cell_list, name='b', coord=cell_dec_coords[2], color=[0, 1, 0, 1], label='b')
         c = point_class.Point(parent=cell_list, name='c', coord=cell_dec_coords[3], color=[0, 0, 1, 1], label='c')
-        cell_rend = point_class.PointsList(parent=cell_list, name='Cell render', color=cell_list)
+        cell_rend = point_class.PointsList(parent=cell_list, name='Cell render', color=cell_list, rad=0.05)
 
-        oa = point_class.PointsList(parent=cell_rend, name='o-a', color=a)
-        point1, point2 = (
-        point_class.Point(parent=oa, coord=o, color=oa), point_class.Point(parent=oa, coord=a, color=oa))
+        oa = point_class.PointsList(parent=cell_rend, name='o-a', color=a, rad=cell_rend)
+        point1, point2 = (point_class.Point(parent=oa, coord=o, color=oa, rad=oa),
+                          point_class.Point(parent=oa, coord=a, color=oa, rad=oa))
 
-        ob = point_class.PointsList(parent=cell_rend, name='o-b', color=b)
-        point1, point2 = (
-        point_class.Point(parent=ob, coord=o, color=ob), point_class.Point(parent=ob, coord=b, color=ob))
+        ob = point_class.PointsList(parent=cell_rend, name='o-b', color=b, rad=cell_rend)
+        point1, point2 = (point_class.Point(parent=ob, coord=o, color=ob, rad=ob),
+                          point_class.Point(parent=ob, coord=b, color=ob, rad=ob))
 
-        oc = point_class.PointsList(parent=cell_rend, name='o-c', color=c)
-        point1, point2 = (
-        point_class.Point(parent=oc, coord=o, color=oc), point_class.Point(parent=oc, coord=c, color=oc))
+        oc = point_class.PointsList(parent=cell_rend, name='o-c', color=c, rad=cell_rend)
+        point1, point2 = (point_class.Point(parent=oc, coord=o, color=oc, rad=oc),
+                          point_class.Point(parent=oc, coord=c, color=oc, rad=oc))
 
-        ab = point_class.PointsList(parent=cell_rend, name='a-b', color=cell_rend)
-        point1, point2 = (point_class.Point(parent=ab, coord=a, color=ab),
-                          point_class.Point(parent=ab, coord=cell_dec_coords[5], color=ab))
-        ac = point_class.PointsList(parent=cell_rend, name='a-c', color=cell_rend)
-        point1, point2 = (point_class.Point(parent=ac, coord=a, color=ac),
-                          point_class.Point(parent=ac, coord=cell_dec_coords[6], color=ac))
+        ab = point_class.PointsList(parent=cell_rend, name='a-b', color=cell_rend, rad=cell_rend)
+        point1, point2 = (point_class.Point(parent=ab, coord=a, color=ab, rad=ab),
+                          point_class.Point(parent=ab, coord=cell_dec_coords[5], color=ab, rad=ab))
+        ac = point_class.PointsList(parent=cell_rend, name='a-c', color=cell_rend, rad=cell_rend)
+        point1, point2 = (point_class.Point(parent=ac, coord=a, color=ac, rad=ac),
+                          point_class.Point(parent=ac, coord=cell_dec_coords[6], color=ac, rad=ac))
 
-        bc = point_class.PointsList(parent=cell_rend, name='b-c', color=cell_rend)
-        point1, point2 = (point_class.Point(parent=bc, coord=b, color=bc),
-                          point_class.Point(parent=bc, coord=cell_dec_coords[4], color=bc))
-        ba = point_class.PointsList(parent=cell_rend, name='b-a', color=cell_rend)
-        point1, point2 = (point_class.Point(parent=ba, coord=b, color=ba),
-                          point_class.Point(parent=ba, coord=cell_dec_coords[5], color=ba))
+        bc = point_class.PointsList(parent=cell_rend, name='b-c', color=cell_rend, rad=cell_rend)
+        point1, point2 = (point_class.Point(parent=bc, coord=b, color=bc, rad=bc),
+                          point_class.Point(parent=bc, coord=cell_dec_coords[4], color=bc, rad=bc))
+        ba = point_class.PointsList(parent=cell_rend, name='b-a', color=cell_rend, rad=cell_rend)
+        point1, point2 = (point_class.Point(parent=ba, coord=b, color=ba, rad=ba),
+                          point_class.Point(parent=ba, coord=cell_dec_coords[5], color=ba, rad=ba))
 
-        cb = point_class.PointsList(parent=cell_rend, name='c-b', color=cell_rend)
-        point1, point2 = (point_class.Point(parent=cb, coord=c, color=cb),
-                          point_class.Point(parent=cb, coord=cell_dec_coords[4], color=cb))
-        ca = point_class.PointsList(parent=cell_rend, name='c-a', color=cell_rend)
-        point1, point2 = (point_class.Point(parent=ca, coord=c, color=ca),
-                          point_class.Point(parent=ca, coord=cell_dec_coords[6], color=ca))
+        cb = point_class.PointsList(parent=cell_rend, name='c-b', color=cell_rend, rad=cell_rend)
+        point1, point2 = (point_class.Point(parent=cb, coord=c, color=cb, rad=cb),
+                          point_class.Point(parent=cb, coord=cell_dec_coords[4], color=cb, rad=cb))
+        ca = point_class.PointsList(parent=cell_rend, name='c-a', color=cell_rend, rad=cell_rend)
+        point1, point2 = (point_class.Point(parent=ca, coord=c, color=ca, rad=ca),
+                          point_class.Point(parent=ca, coord=cell_dec_coords[6], color=ca, rad=ca))
 
-        abc = point_class.PointsList(parent=cell_rend, name='ab-c', color=cell_rend)
-        point1, point2 = (point_class.Point(parent=abc, coord=cell_dec_coords[7], color=abc),
-                          point_class.Point(parent=abc, coord=cell_dec_coords[5], color=abc))
-        acb = point_class.PointsList(parent=cell_rend, name='ac-b', color=cell_rend)
-        point1, point2 = (point_class.Point(parent=acb, coord=cell_dec_coords[7], color=acb),
-                          point_class.Point(parent=acb, coord=cell_dec_coords[6], color=acb))
-        bca = point_class.PointsList(parent=cell_rend, name='bc-a', color=cell_rend)
-        point1, point2 = (point_class.Point(parent=bca, coord=cell_dec_coords[7], color=bca),
-                          point_class.Point(parent=bca, coord=cell_dec_coords[4], color=bca))
+        abc = point_class.PointsList(parent=cell_rend, name='ab-c', color=cell_rend, rad=cell_rend)
+        point1, point2 = (point_class.Point(parent=abc, coord=cell_dec_coords[7], color=abc, rad=abc),
+                          point_class.Point(parent=abc, coord=cell_dec_coords[5], color=abc, rad=abc))
+        acb = point_class.PointsList(parent=cell_rend, name='ac-b', color=cell_rend, rad=cell_rend)
+        point1, point2 = (point_class.Point(parent=acb, coord=cell_dec_coords[7], color=acb, rad=acb),
+                          point_class.Point(parent=acb, coord=cell_dec_coords[6], color=acb, rad=acb))
+        bca = point_class.PointsList(parent=cell_rend, name='bc-a', color=cell_rend, rad=cell_rend)
+        point1, point2 = (point_class.Point(parent=bca, coord=cell_dec_coords[7], color=bca, rad=bca),
+                          point_class.Point(parent=bca, coord=cell_dec_coords[4], color=bca, rad=bca))
         return cell_list
 
     def parsMolSys(self, mol_sys, bond=True, root=None, point_func=None, *args, **kwargs):
@@ -703,6 +702,9 @@ class FileParser:
                         flag = False
                         methods.pop(0)
                         return
+                    elif '***  Property f =  RHO      at CP using GLOBAL axis systems ***' in line:
+                        flag = False
+                        return
 
                 def parseCP():
                     nonlocal line
@@ -801,6 +803,18 @@ class FileParser:
             return point
 
         mol_sys, list_tuple = self.parsMolSys(mol_sys, bond, root, point_func=apCreation)
+        cell_coords = [[0, 0, 0],
+                       [1, 0, 0],
+                       [0, 1, 0],
+                       [0, 0, 1],
+                       [0, 1, 1],
+                       [1, 1, 0],
+                       [1, 0, 1],
+                       [1, 1, 1]]
+        args = [*list(cif_dict.values())[1:], cell_coords]
+        cell_dec_coords = self.fracToDec(*args)
+        self.createCellList(list_tuple[0], cell_dec_coords)
+
         yield mol_sys, list_tuple
 
         def cppCreation(atom_list, atom):

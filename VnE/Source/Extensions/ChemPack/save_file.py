@@ -30,7 +30,6 @@
 from . import MoleculeClass
 from ..ChemPack import PALETTE
 
-import debug
 
 
 class SaveFile:

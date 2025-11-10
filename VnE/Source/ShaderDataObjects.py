@@ -32,7 +32,6 @@ import numpy as np
 from typing import Tuple, Dict, List
 import logging
 
-import debug
 
 class VAOCreator:
     types = {np.byte: GL_BYTE,
@@ -72,6 +71,7 @@ class ShaderData:
              np.ubyte: GL_UNSIGNED_BYTE,
              np.int32: GL_INT,
              np.uint32: GL_UNSIGNED_INT,
+             np.uintc: GL_UNSIGNED_INT,
              np.float32: GL_FLOAT}
 
     def __init__(self, VAOFormat, allocation_size):

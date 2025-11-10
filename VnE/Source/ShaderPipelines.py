@@ -37,7 +37,6 @@ import logging
 
 from .ShaderDataObjects import ShaderData, ShaderDataCreator, ShaderDataText
 
-import debug
 
 
 class Uniform(ABC):
@@ -395,28 +394,62 @@ class BondShaderPipeline(BallsShaderPipeline):
 class TextShaderPipeline(aShaderPipeline):
 
     def __init__(self):
+        aShaderPipeline.__init__(self)
         self.shader_data = []
-        self.VAOFormat = [(3, np.float32), (2, np.float32), (2, np.float32), (2, np.float32)]
+        self.VAOFormat = [(3, np.float32), (2, np.float32), (2, np.float32), (2, np.float32), (3, np.float32), (1, np.uint32)]
         self.programs = [[GL_VERTEX_SHADER, None, open(f'{opath.dirname(__file__)}/shaders/vert/text.vert', 'r').read()],
                          [GL_FRAGMENT_SHADER, None, open(f'{opath.dirname(__file__)}/shaders/frag/text.frag', 'r').read()]]
         self.textures = []
 
-        self.pipeline = glGenProgramPipelines(1)
+        self.select_programs = [[GL_VERTEX_SHADER, None, open(f'{opath.dirname(__file__)}/shaders/vert/id_color_text.vert', 'r').read()],
+            [GL_FRAGMENT_SHADER, None, open(f'{opath.dirname(__file__)}/shaders/frag/id_color.frag', 'r').read()]]
 
-        glBindProgramPipeline(self.pipeline)
+        pipeline = glGenProgramPipelines(1)
+
+        glBindProgramPipeline(pipeline)
 
         for i, program in enumerate(self.programs):
             self.programs[i][1] = SHADER_PROGRAM_CREATOR.createProgram(program[2], program[0])[0]
-            glUseProgramStages(self.pipeline, BallsShaderPipeline.shader_bit[self.programs[i][0]], self.programs[i][1])
+            glUseProgramStages(pipeline, self.shader_bit[self.programs[i][0]], self.programs[i][1])
 
         self.uniforms = {'const_scale': Uniform(np.float32, 'const_scale', self.programs[0][1])}
         self.uniforms['const_scale'].set(ctypes.c_float(150.0))
-        glUseProgram(0)
+
+        self.pipeline = self.Program(pipeline, GL_TRIANGLES)
+
+        def func(pipeline):
+            return lambda: glBindProgramPipeline(pipeline.id)
+
+        self.pipeline.regFunc(func(self.pipeline))
+        self.pipelines['DEFAULT'] = self.pipeline
+
+        pipeline = glGenProgramPipelines(1)
+        glBindProgramPipeline(pipeline)
+
+        for i, program in enumerate(self.select_programs):
+            self.select_programs[i][1] = SHADER_PROGRAM_CREATOR.createProgram(program[2], program[0])[0]
+            glUseProgramStages(pipeline, self.shader_bit[self.select_programs[i][0]], self.select_programs[i][1])
+
+        self.pipeline = self.Program(pipeline, GL_TRIANGLES)
+
+        self.uniforms['pipeline_id'] = Uniform(np.uint64, 'pipeline_id', self.select_programs[1][1])
+
+        def bind_id():
+            data = np.array(id(self), dtype=np.uint64).tobytes()
+            data = np.array([int.from_bytes(data[:4], 'little'), int.from_bytes(data[4:], 'little')], dtype=np.uint32)
+            self.uniforms['pipeline_id'].set(data)
+
+        self.pipeline.regFunc(bind_id)
+        self.pipeline.regFunc(func(self.pipeline))
+
+        self.pipelines['SELECT'] = self.pipeline
+        self.pipeline = self.pipelines['DEFAULT']
 
     def draw(self, mode='DEFAULT'):
-        glBindProgramPipeline(self.pipeline)
+        pipeline = self.pipelines.get(mode, self.pipelines['DEFAULT'])
+        pipeline.exec()
         for shader_data in self.shader_data:
-            shader_data.draw(GL_TRIANGLES, self.textures)
+            shader_data.draw(pipeline.draw_mode, self.textures)
 
     def add_shader_data(self, shader_data_inst=None):
         if shader_data_inst:

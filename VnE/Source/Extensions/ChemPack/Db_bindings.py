@@ -37,7 +37,6 @@ import base64
 import atexit
 import subprocess
 
-import debug
 
 search_types = ['refcode', 'name', 'elements', 'doi', 'authors', 'cell', 'formula']
 

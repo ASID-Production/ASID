@@ -33,7 +33,7 @@ class Ui_Dialog(object):
         sizePolicy.setHeightForWidth(self.pushButton.sizePolicy().hasHeightForWidth())
         self.pushButton.setSizePolicy(sizePolicy)
         self.pushButton.setCheckable(True)
-        self.pushButton.setChecked(False)
+        self.pushButton.setChecked(True)
         self.pushButton.setAutoExclusive(True)
 
         self.horizontalLayout_2.addWidget(self.pushButton)
@@ -45,6 +45,11 @@ class Ui_Dialog(object):
 
         self.horizontalLayout_2.addWidget(self.pushButton_2)
 
+        self.pushButton_3 = QPushButton(Dialog)
+        self.pushButton_3.setObjectName(u"pushButton_3")
+
+        self.horizontalLayout_2.addWidget(self.pushButton_3)
+
 
         self.retranslateUi(Dialog)
 
@@ -54,6 +59,7 @@ class Ui_Dialog(object):
     def retranslateUi(self, Dialog):
         Dialog.setWindowTitle(QCoreApplication.translate("Dialog", u"Dialog", None))
         self.pushButton.setText(QCoreApplication.translate("Dialog", u"Translate", None))
-        self.pushButton_2.setText(QCoreApplication.translate("Dialog", u"PushButton", None))
+        self.pushButton_2.setText(QCoreApplication.translate("Dialog", u"Translate label", None))
+        self.pushButton_3.setText(QCoreApplication.translate("Dialog", u"Delete atoms", None))
     # retranslateUi
 

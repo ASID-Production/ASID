@@ -29,7 +29,6 @@
 from PySide6 import QtWidgets
 import numpy as np
 
-import debug
 
 DIALOG = None
 

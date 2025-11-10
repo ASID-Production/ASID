@@ -32,7 +32,6 @@ from . import AtomsPalette
 import os
 import types
 
-import debug
 
 PALETTE = AtomsPalette.Palette()
 
@@ -428,14 +427,14 @@ def setup(menu, model, uniform_model=None, *args, main_widget=None, **kwargs):
     action_cluster.triggered.connect(clusterCreationFunc)
     cmenu.addAction(action_cluster)
 
-    #action_instruments = QAction('Instruments')
-    #action_instruments.setShortcut('Ctrl+I')
-    #action_instruments.triggered.connect(instrumentsFunc)
-    #cmenu.addAction(action_instruments)
+    action_instruments = QAction('Instruments')
+    action_instruments.setShortcut('Ctrl+I')
+    action_instruments.triggered.connect(instrumentsFunc)
+    cmenu.addAction(action_instruments)
 
     action_polyhedron = QAction('Polyhedron')
     action_polyhedron.triggered.connect(polyhedronFunc)
     cmenu.addAction(action_polyhedron)
 
-    actions = [open_action, action_test, action_DB, save_action, action_sym_op, action_export, action_winx, action_cls, action_aimall, action_2d_export, action_multiwfn, action_symm_poscar, action_assemble, action_cluster, action_polyhedron]
+    actions = [open_action, action_test, action_DB, save_action, action_sym_op, action_export, action_winx, action_cls, action_aimall, action_2d_export, action_multiwfn, action_symm_poscar, action_assemble, action_cluster, action_polyhedron, action_instruments]
     return actions

@@ -31,7 +31,6 @@ import json
 
 import numpy as np
 
-import debug
 
 
 class Palette:

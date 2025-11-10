@@ -31,13 +31,11 @@
 
 out gl_PerVertex { vec4 gl_Position;};
 
-layout (location = 0) in vec3 vertex; // <vec3 pos>
-layout (location = 1) in vec2 tex_cords; // <vec2 tex_coord>
+layout (location = 0) in vec3 vertex;
 layout (location = 2) in vec2 size;
 layout (location = 3) in vec2 shifts;
 layout (location = 4) in vec3 pos_shift;
-
-out vec2 TexCoords;
+layout (location = 5) in uint point_id;
 
 layout(std140, binding = 0) uniform Matrices
 {
@@ -53,13 +51,18 @@ layout(std140, binding = 0) uniform Matrices
 
 uniform float const_scale;
 
+out uint id_frag;
+out uint count;
+
 void main()
     {
+        id_frag = point_id;
 
         vec4 pos = translation * perspective * aspect_ratio * scale * rotation * scene_shift * vec4(vertex + pos_shift, 1.0);
         pos.x = pos.x + (size.x + shifts.x) * pos.w;
         pos.y = pos.y + (shifts.y + size.y) * pos.w;
         pos.z = -pos.w;
         gl_Position = pos;
-        TexCoords = tex_cords;
+        count = 1;
+
     }

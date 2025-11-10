@@ -32,7 +32,6 @@ import freetype
 import numpy as np
 import os.path as opath
 
-import debug
 
 openGL_context = None
 
