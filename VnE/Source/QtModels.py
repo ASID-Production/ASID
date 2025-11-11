@@ -206,10 +206,13 @@ class QtPointsPropertyModel(QAbstractListModel):
         super().__init__(parent)
 
     def addProperty(self, property):
+        if not property:
+            return
         self.beginResetModel()
         if self.selected:
             for selected in self.selected:
                 selected.internalPointer().addProperty(property, None)
+            self.props[property] = self.selected_len
         self.endResetModel()
 
     def removeProperty(self, index=QModelIndex()):
@@ -331,7 +334,7 @@ class QtPointsPropertyModel(QAbstractListModel):
                 property = list(self.props.keys())[index.row()]
             except IndexError:
                 return None
-            value = [(x, x.internalPointer().getProperties()[property]) for x in self.selected]
+            value = [(x, x.internalPointer().getProperties()[property]) for x in self.selected if property in x.internalPointer().getProperties()]
             return property, value
 
     def setData(self, index, value, role=None):

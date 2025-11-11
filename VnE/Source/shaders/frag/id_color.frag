@@ -49,4 +49,5 @@ uniform uvec2 pipeline_id = uvec2(0,0);
 void main()
 {
     out_id = uvec4(id_frag, count, pipeline_id);
+    //out_id = vec4(1,0,0,1);
 }

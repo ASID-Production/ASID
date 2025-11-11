@@ -50,6 +50,12 @@ class Ui_Dialog(object):
 
         self.horizontalLayout_2.addWidget(self.pushButton_3)
 
+        self.pushButton_4 = QPushButton(Dialog)
+        self.pushButton_4.setObjectName(u"pushButton_2")
+        self.pushButton_4.setCheckable(True)
+
+        self.horizontalLayout_2.addWidget(self.pushButton_4)
+
 
         self.retranslateUi(Dialog)
 
@@ -59,6 +65,7 @@ class Ui_Dialog(object):
     def retranslateUi(self, Dialog):
         Dialog.setWindowTitle(QCoreApplication.translate("Dialog", u"Dialog", None))
         self.pushButton.setText(QCoreApplication.translate("Dialog", u"Translate", None))
+        self.pushButton_4.setText(QCoreApplication.translate("Dialog", u"Select molecule", None))
         self.pushButton_2.setText(QCoreApplication.translate("Dialog", u"Translate label", None))
         self.pushButton_3.setText(QCoreApplication.translate("Dialog", u"Delete atoms", None))
     # retranslateUi

@@ -54,6 +54,7 @@ class Font:
         :return:
         """
         face = freetype.Face(f'./Source/fonts/arial.ttf')
+        size = int(size)
         for chr in self.line:
             face.load_char(chr)
             face.set_char_size(width=size << 6, height=0, hres=576, vres=0)

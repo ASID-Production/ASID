@@ -91,6 +91,7 @@ class Dialog(QDialog):
         self.ui.pushButton.clicked.connect(lambda: setattr(self, 'tr_mode', self.translate))
         self.ui.pushButton_2.clicked.connect(lambda: setattr(self, 'tr_mode', self.label_translate))
         self.ui.pushButton_3.clicked.connect(self.deleteSel)
+        self.ui.pushButton_4.clicked.connect(lambda: setattr(self, 'sl_mode', self.select_mol) if self.ui.pushButton_4.isChecked() else setattr(self, 'sl_mode', None))
 
     def show(self):
         self.old_filter = self.opengl_widget.eventFilterf
@@ -99,7 +100,7 @@ class Dialog(QDialog):
 
     def translate(self, dir):
         sel = self.opengl_widget.selection_model.selection()
-        sel = [x.indexes()[0].internalPointer() for x in sel]
+        sel = [x.internalPointer() for s in sel for x in s.indexes()]
         x = dir.x()
         y = dir.y()
         x = x * 2 / (self.opengl_widget.width())
@@ -136,11 +137,10 @@ class Dialog(QDialog):
             elif p.coord is not None:
                 p.coord += coords
         self.opengl_widget.update()
-        ...
 
     def label_translate(self, dir):
         sel = self.opengl_widget.selection_model.selection()
-        sel = [x.indexes()[0].internalPointer() for x in sel]
+        sel = [x.internalPointer() for s in sel for x in s.indexes()]
         x = dir.x()
         y = dir.y()
         x = x * 2 / (self.opengl_widget.width())
@@ -226,7 +226,7 @@ class Dialog(QDialog):
 
     def deleteSel(self):
         sel = self.opengl_widget.selection_model.selection()
-        sel = [x.indexes()[0].internalPointer() for x in sel]
+        sel = [x.internalPointer() for s in sel for x in s.indexes()]
         for p in sel:
             if p._atom:
                 p._atom.remove()

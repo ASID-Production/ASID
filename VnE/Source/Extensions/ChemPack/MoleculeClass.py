@@ -173,10 +173,9 @@ class Bond:
             return False
 
     def __del__(self):
-        for i, p in enumerate(self.point()):
-            if p:
-                p.destroy()
-        for a in self.parents():
+        if self.point()[0]: self.point()[0].destroy()
+        if self.point()[1]: self.point()[1].destroy()
+        for a in self.parents().copy():
             if self in a.bonds():
                 a.bonds().remove(self)
         return
