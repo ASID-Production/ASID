@@ -45,39 +45,39 @@ namespace cpplib {
 	struct FAM_Struct {
 		// Definitions
 		using AtomType = currents::AtomTypeData;
+		using AtomTypeBase = currents::AtomTypeBase;
 		using size_type = currents::size_type;
 		using PointType = currents::PointType;
 		using FloatingPointType = PointType::value_type;
 		using NodeType = Node<AtomType>;
 		using DistancesType = Distances;
 		using BondType = Bond;
-		static_assert(::std::is_same<typename Bond::AtomIndex, typename NodeType::AtomIndex>::value, "Bond::AtomIndex and NodeType::AtomIndex should be the same");
 		using BondExType = BondEx;
 		using AtomIndex = NodeType::AtomIndex;
-		using AtomContainerType = ::std::vector<AtomType>;
+		using AtomContainerType = ::std::vector<AtomTypeBase>;
 		using PointConteinerType = ::std::vector<PointType>;
 		using DistanceFunction = ::std::function<currents::FloatingPointType(const PointType& p1, const PointType& p2)>;
 		using ShiftType = geometry::Point<int>;
 		using SymmRef = unsigned int;
 		using ParseIndexType = ::std::vector<std::tuple<AtomIndex, SymmRef, ShiftType>>;
 
+		static_assert(::std::is_same_v<typename Bond::AtomIndex, typename NodeType::AtomIndex>, "Bond::AtomIndex and NodeType::AtomIndex should be the same");
+
 		// Data
 		AtomContainerType types;
 		PointConteinerType points;
 		ParseIndexType parseIndex;
 
-
 		size_type sizeUnique = 0;
 		size_type sizePoints = 0;
 
 		// Constructors
-		inline FAM_Struct() noexcept = default;
-		inline FAM_Struct(AtomContainerType&& t, PointConteinerType&& p) noexcept : types(std::move(t)), points(std::move(p)) {
+		constexpr FAM_Struct() noexcept = default;
+		constexpr FAM_Struct(AtomContainerType&& t, PointConteinerType&& p) noexcept : types(std::move(t)), points(std::move(p)) {
 			sizeUnique = types.size();
 			sizePoints = points.size();
 			parseIndex.resize(sizeUnique);
-			for (decltype(sizeUnique) i = 0; i < sizeUnique; i++)
-			{
+			for (decltype(sizeUnique) i = 0; i < sizeUnique; i++) {
 				std::get<0>(parseIndex[i]) = i;
 				std::get<1>(parseIndex[i]) = static_cast<SymmRef>(0);
 				std::get<2>(parseIndex[i]) = ShiftType(0,0,0);
@@ -175,19 +175,7 @@ namespace cpplib {
 				auto var = distances.maxDistance(types[i], types[i]);
 				if (var > ret) ret = var;
 			}
-			return std::fma(ret, static_cast<FloatingPointType>(2), static_cast<FloatingPointType>(0.0001));
-		}
-
-
-		// Debug Method
-		void writeXYZ(const std::string& name) {
-			std::ofstream out;
-			const auto size = std::min(types.size(), points.size());
-			for (size_t i = 0; i < size; i++)
-			{
-				out << types[i] << ' ' << points[i].get(0) << ' ' << points[i].get(1) << ' ' << points[i].get(2) << '\n';
-			}
-			out.close();
+			return ::std::fma(ret, static_cast<FloatingPointType>(2), static_cast<FloatingPointType>(0.0001));
 		}
 	};
 
@@ -216,7 +204,7 @@ namespace cpplib {
 				for (FAM_Struct::AtomIndex p = 0; p < p_s; p++) {
 					if (unique[p] == false) // skip non unique atoms
 						continue;
-					const FAM_Struct::AtomIndex p_start = fs.points.size();
+
 					PointType newpoint = symm[s].GenSymm(fs.points[p]);
 					PointType shift = (PointType(0.5, 0.5, 0.5) - newpoint).round();
 					if (intoCell) newpoint += shift;
@@ -231,9 +219,9 @@ namespace cpplib {
 						}
 					}
 					fs.points.push_back(newpoint);
-					fs.parseIndex.emplace_back(p, s, FAM_Struct::ShiftType(static_cast<int>(shift.get(0)), 
-																		   static_cast<int>(shift.get(1)),
-																		   static_cast<int>(shift.get(2))));
+					fs.parseIndex.emplace_back(p, s, FAM_Struct::ShiftType(static_cast<int>(shift[0]), 
+																		   static_cast<int>(shift[1]),
+																		   static_cast<int>(shift[2])));
 				}
 			}
 			fs.sizePoints = fs.points.size();
@@ -273,15 +261,15 @@ namespace cpplib {
 			fs.parseIndex.resize(fps - ds);
 			fs.sizePoints = fps - ds;
 		}
-		void CreateSupercell(PointConteinerType& points, FloatingPointType cutoff, SuperCellCounter minimum = 1) {
+		auto CreateSupercell(PointConteinerType& points, FloatingPointType cutoff, SuperCellCounter minimum = 1) {
 
 			auto super = base::template findOptimalSupercell<SuperCellCounter>(cutoff, minimum);
 			// super_ is ready. Next step is resizing of actual points
-			SuperCellCounter mult_super_cell = super.get(2) * super.get(1) * super.get(0);
+			SuperCellCounter mult_super_cell = super[2] * super[1] * super[0];
 			size_t sizePoints = points.size();
 			points.reserve(static_cast<typename PointConteinerType::size_type>(sizePoints) * mult_super_cell);
 			for (DimmentionType i = 0; i < static_cast<DimmentionType>(3); i++) {
-				SuperCellCounter cur_mult_minus1 = (super.get(i) - SuperCellCounter(1));
+				SuperCellCounter cur_mult_minus1 = (super[i] - SuperCellCounter(1));
 				if (cur_mult_minus1 == 0)
 				{
 					continue;
@@ -292,9 +280,9 @@ namespace cpplib {
 					for (size_t k = 0; k < sizePoints; k++)
 					{
 						points.emplace_back(points[k]);
-						points.back().set(i, (points.back().get(i) + static_cast<FloatingPointType>(j)));
+						points.back()[i] = points.back()[i] + static_cast<FloatingPointType>(j);
 						points.emplace_back(points[k]);
-						points.back().set(i, (points.back().get(i) - static_cast<FloatingPointType>(j)));
+						points.back()[i] = points.back()[i] - static_cast<FloatingPointType>(j);
 					}
 				}
 
@@ -302,32 +290,32 @@ namespace cpplib {
 					for (size_t k = 0; k < sizePoints; k++)
 					{
 						points.emplace_back(points[k]);
-						if (points[k].get(i) < 0.5)
+						if (points[k][i] < 0.5)
 						{
-							points.back().set(i, (points.back().get(i) + static_cast<FloatingPointType>(div2 + 1)));
+							points.back()[i] = points.back()[i] + static_cast<FloatingPointType>(div2 + 1);
 						}
 						else {
-							points.back().set(i, (points.back().get(i) - static_cast<FloatingPointType>(div2 + 1)));
+							points.back()[i] = points.back()[i] - static_cast<FloatingPointType>(div2 + 1);
 						}
 					}
 				}
 				sizePoints = points.size();
 				// Shrink cell
 				for (size_t j = 0; j < sizePoints; j++) {
-					points[j].set(i, (points[j].get(i) - (static_cast<FloatingPointType>(0.5))) / static_cast<FloatingPointType>(super.get(i)) + static_cast<FloatingPointType>(0.5));
+					points[j][i] = (points[j][i] - (static_cast<FloatingPointType>(0.5))) / static_cast<FloatingPointType>(super[i]) + static_cast<FloatingPointType>(0.5);
 				}
-				base::lat_dir(i) *= super.get(i);
+				base::lat_dir(i) *= super[i];
 			}
 			// Update base cell
 			base::create(base::lat_dir(0), base::lat_dir(1), base::lat_dir(2), base::getAngleGrad(0), base::getAngleGrad(1), base::getAngleGrad(2), true);
+			return super;
 		}
 		FloatingPointType distanceInCell(const PointType& p1, const PointType& p2) const noexcept {
 			PointType dp = (p1 - p2).MoveToCell();
-			FloatingPointType ret = 0;
 			for (DimmentionType i = 0; i < static_cast<DimmentionType>(3); i++) {
-				FloatingPointType val = dp.get(i);
+				FloatingPointType val = dp[i];
 				if (val > 0.5)
-					dp.set(i, val - 1);
+					dp[i] = val - 1;
 			}
 			return (base::fracToCart() * dp).r();
 		}
@@ -353,7 +341,7 @@ namespace cpplib {
 					case  1:
 					{
 						bonds.emplace_back(Bond(i, j), toShift((fs.points[i] - fs.points[j]).round()));
-						auto & curbond = bonds.back();
+						const auto & curbond = bonds.back();
 						AtomIndex k1 = 0;
 						for (; k1 < allMolecules.size(); k1++)
 						{
@@ -409,9 +397,9 @@ namespace cpplib {
 		}
 		static inline currents::FAMStructType::ShiftType toShift(const PointType& a1) {
 			using namespace currents;
-			return FAMStructType::ShiftType(static_cast<FAMStructType::ShiftType::value_type>((a1.get(0))),
-											static_cast<FAMStructType::ShiftType::value_type>((a1.get(1))),
-											static_cast<FAMStructType::ShiftType::value_type>((a1.get(2))));
+			return FAMStructType::ShiftType(static_cast<FAMStructType::ShiftType::value_type>((a1[0])),
+											static_cast<FAMStructType::ShiftType::value_type>((a1[1])),
+											static_cast<FAMStructType::ShiftType::value_type>((a1[2])));
 		}
 
 	private:
@@ -484,12 +472,13 @@ namespace cpplib {
 			return static_cast<size_t>(-1);
 		}
 	};
-	
+
 
 	class FindMolecules {
 	public:
 		using FAMSType = FAM_Struct;
 
+		using AtomTypeBase = FAMSType::AtomTypeBase;
 		using AtomIndex = FAMSType::AtomIndex;
 		using FloatingPointType = FAMSType::FloatingPointType;
 		using AtomType = FAMSType::AtomType;
@@ -509,14 +498,18 @@ namespace cpplib {
 
 	public:
 		FindMolecules() noexcept = delete;
+		/// <summary>
+		/// "Relocate" constructor
+		/// </summary>
+		/// <param name="fs"> - basic FAM_Struct</param>
 		explicit FindMolecules(FAMSType&& fs) : fs_(std::move(fs)) {}
-		std::tuple<std::string, std::string, RightType> findMolecules(const DistancesType& distances, std::vector<BondType>& bonds, const std::vector<AtomIndex>& invalids, std::string& errorMsg) {
+		std::tuple<std::string, std::string, RightType> findMolecules(std::vector<BondType>& bonds, const std::vector<AtomIndex>& invalids, std::string& errorMsg) {
 			std::vector<NodeType> net;
 			net.reserve(fs_.sizePoints);
 
 			// 1. Create Nodes in net
 			for (size_type i = 0; i < fs_.sizePoints; i++) {
-				net.emplace_back(fs_.types[i], 0, i);
+				net.emplace_back(static_cast<typename decltype(net)::value_type::AtomType>(fs_.types[i]), 0, i);
 			}
 
 			// 2. Add bonds to net
@@ -539,7 +532,7 @@ namespace cpplib {
 					negative_atoms[i] = true;
 					if (errorMsg.empty()) {
 						errorMsg = "Atom ";
-						errorMsg += mend[static_cast<char>(type)];
+						errorMsg += mend[static_cast<AtomTypeBase>(type)];
 						errorMsg += std::to_string(i);
 						errorMsg += " has too many bonds (";
 						errorMsg += std::to_string(contacts);
@@ -601,7 +594,7 @@ namespace cpplib {
 				right.emplace_back(std::move(oneMol), std::get<1>(molecules[i]), std::move(std::get<2>(molecules[i])));
 			}
 			auto outputStr = output(molecules, net);
-			auto res = cpplib::currents::SearchGraphType::DatabaseGraphType::ResortString(outputStr.c_str()).substr(2);
+			auto res = MoleculeParser<AtomType>::ResortString(outputStr.c_str()).substr(2);
 			return std::make_tuple(res, errorMsg, std::move(right));
 		}
 		std::tuple<std::vector<AtomIndex>, std::vector<MoleculeType>> separateGraphs(std::vector<BondType>& bonds) {
@@ -612,7 +605,7 @@ namespace cpplib {
 
 			for (AtomIndex i = 0; i < fs_.sizePoints; i++)
 			{
-				nodes.emplace_back(fs_.types[std::get<0>(fs_.parseIndex[i])], 0, i);
+				nodes.emplace_back(currents::AtomTypeData(fs_.types[std::get<0>(fs_.parseIndex[i])]), 0, i);
 			}
 			for (AtomIndex i = 0; i < bonds.size(); i++)
 			{
@@ -631,7 +624,7 @@ namespace cpplib {
 			}
 			return std::make_tuple(refs, molecules);
 		}
-		PointConteinerType& compaq(const DistancesType& distances, std::vector<BondType>& bonds) {
+		PointConteinerType& compaq(std::vector<BondType>& bonds) {
 
 			// 1. Find closest atoms
 			deb_write("FM::compaq Phase 1. Find closest atoms");
@@ -651,7 +644,7 @@ namespace cpplib {
 			std::vector<NodeType> net;
 			net.reserve(fs_.sizePoints);
 			for (size_type i = 0; i < fs_.sizePoints; i++) {
-				net.emplace_back(fs_.types[i], 0, i);
+				net.emplace_back(NodeType::AtomType(fs_.types[i]), 0, i);
 			}
 
 			// 3. Add bonds to net
@@ -674,7 +667,7 @@ namespace cpplib {
 				std::vector<AtomIndex> singleTable = findNextUniquePart(closest[i], net, seen);
 				deb_write("FM::compaq Phase 4.0. FM::findNextUniquePart successful");
 
-				size_type singleTableSize = static_cast<size_type>(singleTable.size());
+				auto singleTableSize = static_cast<size_type>(singleTable.size());
 
 				// 4.1. Shift Center of Mass
 				deb_write("FM::compaq Phase 4.1. Shift Center of Mass");
@@ -726,7 +719,7 @@ namespace cpplib {
 
 					revers[std::get<0>(molecules[i])[j]] = n;
 					n++;
-					res += std::to_string(static_cast<int>(static_cast<char>(net[std::get<0>(molecules[i])[j]].getType())));
+					res += std::to_string(static_cast<int>(static_cast<AtomTypeBase>(net[std::get<0>(molecules[i])[j]].getType())));
 					res += " ";
 					res += std::to_string(calculateHAtoms(net[std::get<0>(molecules[i])[j]]));
 					res += " ";

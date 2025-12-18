@@ -76,9 +76,9 @@ namespace cpplib {
 			{
 				auto b = FAMC::toShift(pair.first.floor());
 				std::array < FloatingPointType, 3> low{
-					plane[0].distance(fc.fracToCart() * pair.first) - b.get(0) * dp[0],
-					plane[1].distance(fc.fracToCart() * pair.first) - b.get(1) * dp[1],
-					plane[2].distance(fc.fracToCart() * pair.first) - b.get(2) * dp[2] };
+					plane[0].distance(fc.fracToCart() * pair.first) - b[0] * dp[0],
+					plane[1].distance(fc.fracToCart() * pair.first) - b[1] * dp[1],
+					plane[2].distance(fc.fracToCart() * pair.first) - b[2] * dp[2] };
 
 				std::array < FloatingPointType, 3> high{
 					dp[0] - low[0],
@@ -89,12 +89,12 @@ namespace cpplib {
 
 				// [ -x, +x, -y, +y, -z, +z ]
 				const std::array<ShiftType::value_type, 6> maxr{
-					b.get(0) - static_cast<ShiftType::value_type>(ceil((radius - low[0]) / dp[0])),
-					b.get(0) + static_cast<ShiftType::value_type>(ceil((radius - high[0]) / dp[0])),
-					b.get(1) - static_cast<ShiftType::value_type>(ceil((radius - low[1]) / dp[1])),
-					b.get(1) + static_cast<ShiftType::value_type>(ceil((radius - high[1]) / dp[1])),
-					b.get(2) - static_cast<ShiftType::value_type>(ceil((radius - low[2]) / dp[2])),
-					b.get(2) + static_cast<ShiftType::value_type>(ceil((radius - high[2]) / dp[2])), };
+					b[0] - static_cast<ShiftType::value_type>(ceil((radius - low[0]) / dp[0])),
+					b[0] + static_cast<ShiftType::value_type>(ceil((radius - high[0]) / dp[0])),
+					b[1] - static_cast<ShiftType::value_type>(ceil((radius - low[1]) / dp[1])),
+					b[1] + static_cast<ShiftType::value_type>(ceil((radius - high[1]) / dp[1])),
+					b[2] - static_cast<ShiftType::value_type>(ceil((radius - low[2]) / dp[2])),
+					b[2] + static_cast<ShiftType::value_type>(ceil((radius - high[2]) / dp[2])), };
 				constructBox(maxr, box);
 			}
 		}

@@ -42,7 +42,7 @@ enum class ErrorState {
 	UnknownError,
 };
 struct Prepare_WC {
-	std::vector<cpplib::currents::AtomTypeData> types;
+	std::vector<cpplib::currents::AtomTypeBase> types;
 	std::vector<cpplib::currents::PointType> points;
 	explicit Prepare_WC(PyObject* otuples) {
 		Py_ssize_t s = PyList_Size(otuples);
@@ -51,7 +51,7 @@ struct Prepare_WC {
 
 		for (Py_ssize_t i = 0; i < s; i++) {
 			PyObject* o_tuple = PyList_GetItem(otuples, i);
-			types.push_back(static_cast<AtomTypeData>(PyLong_AsLong(PyTuple_GetItem(o_tuple, 0))));
+			types.push_back(static_cast<AtomTypeBase>(PyLong_AsLong(PyTuple_GetItem(o_tuple, 0))));
 			points.emplace_back(static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 1))),
 								static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 2))),
 								static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 3))));
@@ -89,12 +89,12 @@ static std::array<std::pair<cpplib::currents::FloatingPointType, cpplib::current
 
 		if (value[i].first == 0) {
 			useDistances(self);
-			value[i].first = p_distances->minDistance(static_cast<cpplib::currents::AtomTypeData>(type[i]), static_cast<cpplib::currents::AtomTypeData>(type[i + 1]));
+			value[i].first = p_distances->minDistance(static_cast<cpplib::currents::AtomTypeBase>(type[i]), static_cast<cpplib::currents::AtomTypeBase>(type[i + 1]));
 		}
 
 		if (value[i].second == 0) {
 			useDistances(self);
-			value[i].second = p_distances->maxDistance(static_cast<cpplib::currents::AtomTypeData>(type[i]), static_cast<cpplib::currents::AtomTypeData>(type[i + 1]));
+			value[i].second = p_distances->maxDistance(static_cast<cpplib::currents::AtomTypeBase>(type[i]), static_cast<cpplib::currents::AtomTypeBase>(type[i + 1]));
 		}
 	}
 	return value;
@@ -156,7 +156,7 @@ extern "C" {
 		deb_write("pyListToVectorCharP return");
 		return ErrorState::OK;
 	}
-	inline static ErrorState pyTXYZparse(PyObject* o_list, std::vector<AtomTypeData>* types, std::vector<PointType>* points) {
+	inline static ErrorState pyTXYZparse(PyObject* o_list, std::vector<AtomTypeBase>* types, std::vector<PointType>* points) {
 		Py_ssize_t s = PyList_Size(o_list);
 		types->clear();
 		types->reserve(static_cast<int>(s));
@@ -165,7 +165,7 @@ extern "C" {
 
 		for (Py_ssize_t i = 0; i < s; i++) {
 			PyObject* o_tuple = PyList_GetItem(o_list, i);
-			types->push_back(static_cast<AtomTypeData>(PyLong_AsLong(PyTuple_GetItem(o_tuple, 0))));
+			types->push_back(static_cast<AtomTypeBase>(PyLong_AsLong(PyTuple_GetItem(o_tuple, 0))));
 			points->emplace_back(static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 1))),
 								 static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 2))),
 								 static_cast<cpplib::currents::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 3))));
@@ -292,34 +292,34 @@ extern "C" {
 
 		Prepare_IC all(ocell, osymm, otuple);
 
-		auto ret = FindMoleculesInCell(all.cell, all.symm, all.types, all.points);
+		auto [graph, error, ret] = FindMoleculesInCell(all.cell, all.symm, all.types, all.points);
 		PyObject* o_xyz_block = PyList_New(0);
 
-		for (auto& mol : std::get<2>(ret))
+		for (const auto& [atoms, id, bonds] : ret)
 		{
 			PyObject* o_molecule = PyList_New(0);
-			for (auto& atom : std::get<0>(mol)) {
+			for (auto& [point,type] : atoms) {
 				PyObject* o_atom = Py_BuildValue("{s:f,s:f,s:f,s:l}",
-												 "x", cpplib::currents::FloatingPointType(std::get<0>(atom).get(0)),
-												 "y", cpplib::currents::FloatingPointType(std::get<0>(atom).get(1)),
-												 "z", cpplib::currents::FloatingPointType(std::get<0>(atom).get(2)),
-												 "init_idx", long(std::get<1>(atom)));
+												 "x", cpplib::currents::FloatingPointType(point[0]),
+												 "y", cpplib::currents::FloatingPointType(point[1]),
+												 "z", cpplib::currents::FloatingPointType(point[2]),
+												 "init_idx", long(id));
 				PyList_Append(o_molecule, o_atom);
 			}
 			PyObject* o_bonds = PyList_New(0);
-			for (auto& bond : std::get<2>(mol)) {
+			for (const auto& bond : bonds) {
 				PyObject* o_bond1 = Py_BuildValue("(ii)", int(bond.first), int(bond.second));
 				PyList_Append(o_bonds, o_bond1);
 			}
 
 			PyList_Append(o_xyz_block, Py_BuildValue("{s:l,s:O,s:O}",
-													 "count", long(std::get<1>(mol)),
+													 "count", long(id),
 													 "atoms", o_molecule,
 													 "bonds", o_bonds));
 		}
 		return Py_BuildValue("{s:s,s:s,s:O}",
-							 "graph_str", std::get<0>(ret).c_str(),
-							 "error_str", std::get<1>(ret).c_str(),
+							 "graph_str", graph.c_str(),
+							 "error_str", error.c_str(),
 							 "xyz_block", o_xyz_block);
 	}
 	static PyObject* cpplib_FindMoleculesWithoutCell(PyObject* self, PyObject* otuple) {
@@ -337,9 +337,9 @@ extern "C" {
 			PyObject* o_molecule = PyList_New(0);
 			for (auto& atom : std::get<0>(mol)) {
 				PyObject* o_atom = Py_BuildValue("{s:f,s:f,s:f,s:l}",
-												 "x", cpplib::currents::FloatingPointType(std::get<0>(atom).get(0)),
-												 "y", cpplib::currents::FloatingPointType(std::get<0>(atom).get(1)),
-												 "z", cpplib::currents::FloatingPointType(std::get<0>(atom).get(2)),
+												 "x", cpplib::currents::FloatingPointType(std::get<0>(atom)[0]),
+												 "y", cpplib::currents::FloatingPointType(std::get<0>(atom)[1]),
+												 "z", cpplib::currents::FloatingPointType(std::get<0>(atom)[2]),
 												 "init_idx", long(std::get<1>(atom)));
 				PyList_Append(o_molecule, o_atom);
 			}
@@ -363,15 +363,15 @@ extern "C" {
 	static PyObject* cpplib_GenSymm(PyObject* self, PyObject* args) {
 		PyObject* osymm = NULL;
 		PyObject* otuples = NULL;
-		unsigned char flags;
+		std::byte flags;
 
 		deb_write("cpplib_GenSymm: Parsing start");
 		if (!PyArg_ParseTuple(args, "OBO", &otuples, &flags, &osymm)) {
 			deb_write("! Critic Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
-		bool movetocell = flags & 1;
-		bool movemasstocell = flags & 2;
+		bool movetocell = (flags & std::byte(1)) != std::byte(0);
+		bool movemasstocell = (flags & std::byte(2)) != std::byte(0);
 
 		Prepare_WC all(otuples);
 		deb_write("cpplib_GenSymm: atom parsing ended");
@@ -400,16 +400,16 @@ extern "C" {
 				centerofmass += all.points[i];
 			}
 			centerofmass /= sf_points;
-			PointType ceilmass(std::ceil(centerofmass.get(0)),
-							   std::ceil(centerofmass.get(1)),
-							   std::ceil(centerofmass.get(2)));
+			PointType ceilmass(std::ceil(centerofmass[0]),
+							   std::ceil(centerofmass[1]),
+							   std::ceil(centerofmass[2]));
 
 			for (size_t i = 0; i < ss; i++)
 			{
 				PointType movedcenter = symm[i].GenSymm(centerofmass);
-				PointType ceilmoved(std::ceil(movedcenter.get(0)),
-									std::ceil(movedcenter.get(1)),
-									std::ceil(movedcenter.get(2)));
+				PointType ceilmoved(std::ceil(movedcenter[0]),
+									std::ceil(movedcenter[1]),
+									std::ceil(movedcenter[2]));
 				symm[i].point += ceilmass - ceilmoved;
 			}
 
@@ -429,9 +429,9 @@ extern "C" {
 		{
 			PyList_Append(otuples, Py_BuildValue("(Ifff)",
 												 static_cast<unsigned int>(famstr.types[std::get<0>(famstr.parseIndex[i])]),
-												 static_cast<cpplib::currents::FloatingPointType>(famstr.points[i].get(0)),
-												 static_cast<cpplib::currents::FloatingPointType>(famstr.points[i].get(1)),
-												 static_cast<cpplib::currents::FloatingPointType>(famstr.points[i].get(2))));
+												 static_cast<cpplib::currents::FloatingPointType>(famstr.points[i][0]),
+												 static_cast<cpplib::currents::FloatingPointType>(famstr.points[i][1]),
+												 static_cast<cpplib::currents::FloatingPointType>(famstr.points[i][2])));
 		}
 		Py_INCREF(otuples);
 		return otuples;
@@ -473,7 +473,7 @@ extern "C" {
 			PyList_Append(lst, Py_BuildValue("(IIf)",
 											 static_cast<unsigned int>(std::get<0>(res[i])),
 											 static_cast<unsigned int>(std::get<1>(res[i])),
-											 static_cast<cpplib::currents::FloatingPointType>(std::get<2>(res[i]))));
+											 static_cast<float>(std::get<2>(res[i]))));
 		}
 		deb_write("cpplib_FindDistanceIC: List[...] completed. size = ", res_s);
 		return Py_BuildValue("{s:O}", "distances", lst);
@@ -511,7 +511,7 @@ extern "C" {
 			PyList_Append(lst, Py_BuildValue("(IIf)",
 											 static_cast<unsigned int>(std::get<0>(res[i])),
 											 static_cast<unsigned int>(std::get<1>(res[i])),
-											 static_cast<cpplib::currents::FloatingPointType>(std::get<2>(res[i]))));
+											 static_cast<float>(std::get<2>(res[i]))));
 		}
 		deb_write("cpplib_FindDistanceWC: List[...] completed. size = ", res_s);
 		return Py_BuildValue("{s:O}", "distances", lst);
@@ -549,7 +549,7 @@ extern "C" {
 											 static_cast<unsigned int>(std::get<0>(res[i])),
 											 static_cast<unsigned int>(std::get<1>(res[i])),
 											 static_cast<unsigned int>(std::get<2>(res[i])),
-											 static_cast<cpplib::currents::FloatingPointType>(cpplib::geometry::RadtoGrad(std::get<3>(res[i])))));
+											 static_cast<float>(cpplib::geometry::RadtoGrad(std::get<3>(res[i])))));
 		}
 		deb_write("cpplib_FindAngleIC: List[...] completed. size = ", res_s);
 		return Py_BuildValue("{s:O}", "angles", lst);
@@ -585,7 +585,7 @@ extern "C" {
 											 static_cast<unsigned int>(std::get<0>(res[i])),
 											 static_cast<unsigned int>(std::get<1>(res[i])),
 											 static_cast<unsigned int>(std::get<2>(res[i])),
-											 static_cast<cpplib::currents::FloatingPointType>(cpplib::geometry::RadtoGrad(std::get<3>(res[i])))));
+											 static_cast<float>(cpplib::geometry::RadtoGrad(std::get<3>(res[i])))));
 		}
 		deb_write("cpplib_FindAngleWC: List[...] completed. size = ", res_s);
 		return Py_BuildValue("{s:O}", "angles", lst);
@@ -813,9 +813,9 @@ extern "C" {
 		for (int i = 0; i < s; i++)
 		{
 			PyObject* o_atom = Py_BuildValue("(fff)",
-											 static_cast<cpplib::currents::FloatingPointType>(all.points[i].get(0)),
-											 static_cast<cpplib::currents::FloatingPointType>(all.points[i].get(1)),
-											 static_cast<cpplib::currents::FloatingPointType>(all.points[i].get(2)));
+											 static_cast<float>(all.points[i][0]),
+											 static_cast<float>(all.points[i][1]),
+											 static_cast<float>(all.points[i][2]));
 			PyList_Append(o_xyz_block, o_atom);
 		}
 		// returns List[Tuple(atom1, atom2), ...] 
@@ -838,11 +838,10 @@ extern "C" {
 		bool res = false;
 
 		cpplib::SearchGraph graph;
-
-		auto&& inputpair = SearchGraphType::RequestGraphType::ReadInput(s1);
+		auto&& inputpair = cpplib::MoleculeParser<AtomTypeRequest>::Read(s1);
 		graph.setupInput(std::move(inputpair.first));
 		deb_write("cpplib_SubSearch start ReadData");
-		auto datg = SearchGraphType::RequestGraphType::ReadInput(s2).first.makeCopyEx<AtomTypeData>();
+		auto datg = cpplib::MoleculeParser<AtomTypeRequest>::Read(s2).first.makeCopyEx<AtomTypeData>();
 		graph.setupData(std::move(datg));
 		deb_write("cpplib_SubSearch start prepareSearch");
 		graph.prepareToSearch();
@@ -884,9 +883,9 @@ extern "C" {
 		for (int i = 0; i < std::get<0>(ret).size(); i++)
 		{
 			PyObject* o_atom = Py_BuildValue("(fff)",
-											 static_cast<cpplib::currents::FloatingPointType>(std::get<0>(ret)[i].get(0)),
-											 static_cast<cpplib::currents::FloatingPointType>(std::get<0>(ret)[i].get(1)),
-											 static_cast<cpplib::currents::FloatingPointType>(std::get<0>(ret)[i].get(2)));
+											 static_cast<cpplib::currents::FloatingPointType>(std::get<0>(ret)[i][0]),
+											 static_cast<cpplib::currents::FloatingPointType>(std::get<0>(ret)[i][1]),
+											 static_cast<cpplib::currents::FloatingPointType>(std::get<0>(ret)[i][2]));
 			PyList_Append(o_xyz_block, o_atom);
 		}
 
@@ -904,7 +903,7 @@ extern "C" {
 	}
 	static PyObject* cpplib_SortDatabase(PyObject* self, PyObject* arg) {
 		Py_ssize_t us;
-		const auto ret = cpplib::currents::SearchGraphType::DatabaseGraphType::ResortString(PyUnicode_AsUTF8AndSize(arg,&us));
+		const auto ret = cpplib::MoleculeParser<cpplib::currents::AtomTypeData>::ResortString(PyUnicode_AsUTF8AndSize(arg, &us));
 		return PyUnicode_FromString(ret.c_str());
 	}
 
@@ -939,20 +938,95 @@ extern "C" {
 		for (size_t i = 0; i < ret_s; i++)
 		{
 			PyList_Append(o_ret, Py_BuildValue("(ffflllll)",
-											   static_cast<cpplib::currents::FloatingPointType>(std::get<0>(ret[i]).get(0)), // px
-											   static_cast<cpplib::currents::FloatingPointType>(std::get<0>(ret[i]).get(1)), // py
-											   static_cast<cpplib::currents::FloatingPointType>(std::get<0>(ret[i]).get(2)), // pz
+											   static_cast<float>(std::get<0>(ret[i])[0]), // px
+											   static_cast<float>(std::get<0>(ret[i])[1]), // py
+											   static_cast<float>(std::get<0>(ret[i])[2]), // pz
 											   static_cast<long>(std::get<1>(ret[i])),         // index
 											   static_cast<long>(std::get<2>(ret[i])),         // symmref
-											   static_cast<long>(std::get<3>(ret[i]).get(0)),  // sx
-											   static_cast<long>(std::get<3>(ret[i]).get(1)),  // sy
-											   static_cast<long>(std::get<3>(ret[i]).get(2))));// sz
+											   static_cast<long>(std::get<3>(ret[i])[0]),  // sx
+											   static_cast<long>(std::get<3>(ret[i])[1]),  // sy
+											   static_cast<long>(std::get<3>(ret[i])[2])));// sz
 		}
 		return Py_BuildValue("{s:O,s:O}",
 							 "points", o_ret,
 							 "hasPolymer", b ? Py_True : Py_False);
 	}
 
+	/// 
+	/// Args: [cell, symm, tuples, bools<int>, cutoff]
+	static PyObject* cpplib_Voronoi(PyObject* self, PyObject* args) {
+		using Diagram = cpplib::geometry::VoronoiDiagram<FloatingPointType>;
+
+		PyObject* ocell = NULL;
+		PyObject* osymm = NULL;
+		PyObject* otuples = NULL;
+		PyObject* obools = NULL;
+		float cutoff = 6.0;
+		if (!PyArg_ParseTuple(args, "OOOOf", &ocell, &osymm, &otuples, &obools, &cutoff)) {
+			deb_write("! Critic Error: Parse Error - return None");
+			Py_RETURN_NONE;
+		}
+
+		Prepare_IC all(ocell, osymm, otuples);
+		auto ps = all.points.size();
+		std::vector<int> intbools;
+		intbools.reserve(ps);
+		pyListToVectorInt(obools, &intbools);
+		std::vector<bool> bools(ps);
+
+		for (int i = 0; i < ps; i++) {
+			bools[i] = intbools[i] != 0;
+		}
+
+		FAMCellType fcell(CellType(all.cell));
+		auto supercell_indexes = fcell.CreateSupercell(all.points, cutoff, 1);
+		bools.resize(all.points.size(), false);
+
+		cpplib::geometry::HashedSpace<FloatingPointType, long> space(fcell, cutoff);
+		auto bonds = space.create_hash_bonds(all.points);
+
+		Diagram diag;
+		diag.addPoints(all.points, bools);
+		diag.calculateFaces<long>(bonds);
+
+		auto ret = diag.extractCells();
+		
+		PyObject* retlist = PyList_New(0);
+		
+		for (size_t i = 0; i < ps; i++)
+		{
+			auto& faces = ret[i].getFaces();
+			auto fs = faces.size();
+			PyObject* plist = PyList_New(0);
+			for (size_t j = 0; j < fs; j++)
+			{
+				// Create list of points of one face
+				PyObject* flist = PyList_New(0);
+				
+				for (size_t k = 0; k < faces[j].size(); k++) {
+					PointType point_on_face((faces[j][k][0] * supercell_indexes[0]),
+											(faces[j][k][1] * supercell_indexes[1]),
+											(faces[j][k][2] * supercell_indexes[2]));
+					point_on_face = point_on_face.MoveToCell();
+					PyList_Append(flist, Py_BuildValue("(fff)",
+													   static_cast<float>(point_on_face[0]),  // px
+													   static_cast<float>(point_on_face[1]),  // py
+													   static_cast<float>(point_on_face[2])));// pz
+
+					
+				}
+
+				// Add new face lo list of faces
+				PyList_Append(plist, flist);
+			}
+			// Add new cell to list of cells
+			PyList_Append(retlist, plist);
+		}
+
+		//auto ret = VoronoiCalculation(all.cell, all.symm, all.types, all.points, 8);
+		return Py_BuildValue("{s:O}",
+							 "cells", retlist);
+	}
 
 	static struct PyMethodDef methods[] = {
 		{ "GenBonds", cpplib_GenBonds, METH_O, "Generate bond list"},
@@ -975,6 +1049,7 @@ extern "C" {
 		{ "compaq", cpplib_compaq, METH_VARARGS, "Do the same as Olex2 'compaq' function"},
 		{ "SortDatabase", cpplib_SortDatabase, METH_O, "Sort graph"},
 		{ "Cluster", cpplib_ClusterCreate, METH_VARARGS, "Create cluster"},
+		{ "VoronoiCalculation", cpplib_Voronoi, METH_VARARGS, "Calculate Voronoi cells"},
 
 
 		{ NULL, NULL, 0, NULL }

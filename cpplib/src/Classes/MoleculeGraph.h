@@ -33,8 +33,18 @@
 #include <type_traits> // for std::fundamental
 #include <numeric> // for std::iota
 #include <algorithm> // for std::stable_sort
+#include <cctype> // for isdigit
+#include <ranges>
+#include <charconv>
 #include <sstream>
+#include <optional>
 namespace cpplib {		
+	enum class ReserveStrategy :char {
+		None,
+		Exact,
+		Estimated
+	};
+
 	class TypeMap {
 	public:
 		using AtomIndex = currents::AtomIndex;
@@ -44,10 +54,7 @@ namespace cpplib {
 	public:
 		static_assert (INT8_MAX >= mend_size, "mend_size chould be less than INT8_MAX");
 		constexpr TypeMap() {
-			for (indexType i = 0; i < mend_size; i++)
-			{
-				data_[i] = static_cast<AtomIndex>(-1);
-			}
+			std::ranges::fill(data_, AtomIndex(-1));
 		}
 		constexpr explicit TypeMap(const AtomIndex value) {
 			for (indexType i = 0; i < mend_size; i++)
@@ -56,18 +63,20 @@ namespace cpplib {
 			}
 		}
 		inline AtomIndex& operator[](const indexType i) {
+			_ASSERT(i < data_.size());
 			return data_[i];
 		}
 		inline const AtomIndex& operator[](const indexType i) const {
+			_ASSERT(i < data_.size());
 			return data_[i];
 		}
 		inline void initialize(const currents::TypeBitset& bits) {
 			for (indexType i = 1; i < mend_size; i++)
 			{
-				if (bits[i]) data_[i] = static_cast<AtomIndex>(0);
+				if (bits[i]) data_[i] = AtomIndex(0);
 			}
 		}
-		inline constexpr indexType size() const {
+		constexpr indexType size() const {
 			return data_.size();
 		}
 		inline bool isFinished() const {
@@ -78,18 +87,26 @@ namespace cpplib {
 			return true;
 		}
 	};
-	template<class A> class MoleculeGraph  {
+
+	template<AtomTypeConcept A>
+	class MoleculeParser;
+
+	template<AtomTypeConcept A>
+	class MoleculeCore {
 	public:
-		// Declarations
+		// Definitions
 		using NodeType = Node<A>;
 		using NodeContainer = ::std::vector<NodeType>;
 		using BondType = currents::BondType;
 		using AtomIndex = currents::AtomIndex;
 		using MoleculeIndex = currents::MoleculeIndex;
 		using HType = typename NodeType::HType;
+		using AtomTypeBase = typename A::AtomTypeBase;
 
-		template <class OT>
-		friend class MoleculeGraph;
+		template<AtomTypeConcept T>
+		friend class MoleculeCore;
+
+		friend class MoleculeParser<A>;
 
 	private:
 		// Data
@@ -97,85 +114,38 @@ namespace cpplib {
 		MoleculeIndex id_ = 0;
 
 	public:
-		constexpr MoleculeGraph() noexcept = default;
-		constexpr MoleculeGraph(const MoleculeGraph&) = delete;
-		constexpr MoleculeGraph(MoleculeGraph&&) noexcept = default;
-		explicit constexpr MoleculeGraph(NodeContainer&& other) noexcept(::std::is_nothrow_move_constructible<NodeContainer>::value)
-			: data_(::std::move(other)) {}
-		
-		static ::std::pair<MoleculeGraph, bool> ReadData(const char* str, const currents::TypeBitset& multiAtomBits, const TypeMap& map) {
-			MoleculeGraph mg;
-			const auto sn = mg.parseMainstringData(str, map);
-			if (sn == 0) return ::std::make_pair<MoleculeGraph, bool>(std::move(mg), false);
-			mg.release_HAtoms(multiAtomBits);
-			return ::std::make_pair<MoleculeGraph, bool>(std::move(mg), true);
+		constexpr MoleculeCore() noexcept = default;
+		explicit constexpr MoleculeCore(NodeContainer&& other) noexcept(::std::is_nothrow_move_constructible_v<NodeContainer>)
+			: data_(::std::move(other)) {
 		}
 
-		static ::std::pair<MoleculeGraph, currents::TypeBitset> ReadInput(const char* str) {
-			MoleculeGraph mg;
-			const auto sn = mg.parseMainstringRequest(str);
-			auto multiAtomBits = mg.parseMultiatom(str, sn);
-			mg.release_HAtoms(multiAtomBits);
-			mg.sortGraph();
-			return ::std::make_pair(std::move(mg), ::std::move(multiAtomBits));
-		}
-		
-		void unpackHydrogens(AtomIndex index) {
-			auto s = data_[index].getHAtoms();
-			for (AtomIndex i = 0; i < s; i++)
-			{
-				AtomIndex last = data_.size();
-				data_.emplace_back(1, 0, last);
-				addBond(index, last);
-				data_[last].setCoord(Coord(1,Coord::max));
-			}
-			data_[index].setHAtoms(0);
-		}
-
-		TypeMap getTypeMap() const {
-			TypeMap map;
-			static_assert(map.size() == mend_size);
-			AtomIndex s = size();
-			for (AtomIndex i = 1; i < s; i++)
-			{
-				const auto t = static_cast<currents::AtomTypeData>(data_[i].getType());
-				const auto h = static_cast<currents::AtomTypeData>(data_[i].getHAtoms());
-
-				if (map[1] == AtomIndex(-1))
-					map[1] = AtomIndex(h);
-				else
-					map[1]+=h;
-				if (t > 0) {
-					if (map[t] == AtomIndex(-1))
-						map[t] = AtomIndex(1);
-					else
-						map[t]++;
-				}
-				else {
-					for (TypeMap::indexType j = 1; j < map.size(); j++)
-					{
-						if (data_[i].getType().include(j) && map[j] == AtomIndex(-1))
-							map[j] = AtomIndex(0);
-					}
-				}
-			}
-			return map;
-		}
-
-		inline AtomIndex size() const noexcept {
+		constexpr AtomIndex size() const noexcept {
 			return static_cast<AtomIndex>(data_.size());
 		}
 
 		// Bond functions
-		::std::vector<BondType> getBonds() const {
+		::std::vector<BondType> getBonds(ReserveStrategy strategy = ReserveStrategy::Estimated) const {
 			::std::vector<BondType> ret;
+			switch (strategy) {
+			case ReserveStrategy::Exact:
+				ret.reserve(countBonds());
+				break;
+			case ReserveStrategy::Estimated:
+				ret.reserve(size() * 2);
+				break;
+			default: break;
+			}
+
 
 			AtomIndex s = size();
 			for (AtomIndex i = 1; i < s; i++) {
-				const auto neigh_s = this->operator[](i).neighboursSize();
+				const auto& node = data_[i];
+				const auto neigh_s = node.neighboursSize();
+
 				for (AtomIndex j = 0; j < neigh_s; j++) {
-					if (j > i) {
-						ret.emplace_back(i, j);
+					const AtomIndex neighbor_id = node.getNeighbour(j)->getID();
+					if (neighbor_id > i) {
+						ret.emplace_back(i, neighbor_id);
 					}
 				}
 			}
@@ -198,45 +168,18 @@ namespace cpplib {
 			data_[a].deleteBond(data_[b]);
 		}
 
-		// For Search
-		constexpr AtomIndex findStart() const {
-			return 1;
-		}
-		constexpr AtomIndex getNeighbourId(AtomIndex cur, AtomIndex neighbourIt) const noexcept {
-			return data_[cur].getNeighbour(neighbourIt)->getID();
-		}
-		constexpr const NodeType& getNeighbourReference(AtomIndex cur, AtomIndex neighbourIt) const noexcept {
-			return *(data_[cur].getNeighbour(neighbourIt));
-		}
-		constexpr const NodeType* getNeighbourPointer(AtomIndex cur, AtomIndex neighbourIt) const noexcept {
-			return data_[cur].getNeighbour(neighbourIt);
-		}
-
 		// Copy functions
-		[[nodiscard]] constexpr MoleculeGraph makeCopy() const noexcept(false) {
-			// Copy
-			MoleculeGraph ret;
-			ret.id_ = id_;
-			AtomIndex s = size();
-			ret.data_.reserve(s);
-			// Convertion to Correct Neighbours
-			for (AtomIndex i = 0; i < s; i++) {
-				const auto& node = data_[i];
-				ret.data_.emplace_back(node);
-			}
-			return ret;
-		}
 		template <class OT>
-		[[nodiscard]] constexpr MoleculeGraph<OT> makeCopyEx() const noexcept(false) {
+		[[nodiscard]] constexpr MoleculeCore<OT> makeCopyEx() const noexcept(false) {
 			// Copy
-			MoleculeGraph<OT> ret;
+			MoleculeCore<OT> ret;
 			ret.id_ = id_;
 			AtomIndex s = size();
 			ret.data_.reserve(s);
 			// Convertion to Correct Neighbours
 			for (AtomIndex i = 0; i < s; i++) {
 				const auto& node = data_[i];
-				ret.data_.emplace_back(XAtom(node.getType()).get_simple(), node.getHAtoms(), node.getID());
+				ret.data_.emplace_back(static_cast<OT>(static_cast<AtomTypeBase>(node.getType())), node.getHAtoms(), node.getID());
 				ret.data_.back().addNeighboursVector(node.getNeighboursVector());
 				ret.data_.back().setCoord(std::move(node.getCoord()));
 			}
@@ -245,13 +188,13 @@ namespace cpplib {
 
 		// Operators
 		constexpr const NodeType& operator[](const AtomIndex s) const noexcept {
+			_ASSERT(s < data_.size());
 			return data_[s];
 		}
 		constexpr NodeType& operator[](const AtomIndex s) noexcept {
+			_ASSERT(s < data_.size());
 			return data_[s];
 		}
-		inline MoleculeGraph& operator=(const MoleculeGraph& other) noexcept = delete;
-		inline MoleculeGraph& operator=(MoleculeGraph&& other) noexcept = default;
 
 		// Iterators
 		constexpr auto begin() noexcept {
@@ -271,11 +214,96 @@ namespace cpplib {
 			return id_;
 		}
 
-		// static section for old tests
-		static ::std::string _ParseOldInputString(const char* str)  {
+		constexpr TypeMap getTypeMap() const {
+			TypeMap map;
+			static_assert(map.size() == mend_size);
+			AtomIndex s = size();
+			for (AtomIndex i = 1; i < s; i++)
+			{
+				const auto t = static_cast<currents::AtomTypeBase>(data_[i].getType());
+				const auto h = data_[i].getHAtoms();
+
+				if (map[1] == AtomIndex(-1))
+					map[1] = AtomIndex(h);
+				else
+					map[1] += h;
+				if (t > 0) {
+					if (map[t] == AtomIndex(-1))
+						map[t] = AtomIndex(1);
+					else
+						map[t]++;
+				}
+				else {
+					for (TypeMap::indexType j = 1; j < map.size(); j++)
+					{
+						if (data_[i].getType().contains(j) && map[j] == AtomIndex(-1))
+							map[j] = AtomIndex(0);
+					}
+				}
+			}
+			return map;
+		}
+		void unpackHydrogens(AtomIndex index) {
+			auto s = data_[index].getHAtoms();
+			for (AtomIndex i = 0; i < s; i++)
+			{
+				AtomIndex last = data_.size();
+				data_.emplace_back(A(1), 0, last);
+				addBond(index, last);
+				data_[last].setCoord(Coord(1, Coord::max));
+			}
+			data_[index].setHAtoms(0);
+		}
+		void sortGraph() {
+			// Seclection sort
+
+			AtomIndex s = data_.size();
+			AtomIndex best = 1;
+			for (AtomIndex i = 1; i < s; i++)
+			{
+				best = i;
+				for (AtomIndex j = i + 1; j < s; j++)
+				{
+					if (data_[best] < data_[j]) {
+						best = j;
+					}
+				}
+				if (best != i) {
+					data_[i].swap(data_[best]);
+					// IDs don't swap and stay actual
+				}
+			}
+			for (AtomIndex i = 1; i < s; i++)
+			{
+				data_[i].sortNeighbours();
+			}
+		}
+
+	};
+
+	template<AtomTypeConcept A>
+	class MoleculeParser {
+	public:
+		using GraphType = MoleculeCore<A>;
+		using AtomIndex = typename GraphType::AtomIndex;
+		using HType = typename GraphType::HType;
+
+
+		explicit MoleculeParser(GraphType& graph) noexcept : graph_(graph) {}
+
+		static ::std::string ResortString(const char* str) {
+			GraphType gr;
+			MoleculeParser p(gr);
+			p.parseMainstringData(str, TypeMap(0));
+			gr.sortGraph();
+
+			return p.writeDataString();
+		}
+
+		static ::std::string _ParseOldInputString(const char* str) {
 			::std::string ret(str);
-			int na;
-			int no;
+			long na;
+			long no;
 			{
 				::std::stringstream ss(ret);
 				ss >> no;
@@ -296,72 +324,50 @@ namespace cpplib {
 			}
 			return ret;
 		}
-		void sortGraph() {
-			// Seclection sort
 
-			AtomIndex s = data_.size();
-			AtomIndex best = 1;
-			for (AtomIndex i = 1; i < s; i++)
-			{
-				best = i;
-				for (AtomIndex j = i + 1; j < s; j++)
-				{
-					if (data_[best] < data_[j]) {
-						best = j;
-					}
-				}
-				if (best != i) {
-					exchange(i, best);
-				}
-			}
-			for (AtomIndex i = 1; i < s; i++)
-			{
-				data_[i].sortNeighbours();
-			}
-		}
+		template<typename T = A> requires std::is_same_v<T, currents::AtomTypeRequest>
+		static ::std::pair<GraphType, currents::TypeBitset> Read(const char* str) {
+			GraphType mg;
+			MoleculeParser p(mg);
 
-		// Static Functions
-		static std::string ResortString(const char* str) {
-			MoleculeGraph mg;
-			mg.parseMainstringData(str,TypeMap(0));
+			const auto sn = p.parseMainstringRequest(str);
+			auto multiAtomBits = p.parseMultiatom(str, sn);
+			p.release_HAtoms(multiAtomBits);
 			mg.sortGraph();
-			
-			return mg.writeDataString();
+			return { mg, multiAtomBits };
+		}
+		template<typename T = A> requires std::is_same_v<T, currents::AtomTypeData>
+		static ::std::pair<GraphType, bool> Read(const char* str, const currents::TypeBitset& multiAtomBits, const TypeMap& map) {
+			GraphType mg;
+			MoleculeParser p(mg);
+
+			const auto is_correct = p.parseMainstringData(str, map);
+			if (is_correct == false) return { GraphType(), false };
+			p.release_HAtoms(multiAtomBits);
+			return { mg, true };
 		}
 
 	private:
-		bool readToNext(const char*& str) {
-
+		constexpr bool readToNext(const char*& str) const noexcept {
 			while (*str != '-' && *str != '\0' && (*str > '9' || *str < '0')) {
 				str++;
 			}
 			return *str != '\0';
 		}
-		AtomIndex readSingleInt(const char*& str) {
+		AtomIndex readSingleInt(const char*& str) const {
 			readToNext(str);
-			bool minus = false;
-			if (*str == '-') {
-				minus = true;
-				str++;
-			}
-			AtomIndex res = (*str)-'0';
-			str++;
-			while ((*str)!=' ' && (*str)!='\0')
-			{
-				res *= 10;
-				res += (*str) - '0';
-				str++;
-			}
-			if (minus)
-				return -res;
-			else
-				return res;
+			AtomIndex value;
+			auto [ptr, ec] = std::from_chars(str, str + 15, value);
+			if (ec == std::errc()) str = ptr;
+			else throw std::invalid_argument("Invalid number");
+			return value;
 		}
-		inline ::std::vector<bool> parseAtomsBlockData(const char *& str, const AtomIndex sn, const TypeMap& argMap) {
-			data_.reserve(sn);
-			TypeMap map(argMap);
-			data_.emplace_back(A(0), HType(0), AtomIndex(0));
+		::std::vector<bool> parseAtomsBlockData(const char*& str, const AtomIndex sn, const TypeMap& argMap) {
+			graph_.data_.reserve(sn);
 			::std::vector<bool> is_used(sn, false);
+			TypeMap map(argMap);
+			graph_.data_.emplace_back(A(0), HType(0), AtomIndex(0));
+
 			for (AtomIndex i = 1; i < sn; i++) {
 				int a = readSingleInt(str);
 				int b = readSingleInt(str);
@@ -379,7 +385,7 @@ namespace cpplib {
 					}
 				}
 				is_used[i] = true;
-				data_.emplace_back(A(a), HType(b), AtomIndex(data_.size()));
+				graph_.data_.emplace_back(A(a), HType(b), AtomIndex(graph_.data_.size()));
 			}
 			if (!map.isFinished())
 				is_used[0] = false;
@@ -387,34 +393,37 @@ namespace cpplib {
 				is_used[0] = true;
 			return is_used;
 		}
-		inline void parseAtomsBlockRequest(const char*& str, const AtomIndex sn) {
-			data_.reserve(sn);
-			data_.emplace_back(A(0), HType(0), AtomIndex(0));
+		void parseAtomsBlockRequest(const char*& str, const AtomIndex sn) {
+			graph_.data_.reserve(sn);
+			graph_.data_.emplace_back(A(0), HType(0), AtomIndex(0));
 			for (AtomIndex i = 1; i < sn; i++) {
 				int a = readSingleInt(str);
 				int b = readSingleInt(str);
-				data_.emplace_back(A(a), HType(b), AtomIndex(i));
+				graph_.data_.emplace_back(A(a), HType(b), AtomIndex(i));
 				int first = readSingleInt(str);
 				int second = readSingleInt(str);
-				data_.back().setCoord(Coord(static_cast<Coord::argumentType>(first), static_cast<Coord::argumentType>(second)));
+				graph_.data_.back().setCoord(Coord(static_cast<Coord::argumentType>(first), static_cast<Coord::argumentType>(second)));
 			}
 		}
 		::std::pair<AtomIndex, AtomIndex> parseInit(const char*& str) {
-			id_ = readSingleInt(str);
+			graph_.id_ = readSingleInt(str);
 			::std::pair<AtomIndex, AtomIndex> r;
 			r.first = readSingleInt(str);
 			r.second = readSingleInt(str);
 			r.first++;
 			return r;
 		}
-		inline AtomIndex parseMainstringData(const char*& str, const TypeMap& map) {
+
+		template<typename T = A> requires std::is_same_v<T, currents::AtomTypeData>
+		bool parseMainstringData(const char*& str, const TypeMap& map) {
+
 			::std::pair<AtomIndex, AtomIndex>&& sn_sb = parseInit(str);
 			AtomIndex& sn = sn_sb.first;
 			AtomIndex& sb = sn_sb.second;
 
 			// Atomic loop
 			auto used = parseAtomsBlockData(str, sn, map);
-			if (used[0] == false) return 0;
+			if (used[0] == false) return false;
 			std::vector<AtomIndex> reI(sn, 0);
 			AtomIndex reI_last = 1;
 			for (AtomIndex i = 1; i < sn; i++)
@@ -433,8 +442,8 @@ namespace cpplib {
 				int b = readSingleInt(str);
 				bool b_reIa = reI[a] != 0;
 				bool b_reIb = reI[b] != 0;
-				if(b_reIa && b_reIb)
-					data_[reI[a]].addBondSimple(data_[reI[b]]);
+				if (b_reIa && b_reIb)
+					graph_[reI[a]].addBondSimple(graph_[reI[b]]);
 				else {
 					if (b_reIa)
 						coord_counters[reI[a]]++;
@@ -443,16 +452,18 @@ namespace cpplib {
 				}
 			}
 			for (AtomIndex i = 1; i < reI_last; i++) {
-				Coord c = Coord(static_cast<Coord::argumentType>(data_[i].getHAtoms() + data_[i].neighboursSize() + coord_counters[i]));
-				data_[i].setCoord(::std::move(c));
+				auto c = Coord(static_cast<Coord::argumentType>(graph_[i].getHAtoms() + graph_[i].neighboursSize() + coord_counters[i]));
+				graph_[i].setCoord(::std::move(c));
 			}
 			for (AtomIndex i = 0; i < reI_last; i++) {
-				data_[i].sortNeighbours();
+				graph_[i].sortNeighbours();
 			}
 
-			return sn;
+			return true;
 		}
-		inline AtomIndex parseMainstringRequest(const char*& str) {
+
+		template<typename T = A> requires std::is_same_v<T, currents::AtomTypeRequest>
+		AtomIndex parseMainstringRequest(const char*& str) {
 			::std::pair<AtomIndex, AtomIndex>&& sn_sb = parseInit(str);
 			AtomIndex& sn = sn_sb.first;
 			AtomIndex& sb = sn_sb.second;
@@ -464,18 +475,20 @@ namespace cpplib {
 			for (AtomIndex i = 0; i < sb; i++) {
 				int a = readSingleInt(str);
 				int b = readSingleInt(str);
-				data_[a].addBondSimple(data_[b]);
+				graph_.data_[a].addBondSimple(graph_.data_[b]);
 			}
 			for (AtomIndex i = 0; i < sn; i++) {
-				data_[i].sortNeighbours();
+				graph_.data_[i].sortNeighbours();
 			}
 
 			return sn;
 		}
+
+		template<typename T = A> requires std::is_same_v<T, currents::AtomTypeRequest>
 		currents::TypeBitset parseMultiatom(const char* str, const AtomIndex sn) {
 			AtomIndex xty;
 			currents::TypeBitset multiAtomBits;
-			if(readToNext(str))
+			if (readToNext(str))
 				xty = readSingleInt(str);
 			else {
 				return multiAtomBits;
@@ -492,13 +505,13 @@ namespace cpplib {
 				}
 				for (AtomIndex i = 1; i < sn; i++)
 				{
-					if (this->operator[](i).getType().simple_eq((static_cast<char>(xty)))) {
-						this->operator[](i).setType(real);
-						if (!real.include(1)) continue;
+					if (static_cast<currents::AtomTypeBase>(graph_.data_[i].getType()) == static_cast<currents::AtomTypeBase>(xty)) {
+						graph_.data_[i].setType(real);
+						if (!real.contains(1)) continue;
 
-						for (AtomIndex j = 0; j < this->operator[](i).neighboursSize(); j++)
+						for (AtomIndex j = 0; j < graph_.operator[](i).neighboursSize(); j++)
 						{
-							multiAtomBits |= this->operator[](i).getNeighbour(j)->getType().get_bitset();
+							multiAtomBits |= graph_.operator[](i).getNeighbour(j)->getType().get_bitset();
 						}
 					}
 				}
@@ -511,67 +524,82 @@ namespace cpplib {
 
 			return multiAtomBits;
 		}
-		void release_HAtoms(const currents::TypeBitset& bits) {
-			if (bits.none()) return;
-			AtomIndex hs = this->size();
-			const AtomIndex sn = hs;
 
-			for (AtomIndex i = 1; i < sn; i++)
-			{
-				bool check;
-				if (::std::is_same<A, XAtom>::value == true) {
-					check = ((static_cast<XAtom>(data_[i].getType())).get_bitset() & bits).any();
+		void release_HAtoms(const currents::TypeBitset& bits) {
+			auto& data_ = graph_.data_;
+			if (bits.none()) return;
+			const AtomIndex original_size = graph_.size();
+			AtomIndex new_index = original_size;
+
+			size_t totalH = 0;
+			for (AtomIndex i = 1; i < original_size; i++) {
+				totalH += data_[i].getHAtoms();
+			}
+			data_.reserve(original_size + totalH);
+
+			for (AtomIndex i = 1; i < original_size; i++) {
+				bool check = false;
+
+				if constexpr (::std::is_same_v<A, CompositeAtom>) {
+					check = (data_[i].getType().get_bitset() & bits).any();
 				}
 				else {
-					check = bits[(currents::AtomTypeData)(this->operator[](i).getType())];
+					const auto type = static_cast<currents::AtomTypeBase>(data_[i].getType());
+					check = (type > 0) && bits[type];
 				}
-				if(check) {
-					auto hAtoms = this->operator[](i).getHAtoms();
-					for (HType j = 0; j < hAtoms; j++)
-					{
-						data_.emplace_back(A(1), 0, hs);
+
+				if (check) {
+					const auto hAtoms = data_[i].getHAtoms();
+					for (HType j = 0; j < hAtoms; j++) {
+						data_.emplace_back(A(1), 0, new_index);
 						data_[i].addBondWithSort(data_.back());
 						data_.back().setCoord(Coord(1, Coord::max));
-						hs++;
+						new_index++;
 					}
 					data_[i].setHAtoms(0);
 				}
 			}
 		}
-		constexpr void exchange(AtomIndex a1, AtomIndex a2) {
-			data_[a1].swap(data_[a2]);
-		}
-		std::string writeDataString() const {
-			AtomIndex ns = data_.size();
+		::std::string writeDataString() const {
+			using BondType = typename MoleculeCore<A>::BondType;
+			AtomIndex ns = graph_.size();
 			AtomIndex bs = 0;
-			std::vector<BondType> bonds;
-			std::string bond_str; // starts with ' '
-			std::string node_str;
+			::std::vector<BondType> bonds;
+			::std::string bond_str; // starts with ' '
+			::std::string node_str;
+
+			bond_str.reserve(2048);
+			node_str.reserve(2048);
+
 			for (AtomIndex i = 1; i < ns; i++)
 			{
 				node_str += ' ';
-				node_str += std::to_string(static_cast<int>(static_cast<char>(data_[i].getType())));
+				node_str += std::to_string(static_cast<int>(static_cast<A::AtomTypeBase>(graph_[i].getType())));
 				node_str += ' ';
-				node_str += std::to_string(static_cast<int>(data_[i].getHAtoms()));
+				node_str += std::to_string(static_cast<int>(graph_[i].getHAtoms()));
 
-				int8_t neis = data_[i].neighboursSize();
+				int8_t neis = graph_[i].neighboursSize();
 				for (int8_t j = 0; j < neis; j++)
 				{
-					AtomIndex neindex = getNeighbourId(i, j);
-					if(neindex > i) {
+					AtomIndex neindex = graph_[i].getNeighbour(j)->getID();
+					if (neindex > i) {
 						bond_str += ' ';
 						bond_str += std::to_string(i);
 						bond_str += ' ';
 						bond_str += std::to_string(neindex);
-					}					
+					}
 				}
 				bs += neis;
 			}
 			bs >>= 1;
 
-			std::string res = (std::to_string(id_) + ' ')
-				+ (std::to_string(ns-1) + ' ') + std::to_string(bs);
+			std::string res = (std::to_string(graph_.id_) + ' ')
+				+ (std::to_string(ns - 1) + ' ') + std::to_string(bs);
 			return res + node_str + bond_str;
 		}
+
+	private:
+		// Data ref
+		GraphType& graph_;
 	};
 }

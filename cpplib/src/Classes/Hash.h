@@ -32,22 +32,23 @@
 #include <vector>
 #include <cstdint>
 namespace cpplib {
-	template<class A> class Hash {
+	template<AtomTypeConcept A> class Hash {
 	public:
 		// Current settings
 		using hash_single = uint16_t;
 		using hash_full = uint64_t;
 
 		using NodeType = Node<A>;
+		using AtomTypeBase = typename NodeType::AtomType::AtomTypeBase;
 		using AtomIndex = currents::AtomIndex;
-		using MoleculeGraphType = MoleculeGraph<A>;
+		using MoleculeCoreType = MoleculeCore<A>;
 		using size_type = currents::AtomIndex;
 
 	private:
 		// Data
 		::std::vector<hash_full> hash;
 		template <class MI>
-		explicit constexpr Hash(const MoleculeGraphType& nodes) = delete;
+		explicit constexpr Hash(const MoleculeCoreType& nodes) = delete;
 
 	public:
 		// Constructors
@@ -85,7 +86,7 @@ namespace cpplib {
 			auto size = nodes.size();
 			std::vector<hash_single> monohash(size);
 			for (size_type i = 0; i < size; i++) {
-				monohash[i] = static_cast<hash_single>(nodes[i].getType()) + static_cast<hash_single>(static_cast<hash_single>(nodes[i].getHAtoms()) << 8) + static_cast<hash_single>(nodes[i].neighboursSize() << 12);
+				monohash[i] = static_cast<hash_single>(static_cast<AtomTypeBase>(nodes[i].getType())) + static_cast<hash_single>(static_cast<hash_single>(nodes[i].getHAtoms()) << 8) + static_cast<hash_single>(nodes[i].neighboursSize() << 12);
 			}
 			return monohash;
 		}
@@ -94,7 +95,7 @@ namespace cpplib {
 			auto size = nodes.size();
 			std::vector<hash_single> monohash(size);
 			for (size_type i = 0; i < size; i++) {
-				monohash[i] = static_cast<hash_single>(nodes[ai[i]].getType()) + static_cast<hash_single>(static_cast<hash_single>(nodes[ai[i]].getHAtoms()) << 8) + static_cast<hash_single>(nodes[ai[i]].neighboursSize() << 12);
+				monohash[i] = static_cast<hash_single>(static_cast<AtomTypeBase>(nodes[ai[i]].getType())) + static_cast<hash_single>(static_cast<hash_single>(nodes[ai[i]].getHAtoms()) << 8) + static_cast<hash_single>(nodes[ai[i]].neighboursSize() << 12);
 			}
 			return monohash;
 		}

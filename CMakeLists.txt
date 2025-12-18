@@ -36,16 +36,19 @@ if (POLICY CMP0141)
     set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<IF:$<AND:$<C_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:MSVC>>,$<$<CONFIG:Debug,RelWithDebInfo>:EditAndContinue>,$<$<CONFIG:Debug,RelWithDebInfo>:ProgramDatabase>>")
 endif()
 
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 set(COMPILE_TESTS FALSE)
 if (WIN32)
     set(COMPILE_TESTS TRUE)
     project(cpplibLib)
-    if (UNIX)
-        find_package(Python3 COMPONENTS Interpreter Development)
-    endif (UNIX)
+    if (UNIX OR APPLE)
+        find_package(Python COMPONENTS Interpreter Development)
+    endif (UNIX OR APPLE)
 
     if (WIN32)
-        find_package(Python3 COMPONENTS Interpreter Development EXACT 3.10)
+        find_package(Python COMPONENTS Interpreter Development EXACT 3.10)
     endif (WIN32)
     include_directories(SYSTEM ${Python3_INCLUDE_DIRS})
     
@@ -63,7 +66,7 @@ if (WIN32)
                            "cpplib/src/Functions/Functions.h"
                            "cpplib/src/Functions/AllInOneAndCurrent.h" 
                            "cpplib/src/Classes/FindGeometry.h" "cpplib/src/Functions/PythonInteface.cpp" "cpplib/src/BaseHeaders/Currents.h" "cpplib/src/Classes/Cluster.h")
-    target_link_libraries(cpplibLib ${Python3_LIBRARY_DIRS})
+    target_link_libraries(cpplibLib)
 
     target_include_directories(cpplibLib PUBLIC 
         ${PROJECT_SOURCE_DIR}/cpplib/src/BaseHeaders
@@ -79,9 +82,9 @@ endif(WIN32)
 
 project(cpplib)
 
-    if (UNIX)
+    if (UNIX OR APPLE)
         find_package(Python3 COMPONENTS Interpreter Development)
-    endif (UNIX)
+    endif (UNIX OR APPLE)
 
     if (WIN32)
         find_package(Python3 COMPONENTS Interpreter Development EXACT 3.10)
@@ -106,9 +109,9 @@ project(cpplib)
                            "cpplib/src/Functions/AllInOneAndCurrent.h" 
                            "cpplib/src/Classes/FindGeometry.h" "cpplib/src/Functions/PythonInteface.cpp" "cpplib/src/BaseHeaders/Currents.h" "cpplib/src/Classes/Cluster.h")
         if(WIN32)
-            target_link_libraries(cpplib PRIVATE ${Python3_LIBRARY_DIRS}/python3.lib)
+            target_link_libraries(cpplib PRIVATE ${Python_LIBRARY_DIRS}/python3.lib)
         else()
-            target_link_libraries(cpplib PRIVATE ${Python3_LIBRARY_DIRS})
+            target_link_libraries(cpplib PRIVATE ${Python_LIBRARY_DIRS})
         endif()
         set_target_properties(cpplib PROPERTIES
             PREFIX ""
@@ -117,13 +120,13 @@ project(cpplib)
             POSITION_INDEPENDENT_CODE ON
         )
 
-        if (UNIX)
+        if (UNIX OR APPLE)
             add_custom_command(
                 TARGET cpplib POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy
                     $<TARGET_FILE:cpplib>
                     ${CMAKE_SOURCE_DIR}/module/cpplib.so)
-        endif (UNIX)
+        endif (UNIX OR APPLE)
         if (WIN32)
             add_custom_command(
                 TARGET cpplib POST_BUILD
