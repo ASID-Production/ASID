@@ -116,7 +116,7 @@ namespace cpplib {
 			assert(types.size() == s);
 			asymmetric_unit.reserve(s);
 			for (size_t i = 0; i < s; i++) {
-				asymmetric_unit.emplace_back(i, types[i], points[i], 0, ShiftType(0, 0, 0));
+				asymmetric_unit.emplace_back(AtomIndex(i), types[i], points[i], SymmIndex(0), ShiftType(0, 0, 0));
 			}
 
 			constexpr PointType zeroPoint(0, 0, 0);
@@ -214,7 +214,7 @@ namespace cpplib {
 			unit.reserve(au_s * symm_s);
 
 			for (SymmIndex i = 0; i < symm_s; i++) {
-				for (size_t j = 0; j < au_s; j++) {
+				for (AtomIndex j = 0; j < au_s; j++) {
 					auto temp_point = symm[i].GenSymm(asymmetric_unit[j].point);
 					auto floating_shift = -temp_point.floor();
 					temp_point.MoveToCell();
