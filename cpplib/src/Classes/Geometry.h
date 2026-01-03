@@ -544,8 +544,8 @@ namespace cpplib::geometry {
 		}
 
 		// Method to clip the polygon by a plane
-		std::optional<std::pair<PointType,PointType>> clipByPlane(const PlaneType& clipping_plane) {
-			if (!is_valid_ || vertices_.empty()) 
+		std::optional<std::pair<PointType, PointType>> clipByPlane(const PlaneType& clipping_plane) {
+			if (!is_valid_ || vertices_.empty())
 				return std::optional<std::pair<PointType, PointType>>();
 
 			auto intersect = [](const PointType& a, const PointType& b, const PlaneType& plane)->PointType {
@@ -557,43 +557,56 @@ namespace cpplib::geometry {
 				};
 			auto vs = vertices_.size();
 
-			auto [e1, e2] = findIntersectionPoints(clipping_plane);
+			auto [e1, e2] = find_inner_region(clipping_plane);
 
-			// Check: all points are on the same side of the plane?
-			if (e1 == vs) {
-				if (clipping_plane.side(vertices_[0]) < 0) {
-					vertices_.clear();
-					is_valid_ = false;
-				}
+			// Check: all points are outide of the plane?
+			if (e1 == vs && e2 == vs) {
+				vertices_.clear();
+				is_valid_ = false;
 				return std::optional<std::pair<PointType, PointType>>();
 			}
-			else 
-			{
-				// erase from e1 (including) to e2 (excluding)
-				// find intersection points
-				PointType inter1 = intersect(vertices_[(e1 + vs - 1) % vs], vertices_[e1], clipping_plane);
-				PointType inter2 = intersect(vertices_[(e2 + vs - 1) % vs], vertices_[e2], clipping_plane);
-				if (e1 > e2) {
-					vertices_.erase(vertices_.begin() + e1, vertices_.end());
-					vertices_.erase(vertices_.begin(), vertices_.begin() + e2);
-					vertices_.push_back(inter1);
-					vertices_.push_back(inter2);
-				}
-				else if (e2 > e1) {
-					vertices_[e1] = inter1;
-					vertices_[e2] = inter2;
-					if ((e2 - e1) > 2) {
-						vertices_.erase(vertices_.begin() + e1 + 1, vertices_.begin() + e2 - 1);
+
+			// Check: all points are inside?
+			if (e1 == 0 && e2 == vs - 1) {
+				// No modification needed
+				return std::optional<std::pair<PointType, PointType>>();
+			}
+
+			// erase from e2 (excluding) to e1 (excluding)
+			// find intersection points
+			PointType inter1 = intersect(vertices_[(e1 + vs - 1) % vs], vertices_[e1], clipping_plane);
+			PointType inter2 = intersect(vertices_[(e2 + vs + 1) % vs], vertices_[e2], clipping_plane);
+			if (e1 > e2) {
+				auto de = e1 - e2 - 1;
+				// At least one point should be deleted. So, lets overwrite it:
+				vertices_[e2 + 1] = inter2;
+
+
+				if (de >= 2) {
+					vertices_[e2 + 2] = inter1;
+					// Now, if de > 2 delete all other points
+					if (de > 2) {
+						vertices_.erase(vertices_.begin() + e2 + 3, vertices_.begin() + e1);
 					}
 				}
-				else if (e1 == e2) {
-					// overwrite e1 and add one more point
-					vertices_[e1] = inter1;
-					vertices_.insert(vertices_.begin() + e1 + 1, inter2);
+				else { // de == 1
+					vertices_.insert(vertices_.begin() + e2 + 2, inter1);
 				}
-				_ASSERT(isConvex());
-				return std::make_optional(std::pair<PointType, PointType>(inter1, inter2));
 			}
+			else { // e1 <= e2
+				if (e2 != vs - 1) {
+					vertices_.erase(vertices_.begin() + e2 + 1, vertices_.end());
+				}
+				if (e1 != 0) {
+					vertices_.erase(vertices_.begin(), vertices_.begin() + e1);
+				}
+				vertices_.push_back(inter2);
+				vertices_.push_back(inter1);
+			}
+
+			_ASSERT(isConvex());
+			return std::make_optional(std::pair<PointType, PointType>(inter1, inter2));
+
 
 
 			return std::optional<std::pair<PointType, PointType>>();
@@ -662,7 +675,7 @@ namespace cpplib::geometry {
 		std::pair<size_t,size_t> findIntersectionPoints(const PlaneType& clipping_plane) const {
 			size_t e1 = vertices_.size();
 			size_t e2 = vertices_.size();
-			size_t vs = vertices_.size();
+			const size_t vs = vertices_.size();
 
 			PointType inter1;
 			PointType inter2;
@@ -698,6 +711,68 @@ namespace cpplib::geometry {
 			}
 
 			return std::make_pair(e1, e2);
+		}
+
+		// Special values:
+		// [0, size-1] = All inside
+		// [size, size] = All outside
+		std::pair<size_t, size_t> find_inner_region(const PlaneType& clipping_plane) const {
+			size_t e1 = vertices_.size();
+			size_t e2 = vertices_.size();
+			const size_t vs = vertices_.size();
+			bool has_negative = false;
+			bool has_positive = false;
+
+			PointType inter1;
+			PointType inter2;
+
+			// Prepare dist to plane vector
+			::std::vector<T> dists(vs, 0);
+			for (size_t iter = 0; iter < vs; iter++)
+			{
+				dists[iter] = clipping_plane.side(vertices_[iter]);
+				if (dists[iter] > 0) {
+					has_positive = true;
+					e2 = iter;
+					e1 = iter;
+				}
+				else if (dists[iter] < 0) has_negative = true;
+			}
+
+			// Check all points non-negative = all points inside
+			if (has_negative == false)
+				return { 0, vs - 1 };
+
+			// Check all points non-positive = at maximum - corner or angle touch
+			if (has_positive == false)
+				return { vs, vs };
+
+			
+			// Find left corner 
+			for (size_t iter = e1+vs-1; iter > e2; iter--)
+			{
+				auto iter_t = iter % vs;
+				if (dists[iter_t] > 0) {
+					e1 = iter_t;
+				}
+				else {
+					break;
+				}
+			}
+
+			const auto e1_t = e1 + vs;
+			// Find right corner 
+			for (size_t iter = e2+1; iter < e1_t; iter++)
+			{
+				auto iter_t = iter % vs;
+				if (dists[iter_t] > 0) {
+					e2 = iter_t;
+				}
+				else {
+					break;
+				}
+			}
+			return { e1, e2 };
 		}
 	};
 
