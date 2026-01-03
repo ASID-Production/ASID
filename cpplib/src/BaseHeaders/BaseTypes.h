@@ -17,7 +17,7 @@ namespace cpplib::basic_types {
     using MoleculeIndex = int_fast32_t;
     using HType = int_fast8_t;
     using AtomTypeBase = int_fast8_t;
-    using FloatingPointType = float;
+    using FloatingPointType = double;
     using TypeBitset = ::std::bitset<constants::mend_size>;
 
     // Maximum size type

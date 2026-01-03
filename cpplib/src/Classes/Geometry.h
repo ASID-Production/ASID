@@ -116,6 +116,24 @@ namespace cpplib::geometry {
 			value_type d2 = a.a[2] - b.a[2];
 			return sqrt(fma(d0, d0, fma(d1, d1, d2 * d2)));
 		}
+		static constexpr value_type distanceInCubicCell(const Point& a, const Point& b) noexcept {
+			value_type d0 = fmod(a.a[0] - b.a[0] + T(0.5), T(1.0)) - T(0.5);
+			value_type d1 = fmod(a.a[1] - b.a[1] + T(0.5), T(1.0)) - T(0.5);
+			value_type d2 = fmod(a.a[2] - b.a[2] + T(0.5), T(1.0)) - T(0.5);
+			return sqrt(fma(d0, d0, fma(d1, d1, d2 * d2)));
+		}
+
+		static constexpr value_type isSameInCubicCell(const Point& a, const Point& b, T epsilon) noexcept {
+			return abs(fmod(a.a[0] - b.a[0] + T(0.5), T(1.0)) - T(0.5)) <= epsilon &&
+				abs(fmod(a.a[1] - b.a[1] + T(0.5), T(1.0)) - T(0.5)) <= epsilon &&
+				abs(fmod(a.a[2] - b.a[2] + T(0.5), T(1.0)) - T(0.5)) <= epsilon;
+		}
+		static constexpr value_type isSame(const Point& a, const Point& b, T epsilon) noexcept {
+			return abs(a.a[0] - b.a[0]) <= epsilon &&
+				abs(a.a[1] - b.a[1]) <= epsilon &&
+				abs(a.a[2] - b.a[2]) <= epsilon;
+		}
+
 		static constexpr value_type angleRad(const Point& a, const Point& b, const Point& c) noexcept {
 			auto ab = distance(a, b);
 			auto ac = distance(a, c);
@@ -147,6 +165,14 @@ namespace cpplib::geometry {
 		}
 		constexpr Point floor() const {
 			return Point(std::floor(a[0]), std::floor(a[1]), std::floor(a[2]));
+		}
+		static constexpr Point quantize(const Point & p, T epsilon) noexcept {
+			if (epsilon == 0) return {};
+			return {
+				std::round(p[0] / epsilon) * epsilon,
+				std::round(p[1] / epsilon) * epsilon,
+				std::round(p[2] / epsilon) * epsilon
+			};
 		}
 
 		constexpr value_type operator[](const uint8_t i) const noexcept { return a[i]; }
@@ -629,7 +655,7 @@ namespace cpplib::geometry {
 			return is_valid_ && vertices_.size() >= 3;
 		}
 
-		const std::vector<PointType>& getVertices() const {
+		const std::vector<PointType>& getVertixes() const {
 			return vertices_;
 		}
 	private:
@@ -977,7 +1003,6 @@ namespace cpplib::geometry {
 			addPoints(points, flags_);
 			calculateFaces<AI>(bonds);
 		}
-
 		void addPoints(const PointVector& points, const BoolVector& flags) noexcept {
 			cells_.reserve(points.size());
 			for (size_t i = 0; i < points.size(); i++)
@@ -1022,6 +1047,137 @@ namespace cpplib::geometry {
 			state = State::Uninitialized;
             return std::move(cells_);
 		}
+	};
+
+	template<class T>
+	class VoronoiFused {
+	public:
+		using PointType = Point<T>;
+
+		class Polygon {
+		public:
+			bool is_inner = false;
+			::std::vector<::std::size_t> vert_ids;
+
+			void rotateToCanonical() {
+				const size_t n = vert_ids.size();
+				if (n <= 1) return;
+
+				// 1. Find position of minimum, O(n)
+				size_t min_idx = 0;
+				for (size_t i = 1; i < n; ++i) {
+					if (vert_ids[i] < vert_ids[min_idx]) {
+						min_idx = i;
+					}
+				}
+
+				// 2. Find right diraction of ring
+				const size_t prev_idx = (min_idx == 0) ? n - 1 : min_idx - 1;
+				const size_t next_idx = (min_idx == n - 1) ? 0 : min_idx + 1;
+				const bool need_reverse = (vert_ids[prev_idx] < vert_ids[next_idx]);
+
+				// 3. Final rotation on possible reversion
+				if (need_reverse) {
+					std::reverse(vert_ids.begin(), vert_ids.end());
+					// change minimum position after reverse
+					const size_t new_min_idx = n - 1 - min_idx;
+					if (new_min_idx != 0) {
+						std::rotate(vert_ids.begin(), vert_ids.begin() + new_min_idx, vert_ids.end());
+					}
+				}
+				else {
+					if (min_idx != 0) {
+						std::rotate(vert_ids.begin(), vert_ids.begin() + min_idx, vert_ids.end());
+					}
+				}
+			}
+		};
+
+		using Polyhedra = ::std::vector<size_t>; // Polygon indexes, equal center index
+
+		static constexpr T EPSILON = 0.0001;
+	public:
+		//Data
+		::std::vector<PointType> centers;
+		::std::vector<PointType> vertexes;
+		::std::vector<Polygon> polygons;
+		::std::vector<Polyhedra> polyhedra;
+	public:
+		void AddCells(const ::std::vector<VoronoiCell<T>>& cells) {
+
+			auto cells_s = cells.size();
+
+			vertexes.reserve(120 * cells_s);
+			polygons.reserve(30 * cells_s);
+
+			polyhedra.clear();
+			polyhedra.resize(cells_s);
+			centers.clear();
+			centers.resize(cells_s);
+
+			// fill vetexes with coppies
+			for (size_t i = 0; i < cells_s; i++)
+			{
+				centers[i] = cells[i].getSeed();
+				auto & faces = cells[i].getFaces();
+				auto faces_s = faces.size();
+				for (size_t j = 0; j < faces_s; j++)
+				{
+					Polygon p;
+
+					auto& vert = faces[j].getVertixes();
+					auto vert_s = vert.size();
+					for (size_t k = 0; k < vert_s; k++)
+					{
+						auto iter = add_to_vertex_union(vertexes, vert[k]);
+						p.vert_ids.push_back(iter);
+					}
+					p.rotateToCanonical();
+					auto pgon_it = add_to_polygon_union(polygons, p);
+					polyhedra[i].push_back(pgon_it);
+				}
+			}
+
+		}
+
+	private:
+		inline size_t add_to_vertex_union(::std::vector<PointType>& v, const PointType& x) const {
+			auto f_It = ::std::ranges::find_if(v,
+											   [&x](const PointType& p) {
+												   return PointType::distanceInCubicCell(x, p) <= EPSILON;
+											   });
+			if (f_It != v.end())
+				return ::std::distance(v.begin(), f_It);
+			else {
+				v.push_back(x);
+				return v.size() - 1;
+			}
+		}
+		inline size_t add_to_polygon_union(::std::vector<Polygon>& v, const Polygon& x) const {
+			auto f_It = ::std::ranges::find_if(v, 
+											   [&x](const Polygon& p) { 
+												   if (p.is_inner) return false;
+												   for (size_t i = 0; i < 3; i++)
+												   {
+													   if (p.vert_ids[i] != x.vert_ids[i])
+														   return false;
+												   }
+												   return true;
+											   });
+			if (f_It != v.end()) {
+				f_It->is_inner = true;
+				return ::std::distance(v.begin(), f_It);
+			}
+			else {
+				v.push_back(x);
+				return v.size() - 1;
+			}
+
+
+		}
+
+
+
 	};
 
 	template<class T>

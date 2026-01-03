@@ -82,6 +82,60 @@ extern "C" {
 inline static void useDistances(PyObject * self);
 }
 
+template <std::floating_point FT>
+PyObject* create_list_from_points(const std::vector<cpplib::geometry::Point<FT>>& vec) {
+	PyObject* o_ret = PyList_New(static_cast<Py_ssize_t>(vec.size()));
+	if (o_ret == NULL) {
+		return NULL;
+	}
+
+	// Fill o_ret
+	for (Py_ssize_t i = 0; i < vec.size(); i++)
+	{
+		PyObject* o_point = Py_BuildValue("(ddd)",
+										  static_cast<double>(vec[i][0]),  // px
+										  static_cast<double>(vec[i][1]),  // py
+										  static_cast<double>(vec[i][2]));// pz
+		if (o_point == NULL) {
+			Py_DECREF(o_ret);
+			return NULL;
+		}
+		if (PyList_SetItem(o_ret, i, o_point) < 0) {
+			Py_DECREF(o_ret);
+			Py_DECREF(o_point);
+			return NULL;
+		}
+	}
+	return o_ret;
+}
+
+template <std::integral IT>
+PyObject* create_list_from_points(const std::vector<cpplib::geometry::Point<IT>>& vec) {
+	PyObject* o_ret = PyList_New(static_cast<Py_ssize_t>(vec.size()));
+	if (o_ret == NULL) {
+		return NULL;
+	}
+
+	// Fill o_ret
+	for (Py_ssize_t i = 0; i < vec.size(); i++)
+	{
+		PyObject* o_point = Py_BuildValue("(lll)",
+										  static_cast<long>(vec[i][0]),  // px
+										  static_cast<long>(vec[i][1]),  // py
+										  static_cast<long>(vec[i][2])); // pz
+		if (o_point == NULL) {
+			Py_DECREF(o_ret);
+			return NULL;
+		}
+		if (PyList_SetItem(o_ret, i, o_point) < 0) {
+			Py_DECREF(o_ret);
+			Py_DECREF(o_point);
+			return NULL;
+		}
+	}
+	return o_ret;
+}
+
 template <char times>
 static std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>, times> FindDParamsParse(PyObject* self, PyObject* oparams, const std::array<int, times+1> type, char& d) {
 	std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>, times> value;
@@ -988,6 +1042,11 @@ extern "C" {
 			bools[i] = intbools[i] != 0;
 		}
 
+		Py_DECREF(ocell);
+		Py_DECREF(osymm);
+		Py_DECREF(otuples);
+		Py_DECREF(obools);
+
 		FAM_Cell fcell(FAM_Cell::base(all.cell));
 		auto supercell_indexes = fcell.CreateSupercell(all.points, cutoff, 1);
 		bools.resize(all.points.size(), false);
@@ -999,43 +1058,96 @@ extern "C" {
 		diag.addPoints(all.points, bools);
 		diag.calculateFaces<long>(bonds);
 
-		auto ret = diag.extractCells();
 		
-		PyObject* retlist = PyList_New(0);
+		cpplib::geometry::VoronoiFused<FloatingPointType> vf;
+		vf.AddCells(diag.extractCells());
 		
-		for (size_t i = 0; i < ps; i++)
-		{
-			auto& faces = ret[i].getFaces();
-			auto fs = faces.size();
-			PyObject* plist = PyList_New(0);
-			for (size_t j = 0; j < fs; j++)
-			{
-				// Create list of points of one face
-				PyObject* flist = PyList_New(0);
-				
-				for (size_t k = 0; k < faces[j].size(); k++) {
-					PointType point_on_face((faces[j][k][0] * supercell_indexes[0]),
-											(faces[j][k][1] * supercell_indexes[1]),
-											(faces[j][k][2] * supercell_indexes[2]));
-					point_on_face = point_on_face.MoveToCell();
-					PyList_Append(flist, Py_BuildValue("(fff)",
-													   static_cast<float>(point_on_face[0]),  // px
-													   static_cast<float>(point_on_face[1]),  // py
-													   static_cast<float>(point_on_face[2])));// pz
 
-					
-				}
-
-				// Add new face lo list of faces
-				PyList_Append(plist, flist);
-			}
-			// Add new cell to list of cells
-			PyList_Append(retlist, plist);
+		PyObject* o_centers = create_list_from_points(vf.centers);
+		PyObject* o_vertexes = create_list_from_points(vf.vertexes);
+		PyObject* o_polygons = PyList_New(vf.polygons.size());
+		PyObject* o_polyhedra = PyList_New(vf.polyhedra.size());
+		auto cleanup = [&]() {
+			Py_DECREF(o_centers);
+			Py_DECREF(o_vertexes);
+			Py_DECREF(o_polygons);
+			Py_DECREF(o_polyhedra);
+			};
+		if (o_centers == NULL ||
+			o_vertexes == NULL ||
+			o_polygons == NULL ||
+			o_polyhedra == NULL) {
+			cleanup();
+			Py_RETURN_NONE;
 		}
 
-		//auto ret = VoronoiCalculation(all.cell, all.symm, all.types, all.points, 8);
-		return Py_BuildValue("{s:O}",
-							 "cells", retlist);
+		// Fill o_polygons
+		for (Py_ssize_t i = 0; i < vf.polygons.size(); i++)
+		{
+			PyObject* polygon_list = PyList_New(vf.polygons[i].vert_ids.size());
+			for (Py_ssize_t j = 0; j < vf.polygons[i].vert_ids.size(); j++)
+			{
+				PyObject* py_int = PyLong_FromLong(static_cast<long>(vf.polygons[i].vert_ids[j]));
+				if (py_int == NULL) {
+					// Allocation Error
+					Py_DECREF(polygon_list);
+					cleanup();
+					Py_RETURN_NONE;
+				}
+				if (PyList_SetItem(polygon_list, j, py_int) < 0) {
+					// Failed to set item
+					Py_DECREF(polygon_list);
+					Py_DECREF(py_int);
+					cleanup();
+					Py_RETURN_NONE;
+				}
+				
+			}
+			if (PyList_SetItem(o_polygons, i, polygon_list) < 0) {
+				// Failed to set item
+				Py_DECREF(polygon_list);
+				cleanup();
+				Py_RETURN_NONE;
+			}
+		}
+
+
+		// Fill o_plyhedra
+		for (Py_ssize_t i = 0; i < vf.polyhedra.size(); i++)
+		{
+			PyObject* polyhedra_list = PyList_New(vf.polyhedra[i].size());
+			for (Py_ssize_t j = 0; j < vf.polyhedra[i].size(); j++)
+			{
+				PyObject* py_int = PyLong_FromLong(static_cast<long>(vf.polyhedra[i][j]));
+				if (py_int == NULL) {
+					// Allocation Error
+					Py_DECREF(polyhedra_list);
+					cleanup();
+					Py_RETURN_NONE;
+				}
+				if (PyList_SetItem(polyhedra_list, j, py_int) < 0) {
+					// Failed to set item
+					Py_DECREF(polyhedra_list);
+					Py_DECREF(py_int);
+					cleanup();
+					Py_RETURN_NONE;
+				}
+
+			}
+			if (PyList_SetItem(o_polyhedra, i, polyhedra_list) < 0) {
+				// Failed to set item
+				Py_DECREF(polyhedra_list);
+				cleanup();
+				Py_RETURN_NONE;
+			}
+		}
+
+		// Build return value
+		return Py_BuildValue("{s:O,s:O,s:O,s:O}",
+							 "centers", o_centers,
+							 "vertexes", o_vertexes,
+							 "polygons", o_polygons,
+							 "polyhedra",o_polyhedra);
 	}
 
 	static struct PyMethodDef methods[] = {

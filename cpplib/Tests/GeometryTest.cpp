@@ -573,17 +573,17 @@ TEST_F(GeometryTest, VoronoiDiagramConstructor) {
 }
 
 TEST_F(GeometryTest, VoronoiDiagramWithFlags) {
-    std::vector<Point<float>> points = {
-        Point<float>(0.1, 0.1, 0.1),
-        Point<float>(0.4, 0.4, 0.4),
-        Point<float>(0.254, 0.4, 0.364),
-        Point<float>(0.954, 0.866, 0.23),
-        Point<float>(0.7, 0.7, 0.7)
+    std::vector<Point<double>> points = {
+        Point<double>(0.1, 0.1, 0.1),
+        Point<double>(0.4, 0.4, 0.4),
+        Point<double>(0.254, 0.4, 0.364),
+        Point<double>(0.954, 0.866, 0.23),
+        Point<double>(0.7, 0.7, 0.7)
     };
 
     std::vector<bool> flags = { true, false, true , true, true};
 
-    VoronoiDiagram<float> vd(points, flags);
+    VoronoiDiagram<double> vd(points, flags);
 
     std::vector<std::pair<int, int>> bondlist = {
         {0,1}, {0,2}, {0,3}, {0,4},
@@ -600,10 +600,22 @@ TEST_F(GeometryTest, VoronoiDiagramWithFlags) {
         const auto seed = cell.getSeed();
         for (const auto& face : cell.getFaces()) {
             EXPECT_TRUE(face.isConvex());
-            VoronoiDiagram<float>::VoronCell::Face::PlaneType plane(face[0], face[1], face[2]);
+            VoronoiDiagram<double>::VoronCell::Face::PlaneType plane(face[0], face[1], face[2]);
             EXPECT_TRUE(plane.side(seed) >= 0);
         }
     }
+
+    VoronoiFused<double> VF;
+    VF.AddCells(cells);
+    for (size_t i = 0; i < VF.vertexes.size(); i++)
+    {
+        for (size_t j = i+1; j < VF.vertexes.size(); j++)
+        {
+            if ((VF.vertexes[i] - VF.vertexes[j]).r() < 0.001)
+                break;
+        }
+    }
+    VF.centers.size();
 }
 
 TEST_F(GeometryTest, VoronoiDiagramAddPoints) {
