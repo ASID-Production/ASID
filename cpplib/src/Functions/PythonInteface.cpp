@@ -1016,7 +1016,6 @@ extern "C" {
 							 "hasPolymer", b ? Py_True : Py_False);
 	}
 
-	/// 
 	/// Args: [cell, symm, tuples, bools<int>, cutoff]
 	static PyObject* cpplib_Voronoi(PyObject* self, PyObject* args) {
 		using Diagram = cpplib::geometry::VoronoiDiagram<FloatingPointType>;
