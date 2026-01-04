@@ -352,3 +352,36 @@ def Cluster(cell_params: List[float], symms: List[str], atoms: List[Tuple[int, f
             "hasPolymer": Boolian flag, equals True if cell contains polymer (MOF) structure
     """
     ...
+def VoronoiCalculation(cell_params: List[float], 
+                       symms: List[str], 
+                       atoms: List[Tuple[int, float, float, float]], 
+                       bools: List[bool], 
+                       cutoff: float) -> Dict[
+    "centers":   List[Tuple[float,float,float]],
+    "vertexes":  List[Tuple[float,float,float]],
+    "polygons":  List[List[int]],
+    "polyhedra": List[List[int]]]:
+    """
+        Calculate Voronoi cells.
+        Variables:
+          cell_params: List of exactly 6 cell parameters in strict order: [a, b, c, alpha, beta, gamma].
+            (a, b, c - are translation vectors (in Angstroms) and alpha, beta, gamma - are angles (in degrees)
+          symms:  SYMM-codes of structure. Should contain 'x,y,z' (equivalent) as first ([0]) symmetry - it is ignored.
+          atoms: List of Tuples of atomic type and three internal coordinates.
+            AtomType is integer, coordinates are floating point numbers.
+            example [ [1, 0.0, 0.0, 0.0], [9, 0.5, 0.5, 0.5], ... ]
+          bools: List of boolean values. Each value is True if corresponded atom should be covered with Voronoi cell.
+          cutoff: equals 6 by default 
+        Returns:
+          Dictionary with keys ["centers","vertexes", "polygons", "polyhedra"], where
+            "centers": List of Tuples (Px, Py, Pz), where
+              Px, Py, Pz: coordinates of Voronoi cell center (atom)
+            "vertexes": List of Tuples (Px, Py, Pz), where
+              Px, Py, Pz: coordinates of Voronoi cell vetrexes
+            "polygons": List of Lists, which represent polygons
+              Polygon lists consist of vertexes indexes. Lists are sorted to round order.
+            "polyhedra": List of Lists, which represent Voronoi polyhedra
+              Each polihedra list consists of polygon list indexes. Lists are unsorted.
+            Note: polyhedra and centers lists have same order.
+    """
+    ...

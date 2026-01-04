@@ -45,10 +45,10 @@ namespace cpplib {
 	struct FAM_Struct {
 		// Definitions
 		using AtomType = currents::AtomTypeData;
-		using AtomTypeBase = currents::AtomTypeBase;
-		using size_type = currents::size_type;
-		using PointType = currents::PointType;
-		using FloatingPointType = PointType::value_type;
+		using AtomTypeBase = basic_types::AtomTypeBase;
+		using size_type = basic_types::size_type;
+		using FloatingPointType = basic_types::FloatingPointType;
+		using PointType = geometry::Point<FloatingPointType>;
 		using NodeType = Node<AtomType>;
 		using DistancesType = Distances;
 		using BondType = Bond;
@@ -56,7 +56,7 @@ namespace cpplib {
 		using AtomIndex = NodeType::AtomIndex;
 		using AtomContainerType = ::std::vector<AtomTypeBase>;
 		using PointConteinerType = ::std::vector<PointType>;
-		using DistanceFunction = ::std::function<currents::FloatingPointType(const PointType& p1, const PointType& p2)>;
+		using DistanceFunction = ::std::function<basic_types::FloatingPointType(const PointType& p1, const PointType& p2)>;
 		using ShiftType = geometry::Point<int>;
 		using SymmRef = unsigned int;
 		using ParseIndexType = ::std::vector<std::tuple<AtomIndex, SymmRef, ShiftType>>;
@@ -103,10 +103,10 @@ namespace cpplib {
 						// Incorrect Bond marked, but also added to results
 						if (errorMSG.empty()) {
 							errorMSG = "Too short bond between ";
-							errorMSG += mend[type_i];
+							errorMSG += constants::mend[type_i];
 							errorMSG += std::to_string(indexI);
 							errorMSG += " and ";
-							errorMSG += mend[type_j];
+							errorMSG += constants::mend[type_j];
 							errorMSG += std::to_string(indexJ);
 							errorMSG += ", which is ";
 							errorMSG += std::to_string(dist);
@@ -145,10 +145,10 @@ namespace cpplib {
 						// Incorrect Bond marked, but also added to results
 						if (errorMSG.empty()) {
 							errorMSG = "Too short bond between ";
-							errorMSG += mend[type_i];
+							errorMSG += constants::mend[type_i];
 							errorMSG += std::to_string(indexI);
 							errorMSG += " and ";
-							errorMSG += mend[type_j];
+							errorMSG += constants::mend[type_j];
 							errorMSG += std::to_string(indexJ);
 							errorMSG += ", which is ";
 							errorMSG += std::to_string(dist);
@@ -179,8 +179,8 @@ namespace cpplib {
 		}
 	};
 
-	struct FAM_Cell : public geometry::Cell<currents::FloatingPointType> {
-		using FloatingPointType = currents::FloatingPointType;
+	struct FAM_Cell : public geometry::Cell<basic_types::FloatingPointType> {
+		using FloatingPointType = basic_types::FloatingPointType;
 		using base = geometry::Cell<FloatingPointType>;
 		using PointType = geometry::Point<FloatingPointType>;
 		using PointConteinerType = ::std::vector<PointType>;
@@ -188,7 +188,7 @@ namespace cpplib {
 		using DimmentionType = uint_fast8_t;
 		using SymmType = geometry::Symm<FloatingPointType>;
 		using DistancesType = Distances;
-		using AtomIndex = currents::AtomIndex;
+		using AtomIndex = basic_types::AtomIndex;
 
 		explicit FAM_Cell(base&& cell) : base(::std::move(cell)) {}
 		void GenerateSymm(FAM_Struct& fs, const std::vector<SymmType>& symm, const bool intoCell, const bool force_unique) const {
@@ -310,7 +310,7 @@ namespace cpplib {
 			base::create(base::lat_dir(0), base::lat_dir(1), base::lat_dir(2), base::getAngleGrad(0), base::getAngleGrad(1), base::getAngleGrad(2), true);
 			return super;
 		}
-		FloatingPointType distanceInCell(const PointType& p1, const PointType& p2) const noexcept {
+		[[deprecated("use geometry::Cell::distance_in_01")]] FloatingPointType distanceInCell(const PointType& p1, const PointType& p2) const noexcept {
 			PointType dp = (p1 - p2).MoveToCell();
 			for (DimmentionType i = 0; i < static_cast<DimmentionType>(3); i++) {
 				FloatingPointType val = dp[i];
@@ -318,88 +318,6 @@ namespace cpplib {
 					dp[i] = val - 1;
 			}
 			return (base::fracToCart() * dp).r();
-		}
-		auto findMoleculesForCluster(const FAM_Struct& fs, const DistancesType& distances, bool& hasPoymer) const {
-			using ShiftType = FAM_Struct::ShiftType;
-			using MolType = std::vector<std::vector<ShiftType>>; // mol[atomIndex][0-...?]
-			hasPoymer = false;
-			std::vector<std::pair<Bond,ShiftType>> bonds; // Shift-type bond container
-			std::list<AtomIndex> polis;
-
-			std::vector<AtomIndex> ref(fs.sizePoints, 0);
-			std::vector<std::pair<MolType,bool>> allMolecules(1, std::make_pair(std::vector<std::vector<ShiftType>>(fs.sizePoints),false)); // Molecules start from [1]. Value [0] is always empty
-
-			for (AtomIndex i = 0; i < fs.sizePoints; i++) {
-				const auto type_i = fs.types[std::get<0>(fs.parseIndex[i])];
-				for (AtomIndex j = i + 1; j < fs.sizePoints; j++) {
-					const auto type_j = fs.types[std::get<0>(fs.parseIndex[j])];
-					FloatingPointType dist = distanceInCell(fs.points[i], fs.points[j]);
-					char isbond = distances.isBond(type_i, type_j, dist);
-					switch (isbond) {
-					case -1:
-						//[[fallthrough]]
-					case  1:
-					{
-						bonds.emplace_back(Bond(i, j), toShift((fs.points[i] - fs.points[j]).round()));
-						const auto & curbond = bonds.back();
-						AtomIndex k1 = 0;
-						for (; k1 < allMolecules.size(); k1++)
-						{
-							if (!allMolecules[k1].first[i].empty()) break;
-						}
-						bool k1f = k1 != allMolecules.size(); // k1 found
-						AtomIndex k2 = 0;
-						for (; k2 < allMolecules.size(); k2++)
-						{
-							if (!allMolecules[k2].first[j].empty()) break;
-						}
-						bool k2f = k2 != allMolecules.size(); // k2 found
-
-						switch ((k1f ? 1 : 0) + (k2f ? 2 : 0))
-						{
-						case 0: // None
-							allMolecules.emplace_back(std::vector<std::vector<ShiftType>>(fs.sizePoints), false);
-							allMolecules.back().first[i].push_back(std::get<2>(fs.parseIndex[i]));
-							allMolecules.back().first[j].push_back(std::get<2>(fs.parseIndex[i]) + curbond.second);
-							break;
-						case 1: // Only k1 found
-							_ASSERT(!allMolecules[k1].first[i].empty());
-							allMolecules[k1].first[j].push_back(allMolecules[k1].first[i][0] + curbond.second);
-							_ASSERT(allMolecules[k1].first[j].size() == 1);
-							break;
-						case 2: // Only k2 found
-							_ASSERT(!allMolecules[k2].first[j].empty());
-							allMolecules[k2].first[i].push_back(allMolecules[k2].first[j][0] - curbond.second);
-							_ASSERT(allMolecules[k2].first[i].size() == 1);
-							break;
-						case 3: // Both found
-							if (k1 != k2) { // different molecules
-								Merge(fs, allMolecules[k1].first, allMolecules[k2].first, curbond);
-								allMolecules.erase(allMolecules.begin() + k1);
-							}
-							else {
-								if (!(allMolecules[k1].first[i][0] + curbond.second == allMolecules[k2].first[j][0])) { // It's a polymer!
-									allMolecules[k1].first[j].push_back(allMolecules[k1].first[i][0] + curbond.second);
-									allMolecules[k1].second = true;
-									hasPoymer = true;
-								}
-							}
-							break;
-						}
-					}
-						break;
-					default:
-						break;
-					}
-				}
-			}
-			return allMolecules;
-		}
-		static inline currents::FAMStructType::ShiftType toShift(const PointType& a1) {
-			using namespace currents;
-			return FAMStructType::ShiftType(static_cast<FAMStructType::ShiftType::value_type>((a1[0])),
-											static_cast<FAMStructType::ShiftType::value_type>((a1[1])),
-											static_cast<FAMStructType::ShiftType::value_type>((a1[2])));
 		}
 
 	private:
@@ -532,7 +450,7 @@ namespace cpplib {
 					negative_atoms[i] = true;
 					if (errorMsg.empty()) {
 						errorMsg = "Atom ";
-						errorMsg += mend[static_cast<AtomTypeBase>(type)];
+						errorMsg += constants::mend[static_cast<AtomTypeBase>(type)];
 						errorMsg += std::to_string(i);
 						errorMsg += " has too many bonds (";
 						errorMsg += std::to_string(contacts);
@@ -807,6 +725,14 @@ namespace cpplib {
 				low_pos++;
 			}
 			return res;
+		}
+		template<class T2> [[nodiscard]] auto is_member(const T2 u, const std::vector<T2>& v, typename std::vector<T2>::size_type max = 0) const noexcept {
+			if (max == 0)
+				max = v.size();
+			for (typename std::vector<T2>::size_type i = 0; i < max; i++) {
+				if (v[i] == u) return i;
+			}
+			return  static_cast<typename std::vector<T2>::size_type>(-1);
 		}
 	};
 }

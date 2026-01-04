@@ -40,9 +40,9 @@ namespace cpplib {
 
 		using NodeType = Node<A>;
 		using AtomTypeBase = typename NodeType::AtomType::AtomTypeBase;
-		using AtomIndex = currents::AtomIndex;
+		using AtomIndex = basic_types::AtomIndex;
 		using MoleculeCoreType = MoleculeCore<A>;
-		using size_type = currents::AtomIndex;
+		using size_type = basic_types::AtomIndex;
 
 	private:
 		// Data

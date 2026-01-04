@@ -26,18 +26,20 @@
 //
 // ******************************************************************************************
 #pragma once
-#include "MoleculeGraph.h"
 #include <list>
 #include <vector>
+
+#include "MoleculeGraph.h"
+#include "../BaseHeaders/Currents.h"
 namespace cpplib {
 	class SearchGraph {
 	public:
 		// Declarations
-		using AtomIndex = currents::AtomIndex;
-		using MoleculeIndex = currents::MoleculeIndex;
+		using AtomIndex = basic_types::AtomIndex;
+		using MoleculeIndex = basic_types::MoleculeIndex;
 		using RequestGraphType = MoleculeCore<currents::AtomTypeRequest>;
 		using DatabaseGraphType = MoleculeCore<currents::AtomTypeData>;
-		using AtomTypeBase = currents::AtomTypeBase;
+		using AtomTypeBase = basic_types::AtomTypeBase;
 
 		using BondType = DatabaseGraphType::BondType;
 		using RequestNodeType = RequestGraphType::NodeType;
@@ -46,8 +48,8 @@ namespace cpplib {
 		using Log = ::std::list<::std::pair<BondType, BondType>>;
 
 		// Asserts
-		static_assert (::std::is_same_v<AtomTypeBase, typename RequestGraphType::NodeType::AtomType::AtomTypeBase> &&
-                       ::std::is_same_v<AtomTypeBase, typename DatabaseGraphType::NodeType::AtomType::AtomTypeBase>, 
+		static_assert (::std::is_same_v<AtomTypeBase, typename RequestNodeType::AtomType::AtomTypeBase> &&
+                       ::std::is_same_v<AtomTypeBase, typename DatabaseNodeType::AtomType::AtomTypeBase>,
 					   "AtomTypeBase is not the same in RequestGraphType and DatabaseGraphType");
 
 
@@ -110,27 +112,8 @@ namespace cpplib {
 		}
 	private:
 		// Node comparision
-		bool compare(const RequestNodeType& inputNode, const DatabaseNodeType& dataNode, const bool exact) const noexcept {
-			if (compareLow(inputNode, dataNode, exact) == false)
-				return false;
-
-			auto si = inputNode.neighboursSize();
-			auto sn = dataNode.neighboursSize();
-
-			AtomIndex j = 0;
-			for (AtomIndex i = 0; i < si; ++i) {
-				if (static_cast<AtomTypeBase>(inputNode.getNeighbour(i)->getType()) < 0)
-					continue;
-				bool condition = false;
-				for (; j < sn; ++j) {
-					condition = compareLow(*(inputNode.getNeighbour(i)), *(dataNode.getNeighbour(j)), exact);
-					if (condition) {
-						break;
-					}
-				}
-				if (condition == false) return false;
-			}
-			return true;
+		inline bool compare(const RequestNodeType& inputNode, const DatabaseNodeType& dataNode, const bool exact) const noexcept {
+			return compareLow(inputNode, dataNode, exact);
 		}
 		inline bool compareLow(const RequestNodeType& inputNode, const DatabaseNodeType& dataNode, const bool exact) const noexcept {
 			if (exact) {
@@ -143,7 +126,7 @@ namespace cpplib {
 
 		void prepareHAtoms() {
 
-			currents::TypeBitset bits;
+			basic_types::TypeBitset bits;
 
 			for (AtomIndex i = 1; i < inputSize_; i++)
 			{

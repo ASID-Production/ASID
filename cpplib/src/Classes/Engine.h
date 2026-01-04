@@ -30,31 +30,33 @@
 #include <type_traits> // for std::conditional
 #include <vector>
 #include <string>
+#include <array>
 
-#include "../BaseHeaders/Support.h"
+#include "../BaseHeaders/BaseTypes.h"
+#include "../BaseHeaders/Concepts.h"
 #include "../BaseHeaders/DebugMes.h"
-#include "../BaseHeaders/Currents.h"
 namespace cpplib {
+
 	class SimpleAtom {
 	private:
 		using ConstRef = SimpleAtom;
 	public:
-		using AtomTypeBase = currents::AtomTypeBase;
-        using TypeBitset = currents::TypeBitset;
+		using AtomTypeBase = basic_types::AtomTypeBase;
+        using TypeBitset = basic_types::TypeBitset;
 
 		// Constructors
 		SimpleAtom() = default;
 		constexpr explicit SimpleAtom(AtomTypeBase input) : type_(input) {
-			_ASSERT(input < currents::TypeBitset().size());
+			_ASSERT(input < TypeBitset().size());
 		}
 		
-		constexpr currents::TypeBitset get_bitset() const noexcept{
-			currents::TypeBitset bits;
+		constexpr TypeBitset get_bitset() const noexcept{
+			TypeBitset bits;
 			if (type_ > 0) bits.set(type_);
 			return bits;
 		}
 		constexpr bool contains(const AtomTypeBase t) const noexcept{
-			_ASSERT(t > 0 && currents::TypeBitset().size());
+			_ASSERT(t > 0 && TypeBitset().size());
 			return type_ == t;
 		}
 		// Same as operator==
@@ -76,12 +78,14 @@ namespace cpplib {
 		AtomTypeBase type_ = 0;
 	};
 
+	static_assert(AtomTypeConcept<SimpleAtom>, "SimpleAtom must satisfy AtomTypeConcept");
+
 	class CompositeAtom {
 	private:
         using ConstRef = const CompositeAtom&;
 	public:
-		using AtomTypeBase = currents::AtomTypeBase;
-		using TypeBitset = currents::TypeBitset;
+		using AtomTypeBase = basic_types::AtomTypeBase;
+		using TypeBitset = basic_types::TypeBitset;
 
 		// Constructors
 		CompositeAtom() = default;
@@ -93,14 +97,14 @@ namespace cpplib {
 
 		void AddType(const AtomTypeBase t) {
 			_ASSERT(t > 0);
-			_ASSERT(t < mend_size);
+			_ASSERT(t < constants::mend_size);
 			types.set(t);
 		}
 		constexpr bool contains(const AtomTypeBase t) const {
 			_ASSERT(t > 0 && t < types.size());
 			return types[t];
 		}
-		constexpr currents::TypeBitset get_bitset() const noexcept{
+		constexpr TypeBitset get_bitset() const noexcept{
 			return types;
 		}
 		inline bool intersect(ConstRef other) const noexcept {
@@ -119,14 +123,15 @@ namespace cpplib {
 
 	private:
 		AtomTypeBase basetype = 0;
-		currents::TypeBitset types = {0};
+		TypeBitset types = {0};
 	};
+
+	static_assert(AtomTypeConcept<CompositeAtom>, "SimpleAtom must satisfy AtomTypeConcept");
 
 	class Coord {
 	public:
 		using innerType = int_fast8_t;
 		using argumentType = innerType;
-		static constexpr innerType max = 100;
 	private:
 		innerType low = 0;
 		innerType high = 0;
@@ -154,8 +159,8 @@ namespace cpplib {
 
 	class NeighboursType {
 	public:
-		static constexpr size_t maxNeighbours = 100;
-		using ShiftType = currents::AtomIndex;
+		static constexpr size_t maxNeighbours = constants::maxNeighbours;
+		using ShiftType = basic_types::AtomIndex;
 	private:
 		::std::array<ShiftType, maxNeighbours> data_{ 0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
 		size_t size_ = 0;
@@ -217,8 +222,8 @@ namespace cpplib {
 	public:
 		// Declarations
 		using NeighbourValueType = Node*;
-		using HType = currents::HType;
-		using AtomIndex = currents::AtomIndex;
+		using HType = basic_types::HType;
+		using AtomIndex = basic_types::AtomIndex;
 		using ShiftType = NeighboursType::ShiftType;
 		using AtomType = A;
 
@@ -273,11 +278,9 @@ namespace cpplib {
 		}
 		// simple sorting
 		inline bool operator<(const Node& other) const noexcept {
-			//return id_ > other.id_;
 			return RawLess(other);
 		}
 		inline bool operator>(const Node& other) const noexcept {
-			//return id_ < other.id_;
 			return RawMore(other);
 		}
 
@@ -285,7 +288,6 @@ namespace cpplib {
 		constexpr bool isNeighbour(const Node& node) const noexcept(noexcept(neighbours_.operator[](0)) && noexcept(neighbours_.size())) {
 			const auto s = neighbours_.size();
 			const auto node_id = node.getID();
-			using ShiftType = NeighboursType::ShiftType;
 			ShiftType shift = (&node) - this;
 			for (size_t i = 0; i < s; i++)
 				if (neighbours_[i] == shift) return true;
@@ -418,7 +420,6 @@ namespace cpplib {
 		}
 		constexpr void deleteNeighbour(const Node* pnode) noexcept {
 			_ASSERT(pnode != this);
-			using ShiftType = NeighboursType::ShiftType;
 			auto s = neighbours_.size();
 			ShiftType shift = pnode - this;
 			decltype(s) i = 0;
@@ -449,7 +450,7 @@ namespace cpplib {
 	struct Bond {
 	public:
 		// Declarations
-		using AtomIndex = currents::AtomIndex;
+		using AtomIndex = basic_types::AtomIndex;
 
 		// Data
 		AtomIndex first = 0;
@@ -479,7 +480,7 @@ namespace cpplib {
 	struct BondEx : public Bond {
 	public:
 		// Declarations
-		using LengthType = currents::FloatingPointType; // Float or Double
+		using LengthType = basic_types::FloatingPointType; // Float or Double
 		using base = Bond; // Bond
 
 		// Data
@@ -504,6 +505,8 @@ namespace cpplib {
 			}
 		}
 
+		constexpr BondEx(AtomIndex a1, AtomIndex a2) noexcept : Bond(a1, a2) {}
+
 		// Compares only "base". Ignores length.
 		constexpr bool operator==(const BondEx& other) const noexcept {
 			return base::operator==(other);
@@ -527,6 +530,9 @@ namespace cpplib {
 			// (1, 2, {"distance": 1.0})
 		}
 	};
+
+	static_assert(BondConcept<Bond>, "Bond must satisfy BondConcept");
+	static_assert(BondConcept<BondEx>, "BondEx must satisfy BondConcept");
 }
 
 namespace std {

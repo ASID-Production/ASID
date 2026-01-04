@@ -35,9 +35,9 @@
 namespace cpplib {
 	class SearchDataInterface {
 	public:
-		using MoleculeIndex = currents::MoleculeIndex;
+		using MoleculeIndex = basic_types::MoleculeIndex;
 		using RawVector = std::vector<const char*>;
-		using MultiflagType = std::bitset<mend_size>;
+		using MultiflagType = std::bitset<constants::mend_size>;
 		using size_type = RawVector::size_type;
 	private:
 		size_type iterator_ = 0;
@@ -95,18 +95,18 @@ namespace cpplib {
 	};
 
 	struct ParseData {
-		using FAMStructType = FAM_Struct;
-		using FAMCellType = FAM_Cell;
+		using FAM_Struct = FAM_Struct;
+		using FAM_Cell = FAM_Cell;
 
-		using AtomType = FAMStructType::AtomType;
-		using PointType = FAMStructType::PointType;
-		using SymmType = FAMCellType::SymmType;
+		using AtomType = FAM_Struct::AtomType;
+		using PointType = FAM_Struct::PointType;
+		using SymmType = FAM_Cell::SymmType;
 
-		ParseData(FAMStructType& fs, FAMStructType::AtomContainerType && types, FAMStructType::PointConteinerType && points) {
-			fs = FAMStructType(std::move(types), std::move(points));
+		ParseData(FAM_Struct& fs, FAM_Struct::AtomContainerType && types, FAM_Struct::PointConteinerType && points) {
+			fs = FAM_Struct(std::move(types), std::move(points));
 		}
 
-		ParseData(FAMStructType& fs, FAMCellType& fc, const std::vector<const char*>& symm, FAMStructType::AtomContainerType&& types, FAMStructType::PointConteinerType&& points, bool check_unique = true)
+		ParseData(FAM_Struct& fs, FAM_Cell& fc, const std::vector<const char*>& symm, FAM_Struct::AtomContainerType&& types, FAM_Struct::PointConteinerType&& points, bool check_unique = true)
 			: ParseData(fs, std::move(types), std::move(points))
 		{
 			const int symm_s = symm.size();

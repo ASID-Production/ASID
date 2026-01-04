@@ -36,14 +36,14 @@ namespace cpplib {
 	class FindGeometry {
 	public:
 		// Definitions
-		using FAMStructType = currents::FAMStructType;
-		using AtomTypeBase = FAMStructType::AtomTypeBase;
-		using AtomType = FAMStructType::AtomType;
-		using FloatingPointType = FAMStructType::FloatingPointType;
-		using AtomIndex = FAMStructType::AtomIndex;
-		using size_type = FAMStructType::size_type;
-		using PointType = FAMStructType::PointType;
-		using DistancesType = FAMStructType::DistancesType;
+		using FAM_Struct = FAM_Struct;
+		using AtomTypeBase = FAM_Struct::AtomTypeBase;
+		using AtomType = FAM_Struct::AtomType;
+		using FloatingPointType = FAM_Struct::FloatingPointType;
+		using AtomIndex = FAM_Struct::AtomIndex;
+		using size_type = FAM_Struct::size_type;
+		using PointType = FAM_Struct::PointType;
+		using DistancesType = FAM_Struct::DistancesType;
 
 		using tupleDistance = ::std::tuple<AtomIndex, AtomIndex, FloatingPointType>;
 		using tupleAngle = ::std::tuple<AtomIndex, AtomIndex, AtomIndex, FloatingPointType>;
@@ -53,11 +53,11 @@ namespace cpplib {
 		static_assert(::std::is_same_v<typename DistancesType::AtomTypeBase, AtomTypeBase>, "AtomTypeBase of FAM_Struct and Distances should be the same");
 	private:
 		// Data
-		const FAMStructType& fs;
+		const FAM_Struct& fs;
 
 	public:
 		FindGeometry() = delete;
-		constexpr explicit FindGeometry(const FAMStructType& famstr) noexcept : fs(famstr) {};
+		constexpr explicit FindGeometry(const FAM_Struct& famstr) noexcept : fs(famstr) {};
 		auto findDistance(AtomTypeBase t1, AtomTypeBase t2, MinMaxType d12) const {
 			std::vector<tupleDistance> res;
 			const bool mirror = (t1 == t2);
