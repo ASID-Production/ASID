@@ -1487,6 +1487,12 @@ namespace cpplib::geometry {
 				mat.El(0, 2) == 0 && mat.El(1, 2) == 0 && mat.El(2, 2) == 1 &&
 				point[0] == 0 && point[1] == 0 && point[2] == 0;
 		}
+		bool isValid() const noexcept {
+			return abs(point[0]) < 1 &&
+				abs(point[1]) < 1 &&
+				abs(point[2]) < 1 &&
+				abs(abs(mat.Det()) - 1.0) < 0.0001;
+		}
 	private:
 		size_t findcomma(const char* str) const {
 			size_t n = 0;
@@ -1581,7 +1587,6 @@ namespace cpplib::geometry {
 			iter--;
 			return upper / static_cast<T>(lower);
 		}
-
 	};
 
 	template<class T, class AI>

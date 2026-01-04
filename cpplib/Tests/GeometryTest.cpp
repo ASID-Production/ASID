@@ -1,4 +1,4 @@
-// Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
+﻿// Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
 // This file is part of ASID - Atomistic Simulation Instruments and Database
 // For more information see <https://github.com/ASID-Production/ASID>
 //
@@ -33,46 +33,285 @@
 using namespace std;
 using namespace cpplib;
 using namespace cpplib::geometry;
-
 using namespace cpplib::basic_types;
 
-constexpr Point<FloatingPointType> a(0.01423f, 0.27322f, 0.01346f);
-constexpr Matrix<FloatingPointType> m({ 10.4804f, -5.2402f, 0.f, 0.f, 9.07629264f, 0.f, 0.f, 0.f, 31.8116f });
+// Common constants for tests
+constexpr Point<FloatingPointType> TEST_POINT_A(0.01423f, 0.27322f, 0.01346f);
+constexpr Point<FloatingPointType> TEST_POINT_B(1.0f, 2.0f, 3.0f);
+constexpr Point<FloatingPointType> TEST_POINT_C(4.0f, 5.0f, 6.0f);
+constexpr Matrix<FloatingPointType> TEST_MATRIX_M({ 10.4804f, -5.2402f, 0.f, 0.f, 9.07629264f, 0.f, 0.f, 0.f, 31.8116f });
+constexpr Matrix<FloatingPointType> TEST_MATRIX_N({ 1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f, 9.0f });
+constexpr FloatingPointType EPSILON = 0.00001;
 
-TEST(PointTest, OperatorMult_Point_Matrix) {
-	Point<FloatingPointType> res;
-	ASSERT_NO_THROW({ res = m * a; });
-	EXPECT_NEAR(res[0], -1.28259146, 0.00001);
-	EXPECT_NEAR(res[1], 2.47982478, 0.00001);
-	EXPECT_NEAR(res[2], 0.428184122, 0.00001);
+// ==================== TESTS FOR Point ====================
+TEST(PointTest, CreationAndOperations) {
+    // Testing constructors
+    ASSERT_NO_THROW({
+        Point<FloatingPointType> p0;
+        Point<FloatingPointType> pf(p0);
+        Point<FloatingPointType> p1(0.01423f, 0.27322f, 0.01346f);
+        Point<FloatingPointType> p2(0.0, 1.0, 2.0);
+        EXPECT_NEAR(p0[0], 0.0, EPSILON);
+        EXPECT_NEAR(p0[1], 0.0, EPSILON);
+        EXPECT_NEAR(p0[2], 0.0, EPSILON);
+                    });
+
+    // Testing point-matrix multiplication
+    Point<FloatingPointType> res = TEST_MATRIX_M * TEST_POINT_A;
+    EXPECT_NEAR(res[0], -1.28259146, EPSILON);
+    EXPECT_NEAR(res[1], 2.47982478, EPSILON);
+    EXPECT_NEAR(res[2], 0.428184122, EPSILON);
+
+    // Testing r() method
+    EXPECT_NEAR(TEST_POINT_A.r(), 0.273921, EPSILON);
 }
 
-TEST(PointTest, CreationNothrow) {
-	ASSERT_NO_THROW({
-		auto pf = Point<FloatingPointType>();
-		auto pd = Point<FloatingPointType>();
-					});
-	ASSERT_NO_THROW({
-		auto pf = Point<FloatingPointType>(0.01423f, 0.27322f, 0.01346f);
-		auto pi = Point<FloatingPointType>(0.0, 1.0, 2.0);
-					});
-}
-TEST(PointTest, MemberFunction_r) {
-	Point<FloatingPointType>::value_type res;
-	ASSERT_NO_THROW({ res = a.r(); });
-	EXPECT_NEAR(res, 0.273921, 0.00001);
-}
-TEST(PointTest, reverseTorsion) {
-	Point<FloatingPointType> a1(0.865301423f, 0.21727322f, 0.032461346f);
-	Point<FloatingPointType> a2(0.65630135423f, 0.23467322f, 0.835801346f);
-	Point<FloatingPointType> a3(0.35601423f, 0.346346227322f, 0.601346f);
-	Point<FloatingPointType> a4(0.65301423f, 0.2373334622f, 0.568501346f);
-	EXPECT_NEAR(cpplib::geometry::Point<FloatingPointType>::torsionRad(a1, a2, a3, a4), cpplib::geometry::Point<FloatingPointType>::torsionRad(a4, a3, a2, a1), 0.00001);
-	EXPECT_NEAR(cpplib::geometry::Point<FloatingPointType>::torsionRad(a2, a1, a3, a4), cpplib::geometry::Point<FloatingPointType>::torsionRad(a4, a3, a1, a2), 0.00001);
+TEST(PointTest, VectorOperations) {
+    // Test scalar product
+    FloatingPointType scalar = Point<FloatingPointType>::Scalar(TEST_POINT_B, TEST_POINT_C);
+    EXPECT_NEAR(scalar, 32.0, EPSILON); // 1*4 + 2*5 + 3*6 = 32
+
+    // Test vector product
+    Point<FloatingPointType> cross = Point<FloatingPointType>::Vector(TEST_POINT_B, TEST_POINT_C);
+    EXPECT_NEAR(cross[0], -3.0, EPSILON); // 2*6 - 3*5 = -3
+    EXPECT_NEAR(cross[1], 6.0, EPSILON);  // 3*4 - 1*6 = 6
+    EXPECT_NEAR(cross[2], -3.0, EPSILON); // 1*5 - 2*4 = -3
+
+    // Test distance calculation
+    FloatingPointType dist = Point<FloatingPointType>::distance(TEST_POINT_B, TEST_POINT_C);
+    EXPECT_NEAR(dist, sqrt(27.0), EPSILON);
 }
 
+TEST(PointTest, AngleCalculations) {
+    Point<FloatingPointType> a(1.0f, 0.0f, 0.0f);
+    Point<FloatingPointType> b(0.0f, 0.0f, 0.0f);
+    Point<FloatingPointType> c(0.0f, 1.0f, 0.0f);
 
-std::vector<const char*> test_data_symm{
+    // Test angle calculation (90 degrees)
+    FloatingPointType angle = Point<FloatingPointType>::angleRad(a, b, c);
+    EXPECT_NEAR(angle, numbers::pi_v<FloatingPointType> / 2, EPSILON);
+
+    // Test angle in degrees
+    FloatingPointType angleDeg = Point<FloatingPointType>::angleGrad(a, b, c);
+    EXPECT_NEAR(angleDeg, 90.0, EPSILON);
+}
+
+TEST(PointTest, TorsionSymmetry) {
+    // Testing torsion symmetry properties
+    Point<FloatingPointType> points[] = {
+        {0.865301423f, 0.21727322f, 0.032461346f},
+        {0.65630135423f, 0.23467322f, 0.835801346f},
+        {0.35601423f, 0.346346227322f, 0.601346f},
+        {0.65301423f, 0.2373334622f, 0.568501346f}
+    };
+
+    const auto& a1 = points[0];
+    const auto& a2 = points[1];
+    const auto& a3 = points[2];
+    const auto& a4 = points[3];
+
+    // Testing symmetry of torsion calculation
+    EXPECT_NEAR(Point<FloatingPointType>::torsionRad(a1, a2, a3, a4),
+                Point<FloatingPointType>::torsionRad(a4, a3, a2, a1), EPSILON);
+
+    EXPECT_NEAR(Point<FloatingPointType>::torsionRad(a2, a1, a3, a4),
+                Point<FloatingPointType>::torsionRad(a4, a3, a1, a2), EPSILON);
+}
+
+TEST(PointTest, ComparisonOperations) {
+    Point<FloatingPointType> p1(1.0f, 2.0f, 3.0f);
+    Point<FloatingPointType> p2(1.000001f, 2.000001f, 3.000001f);
+    Point<FloatingPointType> p3(4.0f, 5.0f, 6.0f);
+
+    EXPECT_TRUE(p1 == p2); // Within epsilon tolerance
+    EXPECT_TRUE(p1 != p3);
+    EXPECT_TRUE(p1 < p3);
+    EXPECT_TRUE(p3 > p1);
+}
+
+TEST(PointTest, CellOperations) {
+    Point<FloatingPointType> p(1.5f, 2.7f, -0.3f);
+
+    // Test MoveToCell
+    Point<FloatingPointType> p_cell = p;
+    p_cell.MoveToCell();
+    EXPECT_GE(p_cell[0], 0.0f);
+    EXPECT_LT(p_cell[0], 1.0f);
+    EXPECT_GE(p_cell[1], 0.0f);
+    EXPECT_LT(p_cell[1], 1.0f);
+    EXPECT_GE(p_cell[2], 0.0f);
+    EXPECT_LT(p_cell[2], 1.0f);
+
+    // Test round and floor
+    Point<FloatingPointType> p_round = p.round();
+    Point<FloatingPointType> p_floor = p.floor();
+    EXPECT_NEAR(p_round[0], 2.0f, EPSILON);
+    EXPECT_NEAR(p_round[1], 3.0f, EPSILON);
+    EXPECT_NEAR(p_round[2], 0.0f, EPSILON);
+    EXPECT_NEAR(p_floor[0], 1.0f, EPSILON);
+    EXPECT_NEAR(p_floor[1], 2.0f, EPSILON);
+    EXPECT_NEAR(p_floor[2], -1.0f, EPSILON);
+}
+
+// ==================== TESTS FOR Matrix ====================
+TEST(MatrixTest, BasicOperations) {
+    // Test constructor from array
+    Matrix<FloatingPointType> m1(TEST_MATRIX_M);
+    Matrix<FloatingPointType> m2(TEST_MATRIX_N);
+
+    // Test element access
+    EXPECT_NEAR(m1.El(0, 0), 10.4804f, EPSILON);
+    EXPECT_NEAR(m1.El(1, 1), 9.07629264f, EPSILON);
+    EXPECT_NEAR(m1.El(2, 2), 31.8116f, EPSILON);
+
+    // Test determinant
+    FloatingPointType det1 = m1.Det();
+    FloatingPointType det2 = m2.Det();
+    EXPECT_NEAR(det1, double(10.4804f) * double(9.07629264f) * double(31.8116f), EPSILON);
+    EXPECT_NEAR(det2, 0.0f, EPSILON); // Matrix N is singular
+
+    // Test trace
+    FloatingPointType trace2 = m2.Trace();
+    EXPECT_NEAR(trace2, 5.0f, EPSILON); // (1+5+9)/3 = 5
+}
+
+TEST(MatrixTest, MatrixOperations) {
+    Matrix<FloatingPointType> m1(TEST_MATRIX_M);
+    Matrix<FloatingPointType> identity(1.0f);
+
+    // Test multiplication with identity
+    auto m1_times_id = m1 * identity;
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+            EXPECT_NEAR(m1_times_id.El(i, j), m1.El(i, j), EPSILON);
+        }
+    }
+
+    // Test transposition
+    auto m1_transposed = m1.Transponate();
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+            EXPECT_NEAR(m1_transposed.El(i, j), m1.El(j, i), EPSILON);
+        }
+    }
+
+    // Test inversion (for non-singular matrix)
+    auto m1_inverted = m1.Invert();
+    auto product = m1 * m1_inverted;
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+            if (i == j) {
+                EXPECT_NEAR(product.El(i, j), 1.0f, EPSILON);
+            }
+            else {
+                EXPECT_NEAR(product.El(i, j), 0.0f, EPSILON);
+            }
+        }
+    }
+}
+
+// ==================== TESTS FOR Plane ====================
+TEST(PlaneTest, CreationAndOperations) {
+    // Create plane from three points
+    Point<FloatingPointType> p1(0.0f, 0.0f, 0.0f);
+    Point<FloatingPointType> p2(1.0f, 0.0f, 0.0f);
+    Point<FloatingPointType> p3(0.0f, 1.0f, 0.0f);
+
+    Plane<FloatingPointType> plane1(p1, p2, p3);
+
+    // All points should be in the plane
+    EXPECT_NEAR(plane1.distance(p1), 0.0f, EPSILON);
+    EXPECT_NEAR(plane1.distance(p2), 0.0f, EPSILON);
+    EXPECT_NEAR(plane1.distance(p3), 0.0f, EPSILON);
+
+    // Normal should point in positive z direction
+    auto normal = plane1.normal();
+    EXPECT_NEAR(normal[0], 0.0f, EPSILON);
+    EXPECT_NEAR(normal[1], 0.0f, EPSILON);
+    EXPECT_NEAR(abs(normal[2]), 1.0f, EPSILON);
+
+    // Create plane from point and normal
+    Point<FloatingPointType> point(1.0f, 2.0f, 3.0f);
+    Point<FloatingPointType> norm(0.0f, 0.0f, 1.0f);
+    Plane<FloatingPointType> plane2(point, norm);
+
+    // Test projection
+    Point<FloatingPointType> proj = plane2.make_projection(Point<FloatingPointType>(1.0f, 2.0f, 10.0f));
+    EXPECT_NEAR(proj[0], 1.0f, EPSILON);
+    EXPECT_NEAR(proj[1], 2.0f, EPSILON);
+    EXPECT_NEAR(proj[2], 3.0f, EPSILON);
+
+    // Test side calculation
+    FloatingPointType side1 = plane2.side(Point<FloatingPointType>(1.0f, 2.0f, 5.0f));
+    FloatingPointType side2 = plane2.side(Point<FloatingPointType>(1.0f, 2.0f, 1.0f));
+    EXPECT_GT(side1, 0.0f);
+    EXPECT_LT(side2, 0.0f);
+}
+
+// ==================== TESTS FOR Cell ====================
+TEST(CellTest, CreationAndOperations) {
+    // Create cubic cell
+    Cell<FloatingPointType> cubicCell(10.0f, 10.0f, 10.0f, 90.0f, 90.0f, 90.0f);
+
+    EXPECT_NEAR(cubicCell.lat_dir(0), 10.0f, EPSILON);
+    EXPECT_NEAR(cubicCell.lat_dir(1), 10.0f, EPSILON);
+    EXPECT_NEAR(cubicCell.lat_dir(2), 10.0f, EPSILON);
+    EXPECT_NEAR(cubicCell.getAngleGrad(0), 90.0f, EPSILON);
+    EXPECT_NEAR(cubicCell.getAngleGrad(1), 90.0f, EPSILON);
+    EXPECT_NEAR(cubicCell.getAngleGrad(2), 90.0f, EPSILON);
+
+    // Test fractional to cartesian conversion
+    Point<FloatingPointType> fracPoint(0.5f, 0.5f, 0.5f);
+    Point<FloatingPointType> cartPoint = cubicCell.fracToCart() * fracPoint;
+    EXPECT_NEAR(cartPoint[0], 5.0f, EPSILON);
+    EXPECT_NEAR(cartPoint[1], 5.0f, EPSILON);
+    EXPECT_NEAR(cartPoint[2], 5.0f, EPSILON);
+
+    // Test cartesian to fractional conversion
+    Point<FloatingPointType> fracPoint2 = cubicCell.cartToFrac() * cartPoint;
+    EXPECT_NEAR(fracPoint2[0], 0.5f, EPSILON);
+    EXPECT_NEAR(fracPoint2[1], 0.5f, EPSILON);
+    EXPECT_NEAR(fracPoint2[2], 0.5f, EPSILON);
+
+    // Test distance calculation within unit cell
+    Point<FloatingPointType> p1(0.1f, 0.1f, 0.1f);
+    Point<FloatingPointType> p2(0.9f, 0.9f, 0.9f);
+    FloatingPointType dist = cubicCell.distance_in_01(p1, p2);
+    EXPECT_GT(dist, 0.0f);
+    EXPECT_LT(dist, sqrt(3.0f) * 10.0f); // Maximum distance in cube
+}
+
+TEST(CellTest, TriclinicCell) {
+    // Create triclinic cell
+    Cell<FloatingPointType> triCell(10.0f, 12.0f, 15.0f, 80.0f, 85.0f, 75.0f);
+
+    // Verify parameters
+    EXPECT_NEAR(triCell.lat_dir(0), 10.0f, EPSILON);
+    EXPECT_NEAR(triCell.lat_dir(1), 12.0f, EPSILON);
+    EXPECT_NEAR(triCell.lat_dir(2), 15.0f, EPSILON);
+    EXPECT_NEAR(triCell.getAngleGrad(0), 80.0f, EPSILON);
+    EXPECT_NEAR(triCell.getAngleGrad(1), 85.0f, EPSILON);
+    EXPECT_NEAR(triCell.getAngleGrad(2), 75.0f, EPSILON);
+
+    // Verify that matrices are inverses of each other
+    auto fracToCart = triCell.fracToCart();
+    auto cartToFrac = triCell.cartToFrac();
+    auto product = fracToCart * cartToFrac;
+
+    for (int i = 0; i < 3; ++i) {
+        for (int j = 0; j < 3; ++j) {
+            if (i == j) {
+                EXPECT_NEAR(product.El(i, j), 1.0f, EPSILON);
+            }
+            else {
+                EXPECT_NEAR(product.El(i, j), 0.0f, EPSILON);
+            }
+        }
+    }
+}
+
+// ==================== TESTS FOR Symm ====================
+std::vector<const char*> SYMMETRY_STRINGS = {
 "x, y, z"
 ,"-y, x-y, z"
 ,"-x+y, -x, z"
@@ -315,367 +554,373 @@ std::vector<const char*> test_data_symm{
 ,"x+1/3, y+2/3, z+2/3"
 };
 
-
-TEST(SymmTest, Creation) {
-	for (const auto str : test_data_symm) {
-		Symm<FloatingPointType> symm(str);
-		EXPECT_TRUE(true);
-	}
-}
-
-
-TEST(PolygonTest, CreationFromPoints) {
-    using PointType = Point<FloatingPointType>;
-    std::vector<PointType> points = {
-        PointType(0,0,0),
-        PointType(1,0,0),
-        PointType(1,1,0),
-        PointType(0,1,0)
-    };
-    Polygon<FloatingPointType> poly(points);
-    ASSERT_EQ(poly.size(), 4);
-    ASSERT_TRUE(poly.isConvex());
-}
-TEST(PolygonTest, CreationFromPlaneAndCenter) {
-    using PointType = Point<FloatingPointType>;
-    PointType center(0.5, 0.5, 0);
-    Plane<FloatingPointType> plane(center, PointType(0, 0, 1));
-    Polygon<FloatingPointType> poly(plane, center, 1.0);
-    ASSERT_EQ(poly.size(), 4);
-    for (size_t i = 0; i < poly.size(); ++i) {
-        ASSERT_NEAR(plane.distance(poly[i]), 0.0, 1e-10);
+TEST(SymmTest, CreationAndParsing) {
+    // Testing creation of symmetry objects from strings
+    for (const auto& str : SYMMETRY_STRINGS) {
+        Symm<FloatingPointType> symm(str);
+        EXPECT_TRUE(symm.isValid());
     }
 }
-TEST(PolygonTest, ClipByPlane) {
-    using PointType = Point<FloatingPointType>;
-    std::vector<PointType> points = {
-        PointType(0,0,0),
-        PointType(1,0,0),
-        PointType(1,1,0),
-        PointType(0,1,0)
-    };
-    Polygon<FloatingPointType> poly(points);
-    Plane<FloatingPointType> clipping_plane(PointType(0.5, 0, 0), PointType(1, 0, 0));
-    poly.clipByPlane(clipping_plane);
-    ASSERT_TRUE(poly.isConvex());
-    for (size_t i = 0; i < poly.size(); ++i) {
-        ASSERT_GE(clipping_plane.side(poly[i]), 0.0);
-    }
-}
-TEST(PolygonTest, PolygonClipPreservesOrder) {
-    std::vector<Point<FloatingPointType>> square = {
-        Point<FloatingPointType>(0, 0, 0),
-        Point<FloatingPointType>(2, 0, 0),
-        Point<FloatingPointType>(2, 2, 0),
-        Point<FloatingPointType>(0, 2, 0)
-    };
 
-    Polygon<FloatingPointType> poly(square);
+TEST(SymmTest, SymmetryOperations) {
+    // Test identity symmetry
+    Symm<FloatingPointType> identity("x, y, z");
+    Point<FloatingPointType> testPoint(0.1f, 0.2f, 0.3f);
 
-    Plane<FloatingPointType> clipping_plane(Point<FloatingPointType>(1, 1, 0), Point<FloatingPointType>(1, 1, 0));
-    poly.clipByPlane(clipping_plane);
-    EXPECT_EQ(poly.size(), 3);
-    EXPECT_TRUE(poly.isConvex());
+    // Identity should return the same point
+    Point<FloatingPointType> result = identity.GenSymm(testPoint);
+    EXPECT_NEAR(result[0], 0.1f, EPSILON);
+    EXPECT_NEAR(result[1], 0.2f, EPSILON);
+    EXPECT_NEAR(result[2], 0.3f, EPSILON);
 
-    for (size_t i = 0; i < poly.size(); ++i) {
-        Point<FloatingPointType> current = poly[i];
-        Point<FloatingPointType> next = poly[(i + 1) % poly.size()];
-        Point<FloatingPointType> next_next = poly[(i + 2) % poly.size()];
+    // Test with normalization
+    Point<FloatingPointType> normResult = identity.GenSymmNorm(testPoint);
+    EXPECT_NEAR(normResult[0], 0.1f, EPSILON);
+    EXPECT_NEAR(normResult[1], 0.2f, EPSILON);
+    EXPECT_NEAR(normResult[2], 0.3f, EPSILON);
 
-        Point<FloatingPointType> edge1 = next - current;
-        Point<FloatingPointType> edge2 = next_next - next;
-        Point<FloatingPointType> cross = Point<FloatingPointType>::Vector(edge1, edge2);
+    // Test mirror symmetry
+    Symm<FloatingPointType> mirrorX("-x, y, z");
+    result = mirrorX.GenSymm(testPoint);
+    EXPECT_NEAR(result[0], -0.1f, EPSILON);
+    EXPECT_NEAR(result[1], 0.2f, EPSILON);
+    EXPECT_NEAR(result[2], 0.3f, EPSILON);
 
-        EXPECT_GT(cross[2], -1e-10);
-    }
-}
-TEST(PolygonTest, PolygonConvexityCorrectness) {
-    std::vector<Point<FloatingPointType>> convex_square = {
-        Point<FloatingPointType>(0, 0, 0),
-        Point<FloatingPointType>(1, 0, 0),
-        Point<FloatingPointType>(1, 1, 0),
-        Point<FloatingPointType>(0, 1, 0)
-    };
-    Polygon<FloatingPointType> convex_poly(convex_square);
-    EXPECT_TRUE(convex_poly.isConvex());
+    // Test with shift
+    Symm<FloatingPointType> shifted("x+1/2, y+1/2, z+1/2");
+    result = shifted.GenSymm(testPoint);
+    EXPECT_NEAR(result[0], 0.6f, EPSILON);
+    EXPECT_NEAR(result[1], 0.7f, EPSILON);
+    EXPECT_NEAR(result[2], 0.8f, EPSILON);
 
-    std::vector<Point<FloatingPointType>> concave_points = {
-        Point<FloatingPointType>(0, 0, 0),
-        Point<FloatingPointType>(2, 0, 0),
-        Point<FloatingPointType>(1, 1, 0),
-        Point<FloatingPointType>(2, 2, 0),
-        Point<FloatingPointType>(0, 2, 0)
-    };
-    Polygon<FloatingPointType> concave_poly(concave_points);
-    EXPECT_FALSE(concave_poly.isConvex());
-
-    std::vector<Point<FloatingPointType>> triangle = {
-        Point<FloatingPointType>(0, 0, 0),
-        Point<FloatingPointType>(1, 0, 0),
-        Point<FloatingPointType>(0, 1, 0)
-    };
-    Polygon<FloatingPointType> triangle_poly(triangle);
-    EXPECT_TRUE(triangle_poly.isConvex());
+    // Test normalized result with shift
+    normResult = shifted.GenSymmNorm(testPoint);
+    EXPECT_GE(normResult[0], 0.0f);
+    EXPECT_LT(normResult[0], 1.0f);
+    EXPECT_GE(normResult[1], 0.0f);
+    EXPECT_LT(normResult[1], 1.0f);
+    EXPECT_GE(normResult[2], 0.0f);
+    EXPECT_LT(normResult[2], 1.0f);
 }
 
+TEST(SymmTest, MirrorSymmetry) {
+    Symm<FloatingPointType> symm("x+1/2, -y, z+1/3");
+    Symm<FloatingPointType> mirror = symm.MirrorSymm();
 
-class GeometryTest : public ::testing::Test {
+    // Test that applying symm then its mirror gives identity (within cell)
+    Point<FloatingPointType> testPoint(0.25f, 0.5f, 0.75f);
+    Point<FloatingPointType> transformed = symm.GenSymm(testPoint);
+    Point<FloatingPointType> backTransformed = mirror.GenSymmNorm(transformed);
+
+    // Should get back to original point (within unit cell)
+    EXPECT_NEAR(backTransformed[0], testPoint[0], EPSILON);
+    EXPECT_NEAR(backTransformed[1], testPoint[1], EPSILON);
+    EXPECT_NEAR(backTransformed[2], testPoint[2], EPSILON);
+}
+
+TEST(SymmTest, ValidityChecks) {
+    // Valid symmetries
+    Symm<FloatingPointType> valid1("x, y, z");
+    Symm<FloatingPointType> valid2("-y, x-y, z");
+    Symm<FloatingPointType> valid3("x+1/2, y+1/2, z+1/2");
+
+    EXPECT_TRUE(valid1.isValid());
+    EXPECT_TRUE(valid2.isValid());
+    EXPECT_TRUE(valid3.isValid());
+
+    // Check identity detection
+    EXPECT_TRUE(valid1.is_Eq());
+    EXPECT_FALSE(valid2.is_Eq());
+    EXPECT_FALSE(valid3.is_Eq());
+}
+
+// ==================== TESTS FOR Polygon ====================
+class PolygonTest : public ::testing::Test {
 protected:
-    void SetUp() override {
-        square_points = {
-            Point<FloatingPointType>(0, 0, 0),
-            Point<FloatingPointType>(1, 0, 0),
-            Point<FloatingPointType>(1, 1, 0),
-            Point<FloatingPointType>(0, 1, 0)
-        };
+    using PointType = Point<FloatingPointType>;
 
-        triangle_points = {
-            Point<FloatingPointType>(0, 0, 0),
-            Point<FloatingPointType>(1, 0, 0),
-            Point<FloatingPointType>(0, 1, 0)
-        };
+    void SetUp() override {
+        // Standard polygons for testing
+        square = { PointType(0,0,0), PointType(1,0,0),
+                   PointType(1,1,0), PointType(0,1,0) };
+
+        triangle = { PointType(0,0,0), PointType(1,0,0), PointType(0,1,0) };
+
+        concaveShape = { PointType(0,0,0), PointType(2,0,0),
+                         PointType(1,1,0), PointType(2,2,0), PointType(0,2,0) };
     }
 
-    std::vector<Point<FloatingPointType>> square_points;
-    std::vector<Point<FloatingPointType>> triangle_points;
+    // Helper method to validate polygon convexity
+    void validateConvexity(const Polygon<FloatingPointType>& poly, bool expectedConvex) {
+        EXPECT_EQ(poly.isConvex(), expectedConvex);
+
+        if (poly.size() >= 3 && expectedConvex) {
+            // Additional validation for convex polygons
+            for (size_t i = 0; i < poly.size(); ++i) {
+                size_t j = (i + 1) % poly.size();
+                size_t k = (i + 2) % poly.size();
+
+                PointType edge1 = poly[j] - poly[i];
+                PointType edge2 = poly[k] - poly[j];
+                PointType cross = PointType::Vector(edge1, edge2);
+
+                // All cross products should have the same sign for convex polygons
+                EXPECT_GT(cross[2], -EPSILON); // For 2D polygons in XY plane
+            }
+        }
+    }
+
+    std::vector<PointType> square;
+    std::vector<PointType> triangle;
+    std::vector<PointType> concaveShape;
 };
 
-TEST_F(GeometryTest, PolygonCreation) {
-    Polygon<FloatingPointType> poly(square_points);
-    EXPECT_EQ(poly.size(), 4);
-    EXPECT_TRUE(poly.isConvex());
+TEST_F(PolygonTest, CreationFromPoints) {
+    // Test square creation
+    Polygon<FloatingPointType> polySquare(square);
+    ASSERT_EQ(polySquare.size(), 4);
+    validateConvexity(polySquare, true);
+
+    // Test triangle creation
+    Polygon<FloatingPointType> polyTriangle(triangle);
+    ASSERT_EQ(polyTriangle.size(), 3);
+    validateConvexity(polyTriangle, true);
+
+    // Test concave shape creation
+    Polygon<FloatingPointType> polyConcave(concaveShape);
+    validateConvexity(polyConcave, false);
 }
 
-TEST_F(GeometryTest, PolygonConvexity) {
-    Polygon<FloatingPointType> convex_poly(square_points);
-    EXPECT_TRUE(convex_poly.isConvex());
-
-    std::vector<Point<FloatingPointType>> concave_points = {
-        Point<FloatingPointType>(0, 0, 0),
-        Point<FloatingPointType>(2, 0, 0),
-        Point<FloatingPointType>(1, 1, 0),
-        Point<FloatingPointType>(2, 2, 0),
-        Point<FloatingPointType>(0, 2, 0)
-    };
-    Polygon<FloatingPointType> concave_poly(concave_points);
-    EXPECT_FALSE(concave_poly.isConvex());
-}
-
-TEST_F(GeometryTest, PolygonPlaneCreation) {
-    Point<FloatingPointType> center(0.5, 0.5, 0);
-    Plane<FloatingPointType> plane(Point<FloatingPointType>(0, 0, 0), Point<FloatingPointType>(1, 0, 0), Point<FloatingPointType>(0, 1, 0));
+TEST_F(PolygonTest, CreationFromPlaneAndCenter) {
+    // Test polygon creation from plane and center
+    PointType center(0.5, 0.5, 0);
+    Plane<FloatingPointType> plane(center, PointType(0, 0, 1));
 
     Polygon<FloatingPointType> poly(plane, center, 1.0);
-    EXPECT_EQ(poly.size(), 4);
-    EXPECT_TRUE(poly.isConvex());
-}
+    ASSERT_EQ(poly.size(), 4);
 
-TEST_F(GeometryTest, PolygonAccessOperator) {
-    Polygon<FloatingPointType> poly(square_points);
-
-    EXPECT_EQ(poly[0], Point<FloatingPointType>(0, 0, 0));
-    EXPECT_EQ(poly[1], Point<FloatingPointType>(1, 0, 0));
-    EXPECT_EQ(poly[2], Point<FloatingPointType>(1, 1, 0));
-    EXPECT_EQ(poly[3], Point<FloatingPointType>(0, 1, 0));
-}
-
-TEST_F(GeometryTest, PolygonClipByPlane) {
-    Polygon<FloatingPointType> poly(square_points);
-    Plane<FloatingPointType> clipping_plane(Point<FloatingPointType>(0.5, 0, 0), Point<FloatingPointType>(1, 0, 0));
-
-    poly.clipByPlane(clipping_plane);
-
+    // All points should lie in the plane
     for (size_t i = 0; i < poly.size(); ++i) {
-        EXPECT_GE(poly[i][0], 0.5);
+        EXPECT_NEAR(plane.distance(poly[i]), 0.0, EPSILON);
     }
-    EXPECT_TRUE(poly.isConvex());
+
+    validateConvexity(poly, true);
 }
 
-TEST_F(GeometryTest, PolygonEdgeCases) {
-    std::vector<Point<FloatingPointType>> insufficient_points = {
-        Point<FloatingPointType>(0, 0, 0),
-        Point<FloatingPointType>(1, 0, 0)
-    };
+TEST_F(PolygonTest, AccessOperations) {
+    Polygon<FloatingPointType> poly(square);
 
-    Polygon<FloatingPointType> small_poly(insufficient_points);
-    EXPECT_FALSE(small_poly.isConvex());
-
-    Polygon<FloatingPointType> empty_poly;
-    EXPECT_EQ(empty_poly.size(), 0);
+    // Test element access
+    EXPECT_EQ(poly[0], square[0]);
+    EXPECT_EQ(poly[1], square[1]);
+    EXPECT_EQ(poly[2], square[2]);
+    EXPECT_EQ(poly[3], square[3]);
 }
 
-// VoronoiCell
-TEST_F(GeometryTest, VoronoiCellDefaultConstructor) {
-    VoronoiCell<FloatingPointType> cell;
+TEST_F(PolygonTest, ClippingSimple) {
+    Polygon<FloatingPointType> polySquare(square);
+    Plane<FloatingPointType> plane1(PointType(0.5, 0, 0), PointType(1, 0, 0));
+    polySquare.clipByPlane(plane1);
 
-    Point<FloatingPointType> seed = cell.getSeed();
-    EXPECT_EQ(seed, Point<FloatingPointType>(0, 0, 0));
+    for (size_t i = 0; i < polySquare.size(); ++i) {
+        EXPECT_GE(polySquare[i][0], 0.5 - EPSILON);
+    }
+    validateConvexity(polySquare, true);
+}
+TEST_F(PolygonTest, ClippingOrderProblem) {
+    Polygon<FloatingPointType> polySquare1(square);
+    Plane<FloatingPointType> plane1(PointType(0.5, 0.5, 0), PointType(-1, -1, 0));
+    polySquare1.clipByPlane(plane1);
 
-    auto faces = cell.getFaces();
-    EXPECT_FALSE(faces.empty());
+    EXPECT_EQ(polySquare1.size(), 3);
+    validateConvexity(polySquare1, true);
+
+    Polygon<FloatingPointType> polySquare2(square);
+    Plane<FloatingPointType> plane2(PointType(0.0, 0.0, 0), PointType(-1, -1, 0));
+    polySquare2.clipByPlane(plane2);
+
+    EXPECT_EQ(polySquare2.size(), 0);
+    validateConvexity(polySquare2, false);
+
+    Polygon<FloatingPointType> polySquare3(square);
+    Plane<FloatingPointType> plane3(PointType(0.0, 0.0, 0), PointType(1, 1, 0));
+    polySquare3.clipByPlane(plane3);
+
+    EXPECT_EQ(polySquare3.size(), 4);
+    validateConvexity(polySquare3, true);
+
+}
+TEST_F(PolygonTest, ClippingCorrectSides) {
+    Polygon<FloatingPointType> polySquare5(square);
+    Plane<FloatingPointType> plane5(PointType(0.75, 0.75, 0), PointType(-1, -1, 0));
+    polySquare5.clipByPlane(plane5);
+
+    EXPECT_EQ(polySquare5.size(), 5);
+    validateConvexity(polySquare5, true);
+
+    Polygon<FloatingPointType> polySquare3(square);
+    Plane<FloatingPointType> plane3(PointType(0.75, 0.75, 0), PointType(1, 1, 0));
+    polySquare3.clipByPlane(plane3);
+
+    EXPECT_EQ(polySquare3.size(), 3);
+    validateConvexity(polySquare3, true);
 }
 
-TEST_F(GeometryTest, VoronoiCellSeedConstructor) {
-    Point<FloatingPointType> seed(1.0, 2.0, 3.0);
-    VoronoiCell<FloatingPointType> cell(seed);
+TEST_F(PolygonTest, EdgeCases) {
+    // Insufficient number of points
+    std::vector<PointType> insufficient = { PointType(0,0,0), PointType(1,0,0) };
+    Polygon<FloatingPointType> smallPoly(insufficient);
+    EXPECT_FALSE(smallPoly.isConvex());
 
-    EXPECT_EQ(cell.getSeed(), seed);
-
-    auto faces = cell.getFaces();
-    EXPECT_FALSE(faces.empty());
+    // Empty polygon
+    Polygon<FloatingPointType> emptyPoly;
+    EXPECT_EQ(emptyPoly.size(), 0);
 }
 
-TEST_F(GeometryTest, VoronoiCellInteraction) {
-    VoronoiCell<FloatingPointType> cell1(Point<FloatingPointType>(0.1, 0.1, 0.1));
-    VoronoiCell<FloatingPointType> cell2(Point<FloatingPointType>(0.4, 0.4, 0.4));
+// ==================== TESTS FOR Voronoi ====================
+class VoronoiTest : public ::testing::Test {
+protected:
+    using PointType = Point<FloatingPointType>;
+
+    void SetUp() override {
+        // Common points for Voronoi tests
+        commonPoints = {
+            PointType(0.1, 0.1, 0.1),
+            PointType(0.4, 0.4, 0.4),
+            PointType(0.254, 0.4, 0.364),
+            PointType(0.954, 0.866, 0.23),
+            PointType(0.7, 0.7, 0.7)
+        };
+    }
+
+    // Helper method to validate Voronoi cell properties
+    void validateVoronoiCell(const VoronoiCell<FloatingPointType>& cell) {
+        const auto& seed = cell.getSeed();
+        const auto& faces = cell.getFaces();
+
+        EXPECT_FALSE(faces.empty());
+
+        for (const auto& face : faces) {
+            EXPECT_TRUE(face.isConvex());
+
+            // Verify that seed is on the correct side of the face
+            VoronoiCell<FloatingPointType>::Face::PlaneType plane(face[0], face[1], face[2]);
+            EXPECT_GE(plane.side(seed), 0.0 - EPSILON);
+        }
+    }
+
+    std::vector<PointType> commonPoints;
+};
+
+TEST_F(VoronoiTest, CellConstruction) {
+    // Default constructor
+    VoronoiCell<FloatingPointType> defaultCell;
+    EXPECT_EQ(defaultCell.getSeed(), PointType(0, 0, 0));
+    validateVoronoiCell(defaultCell);
+
+    // Constructor with specified seed
+    PointType seed(1.0, 2.0, 3.0);
+    VoronoiCell<FloatingPointType> customCell(seed);
+    EXPECT_EQ(customCell.getSeed(), seed);
+    validateVoronoiCell(customCell);
+}
+
+TEST_F(VoronoiTest, CellInteraction) {
+    // Normal cell interaction
+    VoronoiCell<FloatingPointType> cell1(PointType(0.1, 0.1, 0.1));
+    VoronoiCell<FloatingPointType> cell2(PointType(0.4, 0.4, 0.4));
 
     int result = VoronoiCell<FloatingPointType>::interact(cell1, cell2);
+    EXPECT_EQ(result, 0); // Normal interaction
 
-    EXPECT_EQ(result, 0);
+    // Cells with close seeds
+    VoronoiCell<FloatingPointType> cell3(PointType(0.1, 0.1, 0.1));
+    VoronoiCell<FloatingPointType> cell4(PointType(0.1000001, 0.1000001, 0.1000001));
 
-    auto faces1 = cell1.getFaces();
-    auto faces2 = cell2.getFaces();
-    EXPECT_FALSE(faces1.empty());
-    EXPECT_FALSE(faces2.empty());
+    result = VoronoiCell<FloatingPointType>::interact(cell3, cell4);
+    EXPECT_EQ(result, 1); // Too close seeds
 }
 
-TEST_F(GeometryTest, VoronoiCellCloseSeeds) {
-    VoronoiCell<FloatingPointType> cell1(Point<FloatingPointType>(0.1, 0.1, 0.1));
-    VoronoiCell<FloatingPointType> cell2(Point<FloatingPointType>(0.1000001, 0.1000001, 0.1000001));
+TEST_F(VoronoiTest, DiagramConstruction) {
+    // Basic constructor
+    VoronoiDiagram<FloatingPointType> vd(commonPoints);
+    auto cells = vd.extractCells();
 
-    int result = VoronoiCell<FloatingPointType>::interact(cell1, cell2);
+    EXPECT_EQ(cells.size(), commonPoints.size());
+    for (const auto& cell : cells) {
+        validateVoronoiCell(cell);
+    }
 
-    EXPECT_EQ(result, 1);
+    // Constructor with flags
+    std::vector<bool> flags(commonPoints.size(), true);
+    VoronoiDiagram<FloatingPointType> vdWithFlags(commonPoints, flags);
+
+    cells = vdWithFlags.extractCells();
+    EXPECT_EQ(cells.size(), commonPoints.size());
 }
 
-// VoronoiDiagram
-TEST_F(GeometryTest, VoronoiDiagramConstructor) {
-    std::vector<Point<FloatingPointType>> points = {
-        Point<FloatingPointType>(0.1, 0.1, 0.1),
-        Point<FloatingPointType>(0.4, 0.4, 0.4),
-        Point<FloatingPointType>(0.254, 0.4, 0.364),
-        Point<FloatingPointType>(0.954, 0.866, 0.23),
-        Point<FloatingPointType>(0.7, 0.7, 0.7)
-    };
+TEST_F(VoronoiTest, DiagramOperations) {
+    VoronoiDiagram<FloatingPointType> vd;
 
-    VoronoiDiagram<FloatingPointType> vd(points);
+    // Adding points to diagram
+    std::vector<PointType> points = { PointType(0.2, 0.2, 0.2), PointType(0.5, 0.5, 0.5) };
+    std::vector<bool> flags(points.size(), true);
+    vd.addPoints(points, flags);
 
     auto cells = vd.extractCells();
     EXPECT_EQ(cells.size(), points.size());
 
-
-    for (const auto& cell : cells) {
-        const auto seed = cell.getSeed();
-        for (const auto& face : cell.getFaces()) {
-            EXPECT_TRUE(face.isConvex());
-            VoronoiDiagram<FloatingPointType>::VoronCell::Face::PlaneType plane(face[0], face[1], face[2]);
-            bool res = plane.side(seed) >= 0;
-            EXPECT_TRUE(res);
-        }
-    }
-}
-
-TEST_F(GeometryTest, VoronoiDiagramWithFlags) {
-    std::vector<Point<double>> points = {
-        Point<double>(0.1, 0.1, 0.1),
-        Point<double>(0.4, 0.4, 0.4),
-        Point<double>(0.254, 0.4, 0.364),
-        Point<double>(0.954, 0.866, 0.23),
-        Point<double>(0.7, 0.7, 0.7)
-    };
-
-    std::vector<bool> flags = { true, false, true , true, true};
-
-    VoronoiDiagram<double> vd(points, flags);
-
+    // Calculating faces using bond list
     std::vector<std::pair<int, int>> bondlist = {
         {0,1}, {0,2}, {0,3}, {0,4},
         {1,2}, {1,3}, {1,4},
         {2,3}, {2,4},
         {3,4}
     };
-    vd.calculateFaces<int>(bondlist);
 
-    auto cells = vd.extractCells();
-    EXPECT_EQ(cells.size(), points.size());
+    vd.calculateFaces<int>(bondlist);
+    cells = vd.extractCells();
 
     for (const auto& cell : cells) {
-        const auto seed = cell.getSeed();
-        for (const auto& face : cell.getFaces()) {
-            EXPECT_TRUE(face.isConvex());
-            VoronoiDiagram<double>::VoronCell::Face::PlaneType plane(face[0], face[1], face[2]);
-            EXPECT_TRUE(plane.side(seed) >= 0);
-        }
+        validateVoronoiCell(cell);
     }
-
-    VoronoiFused<double> VF;
-    VF.AddCells(cells);
-    for (size_t i = 0; i < VF.vertexes.size(); i++)
-    {
-        for (size_t j = i+1; j < VF.vertexes.size(); j++)
-        {
-            if ((VF.vertexes[i] - VF.vertexes[j]).r() < 0.0001)
-                break;
-        }
-    }
-    VF.centers.size();
 }
 
-TEST_F(GeometryTest, VoronoiDiagramAddPoints) {
-    VoronoiDiagram<FloatingPointType> vd;
-
-    std::vector<Point<FloatingPointType>> points = {
-        Point<FloatingPointType>(0.2, 0.2, 0.2),
-        Point<FloatingPointType>(0.5, 0.5, 0.5)
-    };
-
-    std::vector<bool> flags(points.size(), true);
-    vd.addPoints(points, flags);
-
-    auto cells = vd.extractCells();
-    EXPECT_EQ(cells.size(), points.size());
-}
-
-TEST_F(GeometryTest, VoronoiDiagramCalculateLongestDiagonal) {
-    std::vector<Point<FloatingPointType>> points = {
-        Point<FloatingPointType>(0.1, 0.1, 0.1),
-        Point<FloatingPointType>(0.9, 0.9, 0.9)
-    };
-
+TEST_F(VoronoiTest, SpecializedOperations) {
+    // Calculating longest diagonal
+    std::vector<PointType> points = { PointType(0.1, 0.1, 0.1), PointType(0.9, 0.9, 0.9) };
     VoronoiDiagram<FloatingPointType> vd(points);
 
     Cell<FloatingPointType> cell(3, 3, 3, 90, 90, 120, true);
     FloatingPointType diagonal = vd.calculateLongestDiagonal(cell.fracToCart());
-
     EXPECT_GT(diagonal, 0.0);
-}
 
-TEST_F(GeometryTest, VoronoiDiagramExtractCells) {
-    std::vector<Point<FloatingPointType>> points = {
-        Point<FloatingPointType>(0.1, 0.1, 0.1),
-        Point<FloatingPointType>(0.4, 0.4, 0.4)
-    };
-
-    VoronoiDiagram<FloatingPointType> vd(points);
-
+    // Working with VoronoiFused
     auto cells = vd.extractCells();
-    EXPECT_EQ(cells.size(), points.size());
+    VoronoiFused<FloatingPointType> vf;
+    vf.AddCells(cells);
 
-    auto empty_cells = vd.extractCells();
-    EXPECT_TRUE(empty_cells.empty());
+    // Verifying vertex uniqueness
+    for (size_t i = 0; i < vf.vertexes.size(); ++i) {
+        for (size_t j = i + 1; j < vf.vertexes.size(); ++j) {
+            EXPECT_GT((vf.vertexes[i] - vf.vertexes[j]).r(), 0.0001);
+        }
+    }
+
+    EXPECT_EQ(vf.centers.size(), cells.size());
 }
 
-TEST_F(GeometryTest, VoronoiCellBoundaryConditions) {
-    VoronoiCell<FloatingPointType> cell1(Point<FloatingPointType>(0.0, 0.0, 0.0));
-    VoronoiCell<FloatingPointType> cell2(Point<FloatingPointType>(0.999, 0.999, 0.999));
+TEST_F(VoronoiTest, BoundaryConditions) {
+    // Testing cell interactions at boundaries
+    VoronoiCell<FloatingPointType> cell1(PointType(0.0, 0.0, 0.0));
+    VoronoiCell<FloatingPointType> cell2(PointType(0.999, 0.999, 0.999));
 
     int result = VoronoiCell<FloatingPointType>::interact(cell1, cell2);
-
-    EXPECT_EQ(result, 0);
+    EXPECT_EQ(result, 0); // Should interact normally
 }
 
+// ==================== ENTRY POINT ====================
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
-
