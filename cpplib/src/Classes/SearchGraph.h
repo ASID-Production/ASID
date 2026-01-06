@@ -26,11 +26,18 @@
 //
 // ******************************************************************************************
 #pragma once
-#include <list>
-#include <vector>
 
-#include "MoleculeGraph.h"
+#include <cassert>
+#include <list>
+#include <type_traits>
+#include <vector>
+#include <utility>
+
+#include "../BaseHeaders/BaseTypes.h"
 #include "../BaseHeaders/Currents.h"
+#include "../Classes/Engine.h"
+#include "../Classes/MoleculeGraph.h"
+
 namespace cpplib {
 	class SearchGraph {
 	public:
@@ -48,8 +55,8 @@ namespace cpplib {
 		using Log = ::std::list<::std::pair<BondType, BondType>>;
 
 		// Asserts
-		static_assert (::std::is_same_v<AtomTypeBase, typename RequestNodeType::AtomType::AtomTypeBase> &&
-                       ::std::is_same_v<AtomTypeBase, typename DatabaseNodeType::AtomType::AtomTypeBase>,
+		static_assert (::std::is_same_v<AtomTypeBase, typename RequestNodeType::AtomType::AtomTypeBase>&&
+					   ::std::is_same_v<AtomTypeBase, typename DatabaseNodeType::AtomType::AtomTypeBase>,
 					   "AtomTypeBase is not the same in RequestGraphType and DatabaseGraphType");
 
 
@@ -86,14 +93,14 @@ namespace cpplib {
 		bool searchTry(AtomIndex startI, AtomIndex startD, bool exact) {
 			addComp(startI, startD);
 			bool result;
-				if (input_[startI].hasNeighbours()) {
-					result = recursiveSearchHasNeighbours(startI, exact);
-				}
-				else {
-					result = recursiveSearchNoNeighbours(exact);
-				}
-			
-			if(result)
+			if (input_[startI].hasNeighbours()) {
+				result = recursiveSearchHasNeighbours(startI, exact);
+			}
+			else {
+				result = recursiveSearchNoNeighbours(exact);
+			}
+
+			if (result)
 				return true;
 			else
 				deleteComp(startI);
@@ -128,36 +135,30 @@ namespace cpplib {
 
 			basic_types::TypeBitset bits;
 
-			for (AtomIndex i = 1; i < inputSize_; i++)
-			{
+			for (AtomIndex i = 1; i < inputSize_; i++) {
 				if (input_[i].getType().contains(AtomTypeBase(1))) {
-					for (AtomIndex j = 0; j < input_[i].neighboursSize(); j++)
-					{
+					for (AtomIndex j = 0; j < input_[i].neighboursSize(); j++) {
 						auto nei = input_[i].getNeighbour(j);
 						bits |= nei->getType().get_bitset();
 					}
 				}
 			}
-			for (AtomIndex i = 1; i < dataSize_; i++)
-			{
+			for (AtomIndex i = 1; i < dataSize_; i++) {
 				if (data_[i].getType().contains(AtomTypeBase(1))) {
-					for (AtomIndex j = 0; j < data_[i].neighboursSize(); j++)
-					{
+					for (AtomIndex j = 0; j < data_[i].neighboursSize(); j++) {
 						auto nei = data_[i].getNeighbour(j);
 						bits[static_cast<AtomTypeBase>(nei->getType())] = true;
 					}
 				}
 			}
 
-			for (AtomIndex i = 1; i < inputSize_; i++)
-			{
+			for (AtomIndex i = 1; i < inputSize_; i++) {
 				if ((input_[i].getType().get_bitset() & bits).any()) {
 					input_.unpackHydrogens(i);
 				}
 			}
 			input_.sortGraph();
-			for (AtomIndex i = 1; i < dataSize_; i++)
-			{
+			for (AtomIndex i = 1; i < dataSize_; i++) {
 				if (bits[static_cast<AtomTypeBase>(data_[i].getType())]) {
 					data_.unpackHydrogens(i);
 				}
@@ -255,14 +256,13 @@ namespace cpplib {
 				bool completed = FinalComparision(exact);
 				if (completed)
 					return true;
-				for (size_t i = 1; i < inputSize_; i++)
-				{
+				for (size_t i = 1; i < inputSize_; i++) {
 					if (comp_[i] == 0) {
 						nextI = i;
 						break;
 					}
 				}
-				
+
 			}
 
 			// nextI is an atom with neighbours
@@ -288,7 +288,7 @@ namespace cpplib {
 			return false;
 		}
 		bool recursiveSearchHasNeighbours(const AtomIndex curI, const bool exact) {
-			_ASSERT(data_[1].getID() == 1);
+			assert(data_[1].getID() == 1);
 			// Ring check
 			const AtomIndex neiSize = input_[curI].neighboursSize();
 			const AtomIndex curD = comp_[curI];

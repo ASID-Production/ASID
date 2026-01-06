@@ -31,7 +31,6 @@
 #include <bitset>
 #include "../Classes/Geometry.h"
 #include "../Classes/FindMolecules.h"
-#include "../Functions/AllInOneAndCurrent.h"
 namespace cpplib {
 	class SearchDataInterface {
 	public:

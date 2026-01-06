@@ -44,8 +44,9 @@
 #include <MoleculeGraph.h>
 #include <SearchGraph.h>
 
-#include "../src/Functions/AllInOneAndCurrent.h"
 #include "../src/Functions/Functions.h"
+
+extern const cpplib::Distances* p_distances;
 
 
 

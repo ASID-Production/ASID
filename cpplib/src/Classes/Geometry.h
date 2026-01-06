@@ -26,16 +26,13 @@
 //
 // ******************************************************************************************
 #pragma once
-#include <cstdint> // for int8_t etc.
+#include <cstdint>
 #include <type_traits>
 #include <array>
 #include <vector>
-#include <list> // for std::list
-#include <cmath> // for std::sqrt and std::floor
-#include <utility> // for std::move
-#include <algorithm> // for std::sort
-#include <ranges>
-#include <numbers>
+#include <list>
+#include <utility>
+#include <algorithm>
 #include <optional>
 #include <concepts>
 #include <cassert>
@@ -51,9 +48,9 @@ namespace cpplib::geometry {
 
 	template<class T>
 	struct Point {
-	private:
-		static constexpr T eq_pos = static_cast<T>(crystallography_eq_position_eps_fractalspace);
 	public:
+		static constexpr T eq_pos = static_cast<T>(crystallography_eq_position_eps_fractalspace);
+
 		using value_type = T;
 		using array_type = ::std::array<value_type, 3>;
 
@@ -67,9 +64,9 @@ namespace cpplib::geometry {
 					return hx ^ (hy << 1) ^ (hz << 2) ^ (hx >> 31);
 				}
 				else {
-					return 
-						(point[0] * std::size_t(73856093)) ^ 
-						(point[1] * std::size_t(19349663)) ^ 
+					return
+						(point[0] * std::size_t(73856093)) ^
+						(point[1] * std::size_t(19349663)) ^
 						(point[2] * std::size_t(83492791));
 				}
 			}
@@ -86,8 +83,8 @@ namespace cpplib::geometry {
 		explicit constexpr Point(const array_type& other) noexcept : a(other) {};
 		explicit constexpr Point(array_type&& other) noexcept : a(::std::move(other)) {};
 
-		template <typename T2> 
-			requires ((::std::integral<T2> || ::std::floating_point<T2>) && ::std::is_convertible<T2,T>::value)
+		template <typename T2>
+			requires ((::std::integral<T2> || ::std::floating_point<T2>) && ::std::is_convertible<T2, T>::value)
 		explicit constexpr Point(const Point<T2>& other) noexcept {
 			a[0] = static_cast<T>(other[0]);
 			a[1] = static_cast<T>(other[1]);
@@ -167,7 +164,7 @@ namespace cpplib::geometry {
 		constexpr Point floor() const {
 			return Point(std::floor(a[0]), std::floor(a[1]), std::floor(a[2]));
 		}
-		static constexpr Point quantize(const Point & p, T epsilon) noexcept {
+		static constexpr Point quantize(const Point& p, T epsilon) noexcept {
 			if (epsilon == 0) return {};
 			return {
 				std::round(p[0] / epsilon) * epsilon,
@@ -232,8 +229,8 @@ namespace cpplib::geometry {
 			return *this;
 		}
 		template <class OT> inline Point<OT>& operator-=(const Point<OT>& right) noexcept {
-			a[0] += static_cast<T>(right.a[0]);
-			a[1] += static_cast<T>(right.a[1]);
+			a[0] -= static_cast<T>(right.a[0]);
+			a[1] -= static_cast<T>(right.a[1]);
 			a[2] += static_cast<T>(right.a[2]);
 			return *this;
 		}
@@ -480,7 +477,7 @@ namespace cpplib::geometry {
 	private:
 		std::vector<PointType> vertices_;
 		PlaneType plane_;
-		bool is_valid_;
+		bool is_valid_ = false;
 
 	public:
 		// Default Constructor
@@ -673,7 +670,7 @@ namespace cpplib::geometry {
 			return vertices_;
 		}
 	private:
-		std::pair<size_t,size_t> findIntersectionPoints(const PlaneType& clipping_plane) const {
+		std::pair<size_t, size_t> findIntersectionPoints(const PlaneType& clipping_plane) const {
 			size_t e1 = vertices_.size();
 			size_t e2 = vertices_.size();
 			const size_t vs = vertices_.size();
@@ -748,9 +745,9 @@ namespace cpplib::geometry {
 			if (has_positive == false)
 				return { vs, vs };
 
-			
+
 			// Find left corner 
-			for (size_t iter = e1+vs-1; iter > e2; iter--)
+			for (size_t iter = e1 + vs - 1; iter > e2; iter--)
 			{
 				auto iter_t = iter % vs;
 				if (dists[iter_t] > 0) {
@@ -763,7 +760,7 @@ namespace cpplib::geometry {
 
 			const auto e1_t = e1 + vs;
 			// Find right corner 
-			for (size_t iter = e2+1; iter < e1_t; iter++)
+			for (size_t iter = e2 + 1; iter < e1_t; iter++)
 			{
 				auto iter_t = iter % vs;
 				if (dists[iter_t] > 0) {
@@ -1008,9 +1005,9 @@ namespace cpplib::geometry {
 			}
 			faces_.reserve(6);
 			for (int i = 0; i < 6; ++i) {
-				faces_.emplace_back(Face({ cube[face_indices[i][0]], 
-										   cube[face_indices[i][1]], 
-										   cube[face_indices[i][2]], 
+				faces_.emplace_back(Face({ cube[face_indices[i][0]],
+										   cube[face_indices[i][1]],
+										   cube[face_indices[i][2]],
 										   cube[face_indices[i][3]] }));
 			}
 		}
@@ -1070,7 +1067,7 @@ namespace cpplib::geometry {
 			}
 			addPoints(points, flags_);
 		}
-		
+
 		template<class AI>
 		constexpr VoronoiDiagram(const PointVector& points, const BondList<AI>& bonds, const BoolVector& flags = BoolVector()) noexcept : flags_(flags) {
 			if (flags.empty()) {
@@ -1090,11 +1087,11 @@ namespace cpplib::geometry {
 
 		template <class AI>
 		int calculateFaces(const BondList<AI>& bonds) noexcept {
-			if (state == State::Uninitialized) 
+			if (state == State::Uninitialized)
 				return 1; // Error: VoronoiDiagram not initialized
 			for (auto& bond : bonds) {
 				auto interaction_result = VoronCell::interact(cells_[bond.first], cells_[bond.second]);
-				if (interaction_result != 0) 
+				if (interaction_result != 0)
 					return 2; // Error: Cells too close
 			}
 			state = State::Correct_cells;
@@ -1108,12 +1105,12 @@ namespace cpplib::geometry {
 				for (const auto& face : vcell.getFaces()) {
 					for (size_t i = 0; i < face.size(); i++)
 					{
-						T val = (mat*(face[i] - seed)).r();
+						T val = (mat * (face[i] - seed)).r();
 						if (val > ret) ret = val;
 					}
 				}
 			}
-			return ret*2;
+			return ret * 2;
 		}
 
 		CellVector extractCells() noexcept {
@@ -1121,7 +1118,7 @@ namespace cpplib::geometry {
 				return {};
 			}
 			state = State::Uninitialized;
-            return std::move(cells_);
+			return std::move(cells_);
 		}
 	};
 
@@ -1195,7 +1192,7 @@ namespace cpplib::geometry {
 			for (size_t i = 0; i < cells_s; i++)
 			{
 				centers[i] = cells[i].getSeed();
-				auto & faces = cells[i].getFaces();
+				auto& faces = cells[i].getFaces();
 				auto faces_s = faces.size();
 				for (size_t j = 0; j < faces_s; j++)
 				{
@@ -1230,8 +1227,8 @@ namespace cpplib::geometry {
 			}
 		}
 		inline size_t add_to_polygon_union(::std::vector<Polygon>& v, const Polygon& x) const {
-			auto f_It = ::std::ranges::find_if(v, 
-											   [&x](const Polygon& p) { 
+			auto f_It = ::std::ranges::find_if(v,
+											   [&x](const Polygon& p) {
 												   if (p.is_inner) return false;
 												   for (size_t i = 0; i < 3; i++)
 												   {
@@ -1379,7 +1376,7 @@ namespace cpplib::geometry {
 			if (d[0] > 0.5) d[0] = 1 - d[0];
 			if (d[1] > 0.5) d[1] = 1 - d[1];
 			if (d[2] > 0.5) d[2] = 1 - d[2];
-			return (fracToCart_*d).r();
+			return (fracToCart_ * d).r();
 		}
 
 		template <class I>
@@ -1729,7 +1726,7 @@ namespace cpplib::geometry {
 			}
 		}
 
-		constexpr SupPoint coordintate_of_point(const PointType& p) const noexcept {
+		constexpr SupPoint coordinate_of_point(const PointType& p) const noexcept {
 			return {
 				static_cast<size_t>(std::floor(p[0] * sep_[0])),
 				static_cast<size_t>(std::floor(p[1] * sep_[1])),

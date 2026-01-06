@@ -26,13 +26,17 @@
 //
 // ******************************************************************************************
 #pragma once
+#include <array>
+#include <cassert>
+#include <concepts>
+#include <cstdint>
 #include <fstream>
+#include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <vector>
-#include <functional>
-#include <list>
-#include "Engine.h"
-#include "Geometry.h"
+#include "../BaseHeaders/BaseTypes.h"
+#include "../Classes/Geometry.h"
 
 namespace cpplib {
 	class Distances {
@@ -41,7 +45,7 @@ namespace cpplib {
 	public:
 		static constexpr size_t MAX_TYPE = cpplib::constants::mend_size - 1;
 
-		struct DistancesException : public ::std::runtime_error { 
+		struct DistancesException : public ::std::runtime_error {
 			using ::std::runtime_error::runtime_error;
 		};
 
@@ -71,20 +75,26 @@ namespace cpplib {
 			FloatingPointType lmin = 0.0f;
 			FloatingPointType lmax = 0.0f;
 			while (in >> i >> j >> lmin >> lmax) {
-				if (i < 1 || j < 1 || i > MAX_TYPE || j > MAX_TYPE) 
+				if (i < 1 || j < 1 || i > MAX_TYPE || j > MAX_TYPE)
 					throw DistancesException("File contains incorrect data.");
-				data_[i][j] = { lmin, lmax };
-				data_[j][i] = { lmin, lmax }; // symmetric storage
+				data_[i][j] = {lmin, lmax};
+				data_[j][i] = {lmin, lmax}; // symmetric storage
 			}
 			isReady_ = true;
 		}
 		inline bool isReady() const {
 			return isReady_;
 		}
-
-		inline char isBond(AtomTypeBase i, AtomTypeBase j, FloatingPointType length) const noexcept {
-			_ASSERT(i <= MAX_TYPE && j <= MAX_TYPE);
-			_ASSERT(i > 0 && j > 0);
+		/// <summary>
+		/// Check if the distance is in the bond range
+		/// </summary>
+		/// <param name="i">Atom type of first atom</param>
+		/// <param name="j">Atom type of second atom</param>
+		/// <param name="length">Distance between atoms</param>
+		/// <returns> 0  if r > max, 1  if min < r < max, -1 if r < min </returns>
+		constexpr char isBond(AtomTypeBase i, AtomTypeBase j, FloatingPointType length) const noexcept {
+			assert(i <= MAX_TYPE && j <= MAX_TYPE);
+			assert(i > 0 && j > 0);
 			const auto& [min, max] = data_[i][j];
 			if (length < max) {
 				if (min < length) {
@@ -100,31 +110,32 @@ namespace cpplib {
 		}
 
 		inline FloatingPointType minDistance(AtomTypeBase a1, AtomTypeBase a2) const noexcept {
-			_ASSERT(a1 <= MAX_TYPE && a2 <= MAX_TYPE);
-			_ASSERT(a1 > 0 && a2 > 0);
+			assert(a1 <= MAX_TYPE && a2 <= MAX_TYPE);
+			assert(a1 > 0 && a2 > 0);
 			return data_[a1][a2][0];
 		}
 		constexpr FloatingPointType maxDistance(AtomTypeBase a1, AtomTypeBase a2) const noexcept {
-			_ASSERT(a1 <= MAX_TYPE && a2 <= MAX_TYPE);
-			_ASSERT(a1 > 0 && a2 > 0);
+			assert(a1 <= MAX_TYPE && a2 <= MAX_TYPE);
+			assert(a1 > 0 && a2 > 0);
 			return data_[a1][a2][1];
 		}
 
 		template<typename Func, typename BondConteiner>
 			requires std::invocable<Func, const PointType&, const PointType&>&&
 		std::same_as<std::invoke_result_t<Func, const PointType&, const PointType&>, FloatingPointType>
-		void filter_bond_list(BondConteiner& bondlist,
-							  const ::std::vector<AtomTypeBase>& types,
-							  const ::std::vector<PointType>& points,
-							  Func dist) const noexcept
-		{
-			auto iter = bondlist.begin();
+			void filter_bond_list(BondConteiner& bondlist,
+								  const ::std::vector<AtomTypeBase>& types,
+								  const ::std::vector<PointType>& points,
+								  Func dist) const noexcept {
+			auto iter = ::std::begin(bondlist);
 
-			while (iter != bondlist.end()) {
+			while (iter != ::std::end(bondlist)) {
 				const auto l1 = iter->first;
 				const auto l2 = iter->second;
 
-				char is_real_bond = isBond(types[l1], types[l2], dist(points[l1], points[l2]));
+				auto moved_point2 = (points[l1] - points[l2]).round() + points[l2];
+
+				char is_real_bond = isBond(types[l1], types[l2], dist(points[l1], moved_point2));
 
 				if (is_real_bond == 0) {
 					iter->first = 0;

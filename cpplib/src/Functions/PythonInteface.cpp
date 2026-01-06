@@ -27,11 +27,20 @@
 // ******************************************************************************************
 #define Py_LIMITED_API 0x030A0000
 #include <Python.h>
-#include "AllInOneAndCurrent.h"
+
+#include <array>
+#include <cmath>
+#include <concepts>
+#include <utility>
+#include <vector>
+
 #include "Functions.h"
-#include "../Classes/Interfaces.h"
-#include "../BaseHeaders/DebugMes.h"
-#include <list>
+#include "../BaseHeaders/BaseTypes.h"
+#include "../Classes/Distances.h"
+#include "FindMolecules.h"
+#include "Geometry.h"
+
+extern const cpplib::Distances* p_distances;
 
 using namespace cpplib;
 using namespace cpplib::currents;
@@ -73,13 +82,13 @@ struct Prepare_IC : public Prepare_WC {
 		symm.resize(s);
 		for (Py_ssize_t i = 0; i < s; i++) {
 			Py_ssize_t us;
-			symm[i] = PyUnicode_AsUTF8AndSize(PyList_GetItem(osymm, i),&us);
+			symm[i] = PyUnicode_AsUTF8AndSize(PyList_GetItem(osymm, i), &us);
 		}
 	}
 };
 
 extern "C" {
-inline static void useDistances(PyObject * self);
+	inline static void useDistances(PyObject* self);
 }
 
 template <std::floating_point FT>
@@ -90,8 +99,7 @@ PyObject* create_list_from_points(const std::vector<cpplib::geometry::Point<FT>>
 	}
 
 	// Fill o_ret
-	for (Py_ssize_t i = 0; i < vec.size(); i++)
-	{
+	for (Py_ssize_t i = 0; i < vec.size(); i++) {
 		PyObject* o_point = Py_BuildValue("(ddd)",
 										  static_cast<double>(vec[i][0]),  // px
 										  static_cast<double>(vec[i][1]),  // py
@@ -117,8 +125,7 @@ PyObject* create_list_from_points(const std::vector<cpplib::geometry::Point<IT>>
 	}
 
 	// Fill o_ret
-	for (Py_ssize_t i = 0; i < vec.size(); i++)
-	{
+	for (Py_ssize_t i = 0; i < vec.size(); i++) {
 		PyObject* o_point = Py_BuildValue("(lll)",
 										  static_cast<long>(vec[i][0]),  // px
 										  static_cast<long>(vec[i][1]),  // py
@@ -137,10 +144,9 @@ PyObject* create_list_from_points(const std::vector<cpplib::geometry::Point<IT>>
 }
 
 template <char times>
-static std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>, times> FindDParamsParse(PyObject* self, PyObject* oparams, const std::array<int, times+1> type, char& d) {
+static std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>, times> FindDParamsParse(PyObject* self, PyObject* oparams, const std::array<int, times + 1> type, char& d) {
 	std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>, times> value;
-	for (char i = 0; i < times; i++, d += 2)
-	{
+	for (char i = 0; i < times; i++, d += 2) {
 		value[i].first = static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(oparams, d)));
 		value[i].second = static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(oparams, d + 1)));
 
@@ -159,8 +165,8 @@ static std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basi
 template <char times>
 static std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>, times> FindATParamsParse(PyObject* oparams, char& d) {
 	std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>, times> value;
-	for (char i = 0; i < times; i++, d += 2)
-	{
+	for (char i = 0; i < times; i++, d += 2) 
+{
 		value[i].first = static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(oparams, d)));
 		value[i].second = static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(oparams, d + 1)));
 	}
@@ -207,7 +213,7 @@ extern "C" {
 		for (Py_ssize_t i = 0; i < s; i++) {
 			deb_write("pyListToVectorCharP start i = ", i);
 			Py_ssize_t us;
-			ret[i] = PyUnicode_AsUTF8AndSize(PyList_GetItem(plist, i),&us);
+			ret[i] = PyUnicode_AsUTF8AndSize(PyList_GetItem(plist, i), &us);
 			deb_write("pyListToVectorCharP end   i = ", i);
 		}
 		deb_write("pyListToVectorCharP return");
@@ -236,7 +242,7 @@ extern "C" {
 		}
 		deb_write("useDistances parse __file__");
 		Py_ssize_t us;
-		std::string full(PyUnicode_AsUTF8AndSize(PyObject_GetAttrString(self, "__file__"),&us));
+		std::string full(PyUnicode_AsUTF8AndSize(PyObject_GetAttrString(self, "__file__"), &us));
 
 		auto found = full.find_last_of("\\/");
 		auto bond_filename = full.substr(0, found + 1) + "BondLength.ini";
@@ -257,8 +263,7 @@ extern "C" {
 		auto&& bonds = famstr.findBonds(distances, errM, [](const PointType& p1, const PointType& p2) {return (p1 - p2).r(); }).first;
 
 		PyObject* lst = PyList_New(0);
-		for (size_t i = 0; i < bonds.size(); i++)
-		{
+		for (size_t i = 0; i < bonds.size(); i++) {
 			PyList_Append(lst, Py_BuildValue("(ll)",
 											 static_cast<long>(bonds[i].first),
 											 static_cast<long>(bonds[i].second)));
@@ -275,8 +280,7 @@ extern "C" {
 		auto&& bonds = famstr.findBondsEx(distances, errM, [](const PointType& p1, const PointType& p2) {return (p1 - p2).r(); }).first;
 
 		PyObject* lst = PyList_New(0);
-		for (size_t i = 0; i < bonds.size(); i++)
-		{
+		for (size_t i = 0; i < bonds.size(); i++) {
 			PyList_Append(lst, Py_BuildValue("(llf)",
 											 static_cast<long>(bonds[i].first),
 											 static_cast<long>(bonds[i].second),
@@ -307,15 +311,13 @@ extern "C" {
 		PyObject* ret_o = PyList_New(0);
 		deb_write("py_SearchMain create return list");
 
-		for (Py_ssize_t i = 0; i < ret_s; i++)
-		{
+		for (Py_ssize_t i = 0; i < ret_s; i++) {
 			PyList_Append(ret_o, PyLong_FromLong(ret[i]));
 		}
 		deb_write("py_SearchMain return");
 		return ret_o;
 	}
-	static PyObject* cpplib_CompareGraph(PyObject* self, PyObject* args)
-	{
+	static PyObject* cpplib_CompareGraph(PyObject* self, PyObject* args) {
 		deb_write("cpplib_CompareGraph: start");
 		const char* s1 = NULL;
 		const char* s2 = NULL;
@@ -352,10 +354,9 @@ extern "C" {
 		auto [graph, error, ret] = FindMoleculesInCell(all.cell, all.symm, all.types, all.points);
 		PyObject* o_xyz_block = PyList_New(0);
 
-		for (const auto& [atoms, id, bonds] : ret)
-		{
+		for (const auto& [atoms, id, bonds] : ret) {
 			PyObject* o_molecule = PyList_New(0);
-			for (auto& [point,type] : atoms) {
+			for (auto& [point, type] : atoms) {
 				PyObject* o_atom = Py_BuildValue("{s:f,s:f,s:f,s:l}",
 												 "x", cpplib::basic_types::FloatingPointType(point[0]),
 												 "y", cpplib::basic_types::FloatingPointType(point[1]),
@@ -389,8 +390,7 @@ extern "C" {
 		deb_write("cpplib_FindMoleculesWithoutCell returned from FindMoleculesInCell");
 		PyObject* o_xyz_block = PyList_New(0);
 
-		for (auto& mol : std::get<2>(ret))
-		{
+		for (auto& mol : std::get<2>(ret)) {
 			PyObject* o_molecule = PyList_New(0);
 			for (auto& atom : std::get<0>(mol)) {
 				PyObject* o_atom = Py_BuildValue("{s:f,s:f,s:f,s:l}",
@@ -440,8 +440,7 @@ extern "C" {
 		deb_write("cpplib_GenSymm: symm parsing started");
 		std::vector<geometry::Symm<FloatingPointType>> symm;
 		const size_t ss = nsymm.size();
-		for (size_t i = 0; i < ss; i++)
-		{
+		for (size_t i = 0; i < ss; i++) {
 			symm.emplace_back(nsymm[i]);
 		}
 		deb_write("cpplib_GenSymm: Parsing ended");
@@ -452,8 +451,7 @@ extern "C" {
 		if (movemasstocell) {
 			deb_write("cpplib_GenSymm: Move center of mass started");
 			PointType centerofmass(0, 0, 0);
-			for (size_t i = 0; i < s_points; i++)
-			{
+			for (size_t i = 0; i < s_points; i++) {
 				centerofmass += all.points[i];
 			}
 			centerofmass /= sf_points;
@@ -461,8 +459,7 @@ extern "C" {
 							   std::ceil(centerofmass[1]),
 							   std::ceil(centerofmass[2]));
 
-			for (size_t i = 0; i < ss; i++)
-			{
+			for (size_t i = 0; i < ss; i++) {
 				PointType movedcenter = symm[i].GenSymm(centerofmass);
 				PointType ceilmoved(std::ceil(movedcenter[0]),
 									std::ceil(movedcenter[1]),
@@ -482,8 +479,7 @@ extern "C" {
 		deb_write("cpplib_GenSymm: famstr.parseIndex.size() = ", famstr.parseIndex.size());
 		deb_write("cpplib_GenSymm: famstr.sizePoints = ", famstr.sizePoints);
 
-		for (Py_ssize_t i = s_points; i < famstr.sizePoints; i++)
-		{
+		for (Py_ssize_t i = s_points; i < famstr.sizePoints; i++) {
 			PyList_Append(otuples, Py_BuildValue("(Ifff)",
 												 static_cast<unsigned int>(famstr.types[std::get<0>(famstr.parseIndex[i])]),
 												 static_cast<cpplib::basic_types::FloatingPointType>(famstr.points[i][0]),
@@ -508,8 +504,8 @@ extern "C" {
 		}
 		Prepare_IC all(ocell, osymm, otuples);
 
-		const std::array<int, 2> type{ static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 0))),
-										static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 1))) };
+		const std::array<int, 2> type{static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 0))),
+										static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 1)))};
 		char d = 2;
 		auto value = FindDParamsParse<1>(self, oparams, type, d);
 
@@ -525,8 +521,7 @@ extern "C" {
 
 		auto res_s = res.size();
 		PyObject* lst = PyList_New(0);
-		for (size_t i = 0; i < res_s; i++)
-		{
+		for (size_t i = 0; i < res_s; i++) {
 			PyList_Append(lst, Py_BuildValue("(IIf)",
 											 static_cast<unsigned int>(std::get<0>(res[i])),
 											 static_cast<unsigned int>(std::get<1>(res[i])),
@@ -545,8 +540,8 @@ extern "C" {
 		}
 		Prepare_WC all(otuples);
 
-		const std::array<int, 2> type{ static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 0))),
-										static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 1))) };
+		const std::array<int, 2> type{static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 0))),
+										static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 1)))};
 		char d = 2;
 		auto value = FindDParamsParse<1>(self, oparams, type, d);
 
@@ -563,8 +558,7 @@ extern "C" {
 
 		auto res_s = res.size();
 		PyObject* lst = PyList_New(0);
-		for (size_t i = 0; i < res_s; i++)
-		{
+		for (size_t i = 0; i < res_s; i++) {
 			PyList_Append(lst, Py_BuildValue("(IIf)",
 											 static_cast<unsigned int>(std::get<0>(res[i])),
 											 static_cast<unsigned int>(std::get<1>(res[i])),
@@ -586,9 +580,9 @@ extern "C" {
 		}
 		Prepare_IC all(ocell, osymm, otuples);
 
-		const std::array<int, 3> type{ static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 0))),
+		const std::array<int, 3> type{static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 0))),
 										static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 1))),
-										static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 2))) };
+										static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 2)))};
 		char d = type.size();
 		auto value_d = FindDParamsParse<2>(self, oparams, type, d);
 		auto value_a = FindATParamsParse<1>(oparams, d);
@@ -600,8 +594,7 @@ extern "C" {
 
 		auto res_s = res.size();
 		PyObject* lst = PyList_New(0);
-		for (size_t i = 0; i < res_s; i++)
-		{
+		for (size_t i = 0; i < res_s; i++) {
 			PyList_Append(lst, Py_BuildValue("(IIIf)",
 											 static_cast<unsigned int>(std::get<0>(res[i])),
 											 static_cast<unsigned int>(std::get<1>(res[i])),
@@ -622,9 +615,9 @@ extern "C" {
 
 		Prepare_WC all(otuples);
 
-		const std::array<int, 3> type{ static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 0))),
+		const std::array<int, 3> type{static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 0))),
 									   static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 1))),
-									   static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 2))) };
+									   static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 2)))};
 		char d = type.size();
 		auto value_d = FindDParamsParse<2>(self, oparams, type, d);
 		auto value_a = FindATParamsParse<1>(oparams, d);
@@ -636,8 +629,7 @@ extern "C" {
 
 		auto res_s = res.size();
 		PyObject* lst = PyList_New(0);
-		for (size_t i = 0; i < res_s; i++)
-		{
+		for (size_t i = 0; i < res_s; i++) {
 			PyList_Append(lst, Py_BuildValue("(IIIf)",
 											 static_cast<unsigned int>(std::get<0>(res[i])),
 											 static_cast<unsigned int>(std::get<1>(res[i])),
@@ -660,10 +652,10 @@ extern "C" {
 
 		Prepare_IC all(ocell, osymm, otuples);
 
-		const std::array<int, 4> type{ static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 0))),
+		const std::array<int, 4> type{static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 0))),
 										static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 1))),
 										static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 2))),
-										static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 3))) };
+										static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 3)))};
 
 		char d = type.size();
 		auto value_d = FindDParamsParse<3>(self, oparams, type, d);
@@ -676,8 +668,7 @@ extern "C" {
 
 		auto res_s = res.size();
 		PyObject* lst = PyList_New(0);
-		for (size_t i = 0; i < res_s; i++)
-		{
+		for (size_t i = 0; i < res_s; i++) {
 			PyList_Append(lst, Py_BuildValue("(IIIIf)",
 											 static_cast<unsigned int>(std::get<0>(res[i])),
 											 static_cast<unsigned int>(std::get<1>(res[i])),
@@ -699,10 +690,10 @@ extern "C" {
 
 		Prepare_WC all(otuples);
 
-		const std::array<int, 4> type{ static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 0))),
+		const std::array<int, 4> type{static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 0))),
 										static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 1))),
 										static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 2))),
-										static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 3))) };
+										static_cast<int>(PyLong_AsLong(PyList_GetItem(oparams, 3)))};
 
 		char d = type.size();
 		auto value_d = FindDParamsParse<3>(self, oparams, type, d);
@@ -715,8 +706,7 @@ extern "C" {
 
 		auto res_s = res.size();
 		PyObject* lst = PyList_New(0);
-		for (size_t i = 0; i < res_s; i++)
-		{
+		for (size_t i = 0; i < res_s; i++) {
 			PyList_Append(lst, Py_BuildValue("(IIIIf)",
 											 static_cast<unsigned int>(std::get<0>(res[i])),
 											 static_cast<unsigned int>(std::get<1>(res[i])),
@@ -844,13 +834,11 @@ extern "C" {
 		const auto himp_s = himp.size();
 		// Code section
 		const auto s = all.types.size();
-		for (int i = 0; i < s; i++)
-		{
+		for (int i = 0; i < s; i++) {
 			if (all.types[i] != 1) continue;
 			auto dist = static_cast<FloatingPointType>(INFINITY);
 			int best = i;
-			for (int j = 0; j < s; j++)
-			{
+			for (int j = 0; j < s; j++) {
 				if (j == i) continue;
 				auto temp = PointType::distance(all.points[i], all.points[j]);
 				if (temp < dist) {
@@ -867,8 +855,7 @@ extern "C" {
 
 		// Return section
 		PyObject* o_xyz_block = PyList_New(0);
-		for (int i = 0; i < s; i++)
-		{
+		for (int i = 0; i < s; i++) {
 			PyObject* o_atom = Py_BuildValue("(fff)",
 											 static_cast<float>(all.points[i][0]),
 											 static_cast<float>(all.points[i][1]),
@@ -937,8 +924,7 @@ extern "C" {
 
 		deb_write("cpplib_compaq create List[txyz]");
 		deb_write("cpplib_compaq std::get<0>(ret).size() = ", std::get<0>(ret).size());
-		for (int i = 0; i < std::get<0>(ret).size(); i++)
-		{
+		for (int i = 0; i < std::get<0>(ret).size(); i++) {
 			PyObject* o_atom = Py_BuildValue("(fff)",
 											 static_cast<cpplib::basic_types::FloatingPointType>(std::get<0>(ret)[i][0]),
 											 static_cast<cpplib::basic_types::FloatingPointType>(std::get<0>(ret)[i][1]),
@@ -947,8 +933,7 @@ extern "C" {
 		}
 
 		deb_write("cpplib_compaq create List[error_str]");
-		while (std::get<1>(ret).empty() == false)
-		{
+		while (std::get<1>(ret).empty() == false) {
 			PyList_Append(o_errors, Py_BuildValue("s", (std::get<1>(ret)).front().c_str()));
 			(std::get<1>(ret)).pop_front();
 		}
@@ -984,16 +969,15 @@ extern "C" {
 		for (Py_ssize_t i = 0; i < s; i++) {
 			PyObject* o_tuple = PyList_GetItem(ocoords, i);
 			anchors.emplace_back(cpplib::geometry::Point<FloatingPointType>(static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 0))),
-															 static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 1))),
-															 static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 2)))),
+																			static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 1))),
+																			static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 2)))),
 								 static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 3))));
 		}
 		bool b = false;
 		auto ret = ClusterCreate(all.cell, all.symm, all.types, all.points, anchors, over_radius, b);
 		PyObject* o_ret = PyList_New(0);
 		auto ret_s = ret.size();
-		for (size_t i = 0; i < ret_s; i++)
-		{
+		for (size_t i = 0; i < ret_s; i++) {
 			auto py_point = Py_BuildValue("(fff)",
 										  static_cast<float>(ret[i].point[0]), // px
 										  static_cast<float>(ret[i].point[1]), // py
@@ -1013,7 +997,7 @@ extern "C" {
 		}
 		return Py_BuildValue("{s:O,s:O}",
 							 "points", o_ret,
-							 "hasPolymer", b ? Py_True : Py_False);
+							 "hasPolymer", b?Py_True:Py_False);
 	}
 
 	/// Args: [cell, symm, tuples, bools<int>, cutoff]
@@ -1052,7 +1036,8 @@ extern "C" {
 		bools.resize(all.points.size(), false);
 
 		cpplib::geometry::HashedSpace<FloatingPointType, long> space(fcell, cutoff);
-		auto bonds = space.create_hash_bonds<::std::pair<long,long>>(all.points);
+		auto bonds = space.create_hash_bonds<::std::pair<long, long>>(all.points);
+
 		Diagram diag;
 		diag.addPoints(all.points, bools);
 		diag.calculateFaces<long>(bonds);
@@ -1060,8 +1045,6 @@ extern "C" {
 		auto ce = diag.extractCells();
 		deb_write("cells.size() = ", ce.size());
 		
-
-
 		cpplib::geometry::VoronoiFused<FloatingPointType> vf;
 		vf.AddCells(ce);
 		
@@ -1087,11 +1070,9 @@ extern "C" {
 		}
 
 		// Fill o_polygons
-		for (Py_ssize_t i = 0; i < vf.polygons.size(); i++)
-		{
+		for (Py_ssize_t i = 0; i < vf.polygons.size(); i++) {
 			PyObject* polygon_list = PyList_New(vf.polygons[i].vert_ids.size());
-			for (Py_ssize_t j = 0; j < vf.polygons[i].vert_ids.size(); j++)
-			{
+			for (Py_ssize_t j = 0; j < vf.polygons[i].vert_ids.size(); j++) {
 				PyObject* py_int = PyLong_FromLong(static_cast<long>(vf.polygons[i].vert_ids[j]));
 				if (py_int == NULL) {
 					// Allocation Error
@@ -1106,7 +1087,7 @@ extern "C" {
 					cleanup();
 					Py_RETURN_NONE;
 				}
-				
+
 			}
 			if (PyList_SetItem(o_polygons, i, polygon_list) < 0) {
 				// Failed to set item
@@ -1118,11 +1099,9 @@ extern "C" {
 
 
 		// Fill o_plyhedra
-		for (Py_ssize_t i = 0; i < vf.polyhedra.size(); i++)
-		{
+		for (Py_ssize_t i = 0; i < vf.polyhedra.size(); i++) {
 			PyObject* polyhedra_list = PyList_New(vf.polyhedra[i].size());
-			for (Py_ssize_t j = 0; j < vf.polyhedra[i].size(); j++)
-			{
+			for (Py_ssize_t j = 0; j < vf.polyhedra[i].size(); j++) {
 				PyObject* py_int = PyLong_FromLong(static_cast<long>(vf.polyhedra[i][j]));
 				if (py_int == NULL) {
 					// Allocation Error
@@ -1152,7 +1131,7 @@ extern "C" {
 							 "centers", o_centers,
 							 "vertexes", o_vertexes,
 							 "polygons", o_polygons,
-							 "polyhedra",o_polyhedra);
+							 "polyhedra", o_polyhedra);
 	}
 
 	static struct PyMethodDef methods[] = {
@@ -1185,10 +1164,9 @@ extern "C" {
 	static PyModuleDef cpplib_module = {
 		PyModuleDef_HEAD_INIT, "cpplib", NULL, -1, methods,
 		NULL, NULL, NULL, NULL
-	} ;
+	};
 
-	PyMODINIT_FUNC PyInit_cpplib(void)
-	{
+	PyMODINIT_FUNC PyInit_cpplib(void) {
 		return PyModule_Create(&cpplib_module);
 	}
 }

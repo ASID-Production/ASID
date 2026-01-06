@@ -114,7 +114,7 @@ namespace cpplib {
 						invalidAtoms.push_back(i);
 						invalidAtoms.push_back(j);
 
-						// [[fallthrowgh]]
+						[[fallthrowgh]]
 					case  1:
 						res.emplace_back(i, j);
 						break;
@@ -156,7 +156,7 @@ namespace cpplib {
 						invalidAtoms.push_back(i);
 						invalidAtoms.push_back(j);
 
-						// [[fallthrowgh]]
+						[[fallthrowgh]]
 					case  1:
 						res.emplace_back(i, j, dist);
 						break;

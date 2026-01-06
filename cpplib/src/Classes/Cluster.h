@@ -27,16 +27,20 @@
 // ******************************************************************************************
 #pragma once
 #include <array>
-#include <vector>
-#include <ranges>
-#include <tuple>
 #include <algorithm>
-#include <unordered_set>
 #include <cassert>
+#include <cmath>
+#include <cstdint>
+#include <functional>
+#include <unordered_set>
+#include <utility>
+#include <vector>
 
-#include "../BaseHeaders/Currents.h"
-#include "Geometry.h"
+#include "BaseTypes.h"
 #include "DSU.h"
+#include "Distances.h"
+#include "Engine.h"
+#include "Geometry.h"
 
 namespace cpplib {
 
@@ -72,7 +76,7 @@ namespace cpplib {
 			SymmIndex symm;
 			ShiftType shift;
 		};
-		struct TranslatedAtom{
+		struct TranslatedAtom {
 			AtomIndex id;
 			ShiftType shift;
 
@@ -110,7 +114,7 @@ namespace cpplib {
 				const ::std::vector<PointType>& points,
 				const ::std::vector<AtomTypeBase>& types,
 				FloatingPointType polymer_cutoff)
-			: cell(unit_cell), symm(symms), anchors_frac(::std::move(anchors_fractal)), polymer_cutoff_radius(polymer_cutoff) 
+			: cell(unit_cell), symm(symms), anchors_frac(::std::move(anchors_fractal)), polymer_cutoff_radius(polymer_cutoff)
 		{
 			auto s = points.size();
 			assert(types.size() == s);
@@ -129,7 +133,7 @@ namespace cpplib {
 
 
 		}
-		::std::vector<ClusterAtom> execute(const DistancesType& distances)  
+		::std::vector<ClusterAtom> execute(const DistancesType& distances)
 		{
 			auto unit_01 = construct_unit_01();
 			auto molecules01 = constructMoleculesInUnit01(unit_01, distances);
@@ -201,9 +205,9 @@ namespace cpplib {
 			}
 
 			// Construct molecules from unit cell and bonds
-			auto moleculles = create_molecules_near_unit01(unit_01, bonds);
+			auto molecules = create_molecules_near_unit01(unit_01, bonds);
 
-			return moleculles;
+			return molecules;
 		}
 
 		::std::vector<ClusterAtom> construct_unit_01() const {
@@ -329,7 +333,7 @@ namespace cpplib {
 		bool check_intersection(const Molecule& mol1, const Molecule& mol2) const {
 			auto s1 = mol1.nodes.size();
 			auto s2 = mol2.nodes.size();
-			if (s2 > s1) 
+			if (s2 > s1)
 				return check_intersection(mol2, mol1); // Call method with swapped arguments
 
 			// TODO: Maybe useless check
@@ -379,7 +383,7 @@ namespace cpplib {
 				auto nodeid = molecules[i].nodes[0].id;
 				for (AtomIndex j = 0; j < i; j++) {
 					auto iter = std::ranges::find_if(molecules[j].nodes, [nodeid](const TranslatedAtom& atom) {return atom.id == nodeid; });
-					if (iter!= molecules[j].nodes.end())
+					if (iter != molecules[j].nodes.end())
 					{
 						// TODO: Need check (logic)
 						ret[i].shift = iter->shift - molecules[i].nodes[0].shift;
@@ -390,7 +394,7 @@ namespace cpplib {
 			}
 			return ret;
 		}
-		void constructBox(const AnchorType& anchor, 
+		void constructBox(const AnchorType& anchor,
 						  FloatingPointType cutoff,
 						  const std::array<FloatingPointType, 3>& dp,
 						  BoxSet& box) const {
@@ -424,7 +428,7 @@ namespace cpplib {
 				}
 			}
 		}
-		
+
 		::std::vector<AtomIndex> molecule_indexes_create(const std::vector<Molecule>& molecules, AtomIndex size) const {
 			::std::vector<AtomIndex> ret(size, 0);
 			constexpr ShiftType zeroshift(0, 0, 0);
@@ -441,9 +445,9 @@ namespace cpplib {
 			return ret;
 		}
 		::std::vector<BoxSet> create_molecule_boxes_nonpoly(const ::std::vector<Molecule>& molecules,
-													const ::std::vector<ClusterAtom>& unit01,
-													const ::std::vector<TranslatedAtom>& molecule_pass,
-													const BoxSet& boxes) const
+															const ::std::vector<ClusterAtom>& unit01,
+															const ::std::vector<TranslatedAtom>& molecule_pass,
+															const BoxSet& boxes) const
 		{
 			// Construct phantom of each possible molecule
 			::std::vector<BoxSet> ret(molecule_pass.size());
@@ -462,12 +466,12 @@ namespace cpplib {
 			}
 
 			// Check each combination of molecule, anchor and box
-			for (AtomIndex i = 0; i < molecule_pass.size(); i++) 
+			for (AtomIndex i = 0; i < molecule_pass.size(); i++)
 			{
 				std::erase_if(ret[i], [this, i, &molecules, &unit01](const ShiftType& shift) {
 					return !(this->check_molecule(shift, molecules[i], unit01)); });
 			}
-			
+
 			return ret;
 		}
 
@@ -486,7 +490,7 @@ namespace cpplib {
 		}
 
 
-		std::unordered_set<TranslatedAtom, TranslatedAtom::Hash> 
+		std::unordered_set<TranslatedAtom, TranslatedAtom::Hash>
 			grow_polymer(const Molecule& molecule,
 						 const ::std::vector<ClusterAtom>& unit01) const
 		{
