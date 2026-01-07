@@ -43,85 +43,245 @@
 #include "Geometry.h"
 
 namespace cpplib {
+	class Cluster;
+}
+
+namespace cpplib::cluster_detail {
+
+	using FloatingPointType = cpplib::basic_types::FloatingPointType;
+	using PointType = cpplib::geometry::Point<FloatingPointType>;
+	using ShiftType = cpplib::geometry::Point<int8_t>;
+	using Plane = cpplib::geometry::Plane<FloatingPointType>;
+	using BoxSet = ::std::unordered_set<ShiftType>;
+	using SymmIndex = int;
+	using CellType = cpplib::geometry::Cell<FloatingPointType>;
+	using Matrix = typename CellType::matrix_type;
+	using AtomIndex = cpplib::basic_types::AtomIndex;
+	using SymmType = cpplib::geometry::Symm<FloatingPointType>;
+	using AtomTypeBase = cpplib::basic_types::AtomTypeBase;
+	using DistancesType = Distances;
+
+
+	struct BondWithShift : public Bond {
+		ShiftType shift{0, 0, 0};
+		BondWithShift(AtomIndex a, AtomIndex b) : Bond(a, b) {
+		}
+		BondWithShift(Bond a, ShiftType b) : Bond(a), shift(b) {
+		}
+	};
+	using BondList = ::std::vector<BondWithShift>;
+	struct AnchorType {
+		PointType point;
+		FloatingPointType radius;
+	};
+	struct ClusterAtom {
+		AtomIndex index;
+		AtomTypeBase type;
+		PointType point;
+		SymmIndex symm;
+		ShiftType shift;
+	};
+	struct TranslatedAtom {
+		AtomIndex id;
+		ShiftType shift;
+
+		constexpr bool operator==(const TranslatedAtom& other) const noexcept = default;
+
+		struct Hash {
+			size_t operator()(const TranslatedAtom& ta) const noexcept {
+				using ST = typename ShiftType::value_type;
+				return std::hash<AtomIndex>()(ta.id) ^
+					(std::hash<ST>()(ta.shift[0]) << 1) ^
+					(std::hash<ST>()(ta.shift[1]) << 2) ^
+					(std::hash<ST>()(ta.shift[2]) << 3);
+			}
+		};
+	};
+	struct Molecule {
+		::std::vector<TranslatedAtom> nodes{};
+		bool is_polymer = false;
+	};
+
+
+
+	class UnitCellBuilder {
+	public:
+
+		// Input configuration
+		struct Config {
+			bool remove_duplicates = true;
+			FloatingPointType duplicate_tolerance = cpplib::geometry::crystallography_eq_position_eps_fractalspace;
+		};
+
+		// Extended result
+		struct BuildResult {
+			std::vector<ClusterAtom> atoms;
+			size_t original_asymmetric_count = 0;
+			size_t generated_count = 0;
+			size_t duplicate_count = 0;
+
+			bool success() const {
+				return generated_count > 0;
+			}
+		};
+
+		UnitCellBuilder(const CellType& cell,
+					   const ::std::vector<SymmType>& symmetries,
+					   Config config = {})
+			: cell_(cell), symmetries_(symmetries), config_(config) {
+		}
+
+		BuildResult build(const std::vector<PointType>& points,
+						 const std::vector<AtomTypeBase>& types) const {
+
+			BuildResult result;
+			result.original_asymmetric_count = points.size();
+
+			// 1. Create assymetric unit
+			auto asymmetric_unit = create_asymmetric_unit(points, types);
+
+			// 2. Apply symmetry\ies
+			std::vector< ClusterAtom> all_atoms;
+			all_atoms.reserve(asymmetric_unit.size() * symmetries_.size());
+
+			for (int symm_idx = 0; symm_idx < symmetries_.size(); ++symm_idx) {
+				for (const auto& atom : asymmetric_unit) {
+					auto transformed = apply_symmetry(atom, symmetries_[symm_idx], symm_idx);
+
+					if (config_.remove_duplicates &&
+						is_duplicate(transformed, all_atoms, config_.duplicate_tolerance)) {
+						result.duplicate_count++;
+						continue;
+					}
+
+					all_atoms.push_back(std::move(transformed));
+					result.generated_count++;
+				}
+			}
+
+			result.atoms = std::move(all_atoms);
+			return result;
+		}
+
+		// ==== TEST METHODS ====
+
+		static std::vector<ClusterAtom> create_asymmetric_unit(
+			const std::vector<geometry::Point<FloatingPointType>>& points,
+			const std::vector<basic_types::AtomTypeBase>& types) {
+
+			std::vector< ClusterAtom> atoms;
+			atoms.reserve(points.size());
+
+			for (size_t i = 0; i < points.size(); ++i) {
+				atoms.emplace_back(
+					basic_types::AtomIndex(i),
+					types[i],
+					points[i],
+					0,  // symm_index
+					ShiftType(0, 0, 0)
+				);
+			}
+			return atoms;
+		}
+
+		ClusterAtom apply_symmetry(
+			const ClusterAtom& atom,
+			const geometry::Symm<FloatingPointType>& symmetry,
+			int symm_index) const {
+
+			auto temp_point = symmetry.GenSymm(atom.point);
+			auto floating_shift = -temp_point.floor();
+			temp_point.MoveToCell();
+
+			 ShiftType shift(
+				static_cast< ShiftType::value_type>(floating_shift[0]),
+				static_cast< ShiftType::value_type>(floating_shift[1]),
+				static_cast< ShiftType::value_type>(floating_shift[2])
+			);
+
+			return {
+				atom.index,
+				atom.type,
+				temp_point,
+				symm_index,
+				shift
+			};
+		}
+
+	private:
+		bool is_duplicate(const ClusterAtom& atom,
+						 const std::vector<ClusterAtom>& existing_atoms,
+						 FloatingPointType tolerance) const {
+			return std::any_of(existing_atoms.begin(), existing_atoms.end(),
+				[&](const  ClusterAtom& existing) {
+						return geometry::Point<FloatingPointType>::distance(
+							atom.point, existing.point) < tolerance;
+				});
+		}
+
+		const geometry::Cell<FloatingPointType>& cell_;
+		const std::vector<geometry::Symm<FloatingPointType>>& symmetries_;
+		Config config_;
+	}; // class UnitCellBuilder
+
+} // namespace cpplib::cluster_detail
+
+
+
+
+namespace cpplib {
 
 	class Cluster {
 	public:
-		using FloatingPointType = basic_types::FloatingPointType;
-		using PointType = geometry::Point<FloatingPointType>;
-		using ShiftType = geometry::Point<int8_t>;
-		using Plane = geometry::Plane<FloatingPointType>;
-		using BoxSet = ::std::unordered_set<ShiftType>;
-		using SymmIndex = int;
-		using CellType = geometry::Cell<FloatingPointType>;
-		using Matrix = typename CellType::matrix_type;
-		using AtomIndex = basic_types::AtomIndex;
-		using SymmType = geometry::Symm<FloatingPointType>;
-		using AtomTypeBase = basic_types::AtomTypeBase;
-		using DistancesType = Distances;
+		using FloatingPointType = cluster_detail::FloatingPointType;
+		using PointType = cluster_detail::PointType;
+		using ShiftType = cluster_detail::ShiftType;
+		using Plane = cluster_detail::Plane;
+		using BoxSet = cluster_detail::BoxSet;
+		using SymmIndex = cluster_detail::SymmIndex;
+		using CellType = cluster_detail::CellType;
+		using Matrix = cluster_detail::Matrix;
+		using AtomIndex = cluster_detail::AtomIndex;
+		using SymmType = cluster_detail::SymmType;
+		using AtomTypeBase = cluster_detail::AtomTypeBase;
+		using DistancesType = cluster_detail::DistancesType;
 
-		struct BondWithShift : public Bond {
-			ShiftType shift{0, 0, 0};
-			BondWithShift(AtomIndex a, AtomIndex b) : Bond(a, b) {}
-			BondWithShift(Bond a, ShiftType b) : Bond(a), shift(b) {}
-		};
-		using BondList = ::std::vector<BondWithShift>;
-		struct AnchorType {
-			PointType point;
-			FloatingPointType radius;
-		};
-		struct ClusterAtom {
-			AtomIndex index;
-			AtomTypeBase type;
-			PointType point;
-			SymmIndex symm;
-			ShiftType shift;
-		};
-		struct TranslatedAtom {
-			AtomIndex id;
-			ShiftType shift;
+		using AnchorType = cluster_detail::AnchorType;
+		using ClusterAtom = cluster_detail::ClusterAtom;
+		using BondWithShift = cluster_detail::BondWithShift;
+		using BondList = cluster_detail::BondList;
+		using TranslatedAtom = cluster_detail::TranslatedAtom;
+		using Molecule = cluster_detail::Molecule;
 
-			constexpr bool operator==(const TranslatedAtom& other) const noexcept = default;
-
-			struct Hash {
-				size_t operator()(const TranslatedAtom& ta) const noexcept {
-					using ST = typename ShiftType::value_type;
-					return std::hash<AtomIndex>()(ta.id) ^
-						(std::hash<ST>()(ta.shift[0]) << 1) ^
-						(std::hash<ST>()(ta.shift[1]) << 2) ^
-						(std::hash<ST>()(ta.shift[2]) << 3);
-				}
-			};
-		};
-		struct Molecule {
-			::std::vector<TranslatedAtom> nodes{};
-			bool is_polymer = false;
-		};
-
-	private:
-		CellType& cell;
-		::std::vector<SymmType>& symm;
-		::std::vector<AnchorType> anchors_frac;
-		::std::vector<ClusterAtom> asymmetric_unit;
-		FloatingPointType polymer_cutoff_radius;
-		::std::array<Plane, 3> plane;
-		bool has_poly = false;
-
-	public:
-		Cluster() = delete;
+	public:    
 		Cluster(CellType& unit_cell,
 				::std::vector<SymmType>& symms,
 				::std::vector<AnchorType>&& anchors_fractal,
-				const ::std::vector<PointType>& points,
-				const ::std::vector<AtomTypeBase>& types,
+				::std::vector<PointType>&& points,
+				::std::vector<AtomTypeBase>&& types,
 				FloatingPointType polymer_cutoff)
-			: cell(unit_cell), symm(symms), anchors_frac(::std::move(anchors_fractal)), polymer_cutoff_radius(polymer_cutoff)
+			: cell(unit_cell),
+			symm(symms),
+			anchors_frac(std::move(anchors_fractal)),
+			asymmetric_types(std::move(types)),
+			asymmetric_points(std::move(points)),
+			polymer_cutoff_radius(polymer_cutoff)
+		
 		{
-			auto s = points.size();
-			assert(types.size() == s);
-			asymmetric_unit.reserve(s);
-			for (size_t i = 0; i < s; i++) {
-				asymmetric_unit.emplace_back(AtomIndex(i), types[i], points[i], SymmIndex(0), ShiftType(0, 0, 0));
-			}
+			assert(asymmetric_types.size() == asymmetric_points.size());
+		}
+
+
+	private:
+		CellType& cell;
+		std::vector<SymmType>& symm;
+		std::vector<AnchorType> anchors_frac;
+		std::vector<AtomTypeBase> asymmetric_types;
+		std::vector<PointType> asymmetric_points;
+		FloatingPointType polymer_cutoff_radius;
+	public:
+		::std::vector<ClusterAtom> execute(const DistancesType& distances)
+		{
 
 			constexpr PointType zeroPoint(0, 0, 0);
 			::std::array<PointType, 3> e = {
@@ -129,19 +289,19 @@ namespace cpplib {
 				cell.fracToCart() * ShiftType(0,1,0),
 				cell.fracToCart() * ShiftType(0,0,1)
 			};
-			plane = { Plane(zeroPoint, e[1], e[2]), Plane(zeroPoint, e[0], e[2]), Plane(zeroPoint, e[0], e[1]) };
+			const std::array<Plane, 3> plane = {Plane(zeroPoint, e[1], e[2]), Plane(zeroPoint, e[0], e[2]), Plane(zeroPoint, e[0], e[1])};
 
 
-		}
-		::std::vector<ClusterAtom> execute(const DistancesType& distances)
-		{
 			auto unit_01 = construct_unit_01();
+			cluster_detail::UnitCellBuilder ucb(cell, symm);
+			auto unit_01_2 = ucb.build(asymmetric_points, asymmetric_types);
+
 			auto molecules01 = constructMoleculesInUnit01(unit_01, distances);
 
 			auto molecule_pass = analyseMolecules(molecules01);
 			auto unit01_molecule_indexes = molecule_indexes_create(molecules01, unit_01.size());
 			// make Boxes
-			BoxSet boxes = create_boxes();
+			BoxSet boxes = create_boxes(plane);
 
 			// Find nessesary molecules
 			auto moleculeBoxes = create_molecule_boxes_nonpoly(molecules01,
@@ -153,7 +313,7 @@ namespace cpplib {
 			std::unordered_set<TranslatedAtom, TranslatedAtom::Hash> atoms;
 			for (auto& molecule : molecules01) {
 				if (molecule.is_polymer == true) {
-					atoms.merge(grow_polymer(molecule, unit_01));
+					atoms.merge(grow_polymer(molecule, unit_01, plane));
 				}
 			}
 
@@ -209,9 +369,8 @@ namespace cpplib {
 
 			return molecules;
 		}
-
 		::std::vector<ClusterAtom> construct_unit_01() const {
-			auto au_s = asymmetric_unit.size();
+			auto au_s = asymmetric_points.size();
 			size_t symm_s = symm.size();
 
 			::std::vector<ClusterAtom> unit;
@@ -219,7 +378,7 @@ namespace cpplib {
 
 			for (SymmIndex i = 0; i < symm_s; i++) {
 				for (AtomIndex j = 0; j < au_s; j++) {
-					auto temp_point = symm[i].GenSymm(asymmetric_unit[j].point);
+					auto temp_point = symm[i].GenSymm(asymmetric_points[j]);
 					auto floating_shift = -temp_point.floor();
 					temp_point.MoveToCell();
 					if (isPointInVector(unit, temp_point)) continue;
@@ -227,11 +386,12 @@ namespace cpplib {
 					ShiftType shift(static_cast<ShiftType::value_type>(floating_shift[0]),
 									static_cast<ShiftType::value_type>(floating_shift[1]),
 									static_cast<ShiftType::value_type>(floating_shift[2]));
-					unit.emplace_back(j, asymmetric_unit[j].type, temp_point, i, shift);
+					unit.emplace_back(j, asymmetric_types[j], temp_point, i, shift);
 				}
 			}
 			return unit;
 		}
+
 
 		inline bool isPointInVector(const ::std::vector<ClusterAtom>& vec, const PointType& point) const noexcept {
 			return std::ranges::any_of(vec,
@@ -296,7 +456,6 @@ namespace cpplib {
 
 					// so it is polymer
 					molecules[a_ref].is_polymer = true;
-					has_poly = true;
 					continue;
 				}
 
@@ -343,16 +502,20 @@ namespace cpplib {
 			AtomIndex id = mol1.nodes[0].id;
 			return std::ranges::any_of(mol2.nodes, [id](const TranslatedAtom& node) {return id == node.id; });
 		}
-		void change_shift(Molecule& mol, AtomIndex startIndex, ShiftType shift) const {
+		void change_shift(Molecule& mol, 
+						  AtomIndex startIndex, 
+						  ShiftType shift) const {
 			AtomIndex s = mol.nodes.size();
 			for (AtomIndex i = startIndex; i < s; i++) {
 				mol.nodes[i].shift += shift;
 			}
 		}
 
-		BoxSet create_boxes() const {
+		BoxSet create_boxes(const std::array<Plane, 3>& plane) const {
 			BoxSet boxes;
 			auto rp111 = cell.fracToCart() * ShiftType(1, 1, 1);
+
+
 
 			std::array<FloatingPointType, 3> dp = { plane[0].distance(rp111),
 													plane[1].distance(rp111),
@@ -361,7 +524,7 @@ namespace cpplib {
 			for (const auto& anchor : anchors_frac) {
 
 				FloatingPointType cutoff = anchor.radius;
-				constructBox(anchor, cutoff, dp, boxes);
+				constructBox(anchor, cutoff, dp, boxes, plane);
 			}
 			return boxes;
 		}
@@ -397,7 +560,8 @@ namespace cpplib {
 		void constructBox(const AnchorType& anchor,
 						  FloatingPointType cutoff,
 						  const std::array<FloatingPointType, 3>& dp,
-						  BoxSet& box) const {
+						  BoxSet& box, 
+						  const std::array<Plane, 3>& plane) const {
 
 			ShiftType b(anchor.point.floor());
 			std::array < FloatingPointType, 3> low{
@@ -475,7 +639,9 @@ namespace cpplib {
 			return ret;
 		}
 
-		bool check_molecule(const ShiftType& shift, const Molecule& mol, const ::std::vector<ClusterAtom>& unit01) const {
+		bool check_molecule(const ShiftType& shift, 
+							const Molecule& mol, 
+							const ::std::vector<ClusterAtom>& unit01) const {
 			for (const auto& anchor : anchors_frac) {
 				for (const auto& node : mol.nodes) {
 					// Calculate distance to anchor
@@ -492,7 +658,8 @@ namespace cpplib {
 
 		std::unordered_set<TranslatedAtom, TranslatedAtom::Hash>
 			grow_polymer(const Molecule& molecule,
-						 const ::std::vector<ClusterAtom>& unit01) const
+						 const ::std::vector<ClusterAtom>& unit01, 
+						 const std::array<Plane, 3>& plane) const
 		{
 			std::unordered_set<TranslatedAtom, TranslatedAtom::Hash> ret;
 
@@ -504,7 +671,7 @@ namespace cpplib {
 													plane[2].distance(rp111) };
 
 			for (const auto& anchor : anchors_frac) {
-				constructBox(anchor, polymer_cutoff_radius, dp, boxes);
+				constructBox(anchor, polymer_cutoff_radius, dp, boxes, plane);
 			}
 
 			for (const auto& shift : boxes) {

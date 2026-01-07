@@ -503,7 +503,7 @@ ClusterCreate(std::array<cpplib::basic_types::FloatingPointType, 6> unit_cell,
 		symms.emplace_back(s);
 	}
 
-	Cluster cluster(cell, symms, std::move(anchors), points, types, polymer_cutoff);
+	Cluster cluster(cell, symms, std::move(anchors), std::move(points), std::move(types), polymer_cutoff);
 
 	auto ret = cluster.execute(distances);
 
