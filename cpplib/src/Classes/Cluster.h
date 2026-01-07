@@ -292,20 +292,19 @@ namespace cpplib {
 			const std::array<Plane, 3> plane = {Plane(zeroPoint, e[1], e[2]), Plane(zeroPoint, e[0], e[2]), Plane(zeroPoint, e[0], e[1])};
 
 
-			auto unit_01 = construct_unit_01();
 			cluster_detail::UnitCellBuilder ucb(cell, symm);
 			auto unit_01_2 = ucb.build(asymmetric_points, asymmetric_types);
 
-			auto molecules01 = constructMoleculesInUnit01(unit_01, distances);
+			auto molecules01 = constructMoleculesInUnit01(unit_01_2.atoms, distances);
 
 			auto molecule_pass = analyseMolecules(molecules01);
-			auto unit01_molecule_indexes = molecule_indexes_create(molecules01, unit_01.size());
+			auto unit01_molecule_indexes = molecule_indexes_create(molecules01, unit_01_2.atoms.size());
 			// make Boxes
 			BoxSet boxes = create_boxes(plane);
 
 			// Find nessesary molecules
 			auto moleculeBoxes = create_molecule_boxes_nonpoly(molecules01,
-															   unit_01,
+															   unit_01_2.atoms,
 															   molecule_pass,
 															   boxes);
 
@@ -313,7 +312,7 @@ namespace cpplib {
 			std::unordered_set<TranslatedAtom, TranslatedAtom::Hash> atoms;
 			for (auto& molecule : molecules01) {
 				if (molecule.is_polymer == true) {
-					atoms.merge(grow_polymer(molecule, unit_01, plane));
+					atoms.merge(grow_polymer(molecule, unit_01_2.atoms, plane));
 				}
 			}
 
@@ -333,11 +332,11 @@ namespace cpplib {
 			ret.reserve(atoms.size());
 
 			for (const auto& atom : atoms) {
-				ret.emplace_back(unit_01[atom.id].index,
-								 unit_01[atom.id].type,
-								 unit_01[atom.id].point + atom.shift,
-								 unit_01[atom.id].symm,
-								 unit_01[atom.id].shift + atom.shift);
+				ret.emplace_back(unit_01_2.atoms[atom.id].index,
+								 unit_01_2.atoms[atom.id].type,
+								 unit_01_2.atoms[atom.id].point + atom.shift,
+								 unit_01_2.atoms[atom.id].symm,
+								 unit_01_2.atoms[atom.id].shift + atom.shift);
 			}
 			return ret;
 		}
