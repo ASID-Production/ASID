@@ -657,7 +657,6 @@ namespace cpplib::geometry {
 								  Point<T> vecA = a - center;
 								  Point<T> vecB = b - center;
 
-								  // ¬ычисл€ем угол через векторное произведение
 								  Point<T> cross = Point<T>::Vector(vecA, vecB);
 								  T dot_with_normal = Point<T>::Scalar(cross, normal);
 
