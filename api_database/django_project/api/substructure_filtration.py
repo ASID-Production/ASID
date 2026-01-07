@@ -69,7 +69,7 @@ def set_filter(analyse_mol, enable_substr_filtr=True, enable_elem_filtr=True):
 
     if enable_substr_filtr:
         # check analyse_mol has multitypes
-        # TODO: добавить подструктурную фильтрацию (мультитипы преобразовать!!!)
+        # TODO: add substructure filtering (convert multitypes!!!)
         multitypes = False
         if '-' in analyse_mol:
             multitypes = True

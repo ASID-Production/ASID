@@ -95,14 +95,12 @@ def general_cell_filter(request, queryset, value, qc=''):
     raw_params = value.split(',')
     params = list(map(float, raw_params[:6]))
 
-    # получаем reduced cell
     params = get_reduced_cell(params, raw_params[6].upper())
 
     params.extend(raw_params[6:])
     abc_deviation = 0.015
     angle_deviation = 0.02
     centrings = dict((v, k) for k, v in CENTRINGS)
-    # если указано отклонение
     if params[7] != 'none':
         abc_deviation = float(params[7])
     if params[8] != 'none':

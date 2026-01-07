@@ -255,7 +255,7 @@ TEST(CompositeNodeTest, NeighbourManagement) {
 	};
 
 	for (int i = 0; i < 3; ++i) {
-		types[i].AddType(i + 10); // Добавляем дополнительный тип
+		types[i].AddType(i + 10); 
 		nodes[i] = Node<CompositeAtom>(types[i], i, i);
 	}
 
@@ -265,7 +265,6 @@ TEST(CompositeNodeTest, NeighbourManagement) {
 	EXPECT_EQ(nodes[0].neighboursSize(), 2);
 	EXPECT_EQ(nodes[1].neighboursSize(), 1);
 
-	// Проверка связи между разными типами атомов
 	EXPECT_TRUE(nodes[0].isNeighbour(nodes[1]));
 	EXPECT_FALSE(nodes[1].isNeighbour(nodes[2]));
 }
@@ -278,17 +277,14 @@ TEST(CompositeNodeTest, ComparisonOperations) {
 
 	Node<CompositeAtom> node1(type1, 2, 1);
 	Node<CompositeAtom> node2(type2, 3, 2);
-	Node<CompositeAtom> node3(type1, 2, 3); // Такой же тип как node1
+	Node<CompositeAtom> node3(type1, 2, 3); 
 
-	// Проверка сравнения по базовому типу
 	EXPECT_TRUE(node1.RawLess(node2));
 	EXPECT_TRUE(node2.RawMore(node1));
 
-	// Проверка операторов сравнения
 	EXPECT_LT(node1, node2);
 	EXPECT_GT(node2, node1);
 
-	// Узлы с одинаковым базовым типом
 	EXPECT_EQ(node1 == node3, true);
 	EXPECT_NE(node1, node2);
 }
@@ -307,70 +303,55 @@ TEST(CompositeNodeTest, SwapOperation) {
 	auto original_neighbor1 = nodes[0].getNeighbour(0);
 	auto original_neighbor2 = nodes[0].getNeighbour(1);
 
-	// Сохраняем оригинальные связи
 	const auto neighbors_before = nodes[0].getNeighboursVector();
 
-	// Выполняем swap
 	std::swap(nodes[0], nodes[1]);
 
-	// Проверяем обновление связей
 	EXPECT_EQ(nodes[1].neighboursSize(), 2);
 	EXPECT_EQ(nodes[0].neighboursSize(), 1);
 
-	// Проверяем что соседи обновили свои ссылки
 	for (size_t i = 0; i < nodes[1].neighboursSize(); ++i) {
 		Node<CompositeAtom>* neighbor = nodes[1].getNeighbour(i);
 		EXPECT_TRUE(neighbor->isNeighbour(nodes[1]));
 	}
 }
 TEST(CompositeNodeTest, NotExactCompareFunctionality) {
-	// Подготовка композитного атома
 	CompositeAtom compType(1);
 	compType.AddType(2);
 	compType.AddType(3);
 
 	Node<CompositeAtom> compNode(compType, 1, 100);
-	compNode.calculateCoord(); // Координата (1+1=2, 2)
+	compNode.calculateCoord(); 
 
-	// Подходящий простой атом (входит в композитный)
 	Node<SimpleAtom> matchingSimpleNode(SimpleAtom(2), 1, 200);
-	matchingSimpleNode.calculateCoord(); // Координата (1, 1)
+	matchingSimpleNode.calculateCoord(); 
 
-	// Неподходящий простой атом (тип не входит)
 	Node<SimpleAtom> nonMatchingTypeNode(SimpleAtom(4), 1, 300);
 
-	// Неподходящий по количеству H-атомов
 	Node<SimpleAtom> tooManyHAtomsNode(SimpleAtom(2), 2, 400);
 
-	// Неподходящий по координатам
 	Node<SimpleAtom> nonMatchingCoordNode(SimpleAtom(2), 1, 500);
 	nonMatchingCoordNode.setCoord(Coord(10, 10));
 
-	// Проверки
 	EXPECT_TRUE(NotExactCompare(compNode, matchingSimpleNode));
 	EXPECT_FALSE(NotExactCompare(compNode, nonMatchingTypeNode));
 	EXPECT_FALSE(NotExactCompare(compNode, tooManyHAtomsNode));
 	EXPECT_FALSE(NotExactCompare(compNode, nonMatchingCoordNode));
 }
 TEST(CompositeNodeTest, EdgeCases) {
-	// Узел с пустым композитным атомом
 	CompositeAtom emptyAtom;
 	Node<CompositeAtom> emptyNode(emptyAtom, 0, 0);
 
-	// Узел с одним типом
 	CompositeAtom singleType(5);
 	Node<CompositeAtom> singleTypeNode(singleType, 3, 1);
 
-	// Проверка contains
 	EXPECT_FALSE(emptyNode.getType().contains(1));
 	EXPECT_TRUE(singleTypeNode.getType().contains(5));
 	EXPECT_FALSE(singleTypeNode.getType().contains(1));
 
-	// Проверка сравнения с пустым узлом
 	Node<CompositeAtom> anotherEmptyNode(emptyAtom, 0, 2);
 	EXPECT_EQ(emptyNode == anotherEmptyNode, true);
 
-	// Проверка NotExactCompare с пустым узлом
 	Node<SimpleAtom> simpleNode(SimpleAtom(1), 0, 3);
 	EXPECT_FALSE(NotExactCompare(emptyNode, simpleNode));
 }
