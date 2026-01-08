@@ -1622,8 +1622,9 @@ namespace cpplib::geometry {
 		/// </summary>
 		/// <param name="points"> - vector of Points</param>
 		/// <returns>vector with all bonds in boxes and between adjacent ones</returns>
-		template<BondConcept BondType>
-		::std::vector<BondType> create_hash_bonds(const ::std::vector<PointType>& points) const {
+		template<BondConcept BondType, typename ExtendedPointType>
+		::std::vector<BondType> create_hash_bonds(const ::std::vector<ExtendedPointType>& points, 
+												  std::function<const PointType&(const ExtendedPointType&)> func = standard_point_unpacker) const {
 			::std::vector<BondType> ret;
 			size_t estimated_size = points.size() * points.size() * sizemod();
 			ret.reserve(estimated_size);
@@ -1636,7 +1637,8 @@ namespace cpplib::geometry {
 			{
 				auto p = points[i];
 				p.MoveToCell();
-				auto c = coordintate_of_point(p);
+				auto c = coordintate_of_point(func(points[i]));
+				
 				supply_table[c[0]][c[1]][c[2]].emplace_back(i);
 			}
 
@@ -1653,6 +1655,10 @@ namespace cpplib::geometry {
 
 	private:
 		static constexpr FloatingPointType modifier_ = 1.05;
+
+		static const PointType& standard_point_unpacker (const PointType& p) {
+			return p; 
+		}
 
 		template<BondConcept BondType>
 		void box_working(::std::vector<BondType>& ret, const SupType& supply_table, size_t i, size_t j, size_t k) const {
