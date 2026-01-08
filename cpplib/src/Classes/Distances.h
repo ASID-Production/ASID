@@ -145,5 +145,31 @@ namespace cpplib {
 				iter++;
 			}
 		}
+
+		template<typename Func, typename BondConteiner, typename Datatype>
+			requires std::invocable<Func, const PointType&, const PointType&>&&
+		std::same_as<std::invoke_result_t<Func, const PointType&, const PointType&>, FloatingPointType>
+			void filter_bond_list(BondConteiner& bondlist,
+								  const ::std::vector<Datatype>& mergedData,
+								  Func dist) const noexcept {
+			auto iter = ::std::begin(bondlist);
+
+			while (iter != ::std::end(bondlist)) {
+				const auto l1 = iter->first;
+				const auto l2 = iter->second;
+
+				auto moved_point2 = (mergedData[l1].point - mergedData[l2].point).round() + mergedData[l2].point;
+
+				char is_real_bond = isBond(mergedData[l1].type, mergedData[l2].type, dist(mergedData[l1].point, moved_point2));
+
+				if (is_real_bond == 0) {
+					iter->first = 0;
+					iter->second = 0;
+				}
+
+				iter++;
+			}
+		}
+
 	};
 }
