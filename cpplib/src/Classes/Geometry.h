@@ -1626,6 +1626,18 @@ namespace cpplib::geometry {
 		::std::vector<BondType> create_hash_bonds(const ::std::vector<ExtendedPointType>& points, 
 												  std::function<const PointType&(const ExtendedPointType&)> func = standard_point_unpacker) const {
 			::std::vector<BondType> ret;
+			if (is_effective() == false) {
+				// use standard algorithm
+				ret.reserve((points.size() * (points.size() + 1)) >> 1);
+				for (size_t i = 0; i < points.size(); i++)
+				{
+					for (size_t j = i + 1; j < points.size(); j++)
+					{
+						ret.emplace_back(i, j);
+					}
+				}
+				return ret;
+			}
 			size_t estimated_size = points.size() * points.size() * sizemod();
 			ret.reserve(estimated_size);
 			SupType supply_table(sep_[0],
