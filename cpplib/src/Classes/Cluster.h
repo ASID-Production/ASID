@@ -32,15 +32,16 @@
 #include <cmath>
 #include <cstdint>
 #include <functional>
+#include <numeric>
 #include <unordered_set>
 #include <utility>
 #include <vector>
 
-#include "BaseTypes.h"
-#include "DSU.h"
-#include "Distances.h"
-#include "Engine.h"
-#include "Geometry.h"
+#include "../BaseHeaders/BaseTypes.h"
+#include "../Classes/DSU.h"
+#include "../Classes/Distances.h"
+#include "../Classes/Engine.h"
+#include "../Classes/Geometry.h"
 
 namespace cpplib {
 	class Cluster;
@@ -59,15 +60,11 @@ namespace cpplib::cluster_detail {
 	using AtomIndex = cpplib::basic_types::AtomIndex;
 	using SymmType = cpplib::geometry::Symm<FloatingPointType>;
 	using AtomTypeBase = cpplib::basic_types::AtomTypeBase;
-	using DistancesType = Distances;
-
 
 	struct BondWithShift : public Bond {
 		ShiftType shift{0, 0, 0};
-		BondWithShift(AtomIndex a, AtomIndex b) : Bond(a, b) {
-		}
-		BondWithShift(Bond a, ShiftType b) : Bond(a), shift(b) {
-		}
+		BondWithShift(AtomIndex a, AtomIndex b) : Bond(a, b) {}
+		BondWithShift(Bond a, ShiftType b) : Bond(a), shift(b) {}
 	};
 	using BondList = ::std::vector<BondWithShift>;
 	struct AnchorType {
@@ -81,14 +78,14 @@ namespace cpplib::cluster_detail {
 		SymmIndex symm;
 		ShiftType shift;
 	};
-	struct TranslatedAtom {
-		AtomIndex id;
+	struct TranslatedItem {
+		AtomIndex id = 0;
 		ShiftType shift;
 
-		constexpr bool operator==(const TranslatedAtom& other) const noexcept = default;
+		constexpr bool operator==(const TranslatedItem& other) const noexcept = default;
 
 		struct Hash {
-			size_t operator()(const TranslatedAtom& ta) const noexcept {
+			size_t operator()(const TranslatedItem& ta) const noexcept {
 				using ST = typename ShiftType::value_type;
 				return std::hash<AtomIndex>()(ta.id) ^
 					(std::hash<ST>()(ta.shift[0]) << 1) ^
@@ -97,12 +94,15 @@ namespace cpplib::cluster_detail {
 			}
 		};
 	};
+	using TranslatedAtom = TranslatedItem;
+	using TranslatedMolecule = TranslatedItem;
+
 	struct Molecule {
 		::std::vector<TranslatedAtom> nodes{};
 		bool is_polymer = false;
 	};
 
-
+	static constexpr ShiftType zeroShift(0, 0, 0);
 
 	class UnitCellBuilder {
 	public:
@@ -125,10 +125,9 @@ namespace cpplib::cluster_detail {
 			}
 		};
 
-		UnitCellBuilder(const CellType& cell,
-					   const ::std::vector<SymmType>& symmetries,
+		explicit UnitCellBuilder(const ::std::vector<SymmType>& symmetries,
 					   Config config = {})
-			: cell_(cell), symmetries_(symmetries), config_(config) {
+			: symmetries_(symmetries), config_(config) {
 		}
 
 		BuildResult build(const std::vector<PointType>& points,
@@ -219,10 +218,165 @@ namespace cpplib::cluster_detail {
 				});
 		}
 
-		const geometry::Cell<FloatingPointType>& cell_;
 		const std::vector<geometry::Symm<FloatingPointType>>& symmetries_;
 		Config config_;
 	}; // class UnitCellBuilder
+
+	class ConstructMolecules {
+	public:
+		using MoleculeIndex = AtomIndex;
+		// Input configuration
+		struct Config {
+			bool generate_molecules_outside = true;
+		};
+		struct ResultType {
+			::std::vector<Molecule> molecules;
+			::std::vector<TranslatedMolecule> translated_molecules;
+			::std::vector<MoleculeIndex> atom_to_trmol_id;
+			size_t molecules_per_unit_cell = 0;
+		};
+
+		ConstructMolecules(const CellType& unit_cell,
+						   const Distances& distances) noexcept
+			: cell(unit_cell), dist(distances) {
+		}
+
+		ResultType execute(const ::std::vector<ClusterAtom>& atoms_01) const {
+			ResultType result;
+			
+			auto atom_s = atoms_01.size();
+
+
+			std::function< const PointType& (const ClusterAtom&)> point_iterator_lambda = 
+				[](const ClusterAtom& a)->const PointType& { return a.point; };
+
+			geometry::HashedSpace<FloatingPointType, AtomIndex> hashed_space(cell, 4.0);
+			auto bonds = hashed_space.create_hash_bonds<BondWithShift>(atoms_01, 
+																	   point_iterator_lambda);
+			dist.filter_bond_list(bonds, atoms_01, [this](const PointType& a, const PointType& b) {return cell.distance_in_01(a, b); });
+
+			// Based on union-find separation
+			result.molecules.resize(atom_s);
+			for (int i = 0; i < atom_s; i++)
+			{
+				result.molecules[i].nodes.emplace_back(i, zeroShift);
+			}
+			result.atom_to_trmol_id.resize(atom_s);
+			std::iota(result.atom_to_trmol_id.begin(), result.atom_to_trmol_id.end(), 0);
+
+			for (auto& bond : bonds) {
+				if (bond.first == bond.second)
+					continue;
+
+				// Add shift to bonds
+				PointType floatshift = (atoms_01[bond.first].point - atoms_01[bond.second].point).round();
+				bond.shift = ShiftType(floatshift[0], floatshift[1], floatshift[2]);
+				
+				unite(bond, result.molecules, result.atom_to_trmol_id);
+
+			}
+            // Remove empty molecules
+			decltype(result.molecules) tempmol;
+			tempmol.reserve(atom_s);
+			::std::vector<MoleculeIndex> mol_update_id(atom_s, 0);
+			for (size_t i = 0; i < atom_s; i++)
+			{
+				if (result.molecules[i].nodes.empty() == true)
+					continue;
+
+				result.molecules_per_unit_cell++;
+				MoleculeIndex new_index = tempmol.size();
+				tempmol.push_back(std::move(result.molecules[i]));
+				mol_update_id[i] = new_index;
+			}
+			result.molecules = std::move(tempmol);
+			
+			for (size_t j = 0; j < atom_s; j++)
+			{
+				result.atom_to_trmol_id[j] = mol_update_id[result.atom_to_trmol_id[j]];
+			}
+
+			for (size_t i = 0; i < atom_s; i++)
+			{
+				auto shift = find(i, result.molecules[result.atom_to_trmol_id[i]]).shift;
+				
+				result.atom_to_trmol_id[i] = find_or_push_mol({result.atom_to_trmol_id[i],-shift}, result.translated_molecules);
+			}
+
+			return result;
+		}
+
+		void unite(const BondWithShift& bond, std::vector<Molecule>& m, std::vector<AtomIndex>& a_to_m) const {
+
+			Molecule& mol_a = m[a_to_m[bond.first]];
+			Molecule& mol_b = m[a_to_m[bond.second]];
+
+			// Check mol_a and mol_b are the same molecules
+			if (&mol_a == &mol_b) {
+				// Is it polymer?
+				auto totalshift = find(bond.second, mol_a).shift - find(bond.first, mol_a).shift - bond.shift;
+				if (totalshift != zeroShift) {
+					// Yes! It is polymer!
+					mol_a.is_polymer = true;
+				}
+				return;
+			}
+
+			auto mol_a_s = mol_a.nodes.size();
+			auto mol_b_s = mol_b.nodes.size();
+			auto sum_of_sizes = mol_a_s + mol_b_s;
+			if (mol_a.nodes.capacity() < sum_of_sizes)
+				mol_a.nodes.reserve(sum_of_sizes << 1);
+			mol_a.nodes.insert(mol_a.nodes.end(), mol_b.nodes.begin(), mol_b.nodes.end());
+			mol_b.nodes.clear();
+			mol_b.nodes.reserve(0);
+
+			mol_a.is_polymer = mol_a.is_polymer || mol_b.is_polymer;
+
+			// change a_to_m
+			for (size_t i = mol_a_s; i < sum_of_sizes; i++)
+			{
+				a_to_m[mol_a.nodes[i].id] = a_to_m[bond.first];
+			}
+
+			// If bond has shift: move atoms
+			const auto fshift = find(bond.first, mol_a).shift - find(bond.second, mol_a).shift;
+			const auto dshift = fshift + bond.shift;
+			for (size_t i = mol_a_s; i < sum_of_sizes; i++)
+			{
+				mol_a.nodes[i].shift += dshift;
+			}
+
+		}
+
+	private:
+		const TranslatedAtom& find(AtomIndex id, const Molecule& m) const {
+			auto s = m.nodes.size();
+			for (size_t i = 0; i < s; i++)
+			{
+				if (m.nodes[i].id == id) {
+					return m.nodes[i];
+				}
+			}
+			throw m;
+		}
+		MoleculeIndex find_or_push_mol(TranslatedMolecule&& item, ::std::vector<TranslatedMolecule>& mols) const {
+			auto s = mols.size();
+			for (MoleculeIndex i = 0; i < s; i++) {
+				if (mols[i] == item) {
+					return i;
+				}
+			}
+			mols.push_back(std::move(item));
+			return s;
+		}
+		// Data
+		const CellType& cell;
+		const Distances& dist;
+	};
+
+
+
 
 } // namespace cpplib::cluster_detail
 
@@ -244,7 +398,6 @@ namespace cpplib {
 		using AtomIndex = cluster_detail::AtomIndex;
 		using SymmType = cluster_detail::SymmType;
 		using AtomTypeBase = cluster_detail::AtomTypeBase;
-		using DistancesType = cluster_detail::DistancesType;
 
 		using AnchorType = cluster_detail::AnchorType;
 		using ClusterAtom = cluster_detail::ClusterAtom;
@@ -270,7 +423,7 @@ namespace cpplib {
 		{
 			assert(asymmetric_types.size() == asymmetric_points.size());
 		}
-
+		
 
 	private:
 		CellType& cell;
@@ -280,7 +433,7 @@ namespace cpplib {
 		std::vector<PointType> asymmetric_points;
 		FloatingPointType polymer_cutoff_radius;
 	public:
-		::std::vector<ClusterAtom> execute(const DistancesType& distances)
+		::std::vector<ClusterAtom> execute(const Distances& distances)
 		{
 
 			constexpr PointType zeroPoint(0, 0, 0);
@@ -291,20 +444,27 @@ namespace cpplib {
 			};
 			const std::array<Plane, 3> plane = {Plane(zeroPoint, e[1], e[2]), Plane(zeroPoint, e[0], e[2]), Plane(zeroPoint, e[0], e[1])};
 
+			// 1. Fill Utit cell [0,1) with atoms
+			cluster_detail::UnitCellBuilder ucb(symm);
+			auto unit_cell = ucb.build(asymmetric_points, asymmetric_types);
+			if(unit_cell.success() == false)
+				return {}; // unsuccessful generation of unit cell.
 
-			cluster_detail::UnitCellBuilder ucb(cell, symm);
-			auto unit_01_2 = ucb.build(asymmetric_points, asymmetric_types);
+			// 2. Make molecules from atoms from unit cell.
 
-			auto molecules01 = constructMoleculesInUnit01(unit_01_2.atoms, distances);
+			cluster_detail::ConstructMolecules cm(cell, distances);
+			auto mols = cm.execute(unit_cell.atoms);
+
+			auto molecules01 = constructMoleculesInUnit01(unit_cell.atoms, distances);
 
 			auto molecule_pass = analyseMolecules(molecules01);
-			auto unit01_molecule_indexes = molecule_indexes_create(molecules01, unit_01_2.atoms.size());
+			auto unit01_molecule_indexes = molecule_indexes_create(molecules01, unit_cell.atoms.size());
 			// make Boxes
 			BoxSet boxes = create_boxes(plane);
 
 			// Find nessesary molecules
 			auto moleculeBoxes = create_molecule_boxes_nonpoly(molecules01,
-															   unit_01_2.atoms,
+															   unit_cell.atoms,
 															   molecule_pass,
 															   boxes);
 
@@ -312,7 +472,7 @@ namespace cpplib {
 			std::unordered_set<TranslatedAtom, TranslatedAtom::Hash> atoms;
 			for (auto& molecule : molecules01) {
 				if (molecule.is_polymer == true) {
-					atoms.merge(grow_polymer(molecule, unit_01_2.atoms, plane));
+					atoms.merge(grow_polymer(molecule, unit_cell.atoms, plane));
 				}
 			}
 
@@ -332,17 +492,17 @@ namespace cpplib {
 			ret.reserve(atoms.size());
 
 			for (const auto& atom : atoms) {
-				ret.emplace_back(unit_01_2.atoms[atom.id].index,
-								 unit_01_2.atoms[atom.id].type,
-								 unit_01_2.atoms[atom.id].point + atom.shift,
-								 unit_01_2.atoms[atom.id].symm,
-								 unit_01_2.atoms[atom.id].shift + atom.shift);
+				ret.emplace_back(unit_cell.atoms[atom.id].index,
+								 unit_cell.atoms[atom.id].type,
+								 unit_cell.atoms[atom.id].point + atom.shift,
+								 unit_cell.atoms[atom.id].symm,
+								 unit_cell.atoms[atom.id].shift + atom.shift);
 			}
 			return ret;
 		}
 
 	private:
-		::std::vector<Molecule> constructMoleculesInUnit01(const ::std::vector<ClusterAtom>& unit_01, const DistancesType& distances) {
+		::std::vector<Molecule> constructMoleculesInUnit01(const ::std::vector<ClusterAtom>& unit_01, const Distances& distances) {
 			// based on union-find
 			geometry::HashedSpace<FloatingPointType, AtomIndex> hashed_space(cell, 4.0);
 			::std::vector<PointType> points;
@@ -402,7 +562,7 @@ namespace cpplib {
 		::std::vector<Molecule> create_molecules_near_unit01(const std::vector<ClusterAtom>& unit01,
 															 const BondList& bonds) {
 			auto atomsize = unit01.size();
-			constexpr ShiftType zeroShift{ 0, 0, 0 };
+			using cluster_detail::zeroShift;
 			DSU dsu(atomsize);
 
 			BondList filteredbonds;
@@ -471,7 +631,7 @@ namespace cpplib {
 
 				// combine molecules
 				AtomIndex current_size_a = molecules[a_ref].nodes.size();
-				AtomIndex current_size_b = molecules[b_ref].nodes.size();
+				//AtomIndex current_size_b = molecules[b_ref].nodes.size();
 
 				molecules[a_ref].nodes.insert(molecules[a_ref].nodes.end(),
 											  molecules[b_ref].nodes.begin(),
@@ -594,13 +754,13 @@ namespace cpplib {
 
 		::std::vector<AtomIndex> molecule_indexes_create(const std::vector<Molecule>& molecules, AtomIndex size) const {
 			::std::vector<AtomIndex> ret(size, 0);
-			constexpr ShiftType zeroshift(0, 0, 0);
+			using cluster_detail::zeroShift;
 
 			for (AtomIndex i = molecules.size() - 1; i > 0; i--)
 			{
 				for (AtomIndex j = 0; j < molecules[i].nodes.size(); j++)
 				{
-					if (molecules[i].nodes[j].shift == zeroshift) {
+					if (molecules[i].nodes[j].shift == zeroShift) {
 						ret[j] = i;
 					}
 				}
