@@ -713,7 +713,7 @@ namespace cpplib {
 				AtomIndex nei_size = net[res[low_pos]].neighboursSize();
 				for (AtomIndex j = 0; j < nei_size; j++) {
 					const auto cur_id = net[res[low_pos]].getNeighbour(j)->getID();
-					auto is_m = static_cast<AtomIndex>(is_member(cur_id, res));
+					AtomIndex is_m = is_member(cur_id, res);
 					if (is_m == (static_cast<AtomIndex>((size_t)(-1))) && seen[std::get<0>(fs_.parseIndex[cur_id])] == false) {
 						res.emplace_back(cur_id);
 						seen[std::get<0>(fs_.parseIndex[cur_id])] = true;
@@ -726,7 +726,7 @@ namespace cpplib {
 			}
 			return res;
 		}
-		template<class T2> [[nodiscard]] auto is_member(const T2 u, const std::vector<T2>& v, typename std::vector<T2>::size_type max = 0) const noexcept {
+		template<class T2> [[nodiscard]] typename std::vector<T2>::size_type is_member(const T2 u, const std::vector<T2>& v, typename std::vector<T2>::size_type max = 0) const noexcept {
 			if (max == 0)
 				max = v.size();
 			for (typename std::vector<T2>::size_type i = 0; i < max; i++) {

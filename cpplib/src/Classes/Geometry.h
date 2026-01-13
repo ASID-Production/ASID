@@ -38,6 +38,7 @@
 #include <numbers>
 #include <optional>
 #include <concepts>
+#include <cassert>
 
 #include "../BaseHeaders/Concepts.h"
 
@@ -540,7 +541,7 @@ namespace cpplib::geometry {
 		Polygon(const std::vector<PointType>& verts, const PlaneType& pl)
 			: vertices_(verts), plane_(pl), is_valid_(true) {
 			bool t = isConvex();
-			_ASSERT(isConvex());
+			assert(isConvex());
 		}
 
 		// Method to clip the polygon by a plane
@@ -551,7 +552,7 @@ namespace cpplib::geometry {
 			auto intersect = [](const PointType& a, const PointType& b, const PlaneType& plane)->PointType {
 				PointType d = b - a;
 				T denominator = d[0] * plane.a[0] + d[1] * plane.a[1] + d[2] * plane.a[2];
-				_ASSERT(abs(denominator) > limit);
+				assert(abs(denominator) > limit);
 				T t = -plane.side(a) / denominator;
 				return a + d * t;
 				};
@@ -604,7 +605,7 @@ namespace cpplib::geometry {
 				vertices_.push_back(inter1);
 			}
 
-			_ASSERT(isConvex());
+			assert(isConvex());
 			return std::make_optional(std::pair<PointType, PointType>(inter1, inter2));
 
 
@@ -1071,7 +1072,7 @@ namespace cpplib::geometry {
 		}
 		
 		template<class AI>
-		constexpr VoronoiDiagram(const PointVector& points, const BondList<AI>& bonds, const BoolVector& flags = BoolVector(true, points.size())) noexcept : flags_(flags) {
+		constexpr VoronoiDiagram(const PointVector& points, const BondList<AI>& bonds, const BoolVector& flags = BoolVector()) noexcept : flags_(flags) {
 			if (flags.empty()) {
 				flags_.resize(points.size(), true);
 			}
@@ -1631,8 +1632,8 @@ namespace cpplib::geometry {
 			size_t estimated_size = points.size() * points.size() * sizemod();
 			ret.reserve(estimated_size);
 			SupType supply_table(sep_[0],
-								 SupType::value_type(sep_[1],
-													 SupType::value_type::value_type(sep_[2])));
+								 typename SupType::value_type(sep_[1],
+													 typename SupType::value_type::value_type(sep_[2])));
 
 			// Fill supply_table
 			for (AtomIndex i = 0; i < points.size(); i++)
