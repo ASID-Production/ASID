@@ -332,10 +332,15 @@ def clusterCreationFunc():
 
 
 def instrumentsFunc():
-    import importlib
-    from . import instruments
-    importlib.reload(instruments)
-    instruments.execute()
+    import  sys
+    if '--debug' in sys.argv or '-d' in sys.argv:
+        import importlib
+        from . import instruments
+        importlib.reload(instruments)
+        instruments.execute()
+    else:
+        from . import instruments
+        instruments.execute()
 
 
 def polyhedronFunc():
@@ -348,6 +353,19 @@ def polyhedronFunc():
     except Exception as e:
         traceback.print_exc()
         print(traceback.format_exc())
+
+
+def voronoiFunc():
+    import  sys
+    if '--debug' in sys.argv or '-d' in sys.argv:
+        import importlib
+        from . import voronoi
+        importlib.reload(voronoi)
+        voronoi.execute()
+    else:
+        from . import voronoi
+        voronoi.execute()
+
 
 def setup(menu, model, uniform_model=None, *args, main_widget=None, **kwargs):
     from PySide6.QtGui import QAction
@@ -436,5 +454,9 @@ def setup(menu, model, uniform_model=None, *args, main_widget=None, **kwargs):
     action_polyhedron.triggered.connect(polyhedronFunc)
     cmenu.addAction(action_polyhedron)
 
-    actions = [open_action, action_test, action_DB, save_action, action_sym_op, action_export, action_winx, action_cls, action_aimall, action_2d_export, action_multiwfn, action_symm_poscar, action_assemble, action_cluster, action_polyhedron, action_instruments]
+    action_voronoi = QAction('Voronoi')
+    action_voronoi.triggered.connect(voronoiFunc)
+    cmenu.addAction(action_voronoi)
+
+    actions = [open_action, action_test, action_DB, save_action, action_sym_op, action_export, action_winx, action_cls, action_aimall, action_2d_export, action_multiwfn, action_symm_poscar, action_assemble, action_cluster, action_polyhedron, action_instruments, action_voronoi]
     return actions

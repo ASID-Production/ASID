@@ -297,6 +297,7 @@ class UniformWid(QtWidgets.QWidget):
         super().__init__(parent=parent)
         self.setWindowIcon(QtGui.QIcon('Source/ico.svg'))
         self.setWindowTitle('Uniforms')
+        self.setWindowFlag(QtCore.Qt.WindowStaysOnTopHint, True)
         self.listView = ListView(parent=self)
         self.hlayout = QtWidgets.QHBoxLayout()
         self.hlayout.addWidget(self.listView)

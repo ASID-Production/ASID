@@ -76,7 +76,7 @@ class FileParser:
             coords[i] = coord
         return coords
 
-    def parsFile(self, file_path, bond=True, root=None):
+    def parsFile(self, file_path, bond=True, root=None) -> tuple[MoleculeClass.MoleculeSystem, tuple[point_class.PointsList]]:
         basename, ext = os.path.splitext(file_path)
         basename = os.path.basename(basename)
         ext = ext.lower()
