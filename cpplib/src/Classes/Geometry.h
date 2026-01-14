@@ -1220,7 +1220,7 @@ namespace cpplib::geometry {
 		inline size_t add_to_vertex_union(::std::vector<PointType>& v, const PointType& x) const {
 			auto f_It = ::std::ranges::find_if(v,
 											   [&x](const PointType& p) {
-												   return PointType::distanceInCubicCell(x, p) <= EPSILON;
+												   return PointType::distance(x, p) <= EPSILON;
 											   });
 			if (f_It != v.end())
 				return ::std::distance(v.begin(), f_It);
@@ -1638,7 +1638,9 @@ namespace cpplib::geometry {
 			// Fill supply_table
 			for (AtomIndex i = 0; i < points.size(); i++)
 			{
-				auto c = coordintate_of_point(points[i]);
+				auto p = points[i];
+				p.MoveToCell();
+				auto c = coordintate_of_point(p);
 				supply_table[c[0]][c[1]][c[2]].emplace_back(i);
 			}
 

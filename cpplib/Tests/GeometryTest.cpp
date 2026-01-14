@@ -791,6 +791,9 @@ protected:
             PointType(0.954, 0.866, 0.23),
             PointType(0.7, 0.7, 0.7)
         };
+        singlePoint = {
+            PointType(0.0, 0.0, 0.0)
+        };
     }
 
     // Helper method to validate Voronoi cell properties
@@ -810,7 +813,47 @@ protected:
     }
 
     std::vector<PointType> commonPoints;
+    std::vector<PointType> singlePoint;
 };
+
+
+TEST_F(VoronoiTest, AlexTest) {
+    cpplib::geometry::Cell cell (10.9815, 6.8214, 8.9974, 90.0, 101.511, 90.0);
+    std::vector<const char*> symms{"x, y, z", "-x, y+1/2, -z+1/2", "-x, -y, -z", "x, -y-1/2, z-1/2"};
+
+
+
+
+
+    cpplib::geometry::VoronoiDiagram<double>::PointVector data = {{0.85991, 0.6099,  0.54993},
+                                                                  {0.9802,  0.2973,  0.68819},
+                                                                  {0.45147, 0.2722, -0.01408},
+                                                                  {0.4257,  0.369,  -0.0692 },
+                                                                  {0.54605, 0.33304, 0.10639},
+                                                                  {0.59711, 0.18811, 0.18507},
+                                                                  {0.5699,  0.0585,  0.1577 },
+                                                                  {0.6972,  0.22032, 0.31696},
+                                                                  {0.73155, 0.40837, 0.37126},
+                                                                  {0.6897,  0.5202,  0.323  },
+                                                                  {0.8262,  0.42976, 0.49478},
+                                                                  {0.88775, 0.26835, 0.56724},
+                                                                  {0.85479, 0.08196, 0.51712},
+                                                                  {0.8965, -0.0288,  0.5674 },
+                                                                  {0.75907, 0.05834, 0.39111},
+                                                                  {0.7356, -0.0699,  0.3552 }};
+
+
+
+
+    cpplib::geometry::VoronoiDiagram<double>::BoolVector bools{false, false, false, false, 
+                                                               false, true,  false, true, 
+                                                               false, false, false, false, 
+                                                               false, false, false, false};
+    VoronoiDiagram<FloatingPointType> vd(data, bools);
+    HashedSpace<FloatingPointType, AtomIndex> hs(cell, 6.0);
+    auto bonds = hs.create_hash_bonds<std::pair<AtomIndex, AtomIndex>>(data);
+    vd.calculateFaces(bonds);
+}
 
 TEST_F(VoronoiTest, CellConstruction) {
     // Default constructor
@@ -841,7 +884,7 @@ TEST_F(VoronoiTest, CellInteraction) {
     EXPECT_EQ(result, 1); // Too close seeds
 }
 
-TEST_F(VoronoiTest, DiagramConstruction) {
+TEST_F(VoronoiTest, DiagramConstructionCommon) {
     // Basic constructor
     VoronoiDiagram<FloatingPointType> vd(commonPoints);
     auto cells = vd.extractCells();
@@ -851,12 +894,30 @@ TEST_F(VoronoiTest, DiagramConstruction) {
         validateVoronoiCell(cell);
     }
 
+
     // Constructor with flags
     std::vector<bool> flags(commonPoints.size(), true);
     VoronoiDiagram<FloatingPointType> vdWithFlags(commonPoints, flags);
 
     cells = vdWithFlags.extractCells();
     EXPECT_EQ(cells.size(), commonPoints.size());
+}
+TEST_F(VoronoiTest, DiagramConstructionSingle) {
+    // Basic constructor
+    VoronoiDiagram<FloatingPointType> vd(singlePoint);
+    auto cells = vd.extractCells();
+
+    EXPECT_EQ(cells.size(), singlePoint.size());
+    for (const auto& cell : cells) {
+        validateVoronoiCell(cell);
+    }
+
+    // Constructor with flags
+    std::vector<bool> flags(singlePoint.size(), true);
+    VoronoiDiagram<FloatingPointType> vdWithFlags(singlePoint, flags);
+
+    cells = vdWithFlags.extractCells();
+    EXPECT_EQ(cells.size(), singlePoint.size());
 }
 
 TEST_F(VoronoiTest, DiagramOperations) {
@@ -891,9 +952,13 @@ TEST_F(VoronoiTest, SpecializedOperations) {
     std::vector<PointType> points = { PointType(0.1, 0.1, 0.1), PointType(0.9, 0.9, 0.9) };
     VoronoiDiagram<FloatingPointType> vd(points);
 
-    Cell<FloatingPointType> cell(3, 3, 3, 90, 90, 120, true);
+    Cell<FloatingPointType> cell(10, 10, 10, 90, 90, 120, true);
     FloatingPointType diagonal = vd.calculateLongestDiagonal(cell.fracToCart());
     EXPECT_GT(diagonal, 0.0);
+    HashedSpace<FloatingPointType,AtomIndex> hs(cell, diagonal);
+    auto bonds = hs.create_hash_bonds<std::pair<AtomIndex,AtomIndex>>(points);
+    vd.calculateFaces(bonds);
+    
 
     // Working with VoronoiFused
     auto cells = vd.extractCells();
