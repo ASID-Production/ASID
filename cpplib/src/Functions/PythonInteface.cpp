@@ -1041,26 +1041,32 @@ extern "C" {
 			bools[i] = intbools[i] != 0;
 		}
 
-		Py_DECREF(ocell);
-		Py_DECREF(osymm);
-		Py_DECREF(otuples);
-		Py_DECREF(obools);
-
 		FAM_Cell fcell(FAM_Cell::base(all.cell));
 		auto supercell_indexes = fcell.CreateSupercell(all.points, cutoff, 1);
+
+
+		deb_write("supercell_indexes[0] = ", int(supercell_indexes[0]));
+		deb_write("supercell_indexes[1] = ", int(supercell_indexes[1]));
+		deb_write("supercell_indexes[2] = ", int(supercell_indexes[2]));
+
 		bools.resize(all.points.size(), false);
 
 		cpplib::geometry::HashedSpace<FloatingPointType, long> space(fcell, cutoff);
 		auto bonds = space.create_hash_bonds<::std::pair<long,long>>(all.points);
-
 		Diagram diag;
 		diag.addPoints(all.points, bools);
 		diag.calculateFaces<long>(bonds);
 
+		auto ce = diag.extractCells();
+		deb_write("cells.size() = ", ce.size());
 		
+
+
 		cpplib::geometry::VoronoiFused<FloatingPointType> vf;
-		vf.AddCells(diag.extractCells());
+		vf.AddCells(ce);
 		
+
+		deb_write("vertexes.size() = ", vf.vertexes.size());
 
 		PyObject* o_centers = create_list_from_points(vf.centers);
 		PyObject* o_vertexes = create_list_from_points(vf.vertexes);
