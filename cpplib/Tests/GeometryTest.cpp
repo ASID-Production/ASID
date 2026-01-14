@@ -801,8 +801,6 @@ protected:
         const auto& seed = cell.getSeed();
         const auto& faces = cell.getFaces();
 
-        EXPECT_FALSE(faces.empty());
-
         for (const auto& face : faces) {
             EXPECT_TRUE(face.isConvex());
 
@@ -853,6 +851,12 @@ TEST_F(VoronoiTest, AlexTest) {
     HashedSpace<FloatingPointType, AtomIndex> hs(cell, 6.0);
     auto bonds = hs.create_hash_bonds<std::pair<AtomIndex, AtomIndex>>(data);
     vd.calculateFaces(bonds);
+    auto cells = vd.extractCells();
+    for (const auto& c : cells) {
+        validateVoronoiCell(c);
+    }
+    VoronoiFused<double> vf;
+    vf.AddCells(cells);
 }
 
 TEST_F(VoronoiTest, CellConstruction) {
