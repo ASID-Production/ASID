@@ -130,7 +130,8 @@ namespace cpplib::cluster_detail {
 		};
 
 		explicit UnitCellBuilder(const ::std::vector<SymmType>& symmetries,
-								 Config config = {})
+								 Config config = Config{true, 
+								                        cpplib::geometry::crystallography_eq_position_eps_fractalspace})
 			: symmetries_(symmetries), config_(config) {
 		}
 
@@ -438,7 +439,7 @@ namespace cpplib {
 		std::vector<PointType> asymmetric_points;
 		FloatingPointType polymer_cutoff_radius;
 	public:
-		::std::vector<ClusterAtom> execute(const Distances& distances)
+		::std::vector<ClusterAtom> execute(const Distances& distances) const
 		{
 			constexpr PointType zeroPoint(0, 0, 0);
 			::std::array<PointType, 3> e = {
@@ -460,13 +461,9 @@ namespace cpplib {
 			cluster_detail::ConstructMolecules cm(cell, distances);
 			auto mols = cm.execute(unit_cell.atoms);
 
-			const auto& unit01_molecule_indexes = mols.atom_to_trmol_id;
-			const auto& molecules01 = mols.molecules;
-			const auto& molecule_pass = mols.translated_molecules;
-
 			// 3. Grow polymers
 			::std::unordered_set<TranslatedAtom, TranslatedAtom::Hash> atoms;
-			for (auto& molecule : molecules01) {
+			for (auto& molecule : mols.molecules) {
 				if (molecule.is_polymer == true) {
 					atoms.merge(grow_polymer(molecule, unit_cell.atoms, plane));
 				}
@@ -562,12 +559,12 @@ namespace cpplib {
 
 			// [ -x, +x, -y, +y, -z, +z ]
 			const std::array<ShiftType::value_type, 6> maxr{
-				b[0] - static_cast<ShiftType::value_type>(std::lround((cutoff - low[0]) / dp[0])),
-				b[0] + static_cast<ShiftType::value_type>(std::lround((cutoff - high[0]) / dp[0])),
-				b[1] - static_cast<ShiftType::value_type>(std::lround((cutoff - low[1]) / dp[1])),
-				b[1] + static_cast<ShiftType::value_type>(std::lround((cutoff - high[1]) / dp[1])),
-				b[2] - static_cast<ShiftType::value_type>(std::lround((cutoff - low[2]) / dp[2])),
-				b[2] + static_cast<ShiftType::value_type>(std::lround((cutoff - high[2]) / dp[2])), };
+				b[0] - std::ceil((cutoff - low[0]) / dp[0]),
+				b[0] + std::ceil((cutoff - high[0]) / dp[0]),
+				b[1] - std::ceil((cutoff - low[1]) / dp[1]),
+				b[1] + std::ceil((cutoff - high[1]) / dp[1]),
+				b[2] - std::ceil((cutoff - low[2]) / dp[2]),
+				b[2] + std::ceil((cutoff - high[2]) / dp[2]), };
 
 
 			for (ShiftType::value_type i = maxr[0]; i <= maxr[1]; i++) {

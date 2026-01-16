@@ -108,19 +108,18 @@ TEST(CreateClusterTest, Benzene) {
 		"-x+1/2, y+1/2, z"
 	};
 
-	std::vector<AtomTypeBase> types{6, 1, 6, 1, 6, 1};
+	std::vector<AtomTypeBase> types{6, 6, 6, 1, 1, 1};
 	std::vector<cpplib::basic_types::FloatingPointType> xyz{
-         -0.053700,  0.142500,  0.009700,
-          0.043000,  0.002000,  0.002000, 
-         -0.085000,  0.246000,  0.034000,  
-          0.084000,  0.092400,  0.137300, 
-          0.140000,  0.156000,  0.219000,  
-          0.134300, -0.052100,  0.123500,
-          0.220000, -0.080000,  0.204000};
+        -0.06070, 0.13930, -0.00690,
+        -0.13770, 0.04470,  0.12600,
+         0.07700, 0.09580, -0.13250,
+        -0.10460, 0.25020, -0.01230,
+        -0.24580, 0.07810,  0.22410,
+         0.13710, 0.16810, -0.23600};
 
 	bool hasPoly = false;
 	FMIC_TS ts(cell, symm, types, xyz);
-	std::vector<FloatingPointType> anchors{1.0, 2.0, 3.0, 3.0};
+	std::vector<FloatingPointType> anchors{0.0, 0.0, 0.0, 3.0};
 	auto res = ts.cluster(anchors, 10.0, hasPoly);
 	EXPECT_EQ(res.size(), 36);
 	EXPECT_FALSE(hasPoly);
