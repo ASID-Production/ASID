@@ -64,7 +64,7 @@ if (WIN32)
                            "cpplib/src/Classes/Geometry.h"
                            "cpplib/src/Classes/SearchGraph.h"
                            "cpplib/src/Functions/Functions.h"
-                           "cpplib/src/Functions/AllInOneAndCurrent.h" 
+                            
                            "cpplib/src/Classes/FindGeometry.h" "cpplib/src/Functions/PythonInteface.cpp" "cpplib/src/BaseHeaders/Currents.h" "cpplib/src/Classes/Cluster.h" "cpplib/src/BaseHeaders/Concepts.h" "cpplib/src/BaseHeaders/BaseTypes.h" "cpplib/src/Classes/DSU.h")
     target_link_libraries(cpplibLib)
 
@@ -95,19 +95,7 @@ project(cpplib)
     #Generate the shared library from the library sources
     if(CMAKE_BUILD_TYPE MATCHES Release)
         add_library(cpplib SHARED "cpplib/src/Functions/Functions.cpp" 
-                           "cpplib/src/BaseHeaders/Support.h"
-                           "cpplib/src/BaseHeaders/DebugMes.h"
-                           "cpplib/src/Classes/Distances.h"
-                           "cpplib/src/Classes/FindMolecules.h"
-                           "cpplib/src/Classes/Hash.h"
-                           "cpplib/src/Classes/Interfaces.h"
-                           "cpplib/src/Classes/MoleculeGraph.h"
-                           "cpplib/src/Classes/Engine.h"
-                           "cpplib/src/Classes/Geometry.h"
-                           "cpplib/src/Classes/SearchGraph.h"
-                           "cpplib/src/Functions/Functions.h"
-                           "cpplib/src/Functions/AllInOneAndCurrent.h" 
-                           "cpplib/src/Classes/FindGeometry.h" "cpplib/src/Functions/PythonInteface.cpp" "cpplib/src/BaseHeaders/Currents.h" "cpplib/src/Classes/Cluster.h")
+                                  "cpplib/src/Functions/PythonInteface.cpp")
         if(WIN32)
             target_link_libraries(cpplib PRIVATE ${Python_LIBRARY_DIRS}/python3.lib)
         else()

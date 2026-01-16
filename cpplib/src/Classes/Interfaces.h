@@ -31,7 +31,6 @@
 #include <bitset>
 #include "../Classes/Geometry.h"
 #include "../Classes/FindMolecules.h"
-#include "../Functions/AllInOneAndCurrent.h"
 namespace cpplib {
 	class SearchDataInterface {
 	public:
@@ -95,9 +94,6 @@ namespace cpplib {
 	};
 
 	struct ParseData {
-		using FAM_Struct = FAM_Struct;
-		using FAM_Cell = FAM_Cell;
-
 		using AtomType = FAM_Struct::AtomType;
 		using PointType = FAM_Struct::PointType;
 		using SymmType = FAM_Cell::SymmType;

@@ -36,7 +36,6 @@ namespace cpplib {
 	class FindGeometry {
 	public:
 		// Definitions
-		using FAM_Struct = FAM_Struct;
 		using AtomTypeBase = FAM_Struct::AtomTypeBase;
 		using AtomType = FAM_Struct::AtomType;
 		using FloatingPointType = FAM_Struct::FloatingPointType;

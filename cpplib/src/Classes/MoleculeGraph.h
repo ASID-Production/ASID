@@ -26,21 +26,21 @@
 //
 // ******************************************************************************************
 #pragma once
-#include <vector> // for using std::vector
-#include <list> // for using std::list
-#include <type_traits> // for std::fundamental
-#include <numeric> // for std::iota
 #include <algorithm> // for std::stable_sort
 #include <cctype> // for isdigit
-#include <ranges>
 #include <charconv>
-#include <sstream>
+#include <list> 
+#include <numeric> // for std::iota
 #include <optional>
+#include <ranges>
+#include <sstream>
+#include <type_traits> // for std::fundamental
+#include <vector> // for using std::vector
 
 #include "../BaseHeaders/BaseTypes.h" // for constants::mend_size
 #include "../BaseHeaders/Concepts.h"
 #include "../BaseHeaders/Currents.h"
-#include "Engine.h" // for Node and Bond
+#include "../Classes/Engine.h" // for Node and Bond
 
 namespace cpplib {		
 	enum class ReserveStrategy :char {
@@ -67,11 +67,11 @@ namespace cpplib {
 			}
 		}
 		inline AtomIndex& operator[](const indexType i) {
-			_ASSERT(i < data_.size());
+			assert(i < data_.size());
 			return data_[i];
 		}
 		inline const AtomIndex& operator[](const indexType i) const {
-			_ASSERT(i < data_.size());
+			assert(i < data_.size());
 			return data_[i];
 		}
 		inline void initialize(const basic_types::TypeBitset& bits) {
@@ -192,11 +192,11 @@ namespace cpplib {
 
 		// Operators
 		constexpr const NodeType& operator[](const AtomIndex s) const noexcept {
-			_ASSERT(s < data_.size());
+			assert(s < data_.size());
 			return data_[s];
 		}
 		constexpr NodeType& operator[](const AtomIndex s) noexcept {
-			_ASSERT(s < data_.size());
+			assert(s < data_.size());
 			return data_[s];
 		}
 

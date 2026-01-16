@@ -326,10 +326,18 @@ def himp(atoms: List[Tuple[int, float, float, float]], value: float | List[float
             "error_str": optional key. String with error message. Exists only if something gone wrong.
     """
     ...
-def Cluster(cell_params: List[float], symms: List[str], atoms: List[Tuple[int, float, float, float]], anchors: List[Tuple[float,float,float,float]]) -> Dict[
-    "bonds":  List[Tuple[int,int,float]],
-    "angles": List[Tuple[int,int,int,float]],
-    "tors":   List[Tuple[int,int,int,int,float]]]:
+def Cluster(cell_params: List[float], 
+            symms: List[str], 
+            atoms: List[Tuple[int, float, float, float]], 
+            anchors: List[Tuple[float,float,float,float]]) -> Dict[
+    "points":  List[Dict[
+        "index":      int,
+        "point_cart": Tuple[float,float,float],
+        "point_frac": Tuple[float,float,float],
+        "shift":      Tuple[int,int,int],
+        "symmref":    int,
+        "type":       int],
+    "hasPolymer": bool]]:
     """
         Create cluster around anchors.
         Variables:
@@ -344,11 +352,13 @@ def Cluster(cell_params: List[float], symms: List[str], atoms: List[Tuple[int, f
             example [ [0.0, 0.0, 0.0, 4.0], [0.5, 0.5, 0.5, 2.3], ... ]
         Returns:
           Dictionary with keys ["points","hasPolymer"], where
-            "points": List of Tuples (Px, Py, Pz, Index, SymmRef, Sx, Sy, Sz), where
-              Px, Py, Pz: coordinates of atom
-              Index: reference to atom in the initial set
-              SymmRef: reference to initial SYMM-code
-              Sx, Sy, Sz: translation shifts from initial position of SYMM-code (NOT FROM [0,0,0] !!!)
+            "points": List of Dictionaries, where eqch dictionary represents atom, and contains:
+             | "index":      Index of atom in the initial set
+             | "point_cart": Tuple of Cartesian coordinates  (cx, cy, cz)
+             | "point_frac": Tuple of Fractional coordinates (fx, fy, fz)
+             | "shift":      Tuple of translation shift (dx, dy, dz) from initial position of SYMM-code (NOT FROM [0,0,0] !!!)
+             | "symmref":    Reference to initial SYMM-code
+             | "type":       Atomic type
             "hasPolymer": Boolian flag, equals True if cell contains polymer (MOF) structure
     """
     ...
@@ -375,13 +385,13 @@ def VoronoiCalculation(cell_params: List[float],
         Returns:
           Dictionary with keys ["centers","vertexes", "polygons", "polyhedra"], where
             "centers": List of Tuples (Px, Py, Pz), where
-              Px, Py, Pz: coordinates of Voronoi cell center (atom)
+               Px, Py, Pz: coordinates of Voronoi cell center (atom)
             "vertexes": List of Tuples (Px, Py, Pz), where
-              Px, Py, Pz: coordinates of Voronoi cell vetrexes
+               Px, Py, Pz: coordinates of Voronoi cell vetrexes
             "polygons": List of Lists, which represent polygons
-              Polygon lists consist of vertexes indexes. Lists are sorted to round order.
+               Polygon lists consist of vertexes indexes. Lists are sorted to round order.
             "polyhedra": List of Lists, which represent Voronoi polyhedra
-              Each polihedra list consists of polygon list indexes. Lists are unsorted.
+               Each polihedra list consists of polygon list indexes. Lists are unsorted.
             Note: polyhedra and centers lists have same order.
     """
     ...

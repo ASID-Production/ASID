@@ -423,7 +423,7 @@ def main_v2(xyz_mols, element_numbers: Dict[str, int], types: List[int]):
         # make rdkit mol
         raw_mol = Chem.MolFromXYZBlock(xyz_block)
         rd_mol: Chem.Mol = Chem.Mol(raw_mol)
-        # TODO: добавить заряды на атомах, если были указаны в исходном сифе
+        # TODO: add charges on atoms, if they were specified in the original CIF
         if rd_mol.GetNumAtoms() == 1:
             set_atom_charge(rd_mol)
         formula = mol_to_formula(rd_mol)
