@@ -55,7 +55,7 @@ namespace cpplib::geometry {
 		using array_type = ::std::array<value_type, 3>;
 
 		struct Hash {
-			std::size_t operator()(const std::array<T, 3>& point) const {
+			std::size_t operator()(const Point<T>& point) const {
 				if constexpr (std::is_floating_point_v<T>) {
 					std::size_t hx = std::hash<T>{}(point[0]);
 					std::size_t hy = std::hash<T>{}(point[1]);
@@ -1647,9 +1647,9 @@ namespace cpplib::geometry {
 			// Fill supply_table
 			for (AtomIndex i = 0; i < points.size(); i++)
 			{
-				auto p = points[i];
+				auto p = func(points[i]);
 				p.MoveToCell();
-				auto c = coordintate_of_point(func(points[i]));
+				auto c = coordinate_of_point(func(points[i]));
 				
 				supply_table[c[0]][c[1]][c[2]].emplace_back(i);
 			}

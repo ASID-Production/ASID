@@ -34,11 +34,11 @@
 #include <utility>
 #include <vector>
 
-#include "Functions.h"
+#include "../Functions/Functions.h"
 #include "../BaseHeaders/BaseTypes.h"
 #include "../Classes/Distances.h"
-#include "FindMolecules.h"
-#include "Geometry.h"
+#include "../Classes/FindMolecules.h"
+#include "../Classes/Geometry.h"
 
 extern const cpplib::Distances* p_distances;
 
