@@ -26,15 +26,16 @@
 //
 // ******************************************************************************************
 #pragma once
-#include <algorithm> // for std::sort
-#include <type_traits> // for std::conditional
-#include <vector>
-#include <string>
+#include <algorithm>
 #include <array>
+#include <string>
+#include <type_traits>
+#include <vector>
 
 #include "../BaseHeaders/BaseTypes.h"
 #include "../BaseHeaders/Concepts.h"
 #include "../BaseHeaders/DebugMes.h"
+
 namespace cpplib {
 
 	class SimpleAtom {
@@ -47,7 +48,7 @@ namespace cpplib {
 		// Constructors
 		SimpleAtom() = default;
 		constexpr explicit SimpleAtom(AtomTypeBase input) : type_(input) {
-			_ASSERT(input < TypeBitset().size());
+			assert(input < TypeBitset().size());
 		}
 		
 		constexpr TypeBitset get_bitset() const noexcept{
@@ -56,7 +57,7 @@ namespace cpplib {
 			return bits;
 		}
 		constexpr bool contains(const AtomTypeBase t) const noexcept{
-			_ASSERT(t > 0 && TypeBitset().size());
+			assert(t > 0 && TypeBitset().size());
 			return type_ == t;
 		}
 		// Same as operator==
@@ -96,12 +97,12 @@ namespace cpplib {
 		}
 
 		void AddType(const AtomTypeBase t) {
-			_ASSERT(t > 0);
-			_ASSERT(t < constants::mend_size);
+			assert(t > 0);
+			assert(t < constants::mend_size);
 			types.set(t);
 		}
 		constexpr bool contains(const AtomTypeBase t) const {
-			_ASSERT(t > 0 && t < types.size());
+			assert(t > 0 && t < types.size());
 			return types[t];
 		}
 		constexpr TypeBitset get_bitset() const noexcept{
@@ -167,7 +168,7 @@ namespace cpplib {
 	public:
 		NeighboursType() noexcept : data_{0} { data_.fill(0); }
 		inline void push_back(const ShiftType obj) {
-			_ASSERT(size_ < maxNeighbours);
+			assert(size_ < maxNeighbours);
 			data_[size_] = obj;
 			size_++;
 		}
@@ -175,15 +176,15 @@ namespace cpplib {
 			return size_;
 		}
 		inline ShiftType operator[](int8_t i) const {
-			_ASSERT(i < size_);
+			assert(i < size_);
 			return data_[i];
 		}
 		inline ShiftType& operator[](int8_t i) {
-			_ASSERT(i < size_);
+			assert(i < size_);
 			return data_[i];
 		}
 		void erase(int8_t i) {
-			_ASSERT(i < size_);
+			assert(i < size_);
 			size_--;
 			for (; i < size_; i++) {
 				data_[i] = data_[i + 1];
@@ -388,7 +389,7 @@ namespace cpplib {
 			auto curshift = cur - this;
 			auto nextshift = next - this;
 			bool ret = neighbours_.exchange(curshift, nextshift);
-			_ASSERT(ret);
+			assert(ret);
 		}
 		constexpr void swap(Node& other) noexcept {
 			::std::swap(type_, other.type_);
@@ -419,7 +420,7 @@ namespace cpplib {
 			return deleteNeighbour(&node);
 		}
 		constexpr void deleteNeighbour(const Node* pnode) noexcept {
-			_ASSERT(pnode != this);
+			assert(pnode != this);
 			auto s = neighbours_.size();
 			ShiftType shift = pnode - this;
 			decltype(s) i = 0;
