@@ -780,22 +780,22 @@ namespace cpplib::geometry {
 	};
 } // namespace cpplib::geometry
 namespace cpplib {
-	struct BondWithShift : public cpplib::Bond {
+	struct BondWithShift : public Bond {
 	public:
+		constexpr BondWithShift() = default;
 		using Bond::Bond;
 		using ShiftType = geometry::Point<int8_t>;
 
 		// Data
 		ShiftType shift;
+
+		// Operators
 		constexpr bool operator==(const BondWithShift& other) const noexcept {
 			return Bond::operator==(other);
 		}
-
-		// Compares in next order:
-		// 1. "base" 
-		// 2. length
 		constexpr auto operator<=>(const BondWithShift& other) const noexcept = default;
 	};
+
 	static_assert(BondConcept<BondWithShift>, "BondWithShift must satisfy BondConcept");
 
 } // namespace cpplib
@@ -804,7 +804,22 @@ namespace cpplib::geometry {
 	class VoronoiCell {
 	public:
 		using PointType = Point<T>;
-		using Face = Polygon<T>;
+		using ShiftType = BondWithShift::ShiftType;
+
+		struct Face {
+			using PolygonType = Polygon<T>;
+			using PlaneType = typename PolygonType::PlaneType;
+			constexpr Face() noexcept = default;
+
+			constexpr explicit Face(PolygonType&& p,
+						            BondWithShift&& b = BondWithShift()) :
+				poly(std::move(p)), bond(std::move(b)) {}
+
+
+			// Data
+			PolygonType poly;
+			BondWithShift bond;
+		};
 		using PlaneType = typename Face::PlaneType;
 		using FaceVector = ::std::vector<Face>;
 
@@ -885,15 +900,15 @@ namespace cpplib::geometry {
 			for (auto& face : faces_) {
 				// Save original vertices for intersection detection
 				std::vector<PointType> original_vertices;
-				for (size_t i = 0; i < face.size(); ++i) {
-					original_vertices.push_back(face[i]);
+				for (size_t i = 0; i < face.poly.size(); ++i) {
+					original_vertices.push_back(face.poly[i]);
 				}
 
 				// Clip the face
-				face.clipByPlane(clipping_plane);
+				face.poly.clipByPlane(clipping_plane);
 
 				// If face remains valid, add it
-				if (face.size() >= 3) {
+				if (face.poly.size() >= 3) {
 					new_faces.push_back(face);
 
 					// Collect intersection points with this face
@@ -946,9 +961,9 @@ namespace cpplib::geometry {
 			removeDuplicatePoints(points);
 
 			// Create new face
-			Face new_face(points, plane);
-			if (new_face.isConvex()) {
-				faces_.push_back(new_face);
+			typename Face::PolygonType new_polygon(points, plane);
+			if (new_polygon.isConvex()) {
+				faces_.emplace_back(std::move(new_polygon));
 			}
 		}
 
@@ -1026,7 +1041,7 @@ namespace cpplib::geometry {
 
 		inline void clipByPlane(const PlaneType& clipping_plane) {
 			for (auto& face : faces_) {
-				face.clipByPlane(clipping_plane);
+				face.poly.clipByPlane(clipping_plane);
 			}
 		}
 		constexpr void initiate_cube_faces_on_seed() {
@@ -1036,10 +1051,10 @@ namespace cpplib::geometry {
 			}
 			faces_.reserve(6);
 			for (int i = 0; i < 6; ++i) {
-				faces_.emplace_back(Face({cube[face_indices[i][0]],
-										   cube[face_indices[i][1]],
-										   cube[face_indices[i][2]],
-										   cube[face_indices[i][3]]}));
+				faces_.emplace_back(Face::PolygonType({cube[face_indices[i][0]],
+										              cube[face_indices[i][1]],
+										              cube[face_indices[i][2]],
+										              cube[face_indices[i][3]]}));
 			}
 		}
 
@@ -1134,9 +1149,9 @@ namespace cpplib::geometry {
 			for (auto& vcell : cells_) {
 				const PointType seed = vcell.getSeed();
 				for (const auto& face : vcell.getFaces()) {
-					for (size_t i = 0; i < face.size(); i++)
+					for (size_t i = 0; i < face.poly.size(); i++)
 					{
-						T val = (mat * (face[i] - seed)).r();
+						T val = (mat * (face.poly[i] - seed)).r();
 						if (val > ret) ret = val;
 					}
 				}
@@ -1228,7 +1243,7 @@ namespace cpplib::geometry {
 				{
 					Polygon p;
 
-					auto& vert = faces[j].getVertixes();
+					auto& vert = faces[j].poly.getVertixes();
 					auto vert_s = vert.size();
 					for (size_t k = 0; k < vert_s; k++)
 					{

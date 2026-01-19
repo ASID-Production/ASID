@@ -62,11 +62,6 @@ namespace cpplib::cluster_detail {
 	using SymmType = cpplib::geometry::Symm<FloatingPointType>;
 	using AtomTypeBase = cpplib::basic_types::AtomTypeBase;
 
-	struct BondWithShift : public Bond {
-		ShiftType shift{0, 0, 0};
-		BondWithShift(AtomIndex a, AtomIndex b) : Bond(a, b) {}
-		BondWithShift(Bond a, ShiftType b) : Bond(a), shift(b) {}
-	};
 	using BondList = ::std::vector<BondWithShift>;
 	struct AnchorType {
 		PointType point;
@@ -406,7 +401,6 @@ namespace cpplib {
 
 		using AnchorType = cluster_detail::AnchorType;
 		using ClusterAtom = cluster_detail::ClusterAtom;
-		using BondWithShift = cluster_detail::BondWithShift;
 		using BondList = cluster_detail::BondList;
 		using TranslatedAtom = cluster_detail::TranslatedAtom;
 		using TranslatedMolecule = cluster_detail::TranslatedMolecule;
@@ -559,12 +553,12 @@ namespace cpplib {
 
 			// [ -x, +x, -y, +y, -z, +z ]
 			const std::array<ShiftType::value_type, 6> maxr{
-				b[0] - std::ceil((cutoff - low[0]) / dp[0]),
-				b[0] + std::ceil((cutoff - high[0]) / dp[0]),
-				b[1] - std::ceil((cutoff - low[1]) / dp[1]),
-				b[1] + std::ceil((cutoff - high[1]) / dp[1]),
-				b[2] - std::ceil((cutoff - low[2]) / dp[2]),
-				b[2] + std::ceil((cutoff - high[2]) / dp[2]), };
+				b[0] - static_cast<ShiftType::value_type>(std::ceil((cutoff - low[0]) / dp[0])),
+				b[0] + static_cast<ShiftType::value_type>(std::ceil((cutoff - high[0]) / dp[0])),
+				b[1] - static_cast<ShiftType::value_type>(std::ceil((cutoff - low[1]) / dp[1])),
+				b[1] + static_cast<ShiftType::value_type>(std::ceil((cutoff - high[1]) / dp[1])),
+				b[2] - static_cast<ShiftType::value_type>(std::ceil((cutoff - low[2]) / dp[2])),
+				b[2] + static_cast<ShiftType::value_type>(std::ceil((cutoff - high[2]) / dp[2])) };
 
 
 			for (ShiftType::value_type i = maxr[0]; i <= maxr[1]; i++) {

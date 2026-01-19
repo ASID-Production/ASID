@@ -808,10 +808,10 @@ protected:
 		const auto& faces = cell.getFaces();
 
         for (const auto& face : faces) {
-            EXPECT_TRUE(face.isConvex());
+            EXPECT_TRUE(face.poly.isConvex());
 
 			// Verify that seed is on the correct side of the face
-			VoronoiCell<FloatingPointType>::Face::PlaneType plane(face[0], face[1], face[2]);
+			VoronoiCell<FloatingPointType>::Face::PlaneType plane(face.poly[0], face.poly[1], face.poly[2]);
 			EXPECT_GE(plane.side(seed), 0.0 - EPSILON);
 		}
 	}
