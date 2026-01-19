@@ -65,7 +65,7 @@ if (WIN32)
                            "cpplib/src/Classes/SearchGraph.h"
                            "cpplib/src/Functions/Functions.h"
                             
-                           "cpplib/src/Classes/FindGeometry.h" "cpplib/src/Functions/PythonInteface.cpp" "cpplib/src/BaseHeaders/Currents.h" "cpplib/src/Classes/Cluster.h" "cpplib/src/BaseHeaders/Concepts.h" "cpplib/src/BaseHeaders/BaseTypes.h" "cpplib/src/Classes/DSU.h")
+                           "cpplib/src/Classes/FindGeometry.h" "cpplib/src/Functions/PythonInteface.cpp" "cpplib/src/BaseHeaders/Currents.h" "cpplib/src/Classes/Cluster.h" "cpplib/src/BaseHeaders/Concepts.h" "cpplib/src/BaseHeaders/BaseTypes.h" "cpplib/src/Classes/DSU.h" "cpplib/src/Classes/Bond.h")
     target_link_libraries(cpplibLib)
 
     target_include_directories(cpplibLib PUBLIC 
@@ -95,7 +95,7 @@ project(cpplib)
     #Generate the shared library from the library sources
     if(CMAKE_BUILD_TYPE MATCHES Release)
         add_library(cpplib SHARED "cpplib/src/Functions/Functions.cpp" 
-                                  "cpplib/src/Functions/PythonInteface.cpp")
+                                  "cpplib/src/Functions/PythonInteface.cpp" "cpplib/src/Classes/Bond.h")
         if(WIN32)
             target_link_libraries(cpplib PRIVATE ${Python_LIBRARY_DIRS}/python3.lib)
         else()

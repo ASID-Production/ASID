@@ -26,22 +26,27 @@
 //
 // ******************************************************************************************
 #pragma once
-#include <cstdint>
-#include <type_traits>
-#include <array>
-#include <vector>
-#include <list>
-#include <utility>
 #include <algorithm>
-#include <optional>
-#include <concepts>
+#include <array>
 #include <cassert>
+#include <concepts>
+#include <cstdint>
+#include <list>
+#include <optional>
+#include <type_traits>
+#include <utility>
+#include <vector>
 
 #include "../BaseHeaders/Concepts.h"
+#include "../Classes/Bond.h"
 
 namespace cpplib::geometry {
-	template <class T> inline T GradtoRad(T a) { return a * static_cast<T>(0.0174532925199432957692); }
-	template <class T> inline T RadtoGrad(T a) { return a * static_cast<T>(57.295779513082320877); }
+	template <class T> inline T GradtoRad(T a) {
+		return a * static_cast<T>(0.0174532925199432957692);
+	}
+	template <class T> inline T RadtoGrad(T a) {
+		return a * static_cast<T>(57.295779513082320877);
+	}
 
 	constexpr double crystallography_eq_position_eps_realspace = 0.01; // Angstrom
 	constexpr double crystallography_eq_position_eps_fractalspace = crystallography_eq_position_eps_realspace / 100;
@@ -62,8 +67,7 @@ namespace cpplib::geometry {
 					std::size_t hz = std::hash<T>{}(point[2]);
 
 					return hx ^ (hy << 1) ^ (hz << 2) ^ (hx >> 31);
-				}
-				else {
+				} else {
 					return
 						(point[0] * std::size_t(73856093)) ^
 						(point[1] * std::size_t(19349663)) ^
@@ -74,14 +78,17 @@ namespace cpplib::geometry {
 
 
 	public:
-		array_type a = { 0,0,0 };
+		array_type a = {0,0,0};
 
 	public:
 		// Constructors
 		constexpr Point() noexcept = default;
-		constexpr Point(value_type x, value_type y, value_type z) noexcept : a{ x, y, z } {};
-		explicit constexpr Point(const array_type& other) noexcept : a(other) {};
-		explicit constexpr Point(array_type&& other) noexcept : a(::std::move(other)) {};
+		constexpr Point(value_type x, value_type y, value_type z) noexcept : a{x, y, z} {
+		};
+		explicit constexpr Point(const array_type& other) noexcept : a(other) {
+		};
+		explicit constexpr Point(array_type&& other) noexcept : a(::std::move(other)) {
+		};
 
 		template <typename T2>
 			requires ((::std::integral<T2> || ::std::floating_point<T2>) && ::std::is_convertible<T2, T>::value)
@@ -173,8 +180,12 @@ namespace cpplib::geometry {
 			};
 		}
 
-		constexpr value_type operator[](const uint8_t i) const noexcept { return a[i]; }
-		constexpr value_type& operator[](const uint8_t i) noexcept { return a[i]; }
+		constexpr value_type operator[](const uint8_t i) const noexcept {
+			return a[i];
+		}
+		constexpr value_type& operator[](const uint8_t i) noexcept {
+			return a[i];
+		}
 
 		// Operators
 		constexpr Point operator-() const noexcept {
@@ -270,7 +281,7 @@ namespace cpplib::geometry {
 		using array_type = ::std::array< ::std::array<T, 3>, 3>;
 		using const_array_type = const array_type;
 	private:
-		array_type A{ { {0,0,0},{0,0,0},{0,0,0} } };
+		array_type A{{ {0,0,0},{0,0,0},{0,0,0} }};
 		template<class T2> friend class Matrix; // for constructors
 	public:
 		constexpr Matrix() noexcept = default;
@@ -298,7 +309,8 @@ namespace cpplib::geometry {
 			A[2][1] = static_cast<T&&>(r.A[2][1]);
 			A[2][2] = static_cast<T&&>(r.A[2][2]);
 		}
-		explicit constexpr Matrix(const T v) noexcept : A{ { {v,0,0},{0,v,0},{0,0,v} } } {}
+		explicit constexpr Matrix(const T v) noexcept : A{{ {v,0,0},{0,v,0},{0,0,v} }} {
+		}
 		explicit constexpr Matrix(const T** input_massive) noexcept {
 			for (size_t i = 0; i < 3; i++) {
 				for (size_t j = 0; j < 3; j++) {
@@ -313,8 +325,10 @@ namespace cpplib::geometry {
 				}
 			}
 		}
-		explicit constexpr Matrix(const_array_type& in) noexcept : A(in) {}
-		explicit constexpr Matrix(array_type&& in) noexcept : A(std::move(in)) {}
+		explicit constexpr Matrix(const_array_type& in) noexcept : A(in) {
+		}
+		explicit constexpr Matrix(array_type&& in) noexcept : A(std::move(in)) {
+		}
 		[[nodiscard]] constexpr T& El(const size_t a, const size_t b) noexcept {
 			return A[a][b];
 		}
@@ -324,16 +338,16 @@ namespace cpplib::geometry {
 		template<class T2>
 		[[nodiscard]] constexpr Matrix<decltype(T()* T2())> operator*(const Matrix<T2>& right) const noexcept {
 			using resv = decltype(T()* T2());
-			std::array<resv, 3> a1 = { A[0][0] * right.A[0][0] + A[0][1] * right.A[1][0] + A[0][2] * right.A[2][0],
+			std::array<resv, 3> a1 = {A[0][0] * right.A[0][0] + A[0][1] * right.A[1][0] + A[0][2] * right.A[2][0],
 										A[0][0] * right.A[0][1] + A[0][1] * right.A[1][1] + A[0][2] * right.A[2][1],
-										A[0][0] * right.A[0][2] + A[0][1] * right.A[1][2] + A[0][2] * right.A[2][2] };
-			std::array<resv, 3> a2 = { A[1][0] * right.A[0][0] + A[1][1] * right.A[1][0] + A[1][2] * right.A[2][0],
+										A[0][0] * right.A[0][2] + A[0][1] * right.A[1][2] + A[0][2] * right.A[2][2]};
+			std::array<resv, 3> a2 = {A[1][0] * right.A[0][0] + A[1][1] * right.A[1][0] + A[1][2] * right.A[2][0],
 										A[1][0] * right.A[0][1] + A[1][1] * right.A[1][1] + A[1][2] * right.A[2][1],
-										A[1][0] * right.A[0][2] + A[1][1] * right.A[1][2] + A[1][2] * right.A[2][2] };
-			std::array<resv, 3> a3 = { A[2][0] * right.A[0][0] + A[2][1] * right.A[1][0] + A[2][2] * right.A[2][0],
+										A[1][0] * right.A[0][2] + A[1][1] * right.A[1][2] + A[1][2] * right.A[2][2]};
+			std::array<resv, 3> a3 = {A[2][0] * right.A[0][0] + A[2][1] * right.A[1][0] + A[2][2] * right.A[2][0],
 										A[2][0] * right.A[0][1] + A[2][1] * right.A[1][1] + A[2][2] * right.A[2][1],
-										A[2][0] * right.A[0][2] + A[2][1] * right.A[1][2] + A[2][2] * right.A[2][2] };
-			std::array<std::array<resv, 3>, 3> b{ a1, a2, a3 };
+										A[2][0] * right.A[0][2] + A[2][1] * right.A[1][2] + A[2][2] * right.A[2][2]};
+			std::array<std::array<resv, 3>, 3> b{a1, a2, a3};
 			return Matrix<resv>(b);
 		}
 		template<class T2>
@@ -346,33 +360,33 @@ namespace cpplib::geometry {
 		}
 		template<class T2>
 		[[nodiscard]] constexpr Matrix<decltype(T() / T2())> operator/(const T2 right) const noexcept {
-			std::array<T, 3> a1 = { A[0][0] / right, A[0][1] / right, A[0][2] / right };
-			std::array<T, 3> a2 = { A[1][0] / right, A[1][1] / right, A[1][2] / right };
-			std::array<T, 3> a3 = { A[2][0] / right, A[2][1] / right, A[2][2] / right };
-			array_type b{ a1, a2, a3 };
+			std::array<T, 3> a1 = {A[0][0] / right, A[0][1] / right, A[0][2] / right};
+			std::array<T, 3> a2 = {A[1][0] / right, A[1][1] / right, A[1][2] / right};
+			std::array<T, 3> a3 = {A[2][0] / right, A[2][1] / right, A[2][2] / right};
+			array_type b{a1, a2, a3};
 			return Matrix(std::move(b));
 		}
 		[[nodiscard]] constexpr Matrix<T> Transponate() const noexcept {
-			std::array<T, 3> a1 = { A[0][0],A[1][0],A[2][0] };
-			std::array<T, 3> a2 = { A[0][1],A[1][1],A[2][1] };
-			std::array<T, 3> a3 = { A[0][2],A[1][2],A[2][2] };
-			array_type b{ a1, a2, a3 };
+			std::array<T, 3> a1 = {A[0][0],A[1][0],A[2][0]};
+			std::array<T, 3> a2 = {A[0][1],A[1][1],A[2][1]};
+			std::array<T, 3> a3 = {A[0][2],A[1][2],A[2][2]};
+			array_type b{a1, a2, a3};
 			return Matrix(b);
 		}
 		[[nodiscard]] constexpr Matrix<T> Invert() const {
 			const T det = Det();
-			std::array<T, 3> a1 = { (A[1][1] * A[2][2] - A[1][2] * A[2][1]) / det, (A[0][2] * A[2][1] - A[0][1] * A[2][2]) / det, (A[0][1] * A[1][2] - A[0][2] * A[1][1]) / det };
-			std::array<T, 3> a2 = { (A[1][2] * A[2][0] - A[1][0] * A[2][2]) / det, (A[0][0] * A[2][2] - A[0][2] * A[2][0]) / det, (A[0][2] * A[1][0] - A[0][0] * A[1][2]) / det };
-			std::array<T, 3> a3 = { (A[1][0] * A[2][1] - A[2][0] * A[1][1]) / det, (A[0][1] * A[2][0] - A[0][0] * A[2][1]) / det, (A[1][1] * A[0][0] - A[1][0] * A[0][1]) / det };
-			array_type b = { a1,a2,a3 };
+			std::array<T, 3> a1 = {(A[1][1] * A[2][2] - A[1][2] * A[2][1]) / det, (A[0][2] * A[2][1] - A[0][1] * A[2][2]) / det, (A[0][1] * A[1][2] - A[0][2] * A[1][1]) / det};
+			std::array<T, 3> a2 = {(A[1][2] * A[2][0] - A[1][0] * A[2][2]) / det, (A[0][0] * A[2][2] - A[0][2] * A[2][0]) / det, (A[0][2] * A[1][0] - A[0][0] * A[1][2]) / det};
+			std::array<T, 3> a3 = {(A[1][0] * A[2][1] - A[2][0] * A[1][1]) / det, (A[0][1] * A[2][0] - A[0][0] * A[2][1]) / det, (A[1][1] * A[0][0] - A[1][0] * A[0][1]) / det};
+			array_type b = {a1,a2,a3};
 			return Matrix(b);
 		}
 		[[nodiscard]] constexpr Matrix<T> Modul() const noexcept {
 			constexpr T zero = 0;
-			std::array<T, 3> a1 = { A[0][0] < zero ? A[0][0] : -A[0][0], A[0][1] < zero ? A[0][1] : -A[0][1], A[0][2] < zero ? A[0][2] : -A[0][2] };
-			std::array<T, 3> a2 = { A[1][0] < zero ? A[1][0] : -A[1][0], A[1][1] < zero ? A[1][1] : -A[1][1], A[1][2] < zero ? A[1][2] : -A[1][2] };
-			std::array<T, 3> a3 = { A[2][0] < zero ? A[2][0] : -A[2][0], A[2][1] < zero ? A[2][1] : -A[2][1], A[2][2] < zero ? A[2][2] : -A[2][2] };
-			array_type b{ a1, a2, a3 };
+			std::array<T, 3> a1 = {A[0][0] < zero?A[0][0]:-A[0][0], A[0][1] < zero?A[0][1]:-A[0][1], A[0][2] < zero?A[0][2]:-A[0][2]};
+			std::array<T, 3> a2 = {A[1][0] < zero?A[1][0]:-A[1][0], A[1][1] < zero?A[1][1]:-A[1][1], A[1][2] < zero?A[1][2]:-A[1][2]};
+			std::array<T, 3> a3 = {A[2][0] < zero?A[2][0]:-A[2][0], A[2][1] < zero?A[2][1]:-A[2][1], A[2][2] < zero?A[2][2]:-A[2][2]};
+			array_type b{a1, a2, a3};
 			return Matrix(std::move(b));
 		}
 		constexpr double Trace() const noexcept {
@@ -418,7 +432,7 @@ namespace cpplib::geometry {
 	template<class T>
 	struct Plane {
 		using value_type = T; // the same as T
-		std::array<T, 4> a = { T(0), T(0), T(0), T(0) }; // [ A, B, C, D]
+		std::array<T, 4> a = {T(0), T(0), T(0), T(0)}; // [ A, B, C, D]
 
 		constexpr Plane() noexcept = default;
 		constexpr Plane(const Point<T>& a1, const Point<T>& a2, const Point<T>& a3) noexcept {
@@ -488,8 +502,7 @@ namespace cpplib::geometry {
 			if (verts.size() >= 3) {
 				plane_ = PlaneType(verts[0], verts[1], verts[2]);
 				is_valid_ = true;
-			}
-			else {
+			} else {
 				is_valid_ = false;
 			}
 		}
@@ -501,8 +514,7 @@ namespace cpplib::geometry {
 
 			if (T normal_length = normal.r(); normal_length > 1e-10) {
 				normal = normal / normal_length;
-			}
-			else {
+			} else {
 				// if normal is zero, the plane is XY plane
 				normal = PointType(0, 0, 1);
 				plane_ = PlaneType(PointType(0, 0, 0), PointType(1, 0, 0), PointType(0, 1, 0));
@@ -512,8 +524,7 @@ namespace cpplib::geometry {
 			PointType u;
 			if (std::abs(normal[0]) > std::abs(normal[1])) {
 				u = PointType(-normal[2], 0, normal[0]);
-			}
-			else {
+			} else {
 				u = PointType(0, normal[2], -normal[1]);
 			}
 			u = u / u.r();
@@ -586,12 +597,10 @@ namespace cpplib::geometry {
 					if (de > 2) {
 						vertices_.erase(vertices_.begin() + e2 + 3, vertices_.begin() + e1);
 					}
-				}
-				else { // de == 1
+				} else { // de == 1
 					vertices_.insert(vertices_.begin() + e2 + 2, inter1);
 				}
-			}
-			else { // e1 <= e2
+			} else { // e1 <= e2
 				if (e2 != vs - 1) {
 					vertices_.erase(vertices_.begin() + e2 + 1, vertices_.end());
 				}
@@ -732,17 +741,16 @@ namespace cpplib::geometry {
 					has_positive = true;
 					e2 = iter;
 					e1 = iter;
-				}
-				else if (dists[iter] < 0) has_negative = true;
+				} else if (dists[iter] < 0) has_negative = true;
 			}
 
 			// Check all points non-negative = all points inside
 			if (has_negative == false)
-				return { 0, vs - 1 };
+				return {0, vs - 1};
 
 			// Check all points non-positive = at maximum - corner or angle touch
 			if (has_positive == false)
-				return { vs, vs };
+				return {vs, vs};
 
 
 			// Find left corner 
@@ -751,8 +759,7 @@ namespace cpplib::geometry {
 				auto iter_t = iter % vs;
 				if (dists[iter_t] > 0) {
 					e1 = iter_t;
-				}
-				else {
+				} else {
 					break;
 				}
 			}
@@ -764,15 +771,35 @@ namespace cpplib::geometry {
 				auto iter_t = iter % vs;
 				if (dists[iter_t] > 0) {
 					e2 = iter_t;
-				}
-				else {
+				} else {
 					break;
 				}
 			}
-			return { e1, e2 };
+			return {e1, e2};
 		}
 	};
+} // namespace cpplib::geometry
+namespace cpplib {
+	struct BondWithShift : public cpplib::Bond {
+	public:
+		using Bond::Bond;
+		using ShiftType = geometry::Point<int8_t>;
 
+		// Data
+		ShiftType shift;
+		constexpr bool operator==(const BondWithShift& other) const noexcept {
+			return Bond::operator==(other);
+		}
+
+		// Compares in next order:
+		// 1. "base" 
+		// 2. length
+		constexpr auto operator<=>(const BondWithShift& other) const noexcept = default;
+	};
+	static_assert(BondConcept<BondWithShift>, "BondWithShift must satisfy BondConcept");
+
+} // namespace cpplib
+namespace cpplib::geometry {
 	template<class T>
 	class VoronoiCell {
 	public:
@@ -792,7 +819,9 @@ namespace cpplib::geometry {
 		}
 		// Creates cube around seed
 		constexpr explicit VoronoiCell(const PointType& seed, bool init = true) noexcept : seed_(seed) {
-			if (init) { initiate_cube_faces_on_seed(); }
+			if (init) {
+				initiate_cube_faces_on_seed();
+			}
 		}
 
 		/// <summary>
@@ -840,8 +869,12 @@ namespace cpplib::geometry {
 
 			return 0;
 		}
-		constexpr const PointType& getSeed() const noexcept { return seed_; }
-		constexpr const FaceVector& getFaces() const noexcept { return faces_; }
+		constexpr const PointType& getSeed() const noexcept {
+			return seed_;
+		}
+		constexpr const FaceVector& getFaces() const noexcept {
+			return faces_;
+		}
 
 	private:
 		void clipByPlaneAndAddNewFace(const PlaneType& clipping_plane) {
@@ -953,8 +986,7 @@ namespace cpplib::geometry {
 			PointType reference_vector;
 			if (std::abs(normal[0]) > std::abs(normal[1])) {
 				reference_vector = PointType(-normal[2], 0, normal[0]);
-			}
-			else {
+			} else {
 				reference_vector = PointType(0, normal[2], -normal[1]);
 			}
 			reference_vector = reference_vector / reference_vector.r();
@@ -1004,15 +1036,15 @@ namespace cpplib::geometry {
 			}
 			faces_.reserve(6);
 			for (int i = 0; i < 6; ++i) {
-				faces_.emplace_back(Face({ cube[face_indices[i][0]],
+				faces_.emplace_back(Face({cube[face_indices[i][0]],
 										   cube[face_indices[i][1]],
 										   cube[face_indices[i][2]],
-										   cube[face_indices[i][3]] }));
+										   cube[face_indices[i][3]]}));
 			}
 		}
 
 		// Base array of vertices for a cube
-		static constexpr std::array<PointType, 8> base_vertices = { {
+		static constexpr std::array<PointType, 8> base_vertices = {{
 			PointType{-0.5, -0.5, -0.5}, // 0
 			PointType{ 0.5, -0.5, -0.5}, // 1
 			PointType{ 0.5,  0.5, -0.5}, // 2
@@ -1021,17 +1053,17 @@ namespace cpplib::geometry {
 			PointType{ 0.5, -0.5,  0.5}, // 5
 			PointType{ 0.5,  0.5,  0.5}, // 6
 			PointType{-0.5,  0.5,  0.5}  // 7
-		} };
+		}};
 
 		// Indexes for each face of the cube (conter-clockwise from outside)
-		static constexpr std::array<std::array<int, 4>, 6> face_indices = { {
+		static constexpr std::array<std::array<int, 4>, 6> face_indices = {{
 			{4, 7, 6, 5}, // front face
 			{0, 1, 2, 3}, // back face
 			{0, 3, 7, 4}, // left face
 			{1, 5, 6, 2}, // right face
 			{0, 4, 5, 1}, // bottom face
 			{3, 2, 6, 7}  // top face
-		} };
+		}};
 	};
 
 	template<class T, class AI> class HashedSpace;
@@ -1144,8 +1176,8 @@ namespace cpplib::geometry {
 				}
 
 				// 2. Find right diraction of ring
-				const size_t prev_idx = (min_idx == 0) ? n - 1 : min_idx - 1;
-				const size_t next_idx = (min_idx == n - 1) ? 0 : min_idx + 1;
+				const size_t prev_idx = (min_idx == 0)?n - 1:min_idx - 1;
+				const size_t next_idx = (min_idx == n - 1)?0:min_idx + 1;
 				const bool need_reverse = (vert_ids[prev_idx] < vert_ids[next_idx]);
 
 				// 3. Final rotation on possible reversion
@@ -1156,8 +1188,7 @@ namespace cpplib::geometry {
 					if (new_min_idx != 0) {
 						std::rotate(vert_ids.begin(), vert_ids.begin() + new_min_idx, vert_ids.end());
 					}
-				}
-				else {
+				} else {
 					if (min_idx != 0) {
 						std::rotate(vert_ids.begin(), vert_ids.begin() + min_idx, vert_ids.end());
 					}
@@ -1239,8 +1270,7 @@ namespace cpplib::geometry {
 			if (f_It != v.end()) {
 				f_It->is_inner = true;
 				return ::std::distance(v.begin(), f_It);
-			}
-			else {
+			} else {
 				v.push_back(x);
 				return v.size() - 1;
 			}
@@ -1339,8 +1369,7 @@ namespace cpplib::geometry {
 				for (int i = 0; i < 3; i++) {
 					angleRad_[i] = GradtoRad(angleGrad_[i]);
 				}
-			}
-			else {
+			} else {
 				angleRad_[0] = alpha;
 				angleRad_[1] = beta;
 				angleRad_[2] = gamma;
@@ -1392,7 +1421,7 @@ namespace cpplib::geometry {
 				geometry::Point<I>(1, 1, 1),
 				geometry::Point<I>(1, 1,-1),
 				geometry::Point<I>(1,-1, 1),
-				geometry::Point<I>(1,-1,-1) };
+				geometry::Point<I>(1,-1,-1)};
 
 			geometry::Point<I> currentSuperCell(
 				std::max(static_cast<I>(std::ceil(cutoff / lattice_[0])), minimum),
@@ -1408,25 +1437,25 @@ namespace cpplib::geometry {
 
 				unsigned char minDimention = 0;
 				switch (i) {
-				case 0:
-				case 1:
-					if (lattice_[1] * currentSuperCell[1] > lattice_[2] * currentSuperCell[2]) minDimention = 2;
-					else minDimention = 1;
-					break;
-				case 2:
-				case 3:
-					if (lattice_[0] * currentSuperCell[0] > lattice_[2] * currentSuperCell[2]) minDimention = 2;
-					else minDimention = 0;
-					break;
-				case 4:
-				case 5:
-					if (lattice_[0] * currentSuperCell[0] > lattice_[1] * currentSuperCell[1]) minDimention = 1;
-					else minDimention = 0;
-					break;
-				default:
-					if (lattice_[minDimention] * currentSuperCell[minDimention] > lattice_[1] * currentSuperCell[1]) minDimention = 1;
-					if (lattice_[minDimention] * currentSuperCell[minDimention] > lattice_[2] * currentSuperCell[2]) minDimention = 2;
-					break;
+					case 0:
+					case 1:
+						if (lattice_[1] * currentSuperCell[1] > lattice_[2] * currentSuperCell[2]) minDimention = 2;
+						else minDimention = 1;
+						break;
+					case 2:
+					case 3:
+						if (lattice_[0] * currentSuperCell[0] > lattice_[2] * currentSuperCell[2]) minDimention = 2;
+						else minDimention = 0;
+						break;
+					case 4:
+					case 5:
+						if (lattice_[0] * currentSuperCell[0] > lattice_[1] * currentSuperCell[1]) minDimention = 1;
+						else minDimention = 0;
+						break;
+					default:
+						if (lattice_[minDimention] * currentSuperCell[minDimention] > lattice_[1] * currentSuperCell[1]) minDimention = 1;
+						if (lattice_[minDimention] * currentSuperCell[minDimention] > lattice_[2] * currentSuperCell[2]) minDimention = 2;
+						break;
 				}
 				currentSuperCell[minDimention] = currentSuperCell[minDimention] + 1;
 			}
@@ -1435,8 +1464,7 @@ namespace cpplib::geometry {
 	};
 
 	template<class T>
-	struct Symm
-	{
+	struct Symm {
 		using matrix_t = geometry::Matrix<T>;
 		using point_t = geometry::Point<T>;
 		matrix_t mat;
@@ -1497,45 +1525,45 @@ namespace cpplib::geometry {
 			return n;
 		}
 		std::pair<point_t, T> parse(const char* str, const size_t len) const {
-			point_t p{ 0,0,0 };
+			point_t p{0,0,0};
 			T shift = 0;
 			bool minus = false;
 			for (unsigned int i = 0; i < len; i++) // iterator "i" modifies in parseshift function
 			{
 				switch (str[i]) {
-				case 'x': [[fallthrough]];
-				case 'X':
-					if (minus == true) p[0] = -1;
-					else p[0] = 1;
-					minus = false;
-					break;
-				case 'y': [[fallthrough]];
-				case 'Y':
-					if (minus == true) p[1] = -1;
-					else p[1] = 1;
-					minus = false;
-					break;
-				case 'z': [[fallthrough]];
-				case 'Z':
-					if (minus == true) p[2] = -1;
-					else p[2] = 1;
-					minus = false;
-					break;
-				case ' ': [[fallthrough]];
-				case '\'': [[fallthrough]];
-				case '\"': [[fallthrough]];
-				case '+':
-					break;
-				case '-':
-					minus = !minus;
-					break;
-				default:
+					case 'x': [[fallthrough]];
+					case 'X':
+						if (minus == true) p[0] = -1;
+						else p[0] = 1;
+						minus = false;
+						break;
+					case 'y': [[fallthrough]];
+					case 'Y':
+						if (minus == true) p[1] = -1;
+						else p[1] = 1;
+						minus = false;
+						break;
+					case 'z': [[fallthrough]];
+					case 'Z':
+						if (minus == true) p[2] = -1;
+						else p[2] = 1;
+						minus = false;
+						break;
+					case ' ': [[fallthrough]];
+					case '\'': [[fallthrough]];
+					case '\"': [[fallthrough]];
+					case '+':
+						break;
+					case '-':
+						minus = !minus;
+						break;
+					default:
 
-					T partshift = parseshift(str, i, len); // Modifies "i"
-					if (minus) shift -= partshift;
-					else shift += partshift;
-					minus = false;
-					break;
+						T partshift = parseshift(str, i, len); // Modifies "i"
+						if (minus) shift -= partshift;
+						else shift += partshift;
+						minus = false;
+						break;
 				}
 			}
 			return std::make_pair(p, shift);
@@ -1551,35 +1579,32 @@ namespace cpplib::geometry {
 			{
 				if (str[iter] < '0' || str[iter] > '9')
 					switch (str[iter]) {
-					case '.':
-						dot = true;
-						break;
-					case '+':
-					case '-':
-						iter--;
-						return upper / static_cast<T>(lower);
-					case '/':
-						slash = true;
-						iter++;
-						lower = (str[iter] - '0');
-						break;
-					default:
-						// unexpected symbol
-						break;
+						case '.':
+							dot = true;
+							break;
+						case '+':
+						case '-':
+							iter--;
+							return upper / static_cast<T>(lower);
+						case '/':
+							slash = true;
+							iter++;
+							lower = (str[iter] - '0');
+							break;
+						default:
+							// unexpected symbol
+							break;
+					} else {
+						int num = (str[iter] - '0');
+						if (dot) {
+							upper = upper * 10 + num;
+							lower *= 10;
+						} else if (slash) {
+							lower = lower * 10 + num;
+						} else {
+							upper = upper * 10 + num;
+						}
 					}
-				else {
-					int num = (str[iter] - '0');
-					if (dot) {
-						upper = upper * 10 + num;
-						lower *= 10;
-					}
-					else if (slash) {
-						lower = lower * 10 + num;
-					}
-					else {
-						upper = upper * 10 + num;
-					}
-				}
 			}
 			iter--;
 			return upper / static_cast<T>(lower);
@@ -1623,8 +1648,8 @@ namespace cpplib::geometry {
 		/// <param name="points"> - vector of Points</param>
 		/// <returns>vector with all bonds in boxes and between adjacent ones</returns>
 		template<BondConcept BondType, typename ExtendedPointType>
-		::std::vector<BondType> create_hash_bonds(const ::std::vector<ExtendedPointType>& points, 
-												  std::function<const PointType&(const ExtendedPointType&)> func = standard_point_unpacker) const {
+		::std::vector<BondType> create_hash_bonds(const ::std::vector<ExtendedPointType>& points,
+												  std::function<const PointType& (const ExtendedPointType&)> func = standard_point_unpacker) const {
 			::std::vector<BondType> ret;
 			if (is_effective() == false) {
 				// use standard algorithm
@@ -1642,7 +1667,7 @@ namespace cpplib::geometry {
 			ret.reserve(estimated_size);
 			SupType supply_table(sep_[0],
 								 typename SupType::value_type(sep_[1],
-													 typename SupType::value_type::value_type(sep_[2])));
+															  typename SupType::value_type::value_type(sep_[2])));
 
 			// Fill supply_table
 			for (AtomIndex i = 0; i < points.size(); i++)
@@ -1650,7 +1675,7 @@ namespace cpplib::geometry {
 				auto p = func(points[i]);
 				p.MoveToCell();
 				auto c = coordinate_of_point(func(points[i]));
-				
+
 				supply_table[c[0]][c[1]][c[2]].emplace_back(i);
 			}
 
@@ -1668,8 +1693,8 @@ namespace cpplib::geometry {
 	private:
 		static constexpr FloatingPointType modifier_ = 1.05;
 
-		static const PointType& standard_point_unpacker (const PointType& p) {
-			return p; 
+		static const PointType& standard_point_unpacker(const PointType& p) {
+			return p;
 		}
 
 		template<BondConcept BondType>
@@ -1680,9 +1705,9 @@ namespace cpplib::geometry {
 			bool is_y = sep_[1] != 1;
 			bool is_z = sep_[2] != 1;
 
-			auto dx = (i + 1 == sep_[0]) ? 0 : i + 1;
-			auto dy = (j + 1 == sep_[1]) ? 0 : j + 1;
-			auto dz = (k + 1 == sep_[2]) ? 0 : k + 1;
+			auto dx = (i + 1 == sep_[0])?0:i + 1;
+			auto dy = (j + 1 == sep_[1])?0:j + 1;
+			auto dz = (k + 1 == sep_[2])?0:k + 1;
 
 			// dx
 			if (is_x) {
@@ -1735,8 +1760,7 @@ namespace cpplib::geometry {
 				{
 					if (v2 > v1) {
 						ret.emplace_back(v1, v2);
-					}
-					else {
+					} else {
 						ret.emplace_back(v2, v1);
 					}
 				}
@@ -1779,8 +1803,7 @@ namespace cpplib::geometry {
 }
 
 template<class T>
-struct std::hash<cpplib::geometry::Point<T>>
-{
+struct std::hash<cpplib::geometry::Point<T>> {
 	std::size_t operator()(const cpplib::geometry::Point<T>& s) const noexcept
 	{
 		std::size_t h1 = std::hash<T>{}(s[0]);
