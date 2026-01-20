@@ -43,11 +43,30 @@
 #include "../Classes/Distances.h"
 #include "../Classes/Geometry.h"
 
+/**
+ * Primary interface for constructing atomistic clusters from an asymmetric unit,
+ * coordinating unit-cell expansion, molecule construction, polymer growth, and
+ * placement within periodic lattice boxes.
+ *
+ * The complete Cluster definition implements the orchestration of symmetry
+ * application, molecule assembly, polymer growth, anchor-based box generation,
+ * and final aggregated atom output.
+ */
 namespace cpplib {
 	class Cluster;
 }
 
-namespace cpplib::cluster_detail {
+/**
+	 * Represents an anchor defined by a 3D point inside lattice bounds and an influence radius.
+	 *
+	 * The constructor validates that each coordinate of `point` lies within the representable
+	 * range of the lattice shift type and stores the anchor point and radius.
+	 *
+	 * @param point 3D anchor position (must be within the integer shift type bounds).
+	 * @param radius Influence radius around the anchor.
+	 * @throws std::runtime_error if any coordinate of `point` is outside the range of `ShiftType::value_type`.
+	 */
+	namespace cpplib::cluster_detail {
 
 	using FloatingPointType = cpplib::basic_types::FloatingPointType;
 	using PointType = cpplib::geometry::Point<FloatingPointType>;
@@ -397,7 +416,17 @@ namespace cpplib::cluster_detail {
 
 namespace cpplib {
 
-	class Cluster {
+	/**
+		 * Construct a Cluster instance that prepares building blocks for cluster generation.
+		 *
+		 * @param unit_cell Reference to the unit cell geometry used for spatial and periodic calculations.
+		 * @param symms Reference to the list of symmetry operations applied to the asymmetric unit.
+		 * @param anchors_fractal Move-only list of anchor positions with radii used to bound cluster placement.
+		 * @param points Move-only list of asymmetric-unit atom positions.
+		 * @param types Move-only list of asymmetric-unit atom types; must match `points` in length (asserted).
+		 * @param polymer_cutoff Cutoff radius used to detect and grow polymeric connections.
+		 */
+		class Cluster {
 	public:
 		using FloatingPointType = cluster_detail::FloatingPointType;
 		using PointType = cluster_detail::PointType;

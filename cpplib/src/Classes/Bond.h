@@ -32,7 +32,39 @@
 
 #include "../BaseHeaders/BaseTypes.h"
 #include "../BaseHeaders/Concepts.h"
-namespace cpplib {
+/**
+		 * Ensure the atom indices are ordered so `first` is less than or equal to `second`.
+		 */
+		 
+		/**
+		 * Create a textual representation of the bond in the form "(first, second)".
+		 * @returns A string formatted as "(<first>, <second>)" where `<first>` and `<second>` are the atom indices.
+		 */
+		
+		/**
+		 * Initialize a BondEx from a base Bond and an explicit length; normalizes atom ordering.
+		 * @param bond The base Bond providing atom indices.
+		 * @param len The bond length to assign.
+		 */
+		
+		/**
+		 * Initialize a BondEx from two atom indices and an explicit length; stores indices in ascending order.
+		 * @param a1 First atom index.
+		 * @param a2 Second atom index.
+		 * @param l Bond length to assign.
+		 */
+		
+		/**
+		 * Compare only the bond indices (ignore `length`) for equality.
+		 * @param other The BondEx to compare with.
+		 * @returns `true` if the atom indices (`first` and `second`) match `other`'s indices, `false` otherwise.
+		 */
+		
+		/**
+		 * Create a textual representation of the bond with distance in the form "(first, second, {"distance": length})".
+		 * @returns A string formatted as "(<first>, <second>, {"distance": <length>})".
+		 */
+		namespace cpplib {
 	struct Bond {
 	public:
 		// Declarations
@@ -126,10 +158,18 @@ namespace cpplib {
 		using Bond::Bond;
 		using PointType = PT;
 
-		// Data
+		/**
+ * Shift applied to the bond's reference point.
+ *
+ * Default-initialized point representing a displacement or offset associated with the bond.
+ */
 		PointType shift{};
 
-		// Operators
+		/**
+		 * Determine whether two BondWithPoint objects represent the same bond by comparing their atom indices.
+		 * @param other BondWithPoint to compare against.
+		 * @returns `true` if both objects have the same atom indices, `false` otherwise.
+		 */
 		constexpr bool operator==(const BondWithPoint& other) const noexcept {
 			return Bond::operator==(other);
 		}

@@ -6,7 +6,13 @@
 #include "../Classes/Bond.h"
 #include "../Classes/Geometry.h"
 
-namespace cpplib::voronoi {
+/**
+	 * Clip two Voronoi cells against the plane bisecting their seeds and update each cell's faces accordingly.
+	 * @param a First Voronoi cell to be clipped and updated.
+	 * @param b Second Voronoi cell to be clipped and updated.
+	 * @returns `0` if the operation completed successfully (cells may be empty), `1` if the two cell seeds are closer than the tolerance (cells too close).
+	 */
+	namespace cpplib::voronoi {
 	class Edge;
 	class Face;
 	class Cell;
@@ -320,6 +326,72 @@ namespace cpplib::voronoi {
 		using CellVector = ::std::vector<VoronCell>;
 		using BoolVector = ::std::vector<bool>;
 
+		/**
+		 * Construct an empty VoronoiDiagram.
+		 */
+		 
+		/**
+		 * Initialize a VoronoiDiagram from seed points with optional per-point flags.
+		 * @param points Vector of seed points to create one VoronoiCell per point.
+		 * @param flags Boolean flags controlling per-point initialization; if empty, all entries are treated as `true`.
+		 */
+		 
+		/**
+		 * Initialize a VoronoiDiagram from seed points and perform face calculations for the provided bond list.
+		 * @tparam AI Arbitrary index type used in the bond list pairs.
+		 * @param points Vector of seed points to create one VoronoiCell per point.
+		 * @param bonds List of index pairs indicating which cell pairs should be intersected to compute faces.
+		 * @param flags Boolean flags controlling per-point initialization; if empty, all entries are treated as `true`.
+		 */
+		 
+		/**
+		 * Add seed points to the diagram, creating one VoronoiCell per point.
+		 * @param points Vector of seed points to add.
+		 * @param flags Per-point boolean flags used when constructing each cell.
+		 */
+		 
+		/**
+		 * Compute faces for cell pairs specified by bonds by performing pairwise interactions.
+		 * @tparam AI Arbitrary index type used in the bond list pairs.
+		 * @param bonds List of index pairs; each pair identifies two cells to be intersected.
+		 * @returns `0` on success, `1` if the diagram was not initialized, `2` if any pair interaction failed due to cells being too close.
+		 */
+		 
+		/**
+		 * Compute the maximum half-diagonal distance from cell seeds to their face vertices after applying a linear transform.
+		 * @param mat Transformation matrix applied to (vertex - seed) vectors prior to measuring distance.
+		 * @returns Twice the maximum transformed vertex-to-seed distance found across all cells (i.e., the full diagonal length).
+		 */
+		 
+		/**
+		 * Extract and relinquish ownership of the internal cell vector.
+		 * @returns The stored CellVector if the diagram was initialized; otherwise an empty vector. Resets the diagram state to Uninitialized when returning stored cells.
+		 */
+		 
+		/**
+		 * Normalize the polygon vertex index cycle to a canonical orientation and starting position.
+		 * The rotation ensures the smallest vertex index appears first and the cycle direction is chosen consistently.
+		 */
+		 
+		/**
+		 * Convert a collection of VoronoiCell objects into fused representation by collecting centers, global vertex list, canonical polygons, and polyhedra indices.
+		 * @param cells Vector of VoronoiCell instances to merge into the fused representation.
+		 */
+		 
+		/**
+		 * Add a point to the global vertex list if no existing vertex is within EPSILON distance; otherwise return the index of the existing vertex.
+		 * @param v Vector of existing vertices to search/append to.
+		 * @param x Candidate point to add or match.
+		 * @returns Index of the matching or newly appended vertex in `v`.
+		 */
+		 
+		/**
+		 * Add a polygon to the global polygon list if an equivalent (same vertex sequence and not marked inner) polygon does not already exist.
+		 * If an equivalent polygon is found, mark it as inner.
+		 * @param v Vector of existing polygons to search/append to.
+		 * @param x Polygon to add or match.
+		 * @returns Index of the matching or newly appended polygon in `v`.
+		 */
 		enum class State : unsigned char {
 			Uninitialized = 0,
 			Cubic_cells = 1,

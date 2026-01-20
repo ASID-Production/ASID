@@ -1001,7 +1001,27 @@ extern "C" {
 							 "hasPolymer", b?Py_True:Py_False);
 	}
 
-	/// Args: [cell, symm, tuples, bools<int>, cutoff]
+	/**
+	 * @brief Compute Voronoi decomposition for a periodic structure and return centers, vertices, polygons and polyhedra.
+	 *
+	 * Parses Python arguments describing a unit cell, symmetry, atom tuples, per-atom boolean flags, and an optional cutoff,
+	 * then constructs a Voronoi diagram for the provided points (using the cell and symmetry) and returns its fused result.
+	 *
+	 * @param self Unused Python module/object pointer.
+	 * @param args Python tuple of arguments: [cell, symm, tuples, bools<int>, cutoff]
+	 *   - cell: Python sequence of 6 numbers (cell parameters).
+	 *   - symm: Python sequence of symmetry identifiers.
+	 *   - tuples: Python list/sequence of atom tuples (type and coordinates).
+	 *   - bools<int>: Python list/sequence of integers interpreted as per-atom boolean flags (nonzero => true).
+	 *   - cutoff: floating-point cutoff radius (default 6.0) used for neighbor/supercell generation.
+	 *
+	 * @return A Python dict with keys:
+	 *   - "centers": list of 3-tuples (x, y, z) for Voronoi cell centers.
+	 *   - "vertexes": list of 3-tuples (x, y, z) for Voronoi vertices.
+	 *   - "polygons": list of lists of integer vertex indices (polygons per center).
+	 *   - "polyhedra": list of lists of integer vertex indices (polyhedra per center).
+	 *
+	 */
 	static PyObject* cpplib_Voronoi(PyObject* self, PyObject* args) {
 		using Diagram = cpplib::voronoi::VoronoiDiagram<FloatingPointType>;
 

@@ -38,7 +38,49 @@
 
 #include "../BaseHeaders/Concepts.h"
 
-namespace cpplib::geometry {
+/**
+			 * Convert an angle from degrees to radians.
+			 * @tparam T Numeric type of the input and result.
+			 * @param a Angle in degrees.
+			 * @returns Angle in radians.
+			 */
+			
+			/**
+			 * Convert an angle from radians to degrees.
+			 * @tparam T Numeric type of the input and result.
+			 * @param a Angle in radians.
+			 * @returns Angle in degrees.
+			 */
+			
+			/**
+			 * Default position equality tolerance in real space.
+			 *
+			 * Value is given in Angstrom.
+			 */
+			
+			/**
+			 * Default position equality tolerance in fractional (unit-cell) space.
+			 *
+			 * This value equals crystallography_eq_position_eps_realspace divided by 100.
+			 */
+			
+			/**
+			 * Three-dimensional point/vector type.
+			 *
+			 * Provides a compact 3-component point storage and related utilities.
+			 * @tparam T Numeric type of each component.
+			 * @var eq_pos Approximate equality tolerance in fractional coordinates (type T).
+			 */
+			
+			/**
+			 * Compute a hash value for a Point by combining hashes of its three components.
+			 *
+			 * For floating-point component types, component std::hash<T> values are mixed.
+			 * For integral-like component types, a spatial hashing mix of component values is used.
+			 * @param point The point to hash.
+			 * @returns Combined hash value suitable for use in unordered containers.
+			 */
+			namespace cpplib::geometry {
 	template <class T> inline T GradtoRad(T a) {
 		return a * static_cast<T>(0.0174532925199432957692);
 	}
@@ -83,8 +125,16 @@ namespace cpplib::geometry {
 		constexpr Point() noexcept = default;
 		constexpr Point(value_type x, value_type y, value_type z) noexcept : a{x, y, z} {
 		};
+		/**
+		 * Construct a Point from a 3-element array.
+		 * @param other Array of three components used to initialize the point coordinates in order (x, y, z).
+		 */
 		explicit constexpr Point(const array_type& other) noexcept : a(other) {
 		};
+		/ **
+		 * Constructs a Point by taking ownership of a three-element array.
+		 * @param other Rvalue `array_type` whose elements are moved into the point's storage.
+		 */
 		explicit constexpr Point(array_type&& other) noexcept : a(::std::move(other)) {
 		};
 
@@ -163,6 +213,51 @@ namespace cpplib::geometry {
 		static constexpr value_type torsionGrad(const Point& a, const Point& b, const Point& c, const Point& d) noexcept {
 			return RadtoGrad(torsionRad(a, b, c, d));
 		}
+		/**
+		 * Return a point with each component rounded to the nearest integer.
+		 * @returns A Point whose components are the nearest integers to the original components.
+		 */
+		/**
+		 * Return a point with each component floored.
+		 * @returns A Point whose components are the floor of the original components.
+		 */
+		/**
+		 * Quantize each component of `p` to the nearest multiple of `epsilon`.
+		 * If `epsilon` is zero, returns a zero-initialized Point.
+		 * @param p Point to quantize.
+		 * @param epsilon Quantization step; components are rounded to multiples of this value.
+		 * @returns A Point whose components are `round(p[i] / epsilon) * epsilon`, or zero when `epsilon == 0`.
+		 */
+		/**
+		 * Access a component by index (read-only).
+		 * Index 0 corresponds to the first component, 1 to the second, and 2 to the third.
+		 * @param i Component index (0..2).
+		 * @returns The value of the requested component.
+		 */
+		/**
+		 * Access a component by index (mutable).
+		 * Index 0 corresponds to the first component, 1 to the second, and 2 to the third.
+		 * @param i Component index (0..2).
+		 * @returns A reference to the requested component.
+		 */
+		/**
+		 * Return a point with each component negated.
+		 * @returns A Point equal to the negation of this point.
+		 */
+		/**
+		 * Add two points component-wise and return the result.
+		 * @tparam OT Other point coordinate type.
+		 * @param left Left operand point.
+		 * @param right Right operand point.
+		 * @returns A Point whose components are the component-wise sums of `left` and `right`.
+		 */
+		/**
+		 * Add a scalar to each component of a point and return the result.
+		 * @tparam OT Scalar type.
+		 * @param left Point to which the scalar is added.
+		 * @param b Scalar value added to each component.
+		 * @returns A Point whose components are `left[i] + b`.
+		 */
 		constexpr Point round() const {
 			return Point(std::round(a[0]), std::round(a[1]), std::round(a[2]));
 		}
@@ -307,8 +402,16 @@ namespace cpplib::geometry {
 			A[2][1] = static_cast<T&&>(r.A[2][1]);
 			A[2][2] = static_cast<T&&>(r.A[2][2]);
 		}
-		explicit constexpr Matrix(const T v) noexcept : A{{ {v,0,0},{0,v,0},{0,0,v} }} {
+		/**
+ * Construct a 3x3 diagonal matrix with `v` on each diagonal element.
+ * @param v Scalar value placed on the matrix diagonal (creates v*I).
+ */
+explicit constexpr Matrix(const T v) noexcept : A{{ {v,0,0},{0,v,0},{0,0,v} }} {
 		}
+		/**
+		 * Construct a 3x3 Matrix by copying values from a C-style 3x3 array.
+		 * @param input_massive Pointer to an array of three pointers, each pointing to three elements (row-major 3x3 layout). The constructor copies all nine elements into the matrix.
+		 */
 		explicit constexpr Matrix(const T** input_massive) noexcept {
 			for (size_t i = 0; i < 3; i++) {
 				for (size_t j = 0; j < 3; j++) {
@@ -316,6 +419,10 @@ namespace cpplib::geometry {
 				}
 			}
 		}
+		/**
+		 * Constructs a 3x3 matrix from a contiguous 9-element array.
+		 * @param input_massive Pointer to at least nine elements containing matrix entries in row-major order (A[0][0], A[0][1], A[0][2], A[1][0], ... , A[2][2]).
+		 */
 		explicit constexpr Matrix(const T* input_massive) noexcept {
 			for (size_t i = 0, k = 0; i < 3; i++) {
 				for (size_t j = 0; j < 3; j++, k++) {
@@ -323,10 +430,24 @@ namespace cpplib::geometry {
 				}
 			}
 		}
+		/**
+		 * Construct a Matrix by copying a 3x3 array of values into the matrix storage.
+		 * @param in Source 3x3 array whose elements are copied into the matrix.
+		 */
 		explicit constexpr Matrix(const_array_type& in) noexcept : A(in) {
 		}
+		/**
+		 * Create a Matrix from a 3x3 array, taking ownership of the provided storage.
+		 * @param in A 3x3 array whose contents are used to initialize the matrix.
+		 */
 		explicit constexpr Matrix(array_type&& in) noexcept : A(std::move(in)) {
 		}
+		/**
+		 * Access the matrix element at the given row and column.
+		 * @param a Row index (0-based).
+		 * @param b Column index (0-based).
+		 * @returns Mutable reference to the element at row `a` and column `b`.
+		 */
 		[[nodiscard]] constexpr T& El(const size_t a, const size_t b) noexcept {
 			return A[a][b];
 		}
@@ -334,6 +455,61 @@ namespace cpplib::geometry {
 			return A[a][b];
 		}
 		template<class T2>
+		/**
+		 * Multiply this matrix by another 3x3 matrix, producing a matrix with element type resulting from component-wise multiplication.
+		 * @tparam T2 Type of the right-hand matrix elements.
+		 * @returns A 3x3 Matrix whose element type is the result of `T * T2`.
+		 */
+		/**
+		 * Multiply this matrix by a 3-component array (column vector), producing a 3-component array of products summed per row.
+		 * @tparam T2 Type of the array elements.
+		 * @returns A std::array of three elements representing the matrix-vector product; element type is the result of `T * T2`.
+		 */
+		/**
+		 * Divide every element of this matrix by a scalar value.
+		 * @tparam T2 Type of the scalar divisor.
+		 * @param right Scalar value to divide each matrix element by.
+		 * @returns A Matrix with each element equal to the original element divided by `right`; element type remains `T`.
+		 */
+		/**
+		 * Return the transpose of this matrix.
+		 * @returns A Matrix whose rows are the columns of this matrix.
+		 */
+		/**
+		 * Return the inverse of this matrix.
+		 * @returns The matrix inverse computed using the determinant. Behavior is undefined if the matrix is singular (determinant is zero).
+		 */
+		/**
+		 * Return a matrix formed by taking the element-wise absolute value of this matrix.
+		 * @returns A Matrix where each element is the absolute value of the corresponding element of this matrix.
+		 */
+		/**
+		 * Compute the average of the diagonal elements (trace divided by 3).
+		 * @returns The scalar value (A00 + A11 + A22) / 3.
+		 */
+		/**
+		 * Compute the determinant of this 3x3 matrix.
+		 * @returns The determinant value.
+		 */
+		/**
+		 * Multiply this matrix by a 3-component array (delegates to the three-parameter overload).
+		 * @tparam T2 Type of the components.
+		 * @param sup Array whose components are used to scale columns of the matrix.
+		 */
+		/**
+		 * Multiply this matrix in-place by separate x, y, z scaling factors applied to the matrix columns.
+		 * @tparam T2 Type of the scaling factors.
+		 * @param x Scale applied to column 0.
+		 * @param y Scale applied to column 1.
+		 * @param z Scale applied to column 2.
+		 */
+		/**
+		 * Apply this matrix to a Point (matrix * point), producing a Point whose component type is the product type of matrix element and point element.
+		 * @tparam T2 Type of the point coordinates.
+		 * @param left The left matrix operand.
+		 * @param right The right point operand.
+		 * @returns A Point with components equal to the matrix-vector product; component type is the result of `T * T2`.
+		 */
 		[[nodiscard]] constexpr Matrix<decltype(T()* T2())> operator*(const Matrix<T2>& right) const noexcept {
 			using resv = decltype(T()* T2());
 			std::array<resv, 3> a1 = {A[0][0] * right.A[0][0] + A[0][1] * right.A[1][0] + A[0][2] * right.A[2][0],
@@ -903,6 +1079,16 @@ namespace cpplib::geometry {
 		}
 
 		template <class I>
+		/**
+		 * Compute a minimal 3D supercell size that ensures neighbor contacts beyond a cutoff are avoided.
+		 *
+		 * Starting from per-axis sizes equal to ceil(cutoff / lattice_length) (but not smaller than `minimum`),
+		 * incrementally enlarges the smallest necessary lattice direction until all tested neighbor directions
+		 * produce Cartesian separations greater than `cutoff`.
+		 *
+		 * @param cutoff The distance threshold (in same units as lattice_) used to determine required separation.
+		 * @param minimum Minimum allowed size for each supercell dimension.
+		 * @returns A Point<I> whose components are the integer multipliers for the cell along each lattice direction.
 		[[nodiscard]] constexpr geometry::Point<I> findOptimalSupercell(const value_type cutoff, I minimum) const noexcept {
 			constexpr char shortContactsInTriclinic = 10;
 
@@ -1020,7 +1206,15 @@ namespace cpplib::geometry {
 			return n;
 		}
 		std::pair<point_t, T> parse(const char* str, const size_t len) const {
-			point_t p{0,0,0};
+			/**
+		 * Parse axis indicators and a numeric shift from a character sequence and return a direction vector and shift.
+		 *
+		 * @param str Character sequence to parse.
+		 * @param i Index into `str`; advanced to the position immediately after any parsed numeric token.
+		 * @param len Length of `str`.
+		 * @returns A pair where the first element is a 3-component direction vector with components set to -1, 0, or 1 for the presence and sign of `x`,`y`,`z` indicators, and the second element is the parsed numeric shift value.
+		 */
+		point_t p{0,0,0};
 			T shift = 0;
 			bool minus = false;
 			for (unsigned int i = 0; i < len; i++) // iterator "i" modifies in parseshift function
@@ -1064,6 +1258,17 @@ namespace cpplib::geometry {
 			return std::make_pair(p, shift);
 
 		}
+		/**
+		 * Parse a numeric shift value (integer, decimal, or simple fraction) from a string starting at `iter`.
+		 * 
+		 * Parses digits, optional decimal point, or a single `/'`-separated fraction from `str` beginning at index `iter`,
+		 * advances `iter` to the last character consumed (or one before a terminating '+' or '-' so the caller can handle the sign),
+		 * and converts the parsed value to type `T`.
+		 * @param str Null-terminated character buffer containing the expression to parse.
+		 * @param iter Index in `str` at which parsing starts; updated to the position of the last consumed character (or one before a terminating sign).
+		 * @param len Maximum length of `str` to consider while parsing.
+		 * @returns The parsed numeric value as type `T`. If a fraction was provided (e.g., "3/4"), returns numerator/denominator; decimal input is converted appropriately; default denominator is 1.
+		 */
 		T parseshift(const char* str, unsigned int& iter, const size_t len) const {
 			bool dot = false;
 			bool slash = false;
@@ -1188,6 +1393,11 @@ namespace cpplib::geometry {
 	private:
 		static constexpr FloatingPointType modifier_ = 1.05;
 
+		/**
+		 * Identity unpacker that yields the input point unchanged.
+		 * @param p Input point.
+		 * @returns The same `PointType` reference passed in `p`.
+		 */
 		static const PointType& standard_point_unpacker(const PointType& p) {
 			return p;
 		}
