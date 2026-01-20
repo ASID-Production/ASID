@@ -39,6 +39,7 @@
 #include "../Classes/Distances.h"
 #include "../Classes/FindMolecules.h"
 #include "../Classes/Geometry.h"
+#include "../Classes/Voronoi.h"
 
 extern const cpplib::Distances* p_distances;
 

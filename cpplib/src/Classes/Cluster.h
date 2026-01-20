@@ -38,12 +38,9 @@
 #include <vector>
 
 #include "../BaseHeaders/BaseTypes.h"
-#include "../Classes/DSU.h"
+#include "../Classes/Bond.h"
 #include "../Classes/Distances.h"
-#include "../Classes/Engine.h"
 #include "../Classes/Geometry.h"
-
-#include <iostream>
 
 namespace cpplib {
 	class Cluster;
@@ -61,6 +58,7 @@ namespace cpplib::cluster_detail {
 	using AtomIndex = cpplib::basic_types::AtomIndex;
 	using SymmType = cpplib::geometry::Symm<FloatingPointType>;
 	using AtomTypeBase = cpplib::basic_types::AtomTypeBase;
+	using BondWithShift = BondWithPoint<ShiftType>;
 
 	using BondList = ::std::vector<BondWithShift>;
 	struct AnchorType {
