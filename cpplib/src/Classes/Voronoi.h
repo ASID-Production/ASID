@@ -1,31 +1,44 @@
 #pragma once
 
 #include <cstdint>
+#include <utility>
 
 #include "../Classes/Bond.h"
 #include "../Classes/Geometry.h"
 
-namespace cpplib::geometry {
+namespace cpplib::voronoi {
+	class Edge;
+	class Face;
+	class Cell;
+
+
+	class Edge : private BondWithPoint<geometry::Point<int8_t>>{
+		// Data
+
+	};
+
+
 	template<class T>
 	class VoronoiCell {
 	public:
-		using PointType = Point<T>;
-		using ShiftType = Point<int8_t>;
+		using PointType = geometry::Point<T>;
+		using ShiftType = geometry::Point<int8_t>;
 		using BondWithShift = BondWithPoint<ShiftType>;
 
 		struct Face {
-			using PolygonType = Polygon<T>;
+			using PolygonType = geometry::Polygon<T>;
 			using PlaneType = typename PolygonType::PlaneType;
-			constexpr Face() noexcept = default;
-
-			constexpr explicit Face(PolygonType&& p,
-									BondWithShift&& b = BondWithShift()) :
-				poly(std::move(p)), bond(std::move(b)) {}
-
 
 			// Data
 			PolygonType poly;
 			BondWithShift bond;
+
+			// Constructors
+			constexpr Face() noexcept = default;
+			constexpr explicit Face(PolygonType&& p,
+									BondWithShift&& b = BondWithShift())
+				: poly(std::move(p)), bond(std::move(b)) {}
+
 		};
 		using PlaneType = typename Face::PlaneType;
 		using FaceVector = ::std::vector<Face>;
@@ -293,7 +306,7 @@ namespace cpplib::geometry {
 	template<class T>
 	class VoronoiDiagram {
 	public:
-		using PointType = Point<T>;
+		using PointType = geometry::Point<T>;
 		using VoronCell = VoronoiCell<T>;
 
 		template <class AI>
@@ -351,7 +364,7 @@ namespace cpplib::geometry {
 			return 0;
 		}
 
-		constexpr T calculateLongestDiagonal(const Matrix<T>& mat) const noexcept {
+		constexpr T calculateLongestDiagonal(const geometry::Matrix<T>& mat) const noexcept {
 			T ret = 0;
 			for (auto& vcell : cells_) {
 				const PointType seed = vcell.getSeed();
@@ -378,7 +391,7 @@ namespace cpplib::geometry {
 	template<class T>
 	class VoronoiFused {
 	public:
-		using PointType = Point<T>;
+		using PointType = geometry::Point<T>;
 
 		class Polygon {
 		public:

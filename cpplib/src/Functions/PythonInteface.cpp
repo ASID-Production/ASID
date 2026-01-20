@@ -1003,7 +1003,7 @@ extern "C" {
 
 	/// Args: [cell, symm, tuples, bools<int>, cutoff]
 	static PyObject* cpplib_Voronoi(PyObject* self, PyObject* args) {
-		using Diagram = cpplib::geometry::VoronoiDiagram<FloatingPointType>;
+		using Diagram = cpplib::voronoi::VoronoiDiagram<FloatingPointType>;
 
 		PyObject* ocell = NULL;
 		PyObject* osymm = NULL;
@@ -1046,7 +1046,7 @@ extern "C" {
 		auto ce = diag.extractCells();
 		deb_write("cells.size() = ", ce.size());
 		
-		cpplib::geometry::VoronoiFused<FloatingPointType> vf;
+		cpplib::voronoi::VoronoiFused<FloatingPointType> vf;
 		vf.AddCells(ce);
 		
 
@@ -1099,7 +1099,7 @@ extern "C" {
 		}
 
 
-		// Fill o_plyhedra
+		// Fill o_polyhedra
 		for (Py_ssize_t i = 0; i < vf.polyhedra.size(); i++) {
 			PyObject* polyhedra_list = PyList_New(vf.polyhedra[i].size());
 			for (Py_ssize_t j = 0; j < vf.polyhedra[i].size(); j++) {
