@@ -185,6 +185,11 @@ namespace cpplib::voronoi {
 			if (new_polygon.isConvex()) {
 				faces_.emplace_back(std::move(new_polygon));
 			}
+			else {
+				// For test purposes
+				// TODO: delete after tests
+				return;
+			}
 		}
 
 		void removeDuplicatePoints(std::vector<PointType>& points) const {
@@ -445,6 +450,8 @@ namespace cpplib::voronoi {
 
 			auto cells_s = cells.size();
 
+			vertexes.clear();
+			polygons.clear();
 			vertexes.reserve(120 * cells_s);
 			polygons.reserve(30 * cells_s);
 
@@ -495,8 +502,9 @@ namespace cpplib::voronoi {
 			auto f_It = ::std::ranges::find_if(v,
 											   [&x](const Polygon& p) {
 												   if (p.is_inner) return false;
-												   for (size_t i = 0; i < 3; i++)
-												   {
+												   if (p.vert_ids.size() != x.vert_ids.size())
+													   return false;
+												   for (size_t i = 0; i < p.vert_ids.size(); ++i) {
 													   if (p.vert_ids[i] != x.vert_ids[i])
 														   return false;
 												   }

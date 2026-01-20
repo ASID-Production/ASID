@@ -32,6 +32,7 @@
 #include <cmath>
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <numeric>
 #include <unordered_set>
 #include <utility>
@@ -62,8 +63,21 @@ namespace cpplib::cluster_detail {
 
 	using BondList = ::std::vector<BondWithShift>;
 	struct AnchorType {
-		PointType point;
-		FloatingPointType radius;
+		PointType point{};
+		FloatingPointType radius = 0.0;
+		AnchorType(const PointType& point, FloatingPointType radius) : point(point), radius(radius) {
+			constexpr auto smin = std::numeric_limits<ShiftType::value_type>::min();
+			constexpr auto smax = std::numeric_limits<ShiftType::value_type>::max();
+			if (point[0] < smin || 
+				point[1] < smin || 
+				point[2] < smin || 
+				point[0] > smax ||
+				point[1] > smax ||
+				point[2] > smax) 
+			{
+				throw std::runtime_error("Anchor point is out of bounds");
+			}
+		}
 	};
 	struct ClusterAtom {
 		AtomIndex index;

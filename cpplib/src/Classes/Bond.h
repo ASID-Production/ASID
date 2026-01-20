@@ -127,7 +127,7 @@ namespace cpplib {
 		using PointType = PT;
 
 		// Data
-		PointType shift;
+		PointType shift{};
 
 		// Operators
 		constexpr bool operator==(const BondWithPoint& other) const noexcept {
