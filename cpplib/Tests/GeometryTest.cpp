@@ -33,8 +33,8 @@
 #include <vector>
 #include <utility>
 
-#include <../../src/Classes/Geometry.h>
-#include <../../src/BaseHeaders/BaseTypes.h>
+#include "../../src/Classes/Geometry.h"
+#include "../../src/BaseHeaders/BaseTypes.h"
 #include "../../src/Classes/Voronoi.h"
 
 using namespace std;
