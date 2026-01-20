@@ -240,7 +240,7 @@ namespace cpplib::geometry {
 		template <class OT> inline Point<OT>& operator-=(const Point<OT>& right) noexcept {
 			a[0] -= static_cast<T>(right.a[0]);
 			a[1] -= static_cast<T>(right.a[1]);
-			a[2] += static_cast<T>(right.a[2]);
+			a[2] -= static_cast<T>(right.a[2]);
 			return *this;
 		}
 		inline Point& operator-=(const value_type right) noexcept {
