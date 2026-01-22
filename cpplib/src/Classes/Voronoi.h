@@ -146,7 +146,7 @@ namespace cpplib::voronoi {
 					   plane.a[2] * v1->get_point()[2] + 
 					   plane.a[3]) / denom;
 
-			assert(t <= 0.0 || t >= 1.0);
+			assert(t > 0.0 && t < 1.0);
 
 			return v1->get_point() + direction * t;
 		}
@@ -266,7 +266,7 @@ namespace cpplib::voronoi {
 				// delete vertex from set
 				std::erase_if(e->vertexes, 
 							  [](auto* ptr) {
-								  if (ptr->State == State::DELETE) {
+								  if (ptr->get_state() == State::DELETE) {
 								  	  return true;
 								  }
 								  return false;
