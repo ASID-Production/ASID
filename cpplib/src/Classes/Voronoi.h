@@ -1,10 +1,13 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <memory>
+#include <unordered_set>
 #include <utility>
-#include <vector>s
+#include <vector>
 
 #include "../BaseHeaders/BaseTypes.h"
 #include "../Classes/Bond.h"
@@ -16,57 +19,279 @@ namespace cpplib::voronoi {
 	class Face;
 	class Cell;
 
-	class Vertex {
-	public:
+	template<class T>
+	using Container = ::std::unordered_set<T>;
+
+	enum class State : char {
+		DELETE = 0,
+		VALID = 1,
+		INVALID = 2,
+		MODIFICATION = 3
+	};
+
+	struct Vertex {
 		// Types
 		using PointType = geometry::Point<basic_types::FloatingPointType>;
 
-	public:
-        // Constructors
-		constexpr Vertex() = default;
-		constexpr explicit Vertex(const PointType& p) noexcept : point(p) {
-			edges.reserve(4);
-		}
-		constexpr explicit Vertex(PointType&& p) noexcept : point(std::move(p)) {
-			edges.reserve(4);
-		}
 
-		inline void add_edge(const std::shared_ptr<Edge>& edge) {
-			edges.emplace_back(edge);
+		// Constants
+		static constexpr typename PointType::value_type COMPARISON_EPSILON = 1.0 / (1 << 16);
+
+		// Data
+		State state = State::VALID;
+		PointType point;
+
+		// Data (not owning)
+		Container<Edge*> edges;
+		Container<Face*> faces;
+
+		// Constructors
+		Vertex() = default;
+		explicit Vertex(const PointType& p) noexcept : point(p) {}
+		explicit Vertex(PointType&& p) noexcept : point(std::move(p)) {}
+
+		inline void add_edge(Edge* edge) {
+			edges.insert(edge);
 		}
 
 		// Getters
 		inline const PointType& get_point() const {
 			return point;
 		}
-		inline const std::vector<std::weak_ptr<Edge>>& get_edges() const {
+		inline const Container<Edge*>& get_edges() const {
 			return edges;
 		}
 
-	private:
-		// Data (owning)
-		PointType point;
-
-		// Data (not owning)
-		std::vector<std::weak_ptr<Edge>> edges;
-
-	};
-
-	class Edge {
-		// Data (owning)
-		std::array<std::shared_ptr<Vertex>,2> vertices;
-		// Data (not owning)
-		std::array<std::weak_ptr<Face>,2> close_faces;
-	public:
-		using ShiftType = geometry::Point<int8_t>;
+		// Special comparison
+		inline friend bool operator==(const Vertex& a, const Vertex& b) {
+			return std::abs(a.point[0] - b.point[0]) < COMPARISON_EPSILON &&
+				std::abs(a.point[1] - b.point[1]) < COMPARISON_EPSILON &&
+				std::abs(a.point[2] - b.point[2]) < COMPARISON_EPSILON;
+		}
+		inline State get_state() const noexcept {
+			return state;
+		}
+		inline void set_state(State s) noexcept {
+			state = s;
+		}
 
 	};
 
-	class Face {
+	struct Edge {
+		// Data (not owning)
+		State state = State::INVALID;
+		Container<Vertex*> vertexes; // max 2
+		Container<Face*> faces; // max 2
 
+		// Types
+		using PointType = geometry::Point<basic_types::FloatingPointType>;
+		using PlaneType = geometry::Plane<basic_types::FloatingPointType>;
+
+		inline State calculateState() noexcept {
+			const auto vs = vertexes.size();
+			const auto fs = faces.size();
+			if (vs == 2 && fs == 2) {
+				size_t counter = 0;
+				for (const auto v : vertexes)
+				{
+					auto curstate = v->get_state();
+					if (curstate == State::VALID || curstate == State::MODIFICATION)
+						counter++;
+				}
+				switch (counter) {
+					case 2:
+						state = State::VALID;
+						break;
+					case 1:
+						state = State::MODIFICATION;
+						break;
+					case 0:
+						state = State::DELETE;
+						break;
+					default:
+						// Impossible
+						break;
+				}
+			}
+			else {
+				state = State::INVALID;
+			}
+			return state;
+		}
+		inline State get_state() const noexcept {
+			return state;
+		}
+		inline void set_state(State s) noexcept {
+			state = s;
+		}
+
+		PointType intersectSegmentPlane(PlaneType plane) {
+			assert(calculateState() == State::MODIFICATION);
+			auto it = vertexes.begin();
+			auto v1 = *it;
+			it++;
+			auto v2 = *it;
+
+
+			PointType direction = v2->get_point() - v1->get_point();
+			auto normal = plane.normal();
+			auto denom = PointType::Scalar(normal, direction);
+
+			// Check that Edge is not parallel to plane
+			assert(std::abs(denom) >= 1e-6);
+
+			
+			auto t = -(plane.a[0] * v1->get_point()[0] + 
+					   plane.a[1] * v1->get_point()[1] + 
+					   plane.a[2] * v1->get_point()[2] + 
+					   plane.a[3]) / denom;
+
+			assert(t <= 0.0 || t >= 1.0);
+
+			return v1->get_point() + direction * t;
+		}
+
+	};
+
+	struct Face {
+		// Data (not owning)
+		State state = State::INVALID;
+		size_t id_owner;
+		size_t id_other;
+		Container<Vertex*> vertexes; 
+		Container<Edge*> edges; 
+
+		inline void calculateState() {
+			const auto vs = vertexes.size();
+			const auto es = edges.size();
+			if (vs ==  es) {
+				size_t counter = 0;
+				for (const auto e : edges)
+				{
+					auto estate = e->get_state();
+					if (estate == State::MODIFICATION || estate == State::VALID)
+						counter++;
+				}
+				if (counter == es) {  // All edges are VALID
+					state = State::VALID;
+				}
+				else if(counter >= 2) { // At least 2 edges are VALID or ask for MODIFICATION
+					state = State::MODIFICATION;
+				}
+				else if (counter == 1) { // ERROR STATE!!!
+					state = State::INVALID;
+				} 
+				else {
+					state = State::DELETE;
+				}
+			} else {
+				state = State::INVALID;
+			}
+		}
+		inline State get_state() const noexcept {
+			return state;
+		}
+		inline void set_state(State s) noexcept {
+			state = s;
+		}
 	};
 	class Cell {
+	public:
+		using FloatingPointType = basic_types::FloatingPointType;
+		using PointType = geometry::Point<FloatingPointType>;
+		using ShiftType = geometry::Point<int8_t>;
+		using BondWithShift = BondWithPoint<ShiftType>;
+		using PlaneType = geometry::Plane<FloatingPointType>;
 
+		static constexpr FloatingPointType limit = 2*::std::numeric_limits<FloatingPointType>::epsilon();
+		
+	private:
+		// Data (Owning)
+		Container<std::unique_ptr<Vertex>> vertexes;
+		Container<std::unique_ptr<Edge>> edges;
+		Container<std::unique_ptr<Face>> faces;
+
+		PointType center;
+		size_t id;
+
+	public:
+		Vertex* add_vertex(const PointType& p) {
+			auto temp = std::make_unique<Vertex>(p);
+			for (auto& v : vertexes) {
+				if (*v == *temp)
+					return v.get();
+			}
+			auto simple_ptr = temp.get();
+			vertexes.emplace(std::move(temp));
+			return simple_ptr;
+		}
+		void clipByPlaneAndAddNewFace(const PlaneType& clipping_plane, size_t id_of_another_cell) {
+
+			// Check if the side is correct
+			assert(clipping_plane.side(center) > 0);
+
+			// 1. Separate vertexes to sides of plane
+			for (auto& v : vertexes)
+			{
+				if (clipping_plane.side(v->get_point()) < -limit) {
+					// Point cutted off
+					v->set_state(State::DELETE);
+				} 
+				else if (clipping_plane.side(v->get_point()) < limit) {
+					// Point on the Face
+				}
+			}
+
+			// 2. Calculate States of edges and faces
+			for (auto& e : edges)
+			{
+				e->calculateState();
+			}
+			for (auto& f : faces)
+			{
+				f->calculateState();
+				assert(f->get_state() != State::INVALID);
+			}
+
+			// 3. Cut edges
+			// So we need check all Edges, which ask about MODIFICATION
+			for (auto& e : edges)
+			{
+				if (e->get_state() != State::MODIFICATION) {
+					continue;
+				}
+				auto intersection = e->intersectSegmentPlane(clipping_plane);
+				auto new_vertex_ptr = add_vertex(intersection);
+
+				// delete vertex from set
+				std::erase_if(e->vertexes, 
+							  [](auto* ptr) {
+								  if (ptr->State == State::DELETE) {
+								  	  return true;
+								  }
+								  return false;
+							  });
+				// and add new vertex to set
+				e->vertexes.insert(new_vertex_ptr);
+
+
+				new_vertex_ptr->edges.insert(e.get()); // insert this edge to set of new vertex
+				new_vertex_ptr->faces.insert(e->faces.begin(), e->faces.end()); // copy set of faces from the edge
+				new_vertex_ptr->set_state(State::MODIFICATION); // Set, that Vertex is on the NEW FACE
+
+				// Now, new vertex complete
+			}
+
+			// 4. Cut Faces, which need modification
+			// TODO: from here
+
+			// 5. Create new Face
+
+			// 6. Cleanup after modifications
+
+
+		}
+		
 	};
 
 
@@ -200,7 +425,7 @@ namespace cpplib::voronoi {
 
 		void collectIntersectionPoints(const std::vector<PointType>& vertices,
 									   const PlaneType& plane,
-									   std::vector<PointType>& intersection_points) {
+									   std::vector<PointType>& intersection_points) const {
 			const size_t n = vertices.size();
 			if (n < 3) return;
 
@@ -236,8 +461,7 @@ namespace cpplib::voronoi {
 			typename Face::PolygonType new_polygon(points, plane);
 			if (new_polygon.isConvex()) {
 				faces_.emplace_back(std::move(new_polygon));
-			}
-			else {
+			} else {
 				// For test purposes
 				// TODO: delete after tests
 				return;
@@ -569,11 +793,6 @@ namespace cpplib::voronoi {
 				v.push_back(x);
 				return v.size() - 1;
 			}
-
-
 		}
-
-
-
 	};
 }
