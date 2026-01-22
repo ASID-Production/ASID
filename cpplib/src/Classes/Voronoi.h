@@ -1,19 +1,71 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
+#include <memory>
 #include <utility>
+#include <vector>s
 
+#include "../BaseHeaders/BaseTypes.h"
 #include "../Classes/Bond.h"
 #include "../Classes/Geometry.h"
 
 namespace cpplib::voronoi {
+	class Vertex;
 	class Edge;
 	class Face;
 	class Cell;
 
+	class Vertex {
+	public:
+		// Types
+		using PointType = geometry::Point<basic_types::FloatingPointType>;
 
-	class Edge : private BondWithPoint<geometry::Point<int8_t>>{
-		// Data
+	public:
+        // Constructors
+		constexpr Vertex() = default;
+		constexpr explicit Vertex(const PointType& p) noexcept : point(p) {
+			edges.reserve(4);
+		}
+		constexpr explicit Vertex(PointType&& p) noexcept : point(std::move(p)) {
+			edges.reserve(4);
+		}
+
+		inline void add_edge(const std::shared_ptr<Edge>& edge) {
+			edges.emplace_back(edge);
+		}
+
+		// Getters
+		inline const PointType& get_point() const {
+			return point;
+		}
+		inline const std::vector<std::weak_ptr<Edge>>& get_edges() const {
+			return edges;
+		}
+
+	private:
+		// Data (owning)
+		PointType point;
+
+		// Data (not owning)
+		std::vector<std::weak_ptr<Edge>> edges;
+
+	};
+
+	class Edge {
+		// Data (owning)
+		std::array<std::shared_ptr<Vertex>,2> vertices;
+		// Data (not owning)
+		std::array<std::weak_ptr<Face>,2> close_faces;
+	public:
+		using ShiftType = geometry::Point<int8_t>;
+
+	};
+
+	class Face {
+
+	};
+	class Cell {
 
 	};
 
