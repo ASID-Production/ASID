@@ -1188,7 +1188,7 @@ namespace cpplib::geometry {
 	private:
 		static constexpr FloatingPointType modifier_ = 1.05;
 
-		static const PointType& standard_point_unpacker(const PointType& p) {
+		static inline const PointType& standard_point_unpacker(const PointType& p) {
 			return p;
 		}
 
@@ -1293,6 +1293,100 @@ namespace cpplib::geometry {
 		// Data
 		const CellType& cell_;
 		::std::array<size_t, 3> sep_;
+	};
+
+	template <class T>
+	struct SpatialGrid {
+		using ShiftType = Point<int8_t>;
+		using PointType = Point<T>;
+		using CellType = Cell<T>;
+		struct VirtualNeighbour {
+			int realCellIndex;
+			char shiftcode;
+		};
+
+		std::vector<int> pointIndices; // [N] All point indexes in cell order
+		std::vector<int> cellOffsets;    // [C+1[>] Shifts in array pointIndeces, where each cell starts
+		std::array<uint8_t, 3> gridDim = {1,1,1}; // Grid dimensions
+		std::array<uint8_t, 3> gridDimVirt = {1,1,1}; // Virtual grid dimensions
+		int numCells = 1; // number of real cells
+		int numCellsVirt = 27; // number of virtual cells
+
+		std::array<int, 13> left_cell_shifts;
+		// 2. Предрассчитанная топология
+		std::vector<std::array<int, 27>> neighborTable;
+
+		void build(const std::vector<Point<T>>& points, const CellType& cell, const T cutoff) {
+			calculateGridDim(cell, cutoff);
+
+			// Vectors preparing
+			std::vector<int> cellCount(numCells, 0);
+			cellOffsets.resize(numCells + 1, 0);
+			particleIndices.resize(points.size(), 0);
+			
+			// Шаг 1: Считаем, сколько точек в каждой ячейке
+			for (const auto& p : points) {
+				cellCounts[get_index(p.pos)]++;
+			}
+
+			// Шаг 2: Префиксная сумма (строим границы ячеек)
+			int currentOffset = 0;
+			for (int i = 0; i < numCells; ++i) {
+				cellOffsets[i] = currentOffset;
+				currentOffset += cellCounts[i];
+				cellCounts[i] = 0; // Сбрасываем для шага 3
+			}
+			cellOffsets[numCells] = currentOffset;
+
+			// Шаг 3: Заполняем индексы подряд
+			for (int i = 0; i < points.size(); ++i) {
+				int cIdx = get_index(points[i].pos);
+				int destPos = cellOffsets[cIdx] + cellCounts[cIdx];
+				particleIndices[destPos] = i;
+				cellCounts[cIdx]++;
+			}
+		}
+		static constexpr char compress_shift(ShiftType s) {
+			return (s[0] + 1) +
+				   (s[1] + 1) * 3 +
+				   (s[2] + 1) * 9;
+		}
+		static constexpr char inverse_code(char code) {
+			return 26 - code;
+		}
+		static constexpr std::array<ShiftType, 27> shiftTable{{
+        	{-1, -1, -1}, { 0, -1, -1}, { 1, -1, -1}, // code 0, 1, 2
+        	{-1,  0, -1}, { 0,  0, -1}, { 1,  0, -1}, // code 3, 4, 5
+        	{-1,  1, -1}, { 0,  1, -1}, { 1,  1, -1}, // code 6, 7, 8
+
+        	{-1, -1,  0}, { 0, -1,  0}, { 1, -1,  0}, // code 9, 10, 11
+        	{-1,  0,  0}, { 0,  0,  0}, { 1,  0,  0}, // code 12, 13 (Center), 14
+        	{-1,  1,  0}, { 0,  1,  0}, { 1,  1,  0}, // code 15, 16, 17
+
+        	{-1, -1,  1}, { 0, -1,  1}, { 1, -1,  1}, // code 18, 19, 20
+        	{-1,  0,  1}, { 0,  0,  1}, { 1,  0,  1}, // code 21, 22, 23
+        	{-1,  1,  1}, { 0,  1,  1}, { 1,  1,  1}  // code 24, 25, 26
+        }};
+
+		static constexpr const ShiftType& decompress_shift(char code) {
+			return shiftTable[code];
+		}
+
+		constexpr void calculateGridDim(const CellType& cell, T cutoff) {
+			for (uint8_t i = 0; i < 3; i++) {
+				gridDim[i] = static_cast<uint8_t>(std::floor(cell.lat_dir(i) / cutoff));
+				if (gridDim[i] == 0) gridDim[i] = 1;
+				gridDimVirt[i] = gridDim[i] + 2;
+			}
+			numCells = gridDim[0] * gridDim[1] * gridDim[2];
+			numCellsVirt = gridDimVirt[0] * gridDimVirt[1] * gridDimVirt[2];
+		}
+		int get_cell_index(const Point& p) const {
+			auto ix = static_cast<int>(p[0] * gridDim[0]);
+			auto iy = static_cast<int>(p[1] * gridDim[1]);
+			auto iz = static_cast<int>(p[2] * gridDim[2]);
+			return ix + iy * gridDim[0] + iz * gridDim[0] * gridDim[1];
+		}
 	};
 
 } // namespace cpplib::geometry
