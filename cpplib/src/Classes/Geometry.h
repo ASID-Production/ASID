@@ -29,6 +29,7 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
+#include <cmath>
 #include <concepts>
 #include <cstdint>
 #include <optional>
@@ -1301,49 +1302,50 @@ namespace cpplib::geometry {
 		using PointType = Point<T>;
 		using CellType = Cell<T>;
 		struct VirtualNeighbour {
-			int realCellIndex;
+			int realBoxIndex;
 			char shiftcode;
 		};
 
-		std::vector<int> pointIndices; // [N] All point indexes in cell order
-		std::vector<int> cellOffsets;    // [C+1[>] Shifts in array pointIndeces, where each cell starts
+		std::vector<int> pointIndices; // [N] All point indexes in box order
+		std::vector<int> boxOffsets;    // [C+1[>] Shifts in array pointIndeces, where each box starts
 		std::array<uint8_t, 3> gridDim = {1,1,1}; // Grid dimensions
 		std::array<uint8_t, 3> gridDimVirt = {1,1,1}; // Virtual grid dimensions
-		int numCells = 1; // number of real cells
-		int numCellsVirt = 27; // number of virtual cells
+		int numBoxes = 1; // number of real boxes
+		int numBoxesVirt = 27; // number of virtual boxes
 
-		std::array<int, 13> left_cell_shifts;
-		// 2. Предрассчитанная топология
+		std::array<int, 13> left_boxes_shifts;
+		std::array<int, 13> right_boxes_shifts;
+
 		std::vector<std::array<int, 27>> neighborTable;
 
 		void build(const std::vector<Point<T>>& points, const CellType& cell, const T cutoff) {
 			calculateGridDim(cell, cutoff);
 
 			// Vectors preparing
-			std::vector<int> cellCount(numCells, 0);
-			cellOffsets.resize(numCells + 1, 0);
-			particleIndices.resize(points.size(), 0);
+			std::vector<int> boxCount(numBoxes, 0);
+			boxOffsets.resize(numBoxes + 1, 0);
+			pointIndices.resize(points.size(), 0);
 			
-			// Шаг 1: Считаем, сколько точек в каждой ячейке
+			// Counting atoms in boxes
 			for (const auto& p : points) {
-				cellCounts[get_index(p.pos)]++;
+				boxOffsets[get_box_index(p)]++;
 			}
 
-			// Шаг 2: Префиксная сумма (строим границы ячеек)
+			// Construct boxOffsets
 			int currentOffset = 0;
-			for (int i = 0; i < numCells; ++i) {
-				cellOffsets[i] = currentOffset;
-				currentOffset += cellCounts[i];
-				cellCounts[i] = 0; // Сбрасываем для шага 3
+			for (int i = 0; i < numBoxes; ++i) {
+				boxOffsets[i] = currentOffset;
+				currentOffset += boxCount[i];
+				boxCount[i] = 0;
 			}
-			cellOffsets[numCells] = currentOffset;
+			boxOffsets[numBoxes] = currentOffset;
 
-			// Шаг 3: Заполняем индексы подряд
+			// Fill pointIndices
 			for (int i = 0; i < points.size(); ++i) {
-				int cIdx = get_index(points[i].pos);
-				int destPos = cellOffsets[cIdx] + cellCounts[cIdx];
-				particleIndices[destPos] = i;
-				cellCounts[cIdx]++;
+				int cIdx = get_box_index(points[i]);
+				int destPos = boxOffsets[cIdx] + boxCount[cIdx];
+				pointIndices[destPos] = i;
+				boxCount[cIdx]++;
 			}
 		}
 		static constexpr char compress_shift(ShiftType s) {
@@ -1378,10 +1380,10 @@ namespace cpplib::geometry {
 				if (gridDim[i] == 0) gridDim[i] = 1;
 				gridDimVirt[i] = gridDim[i] + 2;
 			}
-			numCells = gridDim[0] * gridDim[1] * gridDim[2];
-			numCellsVirt = gridDimVirt[0] * gridDimVirt[1] * gridDimVirt[2];
+			numBoxes = gridDim[0] * gridDim[1] * gridDim[2];
+			numBoxesVirt = gridDimVirt[0] * gridDimVirt[1] * gridDimVirt[2];
 		}
-		int get_cell_index(const Point& p) const {
+		int get_box_index(const PointType& p) const {
 			auto ix = static_cast<int>(p[0] * gridDim[0]);
 			auto iy = static_cast<int>(p[1] * gridDim[1]);
 			auto iz = static_cast<int>(p[2] * gridDim[2]);
