@@ -1351,7 +1351,7 @@ namespace cpplib::geometry {
 			pointIndices.resize(points.size(), 0);
 
 			// Count atoms in virtual boxes
-			for (int i = 0; i < points.size(); i++) {
+			for (size_t i = 0; i < points.size(); i++) {
 				auto temp = get_virtual_box_index(points[i]);
 				temp_virt_box_IDx[i] = temp;
 				virtBoxCount[temp]++;
