@@ -618,8 +618,8 @@ namespace cpplib::voronoi {
 		using PointType = geometry::Point<T>;
 		using VoronCell = VoronoiCell<T>;
 
-		template <class AI>
-		using BondList = ::std::vector<::std::pair<AI, AI>>;
+		template <BondConcept BondType>
+		using BondList = ::std::vector<BondType>;
 		using PointVector = ::std::vector<PointType>;
 		using CellVector = ::std::vector<VoronCell>;
 		using BoolVector = ::std::vector<bool>;
@@ -660,8 +660,8 @@ namespace cpplib::voronoi {
 			state = State::Cubic_cells;
 		}
 
-		template <class AI>
-		int calculateFaces(const BondList<AI>& bonds) noexcept {
+		template <BondConcept BondType>
+		int calculateFaces(const BondList<BondType>& bonds) noexcept {
 			if (state == State::Uninitialized)
 				return 1; // Error: VoronoiDiagram not initialized
 			for (auto& bond : bonds) {

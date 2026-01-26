@@ -856,8 +856,9 @@ TEST_F(VoronoiTest, AlexTest) {
                                                                false, false, false, false, 
                                                                false, false, false, false};
     VoronoiDiagram<FloatingPointType> vd(data, bools);
-    geometry::HashedSpace<FloatingPointType, AtomIndex> hs(cell, 6.0);
-    auto bonds = hs.create_hash_bonds<std::pair<AtomIndex, AtomIndex>>(data);
+	geometry::SpatialGrid<FloatingPointType> sp;
+	sp.build(data,cell, 6.0);
+	auto bonds = sp.get_bonds();
     vd.calculateFaces(bonds);
     auto cells = vd.extractCells();
     for (const auto& c : cells) {
@@ -950,7 +951,7 @@ TEST_F(VoronoiTest, DiagramOperations) {
 		{3,4}
 	};
 
-	vd.calculateFaces<int>(bondlist);
+	vd.calculateFaces(bondlist);
 	cells = vd.extractCells();
 
 	for (const auto& cell : cells) {
@@ -966,8 +967,9 @@ TEST_F(VoronoiTest, SpecializedOperations) {
     geometry::Cell<FloatingPointType> cell(10, 10, 10, 90, 90, 120, true);
     FloatingPointType diagonal = vd.calculateLongestDiagonal(cell.fracToCart());
     EXPECT_GT(diagonal, 0.0);
-	geometry::HashedSpace<FloatingPointType,AtomIndex> hs(cell, diagonal);
-    auto bonds = hs.create_hash_bonds<std::pair<AtomIndex,AtomIndex>>(points);
+	geometry::SpatialGrid<FloatingPointType> sg;
+	sg.build(points, cell, diagonal);
+    auto bonds = sg.get_bonds();
     vd.calculateFaces(bonds);
     
 

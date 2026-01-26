@@ -475,14 +475,13 @@ std::tuple<std::vector<cpplib::geometry::Point<FloatingPointType>>, std::list<st
 	return std::make_tuple(std::move(compaqed), res_errors);
 }
 
-std::vector<Cluster::ClusterAtom>
-ClusterCreate(std::array<cpplib::basic_types::FloatingPointType, 6> unit_cell,
-			  const std::vector<const char*>& symm,
-			  cpplib::FAM_Struct::AtomContainerType& types,
-			  cpplib::FAM_Struct::PointConteinerType& points,
-			  std::vector<cpplib::Cluster::AnchorType>& anchors,
-			  cpplib::basic_types::FloatingPointType polymer_cutoff,
-			  bool& hasPolymer) {
+Cluster::ClusterData ClusterCreate(std::array<cpplib::basic_types::FloatingPointType, 6> unit_cell,
+			                       const std::vector<const char*>& symm,
+			                       cpplib::FAM_Struct::AtomContainerType& types,
+			                       cpplib::FAM_Struct::PointConteinerType& points,
+			                       std::vector<cpplib::Cluster::AnchorType>& anchors,
+			                       cpplib::basic_types::FloatingPointType polymer_cutoff,
+			                       bool& hasPolymer) {
 	deb_write("ClusterCreate invoked");
 
 	using ShiftType = Cluster::ShiftType;
@@ -506,10 +505,6 @@ ClusterCreate(std::array<cpplib::basic_types::FloatingPointType, 6> unit_cell,
 	Cluster cluster(cell, symms, std::move(anchors), std::move(points), std::move(types), polymer_cutoff);
 
 	auto ret = cluster.execute(distances);
-
-	//for (auto& i : ret) {
-	//	i.point = cell.fracToCart() * i.point;
-	//}
 
 	deb_write("ClusterCreate return");
 	return ret;

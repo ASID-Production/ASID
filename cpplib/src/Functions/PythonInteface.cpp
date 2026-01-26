@@ -1036,12 +1036,13 @@ extern "C" {
 
 		bools.resize(all.points.size(), false);
 
-		cpplib::geometry::HashedSpace<FloatingPointType, long> space(fcell, cutoff);
-		auto bonds = space.create_hash_bonds<::std::pair<long, long>>(all.points);
+		cpplib::geometry::SpatialGrid<FloatingPointType> space;
+		space.build(all.points,fcell, cutoff);
+		auto bonds = space.get_bonds();
 
 		Diagram diag;
 		diag.addPoints(all.points, bools);
-		diag.calculateFaces<long>(bonds);
+		diag.calculateFaces(bonds);
 
 		auto ce = diag.extractCells();
 		deb_write("cells.size() = ", ce.size());

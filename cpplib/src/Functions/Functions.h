@@ -96,7 +96,7 @@ std::tuple<std::vector<cpplib::geometry::Point<cpplib::basic_types::FloatingPoin
 												cpplib::FAM_Struct::AtomContainerType& types,
 												cpplib::FAM_Struct::PointConteinerType& points);
 
-std::vector<cpplib::Cluster::ClusterAtom> ClusterCreate(std::array<cpplib::basic_types::FloatingPointType, 6> unit_cell,
+cpplib::cluster_detail::ClusterData ClusterCreate(std::array<cpplib::basic_types::FloatingPointType, 6> unit_cell,
 														const std::vector<const char*>& symm,
 														cpplib::FAM_Struct::AtomContainerType& types,
 														cpplib::FAM_Struct::PointConteinerType& points,

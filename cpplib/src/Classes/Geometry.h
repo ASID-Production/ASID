@@ -1069,7 +1069,7 @@ namespace cpplib::geometry {
 			int lower = 1;
 			for (; iter < len; iter++)
 			{
-				if (str[iter] < '0' || str[iter] > '9')
+				if (str[iter] < '0' || str[iter] > '9') {
 					switch (str[iter]) {
 						case '.':
 							dot = true;
@@ -1086,210 +1086,23 @@ namespace cpplib::geometry {
 						default:
 							// unexpected symbol
 							break;
-					} else {
-						int num = (str[iter] - '0');
-						if (dot) {
-							upper = upper * 10 + num;
-							lower *= 10;
-						} else if (slash) {
-							lower = lower * 10 + num;
-						} else {
-							upper = upper * 10 + num;
-						}
 					}
+				} else {
+					int num = (str[iter] - '0');
+					if (dot) {
+						upper = upper * 10 + num;
+						lower *= 10;
+					} else if (slash) {
+						lower = lower * 10 + num;
+					} else {
+						upper = upper * 10 + num;
+					}
+				}
+				
 			}
 			iter--;
 			return upper / static_cast<T>(lower);
 		}
-	};
-
-	template<class T, class AI>
-	class HashedSpace {
-	public:
-		using AtomIndex = AI;
-		using FloatingPointType = T;
-		using PointType = Point<T>;
-		using CellType = Cell<T>;
-		using DimentionType = unsigned char;
-
-		using SupListType = ::std::list<AtomIndex>;
-		using SupType = ::std::vector<::std::vector<::std::vector<SupListType>>>;
-		using SupPoint = geometry::Point<size_t>;
-
-		/// <summary>
-		/// Constructor
-		/// </summary>
-		/// <param name="cell"> - Unit cell</param>
-		/// <param name="maxbond"> - calculated in Distances</param>
-		constexpr HashedSpace(const CellType& cell, FloatingPointType maxbond) noexcept :
-			cell_(cell) {
-			calculateSep(maxbond);
-		}
-
-		/// <summary>
-		/// Constant function to estimate theoretic effectivness of HashedSpace
-		/// </summary>
-		/// <returns>true if effective</returns>
-		constexpr bool is_effective() const noexcept {
-			return sep_[0] > 3 || sep_[1] > 3 || sep_[2] > 3;
-		}
-
-		/// <summary>
-		/// Creates theoretical overestimated vector of Bonds
-		/// </summary>
-		/// <param name="points"> - vector of Points</param>
-		/// <returns>vector with all bonds in boxes and between adjacent ones</returns>
-		template<BondConcept BondType, typename ExtendedPointType>
-		::std::vector<BondType> create_hash_bonds(const ::std::vector<ExtendedPointType>& points,
-												  std::function<const PointType& (const ExtendedPointType&)> func = standard_point_unpacker) const {
-			::std::vector<BondType> ret;
-			if (is_effective() == false) {
-				// use standard algorithm
-				ret.reserve((points.size() * (points.size() + 1)) >> 1);
-				for (size_t i = 0; i < points.size(); i++)
-				{
-					for (size_t j = i + 1; j < points.size(); j++)
-					{
-						ret.emplace_back(i, j);
-					}
-				}
-				return ret;
-			}
-			size_t estimated_size = points.size() * points.size() * sizemod();
-			ret.reserve(estimated_size);
-			SupType supply_table(sep_[0],
-								 typename SupType::value_type(sep_[1],
-															  typename SupType::value_type::value_type(sep_[2])));
-
-			// Fill supply_table
-			for (AtomIndex i = 0; i < points.size(); i++)
-			{
-				auto p = func(points[i]);
-				p.MoveToCell();
-				auto c = coordinate_of_point(func(points[i]));
-
-				supply_table[c[0]][c[1]][c[2]].emplace_back(i);
-			}
-
-			// Create all bonds
-			for (size_t i = 0; i < sep_[0]; i++) {
-				for (size_t j = 0; j < sep_[1]; j++) {
-					for (size_t k = 0; k < sep_[2]; k++) {
-						box_working(ret, supply_table, i, j, k);
-					}
-				}
-			}
-			return ret;
-		}
-
-	private:
-		static constexpr FloatingPointType modifier_ = 1.05;
-
-		static inline const PointType& standard_point_unpacker(const PointType& p) {
-			return p;
-		}
-
-		template<BondConcept BondType>
-		void box_working(::std::vector<BondType>& ret, const SupType& supply_table, size_t i, size_t j, size_t k) const {
-			create_bonds_in_box(ret, supply_table[i][j][k]);
-
-			bool is_x = sep_[0] != 1;
-			bool is_y = sep_[1] != 1;
-			bool is_z = sep_[2] != 1;
-
-			auto dx = (i + 1 == sep_[0])?0:i + 1;
-			auto dy = (j + 1 == sep_[1])?0:j + 1;
-			auto dz = (k + 1 == sep_[2])?0:k + 1;
-
-			// dx
-			if (is_x) {
-				create_bonds_between_boxes(ret, supply_table[i][j][k], supply_table[dx][j][k]);
-			}
-			// dy
-			if (is_y) {
-				create_bonds_between_boxes(ret, supply_table[i][j][k], supply_table[i][dy][k]);
-			}
-			// dz
-			if (is_z) {
-				create_bonds_between_boxes(ret, supply_table[i][j][k], supply_table[i][j][dz]);
-			}
-
-			// dxdy
-			if (is_x && is_y) {
-				create_bonds_between_boxes(ret, supply_table[i][j][k], supply_table[dx][dy][k]);
-			}
-			// dxdz
-			if (is_x && is_z) {
-				create_bonds_between_boxes(ret, supply_table[i][j][k], supply_table[dx][j][dz]);
-			}
-			// dydz
-			if (is_y && is_z) {
-				create_bonds_between_boxes(ret, supply_table[i][j][k], supply_table[i][dy][dz]);
-			}
-
-			// dxdydz
-			if (is_x && is_y && is_z) {
-				create_bonds_between_boxes(ret, supply_table[i][j][k], supply_table[dx][dy][dz]);
-			}
-		}
-		template<BondConcept BondType>
-		void create_bonds_in_box(::std::vector<BondType>& ret, const SupListType& l) const {
-			for (auto iter1 = l.begin(); iter1 != l.end(); iter1++)
-			{
-				auto iter2 = iter1;
-				iter2++;
-				for (; iter2 != l.end(); iter2++)
-				{
-					ret.emplace_back(*iter1, *iter2);
-				}
-			}
-		}
-		template<BondConcept BondType>
-		void create_bonds_between_boxes(::std::vector<BondType>& ret, const SupListType& l1, const SupListType& l2) const {
-			for (auto v1 : l1)
-			{
-				for (auto v2 : l2)
-				{
-					if (v2 > v1) {
-						ret.emplace_back(v1, v2);
-					} else {
-						ret.emplace_back(v2, v1);
-					}
-				}
-			}
-		}
-
-		constexpr SupPoint coordinate_of_point(const PointType& p) const noexcept {
-			return {
-				static_cast<size_t>(std::floor(p[0] * sep_[0])),
-				static_cast<size_t>(std::floor(p[1] * sep_[1])),
-				static_cast<size_t>(std::floor(p[2] * sep_[2]))
-			};
-		}
-		constexpr FloatingPointType sizemod() const noexcept {
-			FloatingPointType ret = 1;
-			for (DimentionType i = 0; i < 3; i++)
-			{
-				if (sep_[i] > 3) {
-					ret *= 3;
-					ret /= sep_[i];
-					ret *= modifier_;
-				}
-			}
-			return ret;
-		}
-		constexpr void calculateSep(FloatingPointType maxbond) {
-			maxbond *= modifier_;
-			for (DimentionType i = 0; i < 3; i++) {
-				sep_[i] = static_cast<size_t>(floor(cell_.lat_dir(i) / maxbond));
-				if (sep_[i] == 0) sep_[i] = 1;
-			}
-		}
-
-	private:
-		// Data
-		const CellType& cell_;
-		::std::array<size_t, 3> sep_;
 	};
 
 	template <class T>
@@ -1401,7 +1214,7 @@ namespace cpplib::geometry {
 			for (int rz = 0; rz < gridDim[2]; ++rz) {
 				for (int ry = 0; ry < gridDim[1]; ++ry) {
 					for (int rx = 0; rx < gridDim[0]; ++rx) {
-						process_box_bonds<BondWithShift>(rx, ry, rz, bonds, double_sided);
+						process_box_bonds(rx, ry, rz, bonds, double_sided);
 					}
 				}
 			}
@@ -1480,48 +1293,50 @@ namespace cpplib::geometry {
 			}
 		}
 
-		template<BondConcept BondType>
-		void process_box_bonds(int rx, int ry, int rz, std::vector<BondType>& bonds, bool double_sided) {
+		
+		void process_box_bonds(int rx, int ry, int rz, std::vector<BondWithShift>& bonds, bool double_sided) {
 			// Current box in virtual grid (center of the 3x3x3 neighborhood)
 			int vIdx = get_box_by_index(rx + 1, ry + 1, rz + 1, gridDimVirt);
+			int rIdx = get_box_by_index(rx, ry, rz, gridDim);
 
-			int start_a = boxOffsets[vIdx];
-			int end_a = boxOffsets[vIdx + 1];
+			int start_a = realBoxOffsets[rIdx];
+			int end_a = realBoxOffsets[rIdx + 1];
 
 			// 1. Internal bonds: Shift code is always 13 (0,0,0)
 			for (int i = start_a; i < end_a; ++i) {
 				for (int j = i + 1; j < end_a; ++j) {
-					add_bond_pair<BondType>(pointIndices[i], pointIndices[j], 13, bonds, double_sided);
+					add_bond_pair(pointIndices[i], pointIndices[j], 13, bonds, double_sided);
 				}
 			}
 
 			// 2. External bonds: Get shift code from the neighbor's virtual mapping
 			for (int s = 0; s < 13; ++s) {
 				int neighborVIdx = vIdx + left_boxes_shifts[s];
+				int neighborRIdx = virtMap[neighborVIdx].realBoxIndex;
 
 				// The shiftcode is stored in virtMap for each virtual cell
 				char sCode = virtMap[neighborVIdx].shiftcode;
 
-				int start_b = boxOffsets[neighborVIdx];
-				int end_b = boxOffsets[neighborVIdx + 1];
+
+				int start_b = realBoxOffsets[neighborRIdx];
+				int end_b = realBoxOffsets[neighborRIdx + 1];
 
 				for (int i = start_a; i < end_a; ++i) {
 					for (int j = start_b; j < end_b; ++j) {
-						add_bond_pair<BondType>(pointIndices[i], pointIndices[j], sCode, bonds, double_sided);
+						add_bond_pair(pointIndices[i], pointIndices[j], sCode, bonds, double_sided);
 					}
 				}
 			}
 		}
 
-		template<BondConcept BondType>
-		inline void add_bond_pair(int idxA, int idxB, char shiftCode, std::vector<BondType>& bonds, bool double_sided) {
+		inline void add_bond_pair(int idxA, int idxB, char shiftCode, std::vector<BondWithShift>& bonds, bool double_sided) const {
 			// Basic bond a -> b
-			bonds.push_back(BondType{idxA, idxB, shiftCode});
+			bonds.push_back(BondWithShift{idxA, idxB, shiftCode});
 
 			if (double_sided) {
 				// Inverse bond b -> a
 				// The shift for the opposite direction must be inverted
-				bonds.push_back(BondType{idxB, idxA, inverse_code(shiftCode)});
+				bonds.push_back(BondWithShift{idxB, idxA, inverse_code(shiftCode)});
 			}
 		}
 
