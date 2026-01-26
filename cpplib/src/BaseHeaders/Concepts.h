@@ -10,18 +10,12 @@ namespace cpplib {
     namespace concept_support {
         template<typename T>
         constexpr auto getAtom1(const T& bond) {
-            if constexpr (requires { bond.atom1; }) return bond.atom1;
-            else if constexpr (requires { bond.first; }) return bond.first;
-            else if constexpr (requires { bond.first(); }) return bond.first();
-            else if constexpr (requires { bond.getFirstAtom(); }) return bond.getFirstAtom();
+            if constexpr (requires { bond.first; }) return bond.first;
         }
 
         template<typename T>
         constexpr auto getAtom2(const T& bond) {
-            if constexpr (requires { bond.atom2; }) return bond.atom2;
-            else if constexpr (requires { bond.second; }) return bond.second;
-            else if constexpr (requires { bond.second(); }) return bond.second();
-            else if constexpr (requires { bond.getSecondAtom(); }) return bond.getSecondAtom();
+            if constexpr (requires { bond.second; }) return bond.second;
         }
     }
     template<typename T>
