@@ -1301,93 +1301,262 @@ namespace cpplib::geometry {
 		using ShiftType = Point<int8_t>;
 		using PointType = Point<T>;
 		using CellType = Cell<T>;
+		struct BondWithShift {
+			int first = 0;
+			int second = 0;
+			char shiftcode = 13;
+			BondWithShift() = default;
+			BondWithShift(int a, int b)
+				: first(a), second(b) {}
+			BondWithShift(int a, int b, char scode)
+				: first(a), second(b), shiftcode(scode) {}
+
+		};
+
 		struct VirtualNeighbour {
 			int realBoxIndex;
 			char shiftcode;
 		};
 
-		std::vector<int> pointIndices; // [N] All point indexes in box order
-		std::vector<int> boxOffsets;    // [C+1[>] Shifts in array pointIndeces, where each box starts
-		std::array<uint8_t, 3> gridDim = {1,1,1}; // Grid dimensions
-		std::array<uint8_t, 3> gridDimVirt = {1,1,1}; // Virtual grid dimensions
-		int numBoxes = 1; // number of real boxes
-		int numBoxesVirt = 27; // number of virtual boxes
+		std::vector<int> pointIndices;          // [N] All point indices in box order
+		std::vector<int> boxOffsets;            // [C+1] Offsets in pointIndices array where each virtual box starts
+		std::vector<int> realBoxOffsets;        // [C_real+1] Offsets for real boxes
+		std::vector<VirtualNeighbour> virtMap;  // Mapping from virtual box to real box
+
+		std::array<uint8_t, 3> gridDim = {1,1,1};      // Real grid dimensions
+		std::array<uint8_t, 3> gridDimVirt = {1,1,1};  // Virtual grid dimensions
+		int numBoxes = 1;       // number of real boxes
+		int numBoxesVirt = 1;   // number of virtual boxes
 
 		std::array<int, 13> left_boxes_shifts;
-		std::array<int, 13> right_boxes_shifts;
-
-		std::vector<std::array<int, 27>> neighborTable;
 
 		void build(const std::vector<Point<T>>& points, const CellType& cell, const T cutoff) {
+			// Calculate grid dimensions
 			calculateGridDim(cell, cutoff);
 
-			// Vectors preparing
-			std::vector<int> boxCount(numBoxes, 0);
-			boxOffsets.resize(numBoxes + 1, 0);
+			// Prepare vectors
+			std::vector<int> realBoxCount(numBoxes, 0);
+			std::vector<int> virtBoxCount(numBoxesVirt, 0);
+			realBoxOffsets.resize(numBoxes + 1, 0);
+			boxOffsets.resize(numBoxesVirt + 1, 0);
+
+			// Initialize virtual box mapping
+			virtMap.resize(numBoxesVirt);
+
+			// Build virtual-to-real mapping with periodic boundary conditions
+			build_virtual_mapping();
+
+			// Temporary array for storing point-to-virtual-box assignment
+			std::vector<int> temp_virt_box_IDx(points.size(), 0);
 			pointIndices.resize(points.size(), 0);
-			
-			// Counting atoms in boxes
-			for (const auto& p : points) {
-				boxOffsets[get_box_index(p)]++;
+
+			// Count atoms in virtual boxes
+			for (int i = 0; i < points.size(); i++) {
+				auto temp = get_virtual_box_index(points[i]);
+				temp_virt_box_IDx[i] = temp;
+				virtBoxCount[temp]++;
+
+				// Also count for real boxes (for fast access)
+				realBoxCount[get_real_box_index(points[i])]++;
 			}
 
-			// Construct boxOffsets
+			// Build offsets for virtual boxes
 			int currentOffset = 0;
-			for (int i = 0; i < numBoxes; ++i) {
+			for (int i = 0; i < numBoxesVirt; i++) {
 				boxOffsets[i] = currentOffset;
-				currentOffset += boxCount[i];
-				boxCount[i] = 0;
+				currentOffset += virtBoxCount[i];
+				virtBoxCount[i] = 0;  // Reset for filling
 			}
-			boxOffsets[numBoxes] = currentOffset;
+			boxOffsets[numBoxesVirt] = currentOffset;
 
-			// Fill pointIndices
-			for (int i = 0; i < points.size(); ++i) {
-				int cIdx = get_box_index(points[i]);
-				int destPos = boxOffsets[cIdx] + boxCount[cIdx];
+			// Build offsets for real boxes
+			currentOffset = 0;
+			for (int i = 0; i < numBoxes; i++) {
+				realBoxOffsets[i] = currentOffset;
+				currentOffset += realBoxCount[i];
+			}
+			realBoxOffsets[numBoxes] = currentOffset;
+
+			// Fill pointIndices in virtual box order
+			for (int i = 0; i < points.size(); i++) {
+				int vIdx = temp_virt_box_IDx[i];
+				int destPos = boxOffsets[vIdx] + virtBoxCount[vIdx];
 				pointIndices[destPos] = i;
-				boxCount[cIdx]++;
+				virtBoxCount[vIdx]++;
+			}
+
+			// Calculate shifts for 13 left boxes
+			auto baseshift = get_box_by_index(1, 1, 1, gridDimVirt);
+			for (int i = 0; i < 13; i++) {
+				auto temp = get_box_by_index(shiftTable[i][0] + 1,
+											 shiftTable[i][1] + 1,
+											 shiftTable[i][2] + 1,
+											 gridDimVirt);
+				left_boxes_shifts[i] = temp - baseshift;
 			}
 		}
+		
+		std::vector<BondWithShift> get_bonds(bool double_sided = false) {
+			std::vector<BondWithShift> bonds;
+			// Preliminary memory reservation to reduce reallocations
+			bonds.reserve(pointIndices.size() * (double_sided?26:13));
+
+			// Iterate through real grid dimensions
+			for (int rz = 0; rz < gridDim[2]; ++rz) {
+				for (int ry = 0; ry < gridDim[1]; ++ry) {
+					for (int rx = 0; rx < gridDim[0]; ++rx) {
+						process_box_bonds<BondWithShift>(rx, ry, rz, bonds, double_sided);
+					}
+				}
+			}
+			return bonds;
+		}
+
+
 		static constexpr char compress_shift(ShiftType s) {
 			return (s[0] + 1) +
-				   (s[1] + 1) * 3 +
-				   (s[2] + 1) * 9;
+				(s[1] + 1) * 3 +
+				(s[2] + 1) * 9;
 		}
+
 		static constexpr char inverse_code(char code) {
 			return 26 - code;
 		}
-		static constexpr std::array<ShiftType, 27> shiftTable{{
-        	{-1, -1, -1}, { 0, -1, -1}, { 1, -1, -1}, // code 0, 1, 2
-        	{-1,  0, -1}, { 0,  0, -1}, { 1,  0, -1}, // code 3, 4, 5
-        	{-1,  1, -1}, { 0,  1, -1}, { 1,  1, -1}, // code 6, 7, 8
 
-        	{-1, -1,  0}, { 0, -1,  0}, { 1, -1,  0}, // code 9, 10, 11
-        	{-1,  0,  0}, { 0,  0,  0}, { 1,  0,  0}, // code 12, 13 (Center), 14
-        	{-1,  1,  0}, { 0,  1,  0}, { 1,  1,  0}, // code 15, 16, 17
+		static constexpr std::array<ShiftType, 27> shiftTable = {{
+			{-1, -1, -1}, { 0, -1, -1}, { 1, -1, -1}, // code 0, 1, 2
+			{-1,  0, -1}, { 0,  0, -1}, { 1,  0, -1}, // code 3, 4, 5
+			{-1,  1, -1}, { 0,  1, -1}, { 1,  1, -1}, // code 6, 7, 8
 
-        	{-1, -1,  1}, { 0, -1,  1}, { 1, -1,  1}, // code 18, 19, 20
-        	{-1,  0,  1}, { 0,  0,  1}, { 1,  0,  1}, // code 21, 22, 23
-        	{-1,  1,  1}, { 0,  1,  1}, { 1,  1,  1}  // code 24, 25, 26
-        }};
+			{-1, -1,  0}, { 0, -1,  0}, { 1, -1,  0}, // code 9, 10, 11
+			{-1,  0,  0}, { 0,  0,  0}, { 1,  0,  0}, // code 12, 13 (Center), 14
+			{-1,  1,  0}, { 0,  1,  0}, { 1,  1,  0}, // code 15, 16, 17
+
+			{-1, -1,  1}, { 0, -1,  1}, { 1, -1,  1}, // code 18, 19, 20
+			{-1,  0,  1}, { 0,  0,  1}, { 1,  0,  1}, // code 21, 22, 23
+			{-1,  1,  1}, { 0,  1,  1}, { 1,  1,  1}  // code 24, 25, 26
+		}};
 
 		static constexpr const ShiftType& decompress_shift(char code) {
 			return shiftTable[code];
+		}
+
+
+	private:
+		// Build virtual box mapping
+		void build_virtual_mapping() {
+			const int virtDimX = gridDimVirt[0];
+			const int virtDimY = gridDimVirt[1];
+			const int virtDimXY = virtDimX * virtDimY;
+
+			for (int virtIdx = 0; virtIdx < numBoxesVirt; virtIdx++) {
+				// Decompose linear index
+				std::array<int, 3> v;
+				v[2] = virtIdx / virtDimXY;
+				v[1] = (virtIdx % virtDimXY) / virtDimX;
+				v[0] = virtIdx % virtDimX;
+
+				// Map virtual coordinates to real coordinates
+				std::array<int, 3> r;
+				ShiftType s(0, 0, 0);
+
+				for (char j = 0; j < 3; j++)
+				{
+					const int dim = gridDim[j];
+					r[j] = v[j] - 1;
+					if (r[j] < 0) {
+						s[j] = -1;
+						r[j] += dim;
+					} else if (r[j] >= dim) {
+						r[j] -= dim;
+						s[j] = 1;
+					}
+
+				}
+
+				// Calculate real box index				
+				int realIdx = get_box_by_index(r[0], r[1], r[2], gridDim);
+
+				virtMap[virtIdx] = {
+					.realBoxIndex = realIdx,
+					.shiftcode = compress_shift(s)
+				};
+			}
+		}
+
+		template<BondConcept BondType>
+		void process_box_bonds(int rx, int ry, int rz, std::vector<BondType>& bonds, bool double_sided) {
+			// Current box in virtual grid (center of the 3x3x3 neighborhood)
+			int vIdx = get_box_by_index(rx + 1, ry + 1, rz + 1, gridDimVirt);
+
+			int start_a = boxOffsets[vIdx];
+			int end_a = boxOffsets[vIdx + 1];
+
+			// 1. Internal bonds: Shift code is always 13 (0,0,0)
+			for (int i = start_a; i < end_a; ++i) {
+				for (int j = i + 1; j < end_a; ++j) {
+					add_bond_pair<BondType>(pointIndices[i], pointIndices[j], 13, bonds, double_sided);
+				}
+			}
+
+			// 2. External bonds: Get shift code from the neighbor's virtual mapping
+			for (int s = 0; s < 13; ++s) {
+				int neighborVIdx = vIdx + left_boxes_shifts[s];
+
+				// The shiftcode is stored in virtMap for each virtual cell
+				char sCode = virtMap[neighborVIdx].shiftcode;
+
+				int start_b = boxOffsets[neighborVIdx];
+				int end_b = boxOffsets[neighborVIdx + 1];
+
+				for (int i = start_a; i < end_a; ++i) {
+					for (int j = start_b; j < end_b; ++j) {
+						add_bond_pair<BondType>(pointIndices[i], pointIndices[j], sCode, bonds, double_sided);
+					}
+				}
+			}
+		}
+
+		template<BondConcept BondType>
+		inline void add_bond_pair(int idxA, int idxB, char shiftCode, std::vector<BondType>& bonds, bool double_sided) {
+			// Basic bond a -> b
+			bonds.push_back(BondType{idxA, idxB, shiftCode});
+
+			if (double_sided) {
+				// Inverse bond b -> a
+				// The shift for the opposite direction must be inverted
+				bonds.push_back(BondType{idxB, idxA, inverse_code(shiftCode)});
+			}
+		}
+
+		inline int get_virtual_box_index(const PointType& p) const {
+			auto ix = static_cast<int>(p[0] * gridDim[0]) + 1;
+			auto iy = static_cast<int>(p[1] * gridDim[1]) + 1;
+			auto iz = static_cast<int>(p[2] * gridDim[2]) + 1;
+
+			return get_box_by_index(ix, iy, iz, gridDimVirt);
+		}
+
+		inline int get_real_box_index(const PointType& p) const {
+			auto ix = static_cast<int>(p[0] * gridDim[0]);
+			auto iy = static_cast<int>(p[1] * gridDim[1]);
+			auto iz = static_cast<int>(p[2] * gridDim[2]);
+			return get_box_by_index(ix, iy, iz, gridDim);
 		}
 
 		constexpr void calculateGridDim(const CellType& cell, T cutoff) {
 			for (uint8_t i = 0; i < 3; i++) {
 				gridDim[i] = static_cast<uint8_t>(std::floor(cell.lat_dir(i) / cutoff));
 				if (gridDim[i] == 0) gridDim[i] = 1;
-				gridDimVirt[i] = gridDim[i] + 2;
+				gridDimVirt[i] = gridDim[i] + 2;  // +2 for virtual grid
 			}
 			numBoxes = gridDim[0] * gridDim[1] * gridDim[2];
 			numBoxesVirt = gridDimVirt[0] * gridDimVirt[1] * gridDimVirt[2];
 		}
-		int get_box_index(const PointType& p) const {
-			auto ix = static_cast<int>(p[0] * gridDim[0]);
-			auto iy = static_cast<int>(p[1] * gridDim[1]);
-			auto iz = static_cast<int>(p[2] * gridDim[2]);
-			return ix + iy * gridDim[0] + iz * gridDim[0] * gridDim[1];
+
+		inline int get_box_by_index(int ix, int iy, int iz,
+									const std::array<uint8_t, 3>& grid) const {
+			return ix + iy * grid[0] + iz * grid[0] * grid[1];
 		}
 	};
 
