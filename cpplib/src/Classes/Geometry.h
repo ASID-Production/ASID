@@ -612,10 +612,6 @@ namespace cpplib::geometry {
 
 			assert(isConvex());
 			return std::make_optional(std::pair<PointType, PointType>(inter1, inter2));
-
-
-
-			return std::optional<std::pair<PointType, PointType>>();
 		}
 
 		constexpr const PointType& operator[](size_t i) const noexcept {
