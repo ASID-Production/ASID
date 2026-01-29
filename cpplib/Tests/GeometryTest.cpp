@@ -784,7 +784,17 @@ TEST_F(PolygonTest, EdgeCases) {
 	EXPECT_EQ(emptyPoly.size(), 0);
 }
 
-using namespace cpplib::voronoi;
+using namespace cpplib;
+
+TEST(Voronoi, CellConstruction) {
+	// Insufficient number of points
+	voronoi::Cell cell(Point<FloatingPointType>(0.2, 0.3, 0.4), 1);
+	constexpr Plane<FloatingPointType> plane(Point<FloatingPointType>(0.5, 0.5, 0.5), Point<FloatingPointType>(-1, -1, -1));
+	cell.clipByPlaneAndAddNewFace(plane, 2);
+
+
+}
+
 // ==================== TESTS FOR Voronoi ====================
 // TODO: Tests disabled until Voronoi rework
 //class VoronoiTest : public ::testing::Test {

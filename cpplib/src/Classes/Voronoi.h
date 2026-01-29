@@ -30,8 +30,10 @@
 
 #include <algorithm>
 #include <array>
-#include <cmath>
+#include <cassert>
 #include <cstdint>
+#include <cstdlib>
+#include <limits>
 #include <memory>
 #include <unordered_set>
 #include <utility>
@@ -115,10 +117,11 @@ namespace cpplib::voronoi {
 		using PointType = geometry::Point<basic_types::FloatingPointType>;
 		using PlaneType = geometry::Plane<basic_types::FloatingPointType>;
 
+		Edge(Vertex* v1, Vertex* v2) : vertexes({ v1, v2 }) {}
+
+
 		inline State calculateState() noexcept {
-			const auto vs = vertexes.size();
-			const auto fs = faces.size();
-			if (vs == 2 && fs == 2) {
+			if (vertexes.size() == 2 && faces.size() == 2) {
 				size_t counter = 0;
 				for (const auto v : vertexes)
 				{
@@ -160,10 +163,9 @@ namespace cpplib::voronoi {
 			it++;
 			auto v2 = *it;
 
-
 			PointType direction = v2->get_point() - v1->get_point();
-			auto normal = plane.normal();
-			auto denom = PointType::Scalar(normal, direction);
+			auto unnormalized_normal = PointType(plane.a[0], plane.a[1], plane.a[2]);
+			auto denom = PointType::Scalar(unnormalized_normal, direction);
 
 			// Check that Edge is not parallel to plane
 			assert(std::abs(denom) >= 1e-6);
@@ -184,33 +186,34 @@ namespace cpplib::voronoi {
 	struct Face {
 		// Data (not owning)
 		State state = State::INVALID;
-		size_t id_owner;
-		size_t id_other;
-		Container<Vertex*> vertexes; 
+		size_t owner_id;
+		size_t other_id;
+		char other_shiftcode;
+		Container<Vertex*> vertices;
 		Container<Edge*> edges; 
 
 		inline void calculateState() {
-			const auto vs = vertexes.size();
+			const auto vs = vertices.size();
 			const auto es = edges.size();
 			if (vs ==  es) {
 				size_t counter = 0;
+				state = State::VALID;
 				for (const auto e : edges)
 				{
 					auto estate = e->get_state();
-					if (estate == State::MODIFICATION || estate == State::VALID)
+					if (estate == State::VALID) {
 						counter++;
+					}
+					else if (estate == State::MODIFICATION) {
+						counter++;
+						state = State::MODIFICATION;
+					}
 				}
-				if (counter == es) {  // All edges are VALID
-					state = State::VALID;
-				}
-				else if(counter >= 2) { // At least 2 edges are VALID or ask for MODIFICATION
-					state = State::MODIFICATION;
-				}
+				if (counter == 0) { 
+					state = State::DELETE;
+				} 
 				else if (counter == 1) { // ERROR STATE!!!
 					state = State::INVALID;
-				} 
-				else {
-					state = State::DELETE;
 				}
 			} else {
 				state = State::INVALID;
@@ -235,14 +238,110 @@ namespace cpplib::voronoi {
 		
 	private:
 		// Data (Owning)
-		Container<std::unique_ptr<Vertex>> vertexes;
-		Container<std::unique_ptr<Edge>> edges;
-		Container<std::unique_ptr<Face>> faces;
+		std::vector<std::unique_ptr<Vertex>> vertexes;
+		std::vector<std::unique_ptr<Edge>> edges;
+		std::vector<std::unique_ptr<Face>> faces;
 
 		PointType center;
-		size_t id;
+		int id;
+	public:
+		static constexpr std::array<PointType, 8> base_vertices = {{
+			PointType{-0.5, -0.5, -0.5}, // 0
+			PointType{ 0.5, -0.5, -0.5}, // 1
+			PointType{ 0.5,  0.5, -0.5}, // 2
+			PointType{-0.5,  0.5, -0.5}, // 3
+			PointType{-0.5, -0.5,  0.5}, // 4
+			PointType{ 0.5, -0.5,  0.5}, // 5
+			PointType{ 0.5,  0.5,  0.5}, // 6
+			PointType{-0.5,  0.5,  0.5}  // 7
+		}};
+
+		// Indexes for each face of the cube (conter-clockwise from outside)
+		static constexpr std::array<std::array<int, 4>, 6> face_indices = {{
+			{4, 7, 6, 5}, // front face
+			{0, 1, 2, 3}, // back face
+			{0, 3, 7, 4}, // left face
+			{1, 5, 6, 2}, // right face
+			{0, 4, 5, 1}, // bottom face
+			{3, 2, 6, 7}  // top face
+		}};
+		static constexpr std::array<char, 6> face_shiftcodes = {{
+			22, // front face
+			 4, // back face
+			12, // left face
+			14, // right face
+			10, // bottom face
+			16  // top face
+		}};
+
+		// Indexes for each edge of the cube
+		static constexpr std::array<std::array<int, 2>, 12> edge_indices = {{        
+			{4, 7}, // edge 0: front-left
+			{7, 6}, // edge 1: front-top
+			{6, 5}, // edge 2: front-right
+			{5, 4}, // edge 3: front-bottom
+			{0, 1}, // edge 4: back-bottom
+			{1, 2}, // edge 5: back-right
+			{2, 3}, // edge 6: back-top
+			{3, 0}, // edge 7: back-left
+			{0, 4}, // edge 8: left-bottom
+			{3, 7}, // edge 9: left-top
+			{1, 5}, // edge 10: right-bottom
+			{2, 6}  // edge 11: right-top
+		}};
+		static constexpr std::array<std::array<int, 4>, 6> face_edge_indices = {{
+			{ 0,  1,  2,  3},  // front face
+			{ 4,  5,  6,  7},  // back face
+			{ 7,  9,  0,  8},  // left face
+			{10,  2, 11,  5},  // right face
+			{ 8,  3, 10,  4},  // bottom face
+			{ 9,  1, 11,  6}   // top face
+		}};
+		
 
 	public:
+		Cell(const PointType& c, int i) : center(c), id(i){
+			vertexes.reserve(32);
+			edges.reserve(32);
+            faces.reserve(32);
+			for (const auto& v : base_vertices) {
+				vertexes.emplace_back(std::make_unique<Vertex>(v + center));
+				vertexes.back()->set_state(State::VALID);
+			}
+			for (const auto& e : edge_indices) {
+				auto vertex1_ptr = vertexes[e[0]].get();
+				auto vertex2_ptr = vertexes[e[1]].get();
+				auto owner_ptr = std::make_unique<Edge>(vertex1_ptr, vertex2_ptr); // smart pointer
+				auto edge_ptr = owner_ptr.get(); // raw pointer
+				edges.emplace_back(std::move(owner_ptr)); // smart pointer becomes invalid
+				vertex1_ptr->edges.emplace(edge_ptr);
+				vertex2_ptr->edges.emplace(edge_ptr);
+				edge_ptr->set_state(State::VALID);
+			}
+			for (int face_id = 0; face_id < 6; face_id++) {
+				auto face = std::make_unique<Face>();
+				face->owner_id = id;
+				face->other_id = id;  
+				face->other_shiftcode = face_shiftcodes[face_id];
+
+				// Fill vertices
+				for (int j = 0; j < 4; j++) {
+					auto vertex_ptr = vertexes[face_indices[face_id][j]].get();
+					face->vertices.emplace(vertex_ptr);
+					vertex_ptr->faces.emplace(face.get());
+				}
+
+				// Fill edges
+				for (int j = 0; j < 4; j++) {
+					auto edge_ptr = edges[face_edge_indices[face_id][j]].get();
+					face->edges.emplace(edge_ptr);
+					edge_ptr->faces.emplace(face.get());
+				}
+
+				face->set_state(State::VALID);
+				faces.push_back(std::move(face));
+			}
+		}
 		Vertex* add_vertex(const PointType& p) {
 			auto temp = std::make_unique<Vertex>(p);
 			for (auto& v : vertexes) {
@@ -250,7 +349,7 @@ namespace cpplib::voronoi {
 					return v.get();
 			}
 			auto simple_ptr = temp.get();
-			vertexes.emplace(std::move(temp));
+			vertexes.emplace_back(std::move(temp));
 			return simple_ptr;
 		}
 		void clipByPlaneAndAddNewFace(const PlaneType& clipping_plane, size_t id_of_another_cell) {
@@ -259,14 +358,17 @@ namespace cpplib::voronoi {
 			assert(clipping_plane.side(center) > 0);
 
 			// 1. Separate vertexes to sides of plane
-			for (auto& v : vertexes)
+			for (const auto& v : vertexes)
 			{
-				if (clipping_plane.side(v->get_point()) < -limit) {
+				// calculate side:
+				auto side = clipping_plane.side(v->get_point());
+				if (side < -limit) {
 					// Point cutted off
 					v->set_state(State::DELETE);
 				} 
-				else if (clipping_plane.side(v->get_point()) < limit) {
+				else if (side < limit) {
 					// Point on the Face
+					v->set_state(State::MODIFICATION);
 				}
 			}
 
@@ -305,15 +407,39 @@ namespace cpplib::voronoi {
 
 				new_vertex_ptr->edges.insert(e.get()); // insert this edge to set of new vertex
 				new_vertex_ptr->faces.insert(e->faces.begin(), e->faces.end()); // copy set of faces from the edge
+				for (auto& f : e->faces) {
+					f->vertices.emplace(new_vertex_ptr);
+				}
 				new_vertex_ptr->set_state(State::MODIFICATION); // Set, that Vertex is on the NEW FACE
 
-				// Now, new vertex complete
+				// Now, new vertex complete, so edge is VALID too:
+				e->set_state(State::VALID);
 			}
 
 			// 4. Cut Faces, which need modification
-			// TODO: from here
+			for (auto& f : faces) {
+				if (f->get_state() == State::VALID) continue;
+				assert(f->get_state() == State::MODIFICATION);
+
+				// 4.1. Find and delete all unnesessary edges and vertexes
+				std::erase_if(f->edges, [](const auto* ptr) {
+					    return ptr->get_state() == State::DELETE;
+					});
+				std::erase_if(f->vertices, [](const auto* ptr) {
+					return ptr->get_state() == State::DELETE;
+					});
+
+				// 4.2 Modify the face: add Edge
+				
+				// TODO: from here
+			}
+
+
 
 			// 5. Create new Face
+
+
+
 
 			// 6. Cleanup after modifications
 
