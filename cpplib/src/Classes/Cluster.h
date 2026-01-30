@@ -27,10 +27,8 @@
 // ******************************************************************************************
 #pragma once
 #include <array>
-#include <algorithm>
 #include <cassert>
 #include <cmath>
-#include <cstddef>
 #include <cstdint>
 #include <functional>
 #include <limits>
@@ -41,9 +39,8 @@
 #include <vector>
 
 #include "../BaseHeaders/BaseTypes.h"
-#include "../Classes/Bond.h"
-#include "../Classes/Distances.h"
 #include "../Classes/Geometry.h"
+#include "../Classes/Distances.h"
 
 namespace cpplib {
 	class Cluster;
@@ -148,18 +145,18 @@ namespace cpplib::cluster_detail {
 		AnchorType(const PointType& point, FloatingPointType radius) : point(point), radius(radius) {
 			constexpr auto smin = std::numeric_limits<ShiftType::value_type>::min();
 			constexpr auto smax = std::numeric_limits<ShiftType::value_type>::max();
-			
+
 			if (radius < 0.0) {
 				throw std::runtime_error("Anchor radius must be positive");
 			}
 
 
-			if (point[0] < smin || 
-				point[1] < smin || 
-				point[2] < smin || 
+			if (point[0] < smin ||
+				point[1] < smin ||
+				point[2] < smin ||
 				point[0] > smax ||
 				point[1] > smax ||
-				point[2] > smax) 
+				point[2] > smax)
 			{
 				throw std::runtime_error("Anchor point is out of bounds");
 			}
@@ -216,10 +213,9 @@ namespace cpplib::cluster_detail {
 		};
 
 		explicit UnitCellBuilder(const ::std::vector<SymmType>& symmetries,
-								 Config config = Config{true, 
-								                        cpplib::geometry::crystallography_eq_position_eps_fractalspace})
-			: symmetries_(symmetries), config_(config) {
-		}
+								 Config config = Config{true,
+														cpplib::geometry::crystallography_eq_position_eps_fractalspace})
+			: symmetries_(symmetries), config_(config) {}
 
 		BuildResult build(const std::vector<PointType>& points,
 						 const std::vector<AtomTypeBase>& types) const {
@@ -259,14 +255,14 @@ namespace cpplib::cluster_detail {
 			return result;
 		}
 
-		// ==== TEST METHODS ====
-
 		static ClusterData create_asymmetric_unit(
 			const std::vector<geometry::Point<FloatingPointType>>& points,
 			const std::vector<basic_types::AtomTypeBase>& types) {
 
+			assert(points.size() == types.size());
+
 			ClusterData atoms;
-            atoms.indices.resize(points.size(), 0);
+			atoms.indices.resize(points.size(), 0);
 			atoms.points = points;
 			atoms.types = types;
 			atoms.symm_indices.assign(points.size(), 0);
@@ -334,22 +330,21 @@ namespace cpplib::cluster_detail {
 
 		ConstructMolecules(const CellType& unit_cell,
 						   const Distances& distances) noexcept
-			: cell(unit_cell), dist(distances) {
-		}
+			: cell(unit_cell), dist(distances) {}
 
 		ResultType execute(const ClusterData& atoms_01) const {
 			ResultType result;
-			
+
 			auto atom_s = atoms_01.size();
 
 
 			geometry::SpatialGrid<FloatingPointType> sg;
 			sg.build(atoms_01.points, cell, 4.0);
 			auto bonds = sg.get_bonds(false);
-			dist.filter_bond_list(bonds, 
-								  atoms_01.types, 
-								  atoms_01.points, 
-								  [this](const PointType& a, const PointType& b) 
+			dist.filter_bond_list(bonds,
+								  atoms_01.types,
+								  atoms_01.points,
+								  [this](const PointType& a, const PointType& b)
 								  {
 									  return (cell.fracToCart() * (a - b)).r();
 								  });
@@ -370,7 +365,7 @@ namespace cpplib::cluster_detail {
 				unite(bond, result.molecules, result.atom_to_trmol_id);
 
 			}
-            // Remove empty molecules
+			// Remove empty molecules
 			decltype(result.molecules) tempmol;
 			tempmol.reserve(atom_s);
 			::std::vector<MoleculeIndex> mol_update_id(atom_s, 0);
@@ -385,7 +380,7 @@ namespace cpplib::cluster_detail {
 				mol_update_id[i] = new_index;
 			}
 			result.molecules = std::move(tempmol);
-			
+
 			for (size_t j = 0; j < atom_s; j++)
 			{
 				result.atom_to_trmol_id[j] = mol_update_id[result.atom_to_trmol_id[j]];
@@ -394,7 +389,7 @@ namespace cpplib::cluster_detail {
 			for (size_t i = 0; i < atom_s; i++)
 			{
 				auto shift = find(i, result.molecules[result.atom_to_trmol_id[i]]).shift;
-				
+
 				result.atom_to_trmol_id[i] = find_or_push_mol({result.atom_to_trmol_id[i],-shift}, result.translated_molecules);
 			}
 
@@ -502,7 +497,7 @@ namespace cpplib {
 		using TranslatedMolecule = cluster_detail::TranslatedMolecule;
 		using Molecule = cluster_detail::Molecule;
 
-	public:    
+	public:
 		Cluster(CellType& unit_cell,
 				::std::vector<SymmType>& symms,
 				::std::vector<AnchorType>&& anchors_fractal,
@@ -515,11 +510,11 @@ namespace cpplib {
 			asymmetric_types(std::move(types)),
 			asymmetric_points(std::move(points)),
 			polymer_cutoff_radius(polymer_cutoff)
-		
+
 		{
 			assert(asymmetric_types.size() == asymmetric_points.size());
 		}
-		
+
 
 	private:
 		CellType& cell;
@@ -542,7 +537,7 @@ namespace cpplib {
 			// 1. Fill Utit cell [0,1) with atoms
 			cluster_detail::UnitCellBuilder ucb(symm);
 			auto unit_cell = ucb.build(asymmetric_points, asymmetric_types);
-			if(unit_cell.success() == false)
+			if (unit_cell.success() == false)
 				return {}; // unsuccessful generation of unit cell.
 			const auto atom_size = unit_cell.atoms.size();
 
@@ -561,7 +556,7 @@ namespace cpplib {
 
 			// 4. Find boxes for molecules
 			BoxSet boxes = create_boxes(plane);
-			
+
 
 			// 5. Add nonpolymer molecules
 			::std::unordered_set<TranslatedMolecule, TranslatedMolecule::Hash> moleculeset;
@@ -615,9 +610,9 @@ namespace cpplib {
 
 
 
-			std::array<FloatingPointType, 3> dp = { plane[0].distance(rp111),
+			std::array<FloatingPointType, 3> dp = {plane[0].distance(rp111),
 													plane[1].distance(rp111),
-													plane[2].distance(rp111) };
+													plane[2].distance(rp111)};
 
 			for (const auto& anchor : anchors_frac) {
 
@@ -633,19 +628,19 @@ namespace cpplib {
 		void constructBox(const AnchorType& anchor,
 						  FloatingPointType cutoff,
 						  const std::array<FloatingPointType, 3>& dp,
-						  BoxSet& box, 
+						  BoxSet& box,
 						  const std::array<Plane, 3>& plane) const {
 
 			ShiftType b(anchor.point.floor());
 			std::array < FloatingPointType, 3> low{
 				plane[0].distance(cell.fracToCart() * anchor.point) - b[0] * dp[0],
 				plane[1].distance(cell.fracToCart() * anchor.point) - b[1] * dp[1],
-				plane[2].distance(cell.fracToCart() * anchor.point) - b[2] * dp[2] };
+				plane[2].distance(cell.fracToCart() * anchor.point) - b[2] * dp[2]};
 
 			std::array < FloatingPointType, 3> high{
 				dp[0] - low[0],
 				dp[1] - low[1],
-				dp[2] - low[2] };
+				dp[2] - low[2]};
 
 			// [ -x, +x, -y, +y, -z, +z ]
 			const std::array<ShiftType::value_type, 6> maxr{
@@ -654,7 +649,7 @@ namespace cpplib {
 				b[1] - static_cast<ShiftType::value_type>(std::ceil((cutoff - low[1]) / dp[1])),
 				b[1] + static_cast<ShiftType::value_type>(std::ceil((cutoff - high[1]) / dp[1])),
 				b[2] - static_cast<ShiftType::value_type>(std::ceil((cutoff - low[2]) / dp[2])),
-				b[2] + static_cast<ShiftType::value_type>(std::ceil((cutoff - high[2]) / dp[2])) };
+				b[2] + static_cast<ShiftType::value_type>(std::ceil((cutoff - high[2]) / dp[2]))};
 
 
 			for (ShiftType::value_type i = maxr[0]; i <= maxr[1]; i++) {
@@ -668,13 +663,13 @@ namespace cpplib {
 
 
 
-		bool check_molecule(const ShiftType& shift, 
-							const Molecule& mol, 
+		bool check_molecule(const ShiftType& shift,
+							const Molecule& mol,
 							const ClusterData& unit01) const {
 			for (const auto& anchor : anchors_frac) {
 				for (const auto& node : mol.nodes) {
 					// Calculate distance to anchor
-					PointType vec = cell.fracToCart()*(unit01.points[node.id] + node.shift + shift - anchor.point);
+					PointType vec = cell.fracToCart() * (unit01.points[node.id] + node.shift + shift - anchor.point);
 
 					if (vec.r() < anchor.radius) {
 						return true;
@@ -695,9 +690,9 @@ namespace cpplib {
 			BoxSet boxes;
 			auto rp111 = cell.fracToCart() * ShiftType(1, 1, 1);
 
-			std::array<FloatingPointType, 3> dp = { plane[0].distance(rp111),
+			std::array<FloatingPointType, 3> dp = {plane[0].distance(rp111),
 													plane[1].distance(rp111),
-													plane[2].distance(rp111) };
+													plane[2].distance(rp111)};
 
 			for (const auto& anchor : anchors_frac) {
 				constructBox(anchor, polymer_cutoff_radius, dp, boxes, plane);
