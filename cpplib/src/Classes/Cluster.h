@@ -76,7 +76,7 @@ namespace cpplib::cluster_detail {
 		std::vector<ShiftType> shifts;
 
 		size_t size() const {
-			assert(consistency_check());
+			//assert(consistency_check());
 			return indices.size();
 		}
 

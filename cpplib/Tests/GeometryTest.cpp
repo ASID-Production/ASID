@@ -33,9 +33,10 @@
 #include <vector>
 #include <utility>
 
+#include "../../src/BaseHeaders/BaseTypes.h"
+#include "../../src/Classes/Cluster.h"
 #include "../../src/Classes/Geometry.h"
 #include "../../src/Classes/Voronoi.h"
-#include "../../src/BaseHeaders/BaseTypes.h"
 
 using namespace std;
 using namespace cpplib;
@@ -790,95 +791,139 @@ TEST(Voronoi, CellConstruction) {
 	// Insufficient number of points
 	voronoi::Cell cell(Point<FloatingPointType>(0.2, 0.3, 0.4), 1);
 	constexpr Plane<FloatingPointType> plane(Point<FloatingPointType>(0.5, 0.5, 0.5), Point<FloatingPointType>(-1, -1, -1));
-	cell.clipByPlaneAndAddNewFace(plane, 2);
+	cell.clipByPlaneAndAddNewFace(plane, 2, 13);
 
 
 }
 
 // ==================== TESTS FOR Voronoi ====================
 // TODO: Tests disabled until Voronoi rework
-//class VoronoiTest : public ::testing::Test {
-//protected:
-//	using PointType = Point<FloatingPointType>;
-//
-//    void SetUp() override {
-//        // Common points for Voronoi tests
-//        commonPoints = {
-//            PointType(0.1, 0.1, 0.1),
-//            PointType(0.4, 0.4, 0.4),
-//            PointType(0.254, 0.4, 0.364),
-//            PointType(0.954, 0.866, 0.23),
-//            PointType(0.7, 0.7, 0.7)
-//        };
-//        singlePoint = {
-//            PointType(0.0, 0.0, 0.0)
-//        };
-//    }
-//
-//	// Helper method to validate Voronoi cell properties
-//	void validateVoronoiCell(const VoronoiCell<FloatingPointType>& cell) {
-//		const auto& seed = cell.getSeed();
-//		const auto& faces = cell.getFaces();
-//
-//        for (const auto& face : faces) {
-//            EXPECT_TRUE(face.poly.isConvex());
-//
-//			// Verify that seed is on the correct side of the face
-//			VoronoiCell<FloatingPointType>::Face::PlaneType plane(face.poly[0], face.poly[1], face.poly[2]);
-//			EXPECT_GE(plane.side(seed), 0.0 - EPSILON);
-//		}
-//	}
-//
-//    std::vector<PointType> commonPoints;
-//    std::vector<PointType> singlePoint;
-//};
-//
-//
-//TEST_F(VoronoiTest, AlexTest) {
-//    cpplib::geometry::Cell cell (10.9815, 6.8214, 8.9974, 90.0, 101.511, 90.0);
-//    std::vector<const char*> symms{"x, y, z", "-x, y+1/2, -z+1/2", "-x, -y, -z", "x, -y-1/2, z-1/2"};
-//
-//
-//
-//
-//
-//    VoronoiDiagram<double>::PointVector data = {{0.85991, 0.6099,  0.54993},
-//                                                                  {0.9802,  0.2973,  0.68819},
-//                                                                  {0.45147, 0.2722, -0.01408},
-//                                                                  {0.4257,  0.369,  -0.0692 },
-//                                                                  {0.54605, 0.33304, 0.10639},
-//                                                                  {0.59711, 0.18811, 0.18507},
-//                                                                  {0.5699,  0.0585,  0.1577 },
-//                                                                  {0.6972,  0.22032, 0.31696},
-//                                                                  {0.73155, 0.40837, 0.37126},
-//                                                                  {0.6897,  0.5202,  0.323  },
-//                                                                  {0.8262,  0.42976, 0.49478},
-//                                                                  {0.88775, 0.26835, 0.56724},
-//                                                                  {0.85479, 0.08196, 0.51712},
-//                                                                  {0.8965, -0.0288,  0.5674 },
-//                                                                  {0.75907, 0.05834, 0.39111},
-//                                                                  {0.7356, -0.0699,  0.3552 }};
-//
-//
-//
-//
-//    VoronoiDiagram<double>::BoolVector bools{false, false, false, false, 
-//                                                               false, true,  false, true, 
-//                                                               false, false, false, false, 
-//                                                               false, false, false, false};
-//    VoronoiDiagram<FloatingPointType> vd(data, bools);
-//	geometry::SpatialGrid<FloatingPointType> sp;
-//	sp.build(data,cell, 6.0);
-//	auto bonds = sp.get_bonds();
-//    vd.calculateFaces(bonds);
-//    auto cells = vd.extractCells();
-//    for (const auto& c : cells) {
-//        validateVoronoiCell(c);
-//    }
-//    VoronoiFused<double> vf;
-//    vf.AddCells(cells);
-//}
-//
+class VoronoiTest : public ::testing::Test {
+protected:
+	using PointType = Point<FloatingPointType>;
+
+    void SetUp() override {
+        // Common points for Voronoi tests
+        commonPoints = {
+            PointType(0.1, 0.1, 0.1),
+            PointType(0.4, 0.4, 0.4),
+            PointType(0.254, 0.4, 0.364),
+            PointType(0.954, 0.866, 0.23),
+            PointType(0.7, 0.7, 0.7)
+        };
+        singlePoint = {
+            PointType(0.0, 0.0, 0.0)
+        };
+    }
+
+    std::vector<PointType> commonPoints;
+    std::vector<PointType> singlePoint;
+};
+
+
+TEST_F(VoronoiTest, AlexTest) {
+    cpplib::geometry::Cell cell (10.9815, 6.8214, 8.9974, 90.0, 101.511, 90.0);
+    std::vector<const char*> symms{"x, y, z", "-x, y+1/2, -z+1/2", "-x, -y, -z", "x, -y-1/2, z-1/2"};
+
+
+
+
+
+    voronoi::VoronoiDiagram::PointVector data = {{0.85991, 0.6099,  0.54993},
+                                                 {0.9802,  0.2973,  0.68819},
+                                                 {0.45147, 0.2722, -0.01408},
+                                                 {0.4257,  0.369,  -0.0692 },
+                                                 {0.54605, 0.33304, 0.10639},
+                                                 {0.59711, 0.18811, 0.18507},
+                                                 {0.5699,  0.0585,  0.1577 },
+                                                 {0.6972,  0.22032, 0.31696},
+                                                 {0.73155, 0.40837, 0.37126},
+                                                 {0.6897,  0.5202,  0.323  },
+                                                 {0.8262,  0.42976, 0.49478},
+                                                 {0.88775, 0.26835, 0.56724},
+                                                 {0.85479, 0.08196, 0.51712},
+                                                 {0.8965, -0.0288,  0.5674 },
+                                                 {0.75907, 0.05834, 0.39111},
+                                                 {0.7356, -0.0699,  0.3552 }};
+
+
+
+
+	voronoi::VoronoiDiagram::BoolVector bools{false, false, false, false,
+                                              false, true,  false, true, 
+                                              false, false, false, false, 
+                                              false, false, false, false};
+
+	std::vector<geometry::Symm<FloatingPointType>> symmvec;
+	symmvec.reserve(symms.size());
+	for (int i = 0; i < symms.size(); i++)
+	{
+		symmvec.emplace_back(symms[i]);
+	}
+
+	cpplib::cluster_detail::UnitCellBuilder ucb(symmvec);
+	auto buildresult = ucb.build(data, std::vector<AtomTypeBase>(data.size(), AtomTypeBase(1)));
+
+
+	cpplib::geometry::SpatialGrid<FloatingPointType> space;
+	space.build(buildresult.atoms.points, cell, 6);
+	auto bonds = space.get_bonds();
+
+
+
+
+	voronoi::VoronoiDiagram vd(buildresult.atoms.points,bonds,cell.fracToCart(), bools);
+    auto cells = vd.extractCells();
+}
+TEST_F(VoronoiTest, Benzene) {
+	geometry::Cell<FloatingPointType> cell(7.243, 9.310, 6.756, 90.0, 90.0, 90.0);
+	std::vector<const char*> symms{
+		"x, y, z",
+		"-x+1/2, -y, z+1/2",
+		"-x, y+1/2, -z+1/2",
+		"x+1/2, -y+1/2, -z",
+		"-x, -y, -z",
+		"x+1/2, y, -z+1/2",
+		"x, -y+1/2, z+1/2",
+		"-x+1/2, y+1/2, z"
+	};
+
+	std::vector<PointType> data = {{
+		{-0.06070, 0.13930, -0.00690},
+		{-0.13770, 0.04470,  0.12600},
+		{ 0.07700, 0.09580, -0.13250},
+		{-0.10460, 0.25020, -0.01230},
+		{-0.24580, 0.07810,  0.22410},
+		{ 0.13710, 0.16810, -0.23600}
+		}};
+
+
+
+	voronoi::VoronoiDiagram::BoolVector bools{false, true, false, false,
+											  false, true};
+
+	std::vector<geometry::Symm<FloatingPointType>> symmvec;
+	symmvec.reserve(symms.size());
+	for (int i = 0; i < symms.size(); i++)
+	{
+		symmvec.emplace_back(symms[i]);
+	}
+
+	cpplib::cluster_detail::UnitCellBuilder ucb(symmvec);
+	auto buildresult = ucb.build(data, std::vector<AtomTypeBase>(data.size(), AtomTypeBase(1)));
+
+
+	cpplib::geometry::SpatialGrid<FloatingPointType> space;
+	space.build(buildresult.atoms.points, cell, 6);
+	auto bonds = space.get_bonds();
+
+
+
+
+	voronoi::VoronoiDiagram vd(buildresult.atoms.points, bonds, cell.fracToCart(), bools);
+	auto cells = vd.extractCells();
+}
+
 //TEST_F(VoronoiTest, CellConstruction) {
 //	// Default constructor
 //	VoronoiCell<FloatingPointType> defaultCell;

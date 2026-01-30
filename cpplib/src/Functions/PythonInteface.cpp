@@ -1003,7 +1003,7 @@ extern "C" {
 
 	/// Args: [cell, symm, tuples, bools<int>, cutoff]
 	static PyObject* cpplib_Voronoi(PyObject* self, PyObject* args) {
-		using Diagram = cpplib::voronoi::VoronoiDiagram<FloatingPointType>;
+		using Diagram = cpplib::voronoi::VoronoiDiagram;
 
 		PyObject* ocell = NULL;
 		PyObject* osymm = NULL;
@@ -1036,104 +1036,115 @@ extern "C" {
 
 		bools.resize(all.points.size(), false);
 
-		cpplib::geometry::SpatialGrid<FloatingPointType> space;
-		space.build(all.points,fcell, cutoff);
-		auto bonds = space.get_bonds();
+		std::vector<geometry::Symm<FloatingPointType>> symmvec;
+		symmvec.reserve(all.symm.size());
+		for (int i = 0; i < all.symm.size(); i++)
+		{
+			symmvec.emplace_back(all.symm[i]);
+		}
 
-		Diagram diag;
-		diag.addPoints(all.points, bools);
-		diag.calculateFaces(bonds);
+		cluster_detail::UnitCellBuilder ucb(symmvec);
+		auto buildresult = ucb.build(all.points, all.types);
+
+
+		cpplib::geometry::SpatialGrid<FloatingPointType> space;
+		space.build(buildresult.atoms.points,fcell, cutoff);
+		auto bonds = space.get_bonds();
+		geometry::Cell cell(all.cell);
+		
+		Diagram diag(buildresult.atoms.points,bonds, cell.fracToCart(), bools);
 
 		auto ce = diag.extractCells();
 		deb_write("cells.size() = ", ce.size());
 		
-		cpplib::voronoi::VoronoiFused<FloatingPointType> vf;
-		vf.AddCells(ce);
-		
+		//cpplib::voronoi::VoronoiFused<FloatingPointType> vf;
+		//vf.AddCells(ce);
+		//
 
-		deb_write("vertexes.size() = ", vf.vertexes.size());
+		//deb_write("vertexes.size() = ", vf.vertexes.size());
 
-		PyObject* o_centers = create_list_from_points(vf.centers);
-		PyObject* o_vertexes = create_list_from_points(vf.vertexes);
-		PyObject* o_polygons = PyList_New(vf.polygons.size());
-		PyObject* o_polyhedra = PyList_New(vf.polyhedra.size());
-		auto cleanup = [&]() {
-			Py_DECREF(o_centers);
-			Py_DECREF(o_vertexes);
-			Py_DECREF(o_polygons);
-			Py_DECREF(o_polyhedra);
-			};
-		if (o_centers == NULL ||
-			o_vertexes == NULL ||
-			o_polygons == NULL ||
-			o_polyhedra == NULL) {
-			cleanup();
-			Py_RETURN_NONE;
-		}
+		//PyObject* o_centers = create_list_from_points(vf.centers);
+		//PyObject* o_vertexes = create_list_from_points(vf.vertexes);
+		//PyObject* o_polygons = PyList_New(vf.polygons.size());
+		//PyObject* o_polyhedra = PyList_New(vf.polyhedra.size());
+		//auto cleanup = [&]() {
+		//	Py_DECREF(o_centers);
+		//	Py_DECREF(o_vertexes);
+		//	Py_DECREF(o_polygons);
+		//	Py_DECREF(o_polyhedra);
+		//	};
+		//if (o_centers == NULL ||
+		//	o_vertexes == NULL ||
+		//	o_polygons == NULL ||
+		//	o_polyhedra == NULL) {
+		//	cleanup();
+		//	Py_RETURN_NONE;
+		//}
 
-		// Fill o_polygons
-		for (Py_ssize_t i = 0; i < vf.polygons.size(); i++) {
-			PyObject* polygon_list = PyList_New(vf.polygons[i].vert_ids.size());
-			for (Py_ssize_t j = 0; j < vf.polygons[i].vert_ids.size(); j++) {
-				PyObject* py_int = PyLong_FromLong(static_cast<long>(vf.polygons[i].vert_ids[j]));
-				if (py_int == NULL) {
-					// Allocation Error
-					Py_DECREF(polygon_list);
-					cleanup();
-					Py_RETURN_NONE;
-				}
-				if (PyList_SetItem(polygon_list, j, py_int) < 0) {
-					// Failed to set item
-					Py_DECREF(polygon_list);
-					Py_DECREF(py_int);
-					cleanup();
-					Py_RETURN_NONE;
-				}
+		//// Fill o_polygons
+		//for (Py_ssize_t i = 0; i < vf.polygons.size(); i++) {
+		//	PyObject* polygon_list = PyList_New(vf.polygons[i].vert_ids.size());
+		//	for (Py_ssize_t j = 0; j < vf.polygons[i].vert_ids.size(); j++) {
+		//		PyObject* py_int = PyLong_FromLong(static_cast<long>(vf.polygons[i].vert_ids[j]));
+		//		if (py_int == NULL) {
+		//			// Allocation Error
+		//			Py_DECREF(polygon_list);
+		//			cleanup();
+		//			Py_RETURN_NONE;
+		//		}
+		//		if (PyList_SetItem(polygon_list, j, py_int) < 0) {
+		//			// Failed to set item
+		//			Py_DECREF(polygon_list);
+		//			Py_DECREF(py_int);
+		//			cleanup();
+		//			Py_RETURN_NONE;
+		//		}
 
-			}
-			if (PyList_SetItem(o_polygons, i, polygon_list) < 0) {
-				// Failed to set item
-				Py_DECREF(polygon_list);
-				cleanup();
-				Py_RETURN_NONE;
-			}
-		}
+		//	}
+		//	if (PyList_SetItem(o_polygons, i, polygon_list) < 0) {
+		//		// Failed to set item
+		//		Py_DECREF(polygon_list);
+		//		cleanup();
+		//		Py_RETURN_NONE;
+		//	}
+		//}
 
 
-		// Fill o_polyhedra
-		for (Py_ssize_t i = 0; i < vf.polyhedra.size(); i++) {
-			PyObject* polyhedra_list = PyList_New(vf.polyhedra[i].size());
-			for (Py_ssize_t j = 0; j < vf.polyhedra[i].size(); j++) {
-				PyObject* py_int = PyLong_FromLong(static_cast<long>(vf.polyhedra[i][j]));
-				if (py_int == NULL) {
-					// Allocation Error
-					Py_DECREF(polyhedra_list);
-					cleanup();
-					Py_RETURN_NONE;
-				}
-				if (PyList_SetItem(polyhedra_list, j, py_int) < 0) {
-					// Failed to set item
-					Py_DECREF(polyhedra_list);
-					Py_DECREF(py_int);
-					cleanup();
-					Py_RETURN_NONE;
-				}
+		//// Fill o_polyhedra
+		//for (Py_ssize_t i = 0; i < vf.polyhedra.size(); i++) {
+		//	PyObject* polyhedra_list = PyList_New(vf.polyhedra[i].size());
+		//	for (Py_ssize_t j = 0; j < vf.polyhedra[i].size(); j++) {
+		//		PyObject* py_int = PyLong_FromLong(static_cast<long>(vf.polyhedra[i][j]));
+		//		if (py_int == NULL) {
+		//			// Allocation Error
+		//			Py_DECREF(polyhedra_list);
+		//			cleanup();
+		//			Py_RETURN_NONE;
+		//		}
+		//		if (PyList_SetItem(polyhedra_list, j, py_int) < 0) {
+		//			// Failed to set item
+		//			Py_DECREF(polyhedra_list);
+		//			Py_DECREF(py_int);
+		//			cleanup();
+		//			Py_RETURN_NONE;
+		//		}
 
-			}
-			if (PyList_SetItem(o_polyhedra, i, polyhedra_list) < 0) {
-				// Failed to set item
-				Py_DECREF(polyhedra_list);
-				cleanup();
-				Py_RETURN_NONE;
-			}
-		}
+		//	}
+		//	if (PyList_SetItem(o_polyhedra, i, polyhedra_list) < 0) {
+		//		// Failed to set item
+		//		Py_DECREF(polyhedra_list);
+		//		cleanup();
+		//		Py_RETURN_NONE;
+		//	}
+		//}
 
-		// Build return value
-		return Py_BuildValue("{s:O,s:O,s:O,s:O}",
-							 "centers", o_centers,
-							 "vertexes", o_vertexes,
-							 "polygons", o_polygons,
-							 "polyhedra", o_polyhedra);
+		//// Build return value
+		//return Py_BuildValue("{s:O,s:O,s:O,s:O}",
+		//					 "centers", o_centers,
+		//					 "vertexes", o_vertexes,
+		//					 "polygons", o_polygons,
+		//					 "polyhedra", o_polyhedra);
+		Py_RETURN_NONE;
 	}
 
 	static struct PyMethodDef methods[] = {
