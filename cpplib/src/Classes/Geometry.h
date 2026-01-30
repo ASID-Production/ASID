@@ -1,4 +1,4 @@
-﻿// Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
+// Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
 // This file is part of ASID - Atomistic Simulation Instruments and Database
 // For more information see <https://github.com/ASID-Production/ASID>
 //
@@ -1190,7 +1190,7 @@ namespace cpplib::geometry {
 			realBoxOffsets[numBoxes] = currentOffset;
 
 			// Fill pointIndices in virtual box order
-			for (int i = 0; i < points.size(); i++) {
+			for (size_t i = 0; i < points.size(); i++) {
 				int vIdx = temp_virt_box_IDx[i];
 				int destPos = boxOffsets[vIdx] + virtBoxCount[vIdx];
 				pointIndices[destPos] = i;

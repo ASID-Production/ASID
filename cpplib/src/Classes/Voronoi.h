@@ -568,7 +568,7 @@ namespace cpplib::voronoi {
 			add_points(points_in_unit01, flags_);
 			auto vec = find_interactions(bonds);
 			calculate_and_sort(vec, points_in_unit01, FtoC);
-			for (int i = 0; i < cells_.size(); i++)
+			for (size_t i = 0; i < cells_.size(); i++)
 			{
 				if (flags_[i] == false)
 					continue;
