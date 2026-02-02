@@ -1100,6 +1100,8 @@ namespace cpplib::geometry {
 		}
 	};
 
+	/// @brief Class for using spartial hashing algorithm to find all bonds in 3D periodic space.
+	/// @tparam T Floating point type
 	template <class T>
 	struct SpatialGrid {
 		using ShiftType = Point<int8_t>;
@@ -1134,14 +1136,14 @@ namespace cpplib::geometry {
 
 		std::array<int, 13> left_boxes_shifts;
 
-		/// <summary>
-		/// Build the spatial grid from a set of points. All points must have coordinates in [0, 1). 
-		/// Unnormalized coordinates will produce undefined behavior (out-of-bounds access).
-		/// </summary>
-		/// <param name="points">Vector of points with coordinates normalized to [0, 1) in fractional space</param>
-		/// <param name="cell">The unit cell definition</param>
-		/// <param name="cutoff">Distance cutoff for bonding</param>
-		/// <remarks>Callers are responsible for ensuring point coordinates are properly normalized.</remarks>
+		/// @brief Build the spatial grid from a set of points. 
+		/// 
+		/// All points must have coordinates in[0, 1). Unnormalized coordinates
+		/// will produce undefined behavior(out - of - bounds access).
+		/// 
+		/// @param points Vector of points with coordinates normalized to[0, 1) in fractional space
+		/// @param cell   The unit cell definition
+		/// @param cutoff Distance cutoff for bonding
 		void build(const std::vector<Point<T>>& points, const CellType& cell, const T cutoff) {
 			// Calculate grid dimensions
 			calculateGridDim(cell, cutoff);
@@ -1207,7 +1209,9 @@ namespace cpplib::geometry {
 				left_boxes_shifts[i] = temp - baseshift;
 			}
 		}
-
+		/// @brief Create bonds, based on the spatial grid.
+		/// @param double_sided Default: false. Boolian, whether to create bonds in both directions.
+		/// @return vector of all possible bonds
 		std::vector<BondWithShift> get_bonds(bool double_sided = false) {
 			std::vector<BondWithShift> bonds;
 			// Preliminary memory reservation to reduce reallocations
@@ -1224,7 +1228,9 @@ namespace cpplib::geometry {
 			return bonds;
 		}
 
-
+		/// @brief Compress ShiftType[-1,+1] (usually Point<int8_t>) to char
+		/// @param s The shift
+		/// @return Compressed shift
 		static constexpr char compress_shift(ShiftType s) {
 			return (s[0] + 1) +
 				(s[1] + 1) * 3 +
@@ -1351,7 +1357,7 @@ namespace cpplib::geometry {
 
 			return get_box_by_index(ix, iy, iz, gridDimVirt);
 		}
-
+		// Assumes p has normalized coordinates [0,1); no validation performed for performance
 		inline int get_real_box_index(const PointType& p) const {
 			auto ix = static_cast<int>(p[0] * gridDim[0]);
 			auto iy = static_cast<int>(p[1] * gridDim[1]);
