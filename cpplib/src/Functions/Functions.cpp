@@ -485,15 +485,12 @@ Cluster::ClusterData ClusterCreate(std::array<cpplib::basic_types::FloatingPoint
 	deb_write("ClusterCreate invoked");
 
 	using ShiftType = Cluster::ShiftType;
-	deb_write("Compaq invoked");
 	auto& distances = *p_distances;
 	if (p_distances->isReady() == false) {
 		{
 			return {};
 		}
 	}
-
-
 
 	cpplib::geometry::Cell cell(unit_cell);
 	std::vector<geometry::Symm<FloatingPointType>> symms;
@@ -504,7 +501,7 @@ Cluster::ClusterData ClusterCreate(std::array<cpplib::basic_types::FloatingPoint
 
 	Cluster cluster(cell, symms, std::move(anchors), std::move(points), std::move(types), polymer_cutoff);
 
-	auto ret = cluster.execute(distances);
+	auto ret = cluster.execute(distances, hasPolymer);
 
 	deb_write("ClusterCreate return");
 	return ret;

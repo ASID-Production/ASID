@@ -529,7 +529,7 @@ namespace cpplib {
 		std::vector<PointType> asymmetric_points;
 		FloatingPointType polymer_cutoff_radius;
 	public:
-		ClusterData execute(const Distances& distances) const
+		ClusterData execute(const Distances& distances, bool& hasPolymer) const
 		{
 			constexpr PointType zeroPoint(0, 0, 0);
 			::std::array<PointType, 3> e = {
@@ -556,6 +556,7 @@ namespace cpplib {
 			for (auto& molecule : mols.molecules) {
 				if (molecule.is_polymer == true) {
 					atoms.merge(grow_polymer(molecule, unit_cell.atoms, plane));
+					hasPolymer = true;
 				}
 			}
 
