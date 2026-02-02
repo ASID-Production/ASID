@@ -992,7 +992,7 @@ extern "C" {
 			PyList_Append(o_ret, Py_BuildValue("{s:l,s:l,s:O,s:l,s:O}",
 											   "index", static_cast<long>(ret[i].index),
 											   "type", static_cast<long>(ret[i].type),
-											   "point_cart", py_point,
+											   "point_frac", py_point,
 											   "symmref", static_cast<long>(ret[i].symm),
 											   "shift", py_shift));
 		}

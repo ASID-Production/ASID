@@ -332,7 +332,6 @@ def Cluster(cell_params: List[float],
             anchors: List[Tuple[float,float,float,float]]) -> Dict[
     "points":  List[Dict[
         "index":      int,
-        "point_cart": Tuple[float,float,float],
         "point_frac": Tuple[float,float,float],
         "shift":      Tuple[int,int,int],
         "symmref":    int,
@@ -354,7 +353,6 @@ def Cluster(cell_params: List[float],
           Dictionary with keys ["points","hasPolymer"], where
             "points": List of Dictionaries, where eqch dictionary represents atom, and contains:
              | "index":      Index of atom in the initial set
-             | "point_cart": Tuple of Cartesian coordinates  (cx, cy, cz)
              | "point_frac": Tuple of Fractional coordinates (fx, fy, fz)
              | "shift":      Tuple of translation shift (dx, dy, dz) from initial position of SYMM-code (NOT FROM [0,0,0] !!!)
              | "symmref":    Reference to initial SYMM-code
