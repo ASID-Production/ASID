@@ -524,6 +524,10 @@ namespace cpplib {
 		std::vector<PointType> asymmetric_points;
 		FloatingPointType polymer_cutoff_radius;
 	public:
+		/// @brief Create cluster around anchors
+		/// @param[in] distances Special object with possible bonds
+		/// @param[out] hasPolymer True if cluster contains polymer, false elsewhere
+		/// @return All data about cluster
 		ClusterData execute(const Distances& distances, bool& hasPolymer) const
 		{
 			constexpr PointType zeroPoint(0, 0, 0);
@@ -547,6 +551,7 @@ namespace cpplib {
 			auto mols = cm.execute(unit_cell.atoms);
 
 			// 3. Grow polymers
+			hasPolymer = false;
 			::std::unordered_set<TranslatedAtom, TranslatedAtom::Hash> atoms;
 			for (auto& molecule : mols.molecules) {
 				if (molecule.is_polymer == true) {
@@ -702,7 +707,7 @@ namespace cpplib {
 			for (const auto& shift : boxes) {
 				for (const auto& node : molecule.nodes) {
 					for (const auto& anchor : anchors_frac) {
-						PointType vec = unit01.points[node.id] + shift - anchor.point;
+						PointType vec = cell.fracToCart() * (unit01.points[node.id] + shift - anchor.point);
 
 						if (vec.r() < polymer_cutoff_radius) {
 							ret.emplace(node.id, shift);
