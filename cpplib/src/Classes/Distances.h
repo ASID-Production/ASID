@@ -28,12 +28,10 @@
 #pragma once
 #include <array>
 #include <cassert>
-#include <concepts>
 #include <cstdint>
 #include <fstream>
 #include <stdexcept>
 #include <string>
-#include <type_traits>
 #include <vector>
 #include "../BaseHeaders/BaseTypes.h"
 #include "../Classes/Geometry.h"
@@ -100,12 +98,10 @@ namespace cpplib {
 			if (length < max) {
 				if (min < length) {
 					return 1;
-				}
-				else {
+				} else {
 					return -1;
 				}
-			}
-			else {
+			} else {
 				return 0;
 			}
 		}
@@ -121,10 +117,10 @@ namespace cpplib {
 		}
 
 		template<typename Func>
-			void filter_bond_list(std::vector<geometry::SpatialGrid<FloatingPointType>::BondWithShift>& bondlist,
-								  const ::std::vector<AtomTypeBase>& types,
-								  const ::std::vector<PointType>& points,
-								  Func dist) const noexcept {
+		void filter_bond_list(std::vector<geometry::SpatialGrid<FloatingPointType>::BondWithShift>& bondlist,
+							  const ::std::vector<AtomTypeBase>& types,
+							  const ::std::vector<PointType>& points,
+							  Func dist) const noexcept {
 			auto iter = ::std::begin(bondlist);
 
 			while (iter != ::std::end(bondlist)) {
@@ -136,7 +132,7 @@ namespace cpplib {
 				if (shiftcode != 13) {
 					moved_point2 += geometry::SpatialGrid<FloatingPointType>::decompress_shift(shiftcode);
 				}
-				
+
 				char is_real_bond = isBond(types[l1], types[l2], dist(points[l1], moved_point2));
 
 				if (is_real_bond == 0) {

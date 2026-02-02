@@ -40,7 +40,8 @@
 #include "../BaseHeaders/BaseTypes.h" // for constants::mend_size
 #include "../BaseHeaders/Concepts.h"
 #include "../BaseHeaders/Currents.h"
-#include "../Classes/Engine.h" // for Node and Bond
+#include "../Classes/Bond.h" // for Bond
+#include "../Classes/Engine.h" // for Node
 
 namespace cpplib {		
 	enum class ReserveStrategy :char {

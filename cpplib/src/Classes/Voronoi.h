@@ -35,6 +35,7 @@
 #include <cstdlib>
 #include <limits>
 #include <memory>
+#include <tuple>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -118,7 +119,7 @@ namespace cpplib::voronoi {
 		using PointType = geometry::Point<basic_types::FloatingPointType>;
 		using PlaneType = geometry::Plane<basic_types::FloatingPointType>;
 
-		Edge(Vertex* v1, Vertex* v2) : vertices({ v1, v2 }) {
+		Edge(Vertex* v1, Vertex* v2) : vertices({v1, v2}) {
 			assert(v1 != NULL && v1 != nullptr);
 			assert(v2 != NULL && v2 != nullptr);
 			v1->edges.emplace(this);
@@ -127,31 +128,31 @@ namespace cpplib::voronoi {
 
 
 		inline State calculateState() noexcept {
+			using enum State;
 			if (vertices.size() == 2 && faces.size() == 2) {
 				size_t counter = 0;
 				for (const auto v : vertices)
 				{
 					auto curstate = v->get_state();
-					if (curstate == State::VALID || curstate == State::MODIFICATION)
+					if (curstate == VALID || curstate == MODIFICATION)
 						counter++;
 				}
 				switch (counter) {
 					case 2:
-						state = State::VALID;
+						state = VALID;
 						break;
 					case 1:
-						state = State::MODIFICATION;
+						state = MODIFICATION;
 						break;
 					case 0:
-						state = State::DELETE;
+						state = DELETE;
 						break;
 					default:
 						// Impossible
 						break;
 				}
-			}
-			else {
-				state = State::INVALID;
+			} else {
+				state = INVALID;
 			}
 			return state;
 		}
@@ -176,10 +177,10 @@ namespace cpplib::voronoi {
 			// Check that Edge is not parallel to plane
 			assert(std::abs(denom) >= 1e-6);
 
-			
-			auto t = -(plane.a[0] * v1->get_point()[0] + 
-					   plane.a[1] * v1->get_point()[1] + 
-					   plane.a[2] * v1->get_point()[2] + 
+
+			auto t = -(plane.a[0] * v1->get_point()[0] +
+					   plane.a[1] * v1->get_point()[1] +
+					   plane.a[2] * v1->get_point()[2] +
 					   plane.a[3]) / denom;
 
 			assert(t > 0.0 && t < 1.0);
@@ -196,33 +197,31 @@ namespace cpplib::voronoi {
 		size_t other_id;
 		char other_shiftcode;
 		Container<Vertex*> vertices;
-		Container<Edge*> edges; 
+		Container<Edge*> edges;
 
 		inline State calculateState() {
-			const auto vs = vertices.size();
-			const auto es = edges.size();
-			if (vs ==  es) {
+			using enum State;
+
+			if (vertices.size() == edges.size()) {
 				size_t counter = 0;
-				state = State::VALID;
+				state = VALID;
 				for (const auto e : edges)
 				{
 					auto estate = e->get_state();
-					if (estate == State::VALID) {
+					if (estate == VALID) {
 						counter++;
-					}
-					else if (estate == State::MODIFICATION) {
+					} else if (estate == MODIFICATION) {
 						counter++;
-						state = State::MODIFICATION;
+						state = MODIFICATION;
 					}
 				}
-				if (counter == 0) { 
-					state = State::DELETE;
-				} 
-				else if (counter == 1) { // ERROR STATE!!!
-					state = State::INVALID;
+				if (counter == 0) {
+					state = DELETE;
+				} else if (counter == 1) { // ERROR STATE!!!
+					state = INVALID;
 				}
 			} else {
-				state = State::INVALID;
+				state = INVALID;
 			}
 			return state;
 		}
@@ -326,7 +325,7 @@ namespace cpplib::voronoi {
 			for (int face_id = 0; face_id < 6; face_id++) {
 				auto face = std::make_unique<Face>();
 				face->owner_id = id;
-				face->other_id = id;  
+				face->other_id = id;
 				face->other_shiftcode = face_shiftcodes[face_id];
 
 				// Fill vertices
@@ -377,8 +376,7 @@ namespace cpplib::voronoi {
 					// Point cutted off
 					v->set_state(DELETE);
 					modified = true;
-				} 
-				else if (side < limit) {
+				} else if (side < limit) {
 					// Point on the Face
 					v->set_state(MODIFICATION);
 				}
@@ -421,10 +419,10 @@ namespace cpplib::voronoi {
 				auto new_vertex_ptr = add_vertex(intersection);
 
 				// delete vertex from set
-				std::erase_if(e->vertices, 
+				std::erase_if(e->vertices,
 							  [](auto* ptr) {
 								  if (ptr->get_state() == DELETE) {
-								  	  return true;
+									  return true;
 								  }
 								  return false;
 							  });
@@ -449,7 +447,7 @@ namespace cpplib::voronoi {
 
 				// 4.1. Find and delete all unnesessary edges and vertices
 				std::erase_if(f->edges, [](const auto* ptr) {
-					    return ptr->get_state() == DELETE;
+					return ptr->get_state() == DELETE;
 					});
 				std::erase_if(f->vertices, [](const auto* ptr) {
 					return ptr->get_state() == DELETE;
@@ -484,7 +482,7 @@ namespace cpplib::voronoi {
 				f->edges.emplace(new_edge.get());
 				new_edge->set_state(MODIFICATION);
 				f->set_state(VALID);
-				
+
 			}
 
 			// 5. Create new Face
@@ -558,20 +556,19 @@ namespace cpplib::voronoi {
 		BoolVector flags_;
 		CellVector cells_;
 	public:
-		explicit VoronoiDiagram(const PointVector& points_in_unit01, 
-								const std::vector<SpatialGrid::BondWithShift>& bonds, 
-								const Matrix& FtoC, 
+		explicit VoronoiDiagram(const PointVector& points_in_unit01,
+								const std::vector<SpatialGrid::BondWithShift>& bonds,
+								const Matrix& FtoC,
 								const BoolVector& flags = BoolVector()) : flags_(flags) {
 			if (flags.empty()) {
 				flags_.resize(points_in_unit01.size(), true);
-			}
-			else if (points_in_unit01.size() != flags_.size()) {
+			} else if (points_in_unit01.size() != flags_.size()) {
 				flags_.resize(points_in_unit01.size(), false);
 			}
 			add_points(points_in_unit01, flags_);
 			auto vec = find_interactions(bonds);
 			calculate_and_sort(vec, points_in_unit01, FtoC);
-			for (int i = 0; i < cells_.size(); i++)
+			for (size_t i = 0; i < cells_.size(); i++)
 			{
 				if (flags_[i] == false)
 					continue;
@@ -589,8 +586,7 @@ namespace cpplib::voronoi {
 			{
 				if (flags[i]) {
 					cells_.emplace_back(points[i], i);
-				}
-				else {
+				} else {
 					cells_.emplace_back();
 				}
 			}
@@ -600,7 +596,7 @@ namespace cpplib::voronoi {
 			std::vector<PointsSorted> ret(flags_.size());
 			for (auto& bond : bonds) {
 				// Skip incorrect bonds
-				if (bond.first == bond.second) 
+				if (bond.first == bond.second)
 					continue;
 
 
@@ -619,13 +615,13 @@ namespace cpplib::voronoi {
 				// 1. Calculate distances
 				if (flags_[i] == false)
 					continue;
-				for (auto& [second,code,length] : vec[i])
+				for (auto& [second, code, length] : vec[i])
 				{
 					length = (FtoC * (points_in_unit01[i] -
 									  points_in_unit01[second] -
 									  SpatialGrid::decompress_shift(code))).r();
 				}
-				
+
 				// 2. Sort
 				std::sort(vec[i].begin(), vec[i].end(),
 						  [](const typename PointsSorted::value_type& a,
@@ -635,7 +631,7 @@ namespace cpplib::voronoi {
 			}
 		}
 		// NOTE: this function modifies only one cell  
-		void manager(VoronCell& cell, const PointsSorted& vec, const PointVector& points_in_unit01, const Matrix& FtoC) const { 
+		void manager(VoronCell& cell, const PointsSorted& vec, const PointVector& points_in_unit01, const Matrix& FtoC) const {
 			const Vertex* maxVert = cell.update_vertices_distances(FtoC);
 			auto maxVertDoubleDistance = maxVert->distance * 2;
 			for (auto& [second, code, length] : vec) {
@@ -648,15 +644,15 @@ namespace cpplib::voronoi {
 					// Early exit archived
 					return;
 				}
-				
+
 				// calculate plane
 				auto sumsecond = points_in_unit01[second] + SpatialGrid::decompress_shift(code);
-				auto inter = (cell.center + sumsecond)*FloatingPointType(0.5);
+				auto inter = (cell.center + sumsecond) * FloatingPointType(0.5);
 				auto normal = cell.center - sumsecond;
 				normal /= normal.r();
 
 				PlaneType plane(inter, normal);
-				
+
 				cell.clipByPlaneAndAddNewFace(plane, second, code);
 			}
 		}

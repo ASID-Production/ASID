@@ -29,15 +29,16 @@
 #include <algorithm>
 #include <array>
 #include <cassert>
+#include <cstdlib>
 #include <cmath>
 #include <concepts>
 #include <cstdint>
+#include <functional>
+#include <limits>
 #include <optional>
 #include <type_traits>
 #include <utility>
 #include <vector>
-
-#include "../BaseHeaders/Concepts.h"
 
 namespace cpplib::geometry {
 	template <class T> inline T GradtoRad(T a) {
@@ -82,12 +83,9 @@ namespace cpplib::geometry {
 	public:
 		// Constructors
 		constexpr Point() noexcept = default;
-		constexpr Point(value_type x, value_type y, value_type z) noexcept : a{x, y, z} {
-		};
-		explicit constexpr Point(const array_type& other) noexcept : a(other) {
-		};
-		explicit constexpr Point(array_type&& other) noexcept : a(::std::move(other)) {
-		};
+		constexpr Point(value_type x, value_type y, value_type z) noexcept : a{x, y, z} {};
+		explicit constexpr Point(const array_type& other) noexcept : a(other) {};
+		explicit constexpr Point(array_type&& other) noexcept : a(::std::move(other)) {};
 
 		template <typename T2>
 			requires ((::std::integral<T2> || ::std::floating_point<T2>) && ::std::is_convertible<T2, T>::value)
@@ -308,8 +306,7 @@ namespace cpplib::geometry {
 			A[2][1] = static_cast<T&&>(r.A[2][1]);
 			A[2][2] = static_cast<T&&>(r.A[2][2]);
 		}
-		explicit constexpr Matrix(const T v) noexcept : A{{ {v,0,0},{0,v,0},{0,0,v} }} {
-		}
+		explicit constexpr Matrix(const T v) noexcept : A{{ {v,0,0},{0,v,0},{0,0,v} }} {}
 		explicit constexpr Matrix(const T** input_massive) noexcept {
 			for (size_t i = 0; i < 3; i++) {
 				for (size_t j = 0; j < 3; j++) {
@@ -324,10 +321,8 @@ namespace cpplib::geometry {
 				}
 			}
 		}
-		explicit constexpr Matrix(const_array_type& in) noexcept : A(in) {
-		}
-		explicit constexpr Matrix(array_type&& in) noexcept : A(std::move(in)) {
-		}
+		explicit constexpr Matrix(const_array_type& in) noexcept : A(in) {}
+		explicit constexpr Matrix(array_type&& in) noexcept : A(std::move(in)) {}
 		[[nodiscard]] constexpr T& El(const size_t a, const size_t b) noexcept {
 			return A[a][b];
 		}
@@ -1098,7 +1093,7 @@ namespace cpplib::geometry {
 						upper = upper * 10 + num;
 					}
 				}
-				
+
 			}
 			iter--;
 			return upper / static_cast<T>(lower);
@@ -1139,6 +1134,14 @@ namespace cpplib::geometry {
 
 		std::array<int, 13> left_boxes_shifts;
 
+		/// <summary>
+		/// Build the spatial grid from a set of points. All points must have coordinates in [0, 1). 
+		/// Unnormalized coordinates will produce undefined behavior (out-of-bounds access).
+		/// </summary>
+		/// <param name="points">Vector of points with coordinates normalized to [0, 1) in fractional space</param>
+		/// <param name="cell">The unit cell definition</param>
+		/// <param name="cutoff">Distance cutoff for bonding</param>
+		/// <remarks>Callers are responsible for ensuring point coordinates are properly normalized.</remarks>
 		void build(const std::vector<Point<T>>& points, const CellType& cell, const T cutoff) {
 			// Calculate grid dimensions
 			calculateGridDim(cell, cutoff);
@@ -1187,7 +1190,7 @@ namespace cpplib::geometry {
 			realBoxOffsets[numBoxes] = currentOffset;
 
 			// Fill pointIndices in virtual box order
-			for (int i = 0; i < points.size(); i++) {
+			for (size_t i = 0; i < points.size(); i++) {
 				int vIdx = temp_virt_box_IDx[i];
 				int destPos = boxOffsets[vIdx] + virtBoxCount[vIdx];
 				pointIndices[destPos] = i;
@@ -1204,7 +1207,7 @@ namespace cpplib::geometry {
 				left_boxes_shifts[i] = temp - baseshift;
 			}
 		}
-		
+
 		std::vector<BondWithShift> get_bonds(bool double_sided = false) {
 			std::vector<BondWithShift> bonds;
 			// Preliminary memory reservation to reduce reallocations
@@ -1293,7 +1296,7 @@ namespace cpplib::geometry {
 			}
 		}
 
-		
+
 		void process_box_bonds(int rx, int ry, int rz, std::vector<BondWithShift>& bonds, bool double_sided) {
 			// Current box in virtual grid (center of the 3x3x3 neighborhood)
 			int vIdx = get_box_by_index(rx + 1, ry + 1, rz + 1, gridDimVirt);
@@ -1340,6 +1343,7 @@ namespace cpplib::geometry {
 			}
 		}
 
+		// Assumes p has normalized coordinates [0,1); no validation performed for performance
 		inline int get_virtual_box_index(const PointType& p) const {
 			auto ix = static_cast<int>(p[0] * gridDim[0]) + 1;
 			auto iy = static_cast<int>(p[1] * gridDim[1]) + 1;
@@ -1355,6 +1359,8 @@ namespace cpplib::geometry {
 			return get_box_by_index(ix, iy, iz, gridDim);
 		}
 
+		// Grid dimensions are constrained by physical unit cell sizes (typically < 1000 Å).
+		// If larger cells are needed (gridDim > 253), change gridDim/gridDimVirt to uint32_t.
 		constexpr void calculateGridDim(const CellType& cell, T cutoff) {
 			for (uint8_t i = 0; i < 3; i++) {
 				gridDim[i] = static_cast<uint8_t>(std::floor(cell.lat_dir(i) / cutoff));
