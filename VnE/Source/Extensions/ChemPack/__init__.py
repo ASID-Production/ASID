@@ -332,7 +332,7 @@ def clusterCreationFunc():
 
 
 def instrumentsFunc():
-    import  sys
+    import sys
     if '--debug' in sys.argv or '-d' in sys.argv:
         import importlib
         from . import instruments
@@ -356,7 +356,7 @@ def polyhedronFunc():
 
 
 def voronoiFunc():
-    import  sys
+    import sys
     if '--debug' in sys.argv or '-d' in sys.argv:
         import importlib
         from . import voronoi

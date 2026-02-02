@@ -178,7 +178,6 @@ class Dialog(QDialog):
             else:
                 p.addProperty('label_shift', coords)
         self.opengl_widget.update()
-        ...
 
     def select_mol(self, pos):
         from .MoleculeClass import Bond

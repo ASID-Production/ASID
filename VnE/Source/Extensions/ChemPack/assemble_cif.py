@@ -39,22 +39,22 @@ def execute():
     def process(molsys):
 
         def fracToDec(a, b, c, al, be, ga, coords):
-            al = (al/180)*np.pi
-            be = (be/180)*np.pi
-            ga = (ga/180)*np.pi
+            al = (al / 180) * np.pi
+            be = (be / 180) * np.pi
+            ga = (ga / 180) * np.pi
 
-            coords = coords.copy()
             sin = np.sin
             cos = np.cos
-            cot = lambda x: np.tan(x)**-1
-            csc = lambda x: np.sin(x)**-1
-
-            mat = np.array([[a*sin(be)*np.sqrt(1-(cot(al)*cot(be) - csc(al)*csc(be)*cos(ga))**2), 0, 0],
-                            [a*csc(al)*cos(ga) - a*cot(al)*cos(be), b*sin(al), 0],
-                            [a*cos(be), b*cos(al), c]])
-            mat = mat.transpose()
+            n = (cos(al) - (cos(ga) * cos(be))) / sin(ga)
+            p = (1 - cos(al) ** 2 - cos(be) ** 2 - cos(ga) ** 2 + 2 * cos(al) * cos(be) * cos(ga)) ** 0.5
+            mat = np.array([[a, b * cos(ga), c * cos(be)],
+                            [0, b * sin(ga), c * (cos(al) - cos(be) * cos(ga)) / sin(ga)],
+                            [0, 0, c * p / sin(ga)]])
             for i in range(len(coords)):
-                coords[i] = (coords[i] @ mat).astype(dtype=np.float32)
+                coord = np.array(coords[i])[..., np.newaxis]
+                coord = mat @ coord
+                coord = coord.transpose().squeeze()
+                coords[i] = coord
             return coords
 
         list_obj, molsys = molsys

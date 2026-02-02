@@ -51,20 +51,8 @@ class FileParser:
 
         sin = np.sin
         cos = np.cos
-        cot = lambda x: np.tan(x) ** -1
-        csc = lambda x: np.sin(x) ** -1
         n = (cos(al)-(cos(ga) * cos(be)))/sin(ga)
         p = (1-cos(al)**2-cos(be)**2-cos(ga)**2+2*cos(al)*cos(be)*cos(ga))**0.5
-
-        '''mat = np.array([[a * sin(be) * np.sqrt(1 - (cot(al) * cot(be) - csc(al) * csc(be) * cos(ga)) ** 2), 0, 0],
-                        [a * csc(al) * cos(ga) - a * cot(al) * cos(be), b * sin(al), 0],
-                        [a * cos(be), b * cos(al), c]])
-        mat = np.array([[a, 0, 0],
-                        [b*cos(ga), b*sin(ga), 0],
-                        [c*cos(be), c*n, c*(sin(be)**2-n**2)**0.5],])
-        mat = np.array([[a*p/sin(al), 0, 0],
-                        [a*(cos(ga)-cos(al)*cos(be))/sin(al), b*sin(al), 0],
-                        [a*cos(be), b*cos(al), c]])'''
         mat = np.array([[a, b*cos(ga), c*cos(be)],
                         [0, b*sin(ga), c*(cos(al)-cos(be)*cos(ga))/sin(ga)],
                         [0, 0, c*p/sin(ga)]])
@@ -72,7 +60,6 @@ class FileParser:
             coord = np.array(coords[i])[...,np.newaxis]
             coord = mat @ coord
             coord = coord.transpose().squeeze()
-            #coords[i] = (coords[i] @ mat).astype(dtype=np.float32)
             coords[i] = coord
         return coords
 
