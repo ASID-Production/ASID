@@ -248,7 +248,7 @@ namespace cpplib::voronoi {
 		std::vector<std::unique_ptr<Edge>> edges;
 		std::vector<std::unique_ptr<Face>> faces;
 		PointType center;
-		int id;
+		int id = -1;
 
 
 		static constexpr std::array<PointType, 8> base_vertices = {{
