@@ -60,7 +60,27 @@ namespace cpplib::voronoi {
 		MODIFICATION = 3
 	};
 
-	struct Vertex {
+	class Object {
+		size_t id;
+		State state;
+	public:
+		inline size_t get_id() const noexcept {
+			return id;
+		}
+		inline void set_id(size_t i) noexcept {
+			id = i;
+		}
+		inline State get_state() const noexcept {
+			return state;
+		}
+		inline void set_state(State s) noexcept {
+			state = s;
+		}
+		constexpr explicit Object(size_t ID, State s = State::INVALID) noexcept
+			: id(ID), state(s) {}
+	};
+
+	struct Vertex : public Object{
 		// Types
 		using PointType = geometry::Point<basic_types::FloatingPointType>;
 
@@ -69,7 +89,6 @@ namespace cpplib::voronoi {
 		static constexpr typename PointType::value_type COMPARISON_EPSILON = 1.0 / (1 << 16);
 
 		// Data
-		State state = State::VALID;
 		PointType point;
 		basic_types::FloatingPointType distance = basic_types::FloatingPointType(0.0);
 
@@ -78,9 +97,9 @@ namespace cpplib::voronoi {
 		Container<Face*> faces;
 
 		// Constructors
-		Vertex() = default;
-		explicit Vertex(const PointType& p) noexcept : point(p) {}
-		explicit Vertex(PointType&& p) noexcept : point(std::move(p)) {}
+		explicit Vertex(size_t ID) noexcept: Object(ID, State::VALID) {}
+		Vertex(size_t ID, const PointType& p) noexcept : Object(ID, State::VALID), point(p) {}
+		Vertex(size_t ID, PointType&& p) noexcept : Object(ID, State::VALID), point(std::move(p)) {}
 
 		inline void add_edge(Edge* edge) {
 			edges.insert(edge);
@@ -100,18 +119,12 @@ namespace cpplib::voronoi {
 				std::abs(a.point[1] - b.point[1]) < COMPARISON_EPSILON &&
 				std::abs(a.point[2] - b.point[2]) < COMPARISON_EPSILON;
 		}
-		inline State get_state() const noexcept {
-			return state;
-		}
-		inline void set_state(State s) noexcept {
-			state = s;
-		}
+
 
 	};
 
-	struct Edge {
+	struct Edge : public Object {
 		// Data (not owning)
-		State state = State::INVALID;
 		Container<Vertex*> vertices; // max 2
 		Container<Face*> faces; // max 2
 
@@ -119,7 +132,7 @@ namespace cpplib::voronoi {
 		using PointType = geometry::Point<basic_types::FloatingPointType>;
 		using PlaneType = geometry::Plane<basic_types::FloatingPointType>;
 
-		Edge(Vertex* v1, Vertex* v2) : vertices({v1, v2}) {
+		Edge(size_t ID, Vertex* v1, Vertex* v2) : Object(ID), vertices({v1, v2}) {
 			assert(v1 != NULL && v1 != nullptr);
 			assert(v2 != NULL && v2 != nullptr);
 			v1->edges.emplace(this);
@@ -139,28 +152,22 @@ namespace cpplib::voronoi {
 				}
 				switch (counter) {
 					case 2:
-						state = VALID;
+						set_state(VALID);
 						break;
 					case 1:
-						state = MODIFICATION;
+						set_state(MODIFICATION);
 						break;
 					case 0:
-						state = DELETE;
+						set_state(DELETE);
 						break;
 					default:
 						// Impossible
 						break;
 				}
 			} else {
-				state = INVALID;
+				set_state(INVALID);
 			}
-			return state;
-		}
-		inline State get_state() const noexcept {
-			return state;
-		}
-		inline void set_state(State s) noexcept {
-			state = s;
+			return get_state();
 		}
 
 		PointType intersectSegmentPlane(PlaneType plane) {
@@ -190,21 +197,20 @@ namespace cpplib::voronoi {
 
 	};
 
-	struct Face {
+	struct Face : public Object {
 		// Data (not owning)
-		State state = State::INVALID;
 		size_t owner_id;
 		size_t other_id;
 		char other_shiftcode;
 		Container<Vertex*> vertices;
 		Container<Edge*> edges;
-
+		explicit Face(size_t ID) : Object(ID) {}
 		inline State calculateState() {
 			using enum State;
 
 			if (vertices.size() == edges.size()) {
 				size_t counter = 0;
-				state = VALID;
+				set_state(VALID);
 				for (const auto e : edges)
 				{
 					auto estate = e->get_state();
@@ -212,25 +218,20 @@ namespace cpplib::voronoi {
 						counter++;
 					} else if (estate == MODIFICATION) {
 						counter++;
-						state = MODIFICATION;
+						set_state(MODIFICATION);
 					}
 				}
 				if (counter == 0) {
-					state = DELETE;
+					set_state(DELETE);
 				} else if (counter == 1) { // ERROR STATE!!!
-					state = INVALID;
+					set_state(INVALID);
 				}
 			} else {
-				state = INVALID;
+				set_state(INVALID);
 			}
-			return state;
+			return get_state();
 		}
-		inline State get_state() const noexcept {
-			return state;
-		}
-		inline void set_state(State s) noexcept {
-			state = s;
-		}
+
 	};
 	struct Cell {
 	public:
@@ -310,20 +311,19 @@ namespace cpplib::voronoi {
 			vertices.reserve(128);
 			edges.reserve(128);
             faces.reserve(64);
-			for (const auto& v : base_vertices) {
-				vertices.emplace_back(std::make_unique<Vertex>(v + center));
-				vertices.back()->set_state(State::VALID);
+			for (size_t vert_id = 0; vert_id < 8; vert_id++) {
+				vertices.emplace_back(std::make_unique<Vertex>(vert_id, base_vertices[vert_id] + center));
 			}
-			for (const auto& e : edge_indices) {
-				auto vertex1_ptr = vertices[e[0]].get();
-				auto vertex2_ptr = vertices[e[1]].get();
-				auto owner_ptr = std::make_unique<Edge>(vertex1_ptr, vertex2_ptr); // smart pointer
+			for (size_t edge_id = 0; edge_id < 12; edge_id++) {
+				auto vertex1_ptr = vertices[edge_indices[edge_id][0]].get();
+				auto vertex2_ptr = vertices[edge_indices[edge_id][1]].get();
+				auto owner_ptr = std::make_unique<Edge>(edge_id, vertex1_ptr, vertex2_ptr); // smart pointer
 				auto edge_ptr = owner_ptr.get(); // raw pointer
 				edges.emplace_back(std::move(owner_ptr)); // smart pointer becomes invalid
 				edge_ptr->set_state(State::VALID);
 			}
-			for (int face_id = 0; face_id < 6; face_id++) {
-				auto face = std::make_unique<Face>();
+			for (size_t face_id = 0; face_id < 6; face_id++) {
+				auto face = std::make_unique<Face>(face_id);
 				face->owner_id = id;
 				face->other_id = id;
 				face->other_shiftcode = face_shiftcodes[face_id];
@@ -347,7 +347,7 @@ namespace cpplib::voronoi {
 			}
 		}
 		Vertex* add_vertex(const PointType& p) {
-			auto temp = std::make_unique<Vertex>(p);
+			auto temp = std::make_unique<Vertex>(vertices.size(), p);
 			for (auto& v : vertices) {
 				if (*v == *temp)
 					return v.get();
@@ -477,7 +477,7 @@ namespace cpplib::voronoi {
 				}
 				assert(iter_vertex != f->vertices.cend());
 
-				const auto& new_edge = edges.emplace_back(std::make_unique<Edge>(v1, v2));
+				const auto& new_edge = edges.emplace_back(std::make_unique<Edge>(edges.size(), v1, v2));
 				new_edge->faces.emplace(f.get());
 				f->edges.emplace(new_edge.get());
 				new_edge->set_state(MODIFICATION);
@@ -486,7 +486,7 @@ namespace cpplib::voronoi {
 			}
 
 			// 5. Create new Face
-			const auto& new_face = faces.emplace_back(std::make_unique<Face>()); // smart pointer ref
+			const auto& new_face = faces.emplace_back(std::make_unique<Face>(faces.size())); // smart pointer ref
 			auto raw_face_ptr = new_face.get(); // raw pointer
 			for (const auto& e : edges)
 			{
@@ -658,10 +658,10 @@ namespace cpplib::voronoi {
 		}
 	};
 
-	template<class T>
 	class VoronoiFused {
 	public:
-		using PointType = geometry::Point<T>;
+		using FloatingPointType = basic_types::FloatingPointType;
+		using PointType = geometry::Point<FloatingPointType>;
 
 		struct PolygonIn {
 			::std::vector<::std::size_t>   vert_ids;
@@ -675,14 +675,14 @@ namespace cpplib::voronoi {
 		};
 
 
-		static constexpr T EPSILON = 0.0001;
+		static constexpr FloatingPointType EPSILON = 0.0001;
 	public:
 		//Data
 		::std::vector<PointType> vertices;
 		::std::vector<EdgeIn> edges;
 		::std::vector<PolygonIn> polygons;
 	public:
-		VoronoiFused(const ::std::vector<voronoi::Cell>& cells) {
+		explicit VoronoiFused(const ::std::vector<voronoi::Cell>& cells) {
 
 			size_t count_vertices = 0;
 			size_t count_edges = 0;
@@ -693,10 +693,13 @@ namespace cpplib::voronoi {
 				count_edges += cell.edges.size();
 				count_pol += cell.faces.size();
 			}
-
+			// reserve memory
 			vertices.reserve(count_vertices);
 			edges.reserve(count_edges);
 			polygons.reserve(count_pol);
+
+			// Merge vectors
+
 
 		}
 	};
