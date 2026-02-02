@@ -94,10 +94,17 @@ namespace cpplib::geometry {
 			a[1] = static_cast<T>(other[1]);
 			a[2] = static_cast<T>(other[2]);
 		}
-
+		/// @brief Calculate distance to [0,0,0]. Don't use as (point[a]-point[b]).r().
+		/// @return Distance
 		constexpr value_type r() const noexcept {
 			return sqrt(fma(a[0], a[0], fma(a[1], a[1], a[2] * a[2])));
 		}
+		/// @brief Calculate square of distance to [0,0,0]. Use for comparisons
+		/// @return Distance^2
+		constexpr value_type rSq() const noexcept {
+			return fma(a[0], a[0], fma(a[1], a[1], a[2] * a[2]));
+		}
+
 		constexpr Point& MoveToCell() noexcept {
 			a[0] -= ::std::floor(a[0]);
 			a[1] -= ::std::floor(a[1]);
@@ -117,6 +124,12 @@ namespace cpplib::geometry {
 			value_type d1 = a.a[1] - b.a[1];
 			value_type d2 = a.a[2] - b.a[2];
 			return sqrt(fma(d0, d0, fma(d1, d1, d2 * d2)));
+		}
+		static constexpr value_type distanceSq(const Point& a, const Point& b) noexcept {
+			value_type d0 = a.a[0] - b.a[0];
+			value_type d1 = a.a[1] - b.a[1];
+			value_type d2 = a.a[2] - b.a[2];
+			return fma(d0, d0, fma(d1, d1, d2 * d2));
 		}
 		static constexpr value_type distanceInCubicCell(const Point& a, const Point& b) noexcept {
 			value_type d0 = fmod(a.a[0] - b.a[0] + T(0.5), T(1.0)) - T(0.5);

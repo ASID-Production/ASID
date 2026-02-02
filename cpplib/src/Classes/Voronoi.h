@@ -526,7 +526,7 @@ namespace cpplib::voronoi {
 					continue;
 				auto& curdist = vertices[i]->distance;
 				if (curdist == FloatingPointType(0.0)) {
-					curdist = (fractocart * (vertices[i]->point - center)).r();
+					curdist = (fractocart * (vertices[i]->point - center)).rSq();
 				}
 				if (curdist > m) {
 					m = curdist;
@@ -615,11 +615,11 @@ namespace cpplib::voronoi {
 				// 1. Calculate distances
 				if (flags_[i] == false)
 					continue;
-				for (auto& [second, code, length] : vec[i])
+				for (auto& [second, code, lengthsq] : vec[i])
 				{
-					length = (FtoC * (points_in_unit01[i] -
+					lengthsq = (FtoC * (points_in_unit01[i] -
 									  points_in_unit01[second] -
-									  SpatialGrid::decompress_shift(code))).r();
+									  SpatialGrid::decompress_shift(code))).rSq();
 				}
 
 				// 2. Sort
@@ -633,14 +633,14 @@ namespace cpplib::voronoi {
 		// NOTE: this function modifies only one cell  
 		void manager(VoronCell& cell, const PointsSorted& vec, const PointVector& points_in_unit01, const Matrix& FtoC) const {
 			const Vertex* maxVert = cell.update_vertices_distances(FtoC);
-			auto maxVertDoubleDistance = maxVert->distance * 2;
-			for (auto& [second, code, length] : vec) {
+			auto maxVertDoubleDistanceSq = maxVert->distance * 4; // Squared double distance
+			for (auto& [second, code, lengthsq] : vec) {
 				if (maxVert->get_state() == State::DELETE) {
 					maxVert = cell.update_vertices_distances(FtoC);
-					maxVertDoubleDistance = maxVert->distance * 2;
+					maxVertDoubleDistanceSq = maxVert->distance * 4;
 				}
 
-				if (length > maxVertDoubleDistance) {
+				if (lengthsq > maxVertDoubleDistanceSq) {
 					// Early exit archived
 					return;
 				}
@@ -698,8 +698,48 @@ namespace cpplib::voronoi {
 			edges.reserve(count_edges);
 			polygons.reserve(count_pol);
 
-			// Merge vectors
+			struct SortEntry {
+				FloatingPointType key;
+				uint32_t vIdx;   // glogal index
+				uint32_t lIdx;   // local index
+				const Vertex* ptr;
+			};
+			
+			std::vector<SortEntry> sortentries;
+			sortentries.reserve(count_vertices);
 
+			// Merge living vertices
+			for (const auto& cell : cells) {
+				for (const auto& vert : cell.vertices) {
+					if (vert->get_state() == State::DELETE)
+						continue;
+					sortentries.emplace_back(vert->point[0] + vert->point[1] + vert->point[2],
+											 sortentries.size(),
+											 vert->get_id(),
+											 vert.get());
+					
+				}
+			}
+			// Sort by key
+			std::sort(sortentries.begin(), sortentries.end(), [](auto& a, auto& b) {
+				return a.key < b.key;
+	        });
+			vertices.reserve(sortentries.size());
+			
+			// Two-eyes comparator
+			size_t cur_size = 0;
+			size_t right = 0;
+			for (size_t left = 0; left < sortentries.size(); left++) {
+				for (; right < sortentries.size(); right++) {
+					if (sortentries[right].key - sortentries[left].key >= EPSILON)
+						break;
+				}
+				for (size_t iter = left + 1; iter < right; iter++) {
+					if (PointType::distanceSq(sortentries[left].ptr->point, sortentries[iter].ptr->point) < EPSILON*EPSILON) {
+
+					}
+				}
+			}
 
 		}
 	};

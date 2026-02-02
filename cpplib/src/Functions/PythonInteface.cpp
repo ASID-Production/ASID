@@ -261,6 +261,7 @@ extern "C" {
 
 		FAM_Struct famstr(std::move(all.types), std::move(all.points));
 		std::string errM;
+		// TODO: Don't use famstr anymore
 		auto&& bonds = famstr.findBonds(distances, errM, [](const PointType& p1, const PointType& p2) {return (p1 - p2).r(); }).first;
 
 		PyObject* lst = PyList_New(0);
@@ -278,6 +279,7 @@ extern "C" {
 		Prepare_WC all(arg);
 		FAM_Struct famstr(std::move(all.types), std::move(all.points));
 		std::string errM;
+		// TODO: Don't use famstr anymore
 		auto&& bonds = famstr.findBondsEx(distances, errM, [](const PointType& p1, const PointType& p2) {return (p1 - p2).r(); }).first;
 
 		PyObject* lst = PyList_New(0);
