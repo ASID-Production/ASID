@@ -308,9 +308,9 @@ namespace cpplib::voronoi {
 	public:
 		Cell() = default;
 		Cell(const PointType& c, int i) : center(c), id(i){
-			vertices.reserve(32);
-			edges.reserve(32);
-            faces.reserve(32);
+			vertices.reserve(128);
+			edges.reserve(128);
+            faces.reserve(64);
 			for (const auto& v : base_vertices) {
 				vertices.emplace_back(std::make_unique<Vertex>(v + center));
 				vertices.back()->set_state(State::VALID);
@@ -660,134 +660,48 @@ namespace cpplib::voronoi {
 				cell.clipByPlaneAndAddNewFace(plane, second, code);
 			}
 		}
-
-
 	};
 
-	//template<class T>
-	//class VoronoiFused {
-	//public:
-	//	using PointType = geometry::Point<T>;
+	template<class T>
+	class VoronoiFused {
+	public:
+		using PointType = geometry::Point<T>;
 
-	//	class Polygon {
-	//	public:
-	//		bool is_inner = false;
-	//		::std::vector<::std::size_t> vert_ids;
+		struct PolygonIn {
+			::std::vector<::std::size_t>   vert_ids;
+			::std::vector<::std::size_t>   edge_ids;
+			::std::array<::std::size_t, 2> atom_ids;
 
-	//		void rotateToCanonical() {
-	//			const size_t n = vert_ids.size();
-	//			if (n <= 1) return;
+		};
+		struct EdgeIn {
+			::std::vector<::std::size_t>   atom_ids;
+			::std::array<::std::size_t, 2> vert_ids;
+		};
 
-	//			// 1. Find position of minimum, O(n)
-	//			size_t min_idx = 0;
-	//			for (size_t i = 1; i < n; ++i) {
-	//				if (vert_ids[i] < vert_ids[min_idx]) {
-	//					min_idx = i;
-	//				}
-	//			}
 
-	//			// 2. Find right diraction of ring
-	//			const size_t prev_idx = (min_idx == 0)?n - 1:min_idx - 1;
-	//			const size_t next_idx = (min_idx == n - 1)?0:min_idx + 1;
-	//			const bool need_reverse = (vert_ids[prev_idx] < vert_ids[next_idx]);
+		static constexpr T EPSILON = 0.0001;
+	public:
+		//Data
+		::std::vector<PointType> vertices;
+		::std::vector<EdgeIn> edges;
+		::std::vector<PolygonIn> polygons;
+	public:
+		VoronoiFused(const ::std::vector<voronoi::Cell>& cells) {
 
-	//			// 3. Final rotation on possible reversion
-	//			if (need_reverse) {
-	//				std::reverse(vert_ids.begin(), vert_ids.end());
-	//				// change minimum position after reverse
-	//				const size_t new_min_idx = n - 1 - min_idx;
-	//				if (new_min_idx != 0) {
-	//					std::rotate(vert_ids.begin(), vert_ids.begin() + new_min_idx, vert_ids.end());
-	//				}
-	//			} else {
-	//				if (min_idx != 0) {
-	//					std::rotate(vert_ids.begin(), vert_ids.begin() + min_idx, vert_ids.end());
-	//				}
-	//			}
-	//		}
-	//	};
+			size_t count_vertices = 0;
+			size_t count_edges = 0;
+			size_t count_pol = 0;
 
-	//	using Polyhedra = ::std::vector<size_t>; // Polygon indexes, equal center index
+			for (const auto& cell : cells) {
+				count_vertices += cell.vertices.size();
+				count_edges += cell.edges.size();
+				count_pol += cell.faces.size();
+			}
 
-	//	static constexpr T EPSILON = 0.0001;
-	//public:
-	//	//Data
-	//	::std::vector<PointType> centers;
-	//	::std::vector<PointType> vertexes;
-	//	::std::vector<Polygon> polygons;
-	//	::std::vector<Polyhedra> polyhedra;
-	//public:
-	//	void AddCells(const ::std::vector<voronoi::Cell>& cells) {
+			vertices.reserve(count_vertices);
+			edges.reserve(count_edges);
+			polygons.reserve(count_pol);
 
-	//		auto cells_s = cells.size();
-
-	//		vertexes.clear();
-	//		polygons.clear();
-	//		vertexes.reserve(120 * cells_s);
-	//		polygons.reserve(30 * cells_s);
-
-	//		polyhedra.clear();
-	//		polyhedra.resize(cells_s);
-	//		centers.clear();
-	//		centers.resize(cells_s);
-
-	//		// fill vetexes with coppies
-	//		for (size_t i = 0; i < cells_s; i++)
-	//		{
-	//			centers[i] = cells[i].center;
-	//			auto& faces = cells[i].getFaces();
-	//			auto faces_s = faces.size();
-	//			for (size_t j = 0; j < faces_s; j++)
-	//			{
-	//				Polygon p;
-
-	//				auto& vert = faces[j].poly.getVertixes();
-	//				auto vert_s = vert.size();
-	//				for (size_t k = 0; k < vert_s; k++)
-	//				{
-	//					auto iter = add_to_vertex_union(vertexes, vert[k]);
-	//					p.vert_ids.push_back(iter);
-	//				}
-	//				p.rotateToCanonical();
-	//				auto pgon_it = add_to_polygon_union(polygons, p);
-	//				polyhedra[i].push_back(pgon_it);
-	//			}
-	//		}
-
-	//	}
-
-	//private:
-	//	inline size_t add_to_vertex_union(::std::vector<PointType>& v, const PointType& x) const {
-	//		auto f_It = ::std::ranges::find_if(v,
-	//										   [&x](const PointType& p) {
-	//											   return PointType::distance(x, p) <= EPSILON;
-	//										   });
-	//		if (f_It != v.end())
-	//			return ::std::distance(v.begin(), f_It);
-	//		else {
-	//			v.push_back(x);
-	//			return v.size() - 1;
-	//		}
-	//	}
-	//	inline size_t add_to_polygon_union(::std::vector<Polygon>& v, const Polygon& x) const {
-	//		auto f_It = ::std::ranges::find_if(v,
-	//										   [&x](const Polygon& p) {
-	//											   if (p.is_inner) return false;
-	//											   if (p.vert_ids.size() != x.vert_ids.size())
-	//												   return false;
-	//											   for (size_t i = 0; i < p.vert_ids.size(); ++i) {
-	//												   if (p.vert_ids[i] != x.vert_ids[i])
-	//													   return false;
-	//											   }
-	//											   return true;
-	//										   });
-	//		if (f_It != v.end()) {
-	//			f_It->is_inner = true;
-	//			return ::std::distance(v.begin(), f_It);
-	//		} else {
-	//			v.push_back(x);
-	//			return v.size() - 1;
-	//		}
-	//	}
-	//};
+		}
+	};
 }
