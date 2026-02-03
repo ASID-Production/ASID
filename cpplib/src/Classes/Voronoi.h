@@ -662,10 +662,14 @@ namespace cpplib::voronoi {
 			::std::vector<uint32_t>   vert_ids;
 			::std::vector<uint32_t>   edge_ids;
 			::std::array<uint32_t, 2> atom_ids;
-
 		};
 		struct EdgeIn {
 			::std::array<uint32_t, 2> vert_ids;
+		};
+		struct Polyhedron {
+			::std::vector<uint32_t>   vert_ids;
+			::std::vector<uint32_t>   edge_ids;
+			::std::vector<uint32_t>   poly_ids;
 		};
 
 
@@ -675,20 +679,18 @@ namespace cpplib::voronoi {
 		::std::vector<PointType> vertices;
 		::std::vector<EdgeIn> edges;
 		::std::vector<PolygonIn> polygons;
+		::std::vector<Polyhedron> polyhedra;
 	public:
 		explicit VoronoiFused(::std::vector<voronoi::Cell>& cells) {
-
 			uint32_t count_vertices = 0;
-			uint32_t count_edges = 0;
-			uint32_t count_pol = 0;
-
+			polyhedra.resize(cells.size());
 			for (const auto& cell : cells) {
 				count_vertices += cell.vertices.size();
 			}
 
 			struct SortEntry {
 				bool is_merged;
-				uint32_t lIdx;   // local index
+				std::vector<uint32_t> cIdx;   // cell indexes
 				FloatingPointType key;
 				Vertex* ptr;
 			};
@@ -702,10 +704,10 @@ namespace cpplib::voronoi {
 					if (vert->get_state() == State::DELETE)
 						continue;
 					sortentries.emplace_back(false,
-											 vert->get_id(),
+											 std::vector<uint32_t>(1,cell.id),
 											 vert->point[0] + vert->point[1] + vert->point[2],
 											 vert.get());
-
+					sortentries.back().cIdx.reserve(cells.size());
 				}
 			}
 			// Sort by key
@@ -732,6 +734,10 @@ namespace cpplib::voronoi {
 						// mark iter as deleted
 						sortentries[iter].ptr = nullptr;
 						sortentries[left].is_merged = true;
+						sortentries[left].cIdx.insert(sortentries[left].cIdx.end(), 
+													  sortentries[iter].cIdx.begin(),
+													  sortentries[iter].cIdx.end());
+						sortentries[iter].cIdx.clear();
 					}
 				}
 			}
@@ -744,9 +750,13 @@ namespace cpplib::voronoi {
 			for (uint32_t i = 0; i < count_vertices; ++i) {
 				sortentries[i].ptr->set_id(i);
 				vertices.emplace_back(sortentries[i].ptr->point);
+				for (auto& c : sortentries[i].cIdx) {
+					polyhedra[c].vert_ids.push_back(i);
+				}
 			}
 
 			// Merge edges
+			uint32_t count_edges = 0;
 			for (uint32_t i = 0; i < count_vertices; i++)
 			{
 				if (sortentries[i].is_merged == true) {
@@ -769,25 +779,6 @@ namespace cpplib::voronoi {
 					edges.emplace_back(EdgeIn{{v1->get_id(), v2->get_id()}});
 				}
 			}
-
-			// TODO: DELETE. FOR DEBUG
-			for (auto& e : edges) {
-				if (e.vert_ids[0] > e.vert_ids[1]) 
-					std::swap(e.vert_ids[0], e.vert_ids[1]);
-			}
-			std::sort(edges.begin(), edges.end(), [](auto& a, auto& b) {
-				if(a.vert_ids[0] == b.vert_ids[0])
-					return a.vert_ids[1] < b.vert_ids[1];
-				else
-					return a.vert_ids[0] < b.vert_ids[0];
-
-			});
-			auto last = std::unique(edges.begin(), edges.end(), [](auto& a, auto& b) {
-				return a.vert_ids[0] == b.vert_ids[0] && a.vert_ids[1] == b.vert_ids[1];
-			});
-			if (last != edges.end())
-				return;
-			// TODO: END OF DELETE
 
 			// Merge polygons
 			for (const auto& cell : cells) {
@@ -813,8 +804,8 @@ namespace cpplib::voronoi {
 						cur_poly.edge_ids.push_back(edge->get_id());
 					}
 				}
-
 			}
+
 		}
 		void unite_vertices(Vertex* a, Vertex* b) const {
 			// To remember about strong dependency to Container type.

@@ -104,7 +104,7 @@ PyObject* create_list_from_points(const std::vector<cpplib::geometry::Point<FT>>
 		PyObject* o_point = Py_BuildValue("(ddd)",
 										  static_cast<double>(vec[i][0]),  // px
 										  static_cast<double>(vec[i][1]),  // py
-										  static_cast<double>(vec[i][2]));// pz
+										  static_cast<double>(vec[i][2])); // pz
 		if (o_point == NULL) {
 			Py_DECREF(o_ret);
 			return NULL;
@@ -929,9 +929,9 @@ extern "C" {
 		deb_write("cpplib_compaq std::get<0>(ret).size() = ", std::get<0>(ret).size());
 		for (int i = 0; i < std::get<0>(ret).size(); i++) {
 			PyObject* o_atom = Py_BuildValue("(fff)",
-											 static_cast<cpplib::basic_types::FloatingPointType>(std::get<0>(ret)[i][0]),
-											 static_cast<cpplib::basic_types::FloatingPointType>(std::get<0>(ret)[i][1]),
-											 static_cast<cpplib::basic_types::FloatingPointType>(std::get<0>(ret)[i][2]));
+											 static_cast<float>(std::get<0>(ret)[i][0]),
+											 static_cast<float>(std::get<0>(ret)[i][1]),
+											 static_cast<float>(std::get<0>(ret)[i][2]));
 			PyList_Append(o_xyz_block, o_atom);
 		}
 
@@ -1059,11 +1059,10 @@ extern "C" {
 		auto ce = diag.extractCells();
 		deb_write("cells.size() = ", ce.size());
 		
-		//cpplib::voronoi::VoronoiFused<FloatingPointType> vf;
-		//vf.AddCells(ce);
-		//
+		cpplib::voronoi::VoronoiFused vf(ce);
+		
 
-		//deb_write("vertexes.size() = ", vf.vertexes.size());
+		deb_write("vertexes.size() = ", vf.vertices.size());
 
 		//PyObject* o_centers = create_list_from_points(vf.centers);
 		//PyObject* o_vertexes = create_list_from_points(vf.vertexes);
