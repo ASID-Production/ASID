@@ -44,65 +44,126 @@
 #include "../Classes/Bond.h"
 #include "../Classes/Geometry.h"
 
+/// @brief Voronoi diagram construction and analysis namespace
+///
+/// This namespace contains classes and utilities for constructing and manipulating
+/// Voronoi diagrams in 3D space. The Voronoi diagram partitions space based on
+/// proximity to a set of input points (typically atom positions).
 namespace cpplib::voronoi {
+	// Forward declarations
 	class Vertex;
 	class Edge;
 	class Face;
 	class Cell;
 
+	/// @brief Container type for non-owning pointers in Voronoi structures
+	/// @tparam T Pointer type to store
 	template<class T>
 	using Container = ::std::unordered_set<T>;
 
+	/// @brief State of a Voronoi geometric object during construction
+	///
+	/// Objects transition through states during plane clipping operations:
+	/// - DELETE: Object is outside the valid region
+	/// - VALID: Object is fully valid and unchanged
+	/// - INVALID: Object is in an inconsistent state (error condition)
+	/// - MODIFICATION: Object is being modified by a clipping operation
 	enum class State : char {
-		DELETE = 0,
-		VALID = 1,
-		INVALID = 2,
-		MODIFICATION = 3
+		DELETE = 0,       ///< Object should be deleted
+		VALID = 1,        ///< Object is valid
+		INVALID = 2,      ///< Object is in invalid state
+		MODIFICATION = 3  ///< Object is being modified
 	};
 
+	/// @brief Base class for Voronoi geometric objects with state and ID management
+	///
+	/// Provides common functionality for tracking the state and unique identifier
+	/// of Voronoi vertices, edges, and faces during diagram construction.
 	class Object {
-		State state;
-		uint32_t id;
+		State state;     ///< Current state of the object
+		uint32_t id;     ///< Unique identifier
 	public:
+		/// @brief Get the unique identifier
+		/// @return Object's ID
 		inline uint32_t get_id() const noexcept {
 			return id;
 		}
+
+		/// @brief Set the unique identifier
+		/// @param i New ID value
 		inline void set_id(uint32_t i) noexcept {
 			id = i;
 		}
+
+		/// @brief Get the current state
+		/// @return Current State
 		inline State get_state() const noexcept {
 			return state;
 		}
+
+		/// @brief Set the current state
+		/// @param s New State value
 		inline void set_state(State s) noexcept {
 			state = s;
 		}
+
+		/// @brief Construct an Object with ID and optional state
+		/// @param ID Unique identifier
+		/// @param s Initial state (default: INVALID)
 		constexpr explicit Object(uint32_t ID, State s = State::INVALID) noexcept
 			: state(s), id(ID) {}
 	};
 
-	struct Vertex : public Object{
-		// Types
+	/// @brief Represents a vertex in a Voronoi diagram
+	///
+	/// A Vertex stores a 3D point position, distance metric, and maintains
+	/// non-owning pointers to connected edges and faces. Vertices are compared
+	/// using a spatial epsilon for numerical stability.
+	struct Vertex : public Object {
+		/// @brief 3D point type for vertex position
 		using PointType = geometry::Point<basic_types::FloatingPointType>;
 
-
-		// Constants
+		/// @brief Epsilon for comparing vertex positions
+		///
+		/// Vertices within this distance are considered equal to handle
+		/// floating-point precision issues.
 		static constexpr typename PointType::value_type COMPARISON_EPSILON = 1.0 / (1 << 16);
 
-		// Data
+		/// @brief 3D position of this vertex
 		PointType point;
+
+		/// @brief Distance metric for this vertex (typically squared distance to cell center)
 		basic_types::FloatingPointType distance = basic_types::FloatingPointType(0.0);
 
-		// Data (not owning)
+		/// @brief Edges connected to this vertex (non-owning pointers)
 		Container<Edge*> edges;
+
+		/// @brief Faces connected to this vertex (non-owning pointers)
 		Container<Face*> faces;
 
-		// Constructors
+		/// @brief Default constructor with ID 0
 		Vertex() noexcept : Object(0, State::VALID) {}
-		explicit Vertex(uint32_t ID) noexcept: Object(ID, State::VALID) {}
+
+		/// @brief Construct vertex with given ID
+		/// @param ID Unique identifier for this vertex
+		explicit Vertex(uint32_t ID) noexcept : Object(ID, State::VALID) {}
+
+		/// @brief Construct vertex with ID and position
+		/// @param ID Unique identifier
+		/// @param p Position point
 		Vertex(uint32_t ID, const PointType& p) noexcept : Object(ID, State::VALID), point(p) {}
+
+		/// @brief Construct vertex with ID and position (move)
+		/// @param ID Unique identifier
+		/// @param p Position point (moved)
 		Vertex(uint32_t ID, PointType&& p) noexcept : Object(ID, State::VALID), point(std::move(p)) {}
 
-		// Special comparison
+		/// @brief Compare vertices for equality using spatial epsilon
+		/// @param a First vertex
+		/// @param b Second vertex
+		/// @return True if vertices are spatially equivalent
+		///
+		/// Uses COMPARISON_EPSILON to handle floating-point precision.
 		inline friend bool operator==(const Vertex& a, const Vertex& b) {
 			return std::abs(a.point[0] - b.point[0]) < COMPARISON_EPSILON &&
 				std::abs(a.point[1] - b.point[1]) < COMPARISON_EPSILON &&
@@ -110,15 +171,28 @@ namespace cpplib::voronoi {
 		}
 	};
 
+	/// @brief Represents an edge in a Voronoi diagram
+	///
+	/// An Edge connects two vertices and is shared by (at most) two faces.
+	/// Edges maintain non-owning pointers to their vertices and adjacent faces.
 	struct Edge : public Object {
-		// Data (not owning)
-		Container<Vertex*> vertices; // max 2
-		Container<Face*> faces; // max 2
+		/// @brief Vertices at the endpoints of this edge (max 2, non-owning)
+		Container<Vertex*> vertices;
 
-		// Types
+		/// @brief Faces adjacent to this edge (max 2, non-owning)
+		Container<Face*> faces;
+
+		/// @brief 3D point type
 		using PointType = geometry::Point<basic_types::FloatingPointType>;
+		/// @brief Plane type for intersection calculations
 		using PlaneType = geometry::Plane<basic_types::FloatingPointType>;
 
+		/// @brief Construct an edge connecting two vertices
+		/// @param ID Unique identifier
+		/// @param v1 First vertex (must not be null)
+		/// @param v2 Second vertex (must not be null)
+		///
+		/// Automatically registers this edge with both vertices.
 		Edge(uint32_t ID, Vertex* v1, Vertex* v2) : Object(ID), vertices({v1, v2}) {
 			assert(v1 != NULL && v1 != nullptr);
 			assert(v2 != NULL && v2 != nullptr);
@@ -126,7 +200,13 @@ namespace cpplib::voronoi {
 			v2->edges.emplace(this);
 		}
 
-
+		/// @brief Calculate and update the state of this edge
+		/// @return Updated State
+		///
+		/// An edge is VALID if it has 2 vertices and 2 faces, with both vertices valid.
+		/// An edge is MODIFICATION if it's properly formed but one vertex is being modified.
+		/// An edge is DELETE if both vertices are deleted.
+		/// Otherwise, it's INVALID.
 		inline State calculateState() noexcept {
 			using enum State;
 			if (vertices.size() == 2 && faces.size() == 2) {
@@ -157,6 +237,12 @@ namespace cpplib::voronoi {
 			return get_state();
 		}
 
+		/// @brief Calculate intersection point of this edge with a plane
+		/// @param plane Clipping plane
+		/// @return Intersection point
+		///
+		/// Requires that this edge is in MODIFICATION state (one vertex on each side of plane).
+		/// The edge must not be parallel to the plane.
 		PointType intersectSegmentPlane(PlaneType plane) {
 			assert(calculateState() == State::MODIFICATION);
 			auto it = vertices.begin();
@@ -171,7 +257,6 @@ namespace cpplib::voronoi {
 			// Check that Edge is not parallel to plane
 			assert(std::abs(denom) >= 1e-6);
 
-
 			auto t = -(plane.a[0] * v1->point[0] +
 					   plane.a[1] * v1->point[1] +
 					   plane.a[2] * v1->point[2] +
@@ -181,6 +266,12 @@ namespace cpplib::voronoi {
 
 			return v1->point + direction * t;
 		}
+
+		/// @brief Get the other vertex of this edge
+		/// @param v One vertex of the edge
+		/// @return The other vertex
+		///
+		/// Requires that v is one of the two vertices of this edge.
 		Vertex* get_second_vertex(const Vertex* v) const {
 			for (auto& i : vertices) {
 				if (i != v)
@@ -191,14 +282,39 @@ namespace cpplib::voronoi {
 		}
 	};
 
+	/// @brief Represents a face in a Voronoi diagram
+	///
+	/// A Face is a polygon formed by vertices and edges, separating two Voronoi cells.
+	/// Each face has an owner cell and an "other" cell (possibly shifted by periodic boundaries).
 	struct Face : public Object {
-		// Data (not owning)
+		/// @brief ID of the cell that owns this face
 		uint32_t owner_id;
+
+		/// @brief ID of the neighboring cell on the other side of this face
 		uint32_t other_id;
+
+		/// @brief Shift code for periodic boundary conditions
+		///
+		/// Indicates which periodic image the "other" cell is in.
 		char other_shiftcode;
+
+		/// @brief Vertices forming this face (non-owning pointers)
 		Container<Vertex*> vertices;
+
+		/// @brief Edges forming this face (non-owning pointers)
 		Container<Edge*> edges;
+
+		/// @brief Construct a face with given ID
+		/// @param ID Unique identifier
 		explicit Face(uint32_t ID) : Object(ID) {}
+
+		/// @brief Calculate and update the state of this face
+		/// @return Updated State
+		///
+		/// A face is VALID if it has equal numbers of vertices and edges, and all edges are valid.
+		/// A face is MODIFICATION if any edge is being modified.
+		/// A face is DELETE if all edges are deleted.
+		/// A face with exactly one valid edge is INVALID (error condition).
 		inline State calculateState() {
 			using enum State;
 
@@ -225,26 +341,50 @@ namespace cpplib::voronoi {
 			}
 			return get_state();
 		}
-
 	};
+
+	/// @brief Represents a complete Voronoi cell in 3D space
+	///
+	/// A Cell contains vertices, edges, and faces that define a Voronoi polyhedron.
+	/// Supports progressive clipping by planes to construct the final cell geometry.
+	/// Cells are initialized as cubes centered at an atomic position and then
+	/// iteratively clipped by planes perpendicular to neighboring atoms.
 	struct Cell {
 	public:
+		/// @brief Floating-point type for coordinates
 		using FloatingPointType = basic_types::FloatingPointType;
+		/// @brief 3D point type
 		using PointType = geometry::Point<FloatingPointType>;
+		/// @brief Integer shift type for periodic boundaries
 		using ShiftType = geometry::Point<int8_t>;
+		/// @brief Bond with periodic boundary shift
 		using BondWithShift = BondWithPoint<ShiftType>;
+		/// @brief Plane type for clipping operations
 		using PlaneType = geometry::Plane<FloatingPointType>;
 
+		/// @brief Epsilon for geometric comparisons
+		///
+		/// Used to determine if a vertex lies exactly on a clipping plane.
 		static constexpr FloatingPointType limit = 2 * ::std::numeric_limits<FloatingPointType>::epsilon();
 
-		// Data (Owning)
+		/// @brief Owned vertices in this cell (smart pointers)
 		std::vector<std::unique_ptr<Vertex>> vertices;
+
+		/// @brief Owned edges in this cell (smart pointers)
 		std::vector<std::unique_ptr<Edge>> edges;
+
+		/// @brief Owned faces in this cell (smart pointers)
 		std::vector<std::unique_ptr<Face>> faces;
+
+		/// @brief Center point of this cell (typically an atom position)
 		PointType center;
+
+		/// @brief Cell identifier (typically atom index)
 		int id = -1;
 
-
+		/// @brief Base cube vertices (8 corners, relative to center)
+		///
+		/// Initial geometry for a Voronoi cell before clipping.
 		static constexpr std::array<PointType, 8> base_vertices = {{
 			PointType{-0.5, -0.5, -0.5}, // 0
 			PointType{ 0.5, -0.5, -0.5}, // 1
@@ -256,15 +396,19 @@ namespace cpplib::voronoi {
 			PointType{-0.5,  0.5,  0.5}  // 7
 		}};
 
-		// Indexes for each face of the cube (conter-clockwise from outside)
+		/// @brief Vertex indices for each face of the cube (counter-clockwise from outside)
 		static constexpr std::array<std::array<int, 4>, 6> face_indices = {{
-			{4, 7, 6, 5}, // front face
-			{0, 1, 2, 3}, // back face
-			{0, 3, 7, 4}, // left face
-			{1, 5, 6, 2}, // right face
-			{0, 4, 5, 1}, // bottom face
-			{3, 2, 6, 7}  // top face
+			{4, 7, 6, 5}, // front face  (+Z)
+			{0, 1, 2, 3}, // back face   (-Z)
+			{0, 3, 7, 4}, // left face   (-X)
+			{1, 5, 6, 2}, // right face  (+X)
+			{0, 4, 5, 1}, // bottom face (-Y)
+			{3, 2, 6, 7}  // top face    (+Y)
 		}};
+
+		/// @brief Shift codes for each face of the base cube
+		///
+		/// Indicates which periodic image each cube face points toward.
 		static constexpr std::array<char, 6> face_shiftcodes = {{
 			22, // front face
 			 4, // back face
@@ -274,7 +418,7 @@ namespace cpplib::voronoi {
 			16  // top face
 		}};
 
-		// Indexes for each edge of the cube
+		/// @brief Vertex indices for each edge of the cube
 		static constexpr std::array<std::array<int, 2>, 12> edge_indices = {{
 			{4, 7}, // edge 0: front-left
 			{7, 6}, // edge 1: front-top
@@ -289,6 +433,8 @@ namespace cpplib::voronoi {
 			{1, 5}, // edge 10: right-bottom
 			{2, 6}  // edge 11: right-top
 		}};
+
+		/// @brief Edge indices for each face of the cube
 		static constexpr std::array<std::array<int, 4>, 6> face_edge_indices = {{
 			{ 0,  1,  2,  3},  // front face
 			{ 4,  5,  6,  7},  // back face
@@ -297,39 +443,51 @@ namespace cpplib::voronoi {
 			{ 8,  3, 10,  4},  // bottom face
 			{ 9,  1, 11,  6}   // top face
 		}};
-		
 
 	public:
+		/// @brief Default constructor
 		Cell() = default;
-		Cell(const PointType& c, int i) : center(c), id(i){
+
+		/// @brief Construct a Voronoi cell as a cube centered at given point
+		/// @param c Center point (typically atom position)
+		/// @param i Cell identifier (typically atom index)
+		///
+		/// Initializes the cell as a cube with 8 vertices, 12 edges, and 6 faces.
+		Cell(const PointType& c, int i) : center(c), id(i) {
 			vertices.reserve(128);
 			edges.reserve(128);
-            faces.reserve(64);
+			faces.reserve(64);
+
+			// Create base vertices
 			for (uint32_t vert_id = 0; vert_id < 8; vert_id++) {
 				vertices.emplace_back(std::make_unique<Vertex>(vert_id, base_vertices[vert_id] + center));
 			}
+
+			// Create edges connecting vertices
 			for (uint32_t edge_id = 0; edge_id < 12; edge_id++) {
 				auto vertex1_ptr = vertices[edge_indices[edge_id][0]].get();
 				auto vertex2_ptr = vertices[edge_indices[edge_id][1]].get();
-				auto owner_ptr = std::make_unique<Edge>(edge_id, vertex1_ptr, vertex2_ptr); // smart pointer
-				auto edge_ptr = owner_ptr.get(); // raw pointer
-				edges.emplace_back(std::move(owner_ptr)); // smart pointer becomes invalid
+				auto owner_ptr = std::make_unique<Edge>(edge_id, vertex1_ptr, vertex2_ptr);
+				auto edge_ptr = owner_ptr.get();
+				edges.emplace_back(std::move(owner_ptr));
 				edge_ptr->set_state(State::VALID);
 			}
+
+			// Create faces
 			for (uint32_t face_id = 0; face_id < 6; face_id++) {
 				auto face = std::make_unique<Face>(face_id);
 				face->owner_id = id;
 				face->other_id = id;
 				face->other_shiftcode = face_shiftcodes[face_id];
 
-				// Fill vertices
+				// Fill vertices for this face
 				for (int j = 0; j < 4; j++) {
 					auto vertex_ptr = vertices[face_indices[face_id][j]].get();
 					face->vertices.emplace(vertex_ptr);
 					vertex_ptr->faces.emplace(face.get());
 				}
 
-				// Fill edges
+				// Fill edges for this face
 				for (int j = 0; j < 4; j++) {
 					auto edge_ptr = edges[face_edge_indices[face_id][j]].get();
 					face->edges.emplace(edge_ptr);
@@ -340,6 +498,13 @@ namespace cpplib::voronoi {
 				faces.push_back(std::move(face));
 			}
 		}
+
+		/// @brief Add a new vertex to the cell (with deduplication)
+		/// @param p Vertex position
+		/// @return Pointer to the vertex (new or existing)
+		///
+		/// If a vertex at this position already exists (within epsilon), returns
+		/// the existing vertex. Otherwise, creates a new vertex.
 		Vertex* add_vertex(const PointType& p) {
 			auto temp = std::make_unique<Vertex>(vertices.size(), p);
 			for (auto& v : vertices) {
@@ -350,10 +515,22 @@ namespace cpplib::voronoi {
 			vertices.emplace_back(std::move(temp));
 			return simple_ptr;
 		}
+
+		/// @brief Clip cell by a plane and add the resulting face
+		/// @param clipping_plane Plane to clip by
+		/// @param id_of_another_cell ID of the neighboring cell
+		/// @param another_shiftcode Shift code for periodic boundaries
+		///
+		/// Progressively clips the Voronoi cell by a plane perpendicular to a neighboring atom.
+		/// This algorithm:
+		/// 1. Classifies vertices as deleted, modified, or valid based on their side of the plane
+		/// 2. Updates edge and face states accordingly
+		/// 3. Creates new vertices at edge-plane intersections
+		/// 4. Adds new edges and a new face where the plane cuts the cell
 		void clipByPlaneAndAddNewFace(const PlaneType& clipping_plane, uint32_t id_of_another_cell, char another_shiftcode) {
 			using enum State;
 
-			// Check if the side is correct
+			// Check if the side is correct (center must be on positive side)
 			assert(clipping_plane.side(center) > 0);
 
 			// Check cutting
@@ -375,6 +552,8 @@ namespace cpplib::voronoi {
 					v->set_state(MODIFICATION);
 				}
 			}
+
+			// Early exit if no vertices were cut
 			if (modified == false) {
 				for (auto& v : vertices)
 				{
@@ -403,7 +582,7 @@ namespace cpplib::voronoi {
 			}
 
 			// 3. Cut edges
-			// So we need check all Edges, which ask about MODIFICATION
+			// Check all Edges which need MODIFICATION
 			for (auto& e : edges)
 			{
 				if (e->get_state() != MODIFICATION) {
@@ -412,7 +591,7 @@ namespace cpplib::voronoi {
 				auto intersection = e->intersectSegmentPlane(clipping_plane);
 				auto new_vertex_ptr = add_vertex(intersection);
 
-				// delete vertex from set
+				// Erase deleted vertex from set
 				std::erase_if(e->vertices,
 							  [](auto* ptr) {
 								  if (ptr->get_state() == DELETE) {
@@ -420,26 +599,25 @@ namespace cpplib::voronoi {
 								  }
 								  return false;
 							  });
-				// and add new vertex to set
+				// Add new vertex to set
 				e->vertices.insert(new_vertex_ptr);
 
-
-				new_vertex_ptr->edges.insert(e.get()); // insert this edge to set of new vertex
-				new_vertex_ptr->faces.insert(e->faces.begin(), e->faces.end()); // copy set of faces from the edge
+				new_vertex_ptr->edges.insert(e.get());
+				new_vertex_ptr->faces.insert(e->faces.begin(), e->faces.end());
 				for (auto& f : e->faces) {
 					f->vertices.emplace(new_vertex_ptr);
 				}
-				new_vertex_ptr->set_state(MODIFICATION); // Set, that Vertex is on the NEW FACE
+				new_vertex_ptr->set_state(MODIFICATION); // Mark as on the NEW FACE
 
 				// Now, new vertex complete, so edge is VALID too:
 				e->set_state(VALID);
 			}
 
-			// 4. Cut Faces, which need modification
+			// 4. Cut Faces which need modification
 			for (auto& f : faces) {
 				if (f->get_state() != MODIFICATION) continue;
 
-				// 4.1. Find and delete all unnesessary edges and vertices
+				// 4.1. Find and delete all unnecessary edges and vertices
 				std::erase_if(f->edges, [](const auto* ptr) {
 					return ptr->get_state() == DELETE;
 					});
@@ -448,12 +626,11 @@ namespace cpplib::voronoi {
 					});
 
 				// 4.2 Modify the face: add Edge
-
 				auto iter_vertex = f->vertices.cbegin();
 				Vertex* v1 = nullptr;
 				Vertex* v2 = nullptr;
 
-				// Find new vertices
+				// Find new vertices (those on the clipping plane)
 				while (iter_vertex != f->vertices.cend()) {
 					v1 = *iter_vertex;
 					if (v1->get_state() == MODIFICATION) {
@@ -471,17 +648,19 @@ namespace cpplib::voronoi {
 				}
 				assert(iter_vertex != f->vertices.cend());
 
+				// Create edge connecting the two new vertices
 				const auto& new_edge = edges.emplace_back(std::make_unique<Edge>(edges.size(), v1, v2));
 				new_edge->faces.emplace(f.get());
 				f->edges.emplace(new_edge.get());
 				new_edge->set_state(MODIFICATION);
 				f->set_state(VALID);
-
 			}
 
-			// 5. Create new Face
-			const auto& new_face = faces.emplace_back(std::make_unique<Face>(faces.size())); // smart pointer ref
-			auto raw_face_ptr = new_face.get(); // raw pointer
+			// 5. Create new Face (the clipping plane becomes a face)
+			const auto& new_face = faces.emplace_back(std::make_unique<Face>(faces.size()));
+			auto raw_face_ptr = new_face.get();
+
+			// Add all MODIFICATION edges to the new face
 			for (const auto& e : edges)
 			{
 				if (e->get_state() == MODIFICATION) {
@@ -491,6 +670,8 @@ namespace cpplib::voronoi {
 					assert(e->calculateState() == VALID);
 				}
 			}
+
+			// Add all MODIFICATION vertices to the new face
 			for (const auto& v : vertices)
 			{
 				if (v->get_state() == MODIFICATION) {
@@ -499,6 +680,7 @@ namespace cpplib::voronoi {
 					v->set_state(VALID);
 				}
 			}
+
 			raw_face_ptr->owner_id = id;
 			raw_face_ptr->other_id = id_of_another_cell;
 			raw_face_ptr->other_shiftcode = another_shiftcode;
@@ -507,8 +689,15 @@ namespace cpplib::voronoi {
 
 			// Cleanup after modifications is not needed right now. 
 			// It may be done after last cut.
-
 		}
+
+		/// @brief Update vertex distances from the cell center
+		/// @param fractocart Transformation matrix (fractional to Cartesian)
+		/// @return Pointer to the vertex with maximum distance
+		///
+		/// Calculates squared distances for vertices that haven't been computed yet,
+		/// and returns the vertex farthest from the center. Used for early exit
+		/// optimization during cell construction.
 		const Vertex* update_vertices_distances(const geometry::Matrix<FloatingPointType>& fractocart) {
 			const Vertex* ret = nullptr;
 			FloatingPointType m = FloatingPointType(0.0);
@@ -532,24 +721,60 @@ namespace cpplib::voronoi {
 		}
 	};
 
+	/// @brief Main class for constructing Voronoi diagrams from atomic positions
+	///
+	/// VoronoiDiagram constructs Voronoi cells for a set of input points (atoms) by:
+	/// 1. Initializing each cell as a cube centered at the point
+	/// 2. Finding neighboring points via a spatial grid and bonds
+	/// 3. Iteratively clipping each cell by planes perpendicular to its neighbors
+	/// 4. Extracting the final cell geometry
+	///
+	/// Note: Only cells marked with flags=true are fully computed. Others are left empty.
 	class VoronoiDiagram {
 	public:
+		/// @brief Floating-point type
 		using FloatingPointType = basic_types::FloatingPointType;
+		/// @brief 3D point type
 		using PointType = geometry::Point<FloatingPointType>;
+		/// @brief Voronoi cell type
 		using VoronCell = voronoi::Cell;
+		/// @brief Vector of points
 		using PointVector = ::std::vector<PointType>;
+		/// @brief Vector of cells
 		using CellVector = ::std::vector<VoronCell>;
+		/// @brief Vector of flags
 		using BoolVector = ::std::vector<bool>;
+		/// @brief Spatial grid for neighbor finding
 		using SpatialGrid = geometry::SpatialGrid<FloatingPointType>;
+		/// @brief Transformation matrix type
 		using Matrix = geometry::Matrix<FloatingPointType>;
+		/// @brief Sorted list of neighbor interactions (index, shiftcode, distance?)
 		using PointsSorted = std::vector<std::tuple<int, char, FloatingPointType>>;
+		/// @brief Plane type
 		using PlaneType = geometry::Plane<FloatingPointType>;
 
 	private:
 		//Data
+		/// @brief Flags indicating which cells to compute
 		BoolVector flags_;
+		/// @brief Computed Voronoi cells
 		CellVector cells_;
+
 	public:
+		/// @brief Construct a Voronoi diagram from points and bonds
+		/// @param points_in_unit01 Atomic positions in fractional coordinates [0,1]
+		/// @param bonds List of bonds with periodic shifts
+		/// @param FtoC Transformation matrix (fractional to Cartesian coordinates)
+		/// @param flags Optional flags indicating which cells to compute (default: all true)
+		///
+		/// The constructor performs the complete Voronoi construction:
+		/// - Initializes cells for all points
+		/// - Finds interactions via bonds
+		/// - Sorts neighbors by distance
+		/// - Clips each cell by planes to neighboring atoms
+		///
+		/// Only cells with flags[i]=true are fully computed. This allows computing only
+		/// the asymmetric unit cells while using symmetry-expanded points for boundaries.
 		explicit VoronoiDiagram(const PointVector& points_in_unit01,
 								const std::vector<SpatialGrid::BondWithShift>& bonds,
 								const Matrix& FtoC,
@@ -570,10 +795,18 @@ namespace cpplib::voronoi {
 			}
 		}
 
+		/// @brief Extract the computed Voronoi cells
+		/// @return Vector of cells (moved out)
+		///
+		/// After calling this, the diagram is left in an empty state.
 		CellVector extractCells() noexcept {
 			return std::move(cells_);
 		}
+
 	private:
+		/// @brief Initialize cells for all points
+		/// @param points Atomic positions
+		/// @param flags Flags indicating which cells to compute
 		void add_points(const PointVector& points, const BoolVector& flags) noexcept {
 			cells_.reserve(points.size());
 			for (uint32_t i = 0; i < static_cast<uint32_t>(points.size()); i++)
@@ -586,23 +819,37 @@ namespace cpplib::voronoi {
 			}
 		}
 
+		/// @brief Find neighbor interactions from bonds
+		/// @param bonds List of bonds with shift codes
+		/// @return Vector of neighbor lists for each point
+		///
+		/// For each cell, creates a list of (neighbor_id, shiftcode, distance?) tuples.
 		std::vector<PointsSorted> find_interactions(const std::vector<SpatialGrid::BondWithShift>& bonds) noexcept {
 			std::vector<PointsSorted> ret(flags_.size());
 			for (auto& bond : bonds) {
-				// Skip incorrect bonds
+				// Skip incorrect bonds (self-bonds)
 				if (bond.first == bond.second)
 					continue;
 
-
+				// Add neighbor to first atom's list
 				if (flags_[bond.first] == true) {
 					ret[bond.first].emplace_back(bond.second, bond.shiftcode, FloatingPointType(0.0));
 				}
+				// Add neighbor to second atom's list (with inverse shift)
 				if (flags_[bond.second] == true) {
 					ret[bond.second].emplace_back(bond.first, SpatialGrid::inverse_code(bond.shiftcode), FloatingPointType(0.0));
 				}
 			}
 			return ret;
 		}
+
+		/// @brief Calculate distances and sort neighbors for each cell
+		/// @param vec Neighbor lists (modified in-place)
+		/// @param points_in_unit01 Atomic positions
+		/// @param FtoC Fractional to Cartesian transformation
+		///
+		/// Computes squared distances to neighbors in Cartesian space and sorts
+		/// neighbors by increasing distance for each cell.
 		void calculate_and_sort(std::vector<PointsSorted>& vec, const PointVector& points_in_unit01, const Matrix& FtoC) {
 			auto vec_s = static_cast<uint32_t>(vec.size());
 			for (uint32_t i = 0; i < vec_s; i++)
@@ -613,11 +860,11 @@ namespace cpplib::voronoi {
 				for (auto& [second, code, lengthsq] : vec[i])
 				{
 					lengthsq = (FtoC * (points_in_unit01[i] -
-									  points_in_unit01[second] -
-									  SpatialGrid::decompress_shift(code))).rSq();
+										points_in_unit01[second] -
+										SpatialGrid::decompress_shift(code))).rSq();
 				}
 
-				// 2. Sort
+				// 2. Sort by distance
 				std::sort(vec[i].begin(), vec[i].end(),
 						  [](const typename PointsSorted::value_type& a,
 							 const typename PointsSorted::value_type& b) {
@@ -625,26 +872,37 @@ namespace cpplib::voronoi {
 						  });
 			}
 		}
-		// NOTE: this function modifies only one cell  
+
+		/// @brief Construct a single Voronoi cell by clipping
+		/// @param cell Cell to modify
+		/// @param vec Sorted neighbor list
+		/// @param points_in_unit01 Atomic positions
+		/// @param FtoC Fractional to Cartesian transformation
+		///
+		/// Iteratively clips the cell by planes perpendicular to neighbors (sorted by distance).
+		/// Uses early exit optimization: stops when the nearest unprocessed neighbor is farther
+		/// than twice the distance to the farthest vertex of the current cell.
 		void manager(VoronCell& cell, const PointsSorted& vec, const PointVector& points_in_unit01, const Matrix& FtoC) const {
 			const Vertex* maxVert = cell.update_vertices_distances(FtoC);
 			auto maxVertDoubleDistanceSq = maxVert->distance * 4; // Squared double distance
+
 			for (auto& [second, code, lengthsq] : vec) {
+				// Update max vertex if it was deleted
 				if (maxVert->get_state() == State::DELETE) {
 					maxVert = cell.update_vertices_distances(FtoC);
 					maxVertDoubleDistanceSq = maxVert->distance * 4;
 				}
 
+				// Early exit: neighbor is too far to affect the cell
 				if (lengthsq > maxVertDoubleDistanceSq) {
-					// Early exit archived
 					return;
 				}
 
-				// calculate plane
+				// Calculate clipping plane
 				auto sumsecond = points_in_unit01[second] + SpatialGrid::decompress_shift(code);
-				auto inter = (cell.center + sumsecond) * FloatingPointType(0.5);
+				auto inter = (cell.center + sumsecond) * FloatingPointType(0.5); // Midpoint
 				auto normal = cell.center - sumsecond;
-				normal /= normal.r();
+				normal /= normal.r(); // Normalize
 
 				PlaneType plane(inter, normal);
 
@@ -653,34 +911,62 @@ namespace cpplib::voronoi {
 		}
 	};
 
+	/// @brief Fused Voronoi structure for merged/unified cells
+	///
+	/// VoronoiFused takes a collection of Voronoi cells and merges coincident vertices,
+	/// edges, and faces to create a unified polyhedral structure. This is useful for
+	/// visualization and further analysis of the Voronoi tessellation.
 	class VoronoiFused {
 	public:
+		/// @brief Floating-point type
 		using FloatingPointType = basic_types::FloatingPointType;
+		/// @brief 3D point type
 		using PointType = geometry::Point<FloatingPointType>;
 
+		/// @brief Polygon (face) in the fused structure
 		struct PolygonIn {
-			::std::vector<uint32_t>   vert_ids;
-			::std::vector<uint32_t>   edge_ids;
-			::std::array<uint32_t, 2> atom_ids;
+			::std::vector<uint32_t>   vert_ids;   ///< Vertex indices forming the polygon
+			::std::vector<uint32_t>   edge_ids;   ///< Edge indices forming the polygon
+			::std::array<uint32_t, 2> atom_ids;   ///< IDs of the two atoms separated by this face
 		};
+
+		/// @brief Edge in the fused structure
 		struct EdgeIn {
-			::std::array<uint32_t, 2> vert_ids;
+			::std::array<uint32_t, 2> vert_ids;   ///< Vertex indices at endpoints
 		};
+
+		/// @brief Polyhedron (cell) in the fused structure
 		struct Polyhedron {
-			::std::vector<uint32_t>   vert_ids;
-			::std::vector<uint32_t>   edge_ids;
-			::std::vector<uint32_t>   poly_ids;
+			::std::vector<uint32_t>   vert_ids;   ///< Vertex indices in this polyhedron
+			::std::vector<uint32_t>   edge_ids;   ///< Edge indices in this polyhedron
+			::std::vector<uint32_t>   poly_ids;   ///< Polygon indices in this polyhedron
 		};
 
-
+		/// @brief Epsilon for merging coincident vertices
+		///
+		/// Vertices within this distance are considered identical and merged.
 		static constexpr FloatingPointType EPSILON = 256 * std::numeric_limits<FloatingPointType>::epsilon();
+
 	public:
 		//Data
+		/// @brief Unified vertex positions
 		::std::vector<PointType> vertices;
+		/// @brief Unified edges
 		::std::vector<EdgeIn> edges;
+		/// @brief Unified polygons (faces)
 		::std::vector<PolygonIn> polygons;
+		/// @brief Polyhedra (cells)
 		::std::vector<Polyhedron> polyhedra;
+
 	public:
+		/// @brief Construct a fused Voronoi structure from cells
+		/// @param cells Vector of Voronoi cells to merge
+		///
+		/// Performs the following operations:
+		/// 1. Merges coincident vertices across cells
+		/// 2. Merges duplicate edges
+		/// 3. Merges duplicate faces (polygons)
+		/// 4. Builds unified polyhedra (cells) referencing the merged geometry
 		explicit VoronoiFused(::std::vector<voronoi::Cell>& cells) {
 			uint32_t count_vertices = 0;
 			polyhedra.resize(cells.size());
@@ -688,60 +974,64 @@ namespace cpplib::voronoi {
 				count_vertices += cell.vertices.size();
 			}
 
+			/// @brief Helper structure for sorting and merging vertices
 			struct SortEntry {
-				bool is_merged;
-				std::vector<uint32_t> cIdx;   // cell indexes
-				FloatingPointType key;
-				Vertex* ptr;
+				bool is_merged;                  ///< Whether this vertex was merged with others
+				std::vector<uint32_t> cIdx;      ///< Cell indices this vertex belongs to
+				FloatingPointType key;           ///< Sort key (sum of coordinates)
+				Vertex* ptr;                     ///< Pointer to original vertex
 			};
 
 			std::vector<SortEntry> sortentries;
 			sortentries.reserve(count_vertices);
 
-			// Merge living vertices
+			// Collect all living vertices
 			for (const auto& cell : cells) {
 				for (const auto& vert : cell.vertices) {
 					if (vert->get_state() == State::DELETE)
 						continue;
 					sortentries.emplace_back(false,
-											 std::vector<uint32_t>(1,cell.id),
+											 std::vector<uint32_t>(1, cell.id),
 											 vert->point[0] + vert->point[1] + vert->point[2],
 											 vert.get());
 					sortentries.back().cIdx.reserve(cells.size());
 				}
 			}
-			// Sort by key
+
+			// Sort by coordinate sum (for efficient proximity search)
 			std::sort(sortentries.begin(), sortentries.end(), [](auto& a, auto& b) {
 				return a.key < b.key;
 			});
 
-			// Two-eyes comparator
+			// Merge coincident vertices using two-pointer technique
 			count_vertices = static_cast<uint32_t>(sortentries.size());
 			uint32_t right = 0;
 			for (uint32_t left = 0; left < count_vertices; left++) {
 				if (sortentries[left].ptr == nullptr)
 					continue;
+				// Advance right pointer to include all vertices within EPSILON of left
 				for (; right < count_vertices; right++) {
 					if (sortentries[right].key - sortentries[left].key >= EPSILON)
 						break;
 				}
+				// Check for exact matches within the window
 				for (uint32_t iter = left + 1; iter < right; iter++) {
 					if (sortentries[iter].ptr == nullptr)
 						continue;
 					if (PointType::isSame(sortentries[left].ptr->point, sortentries[iter].ptr->point, EPSILON)) {
-						// Copy data to the left ptr
+						// Merge iter into left
 						unite_vertices(sortentries[left].ptr, sortentries[iter].ptr);
-						// mark iter as deleted
 						sortentries[iter].ptr = nullptr;
 						sortentries[left].is_merged = true;
-						sortentries[left].cIdx.insert(sortentries[left].cIdx.end(), 
+						sortentries[left].cIdx.insert(sortentries[left].cIdx.end(),
 													  sortentries[iter].cIdx.begin(),
 													  sortentries[iter].cIdx.end());
 						sortentries[iter].cIdx.clear();
 					}
 				}
 			}
-			// Erase and finalise vertices
+
+			// Remove deleted entries and finalize vertices
 			std::erase_if(sortentries, [](const auto& entry) {
 				return entry.ptr == nullptr;
 			});
@@ -755,20 +1045,20 @@ namespace cpplib::voronoi {
 				}
 			}
 
-			// Merge edges
+			// Merge edges (find and unite duplicates)
 			uint32_t count_edges = 0;
 			for (uint32_t i = 0; i < count_vertices; i++)
 			{
 				if (sortentries[i].is_merged == true) {
 					count_edges += find_dublicate_and_count_edges(sortentries[i].ptr);
-				}
-				else {
+				} else {
 					count_edges += sortentries[i].ptr->edges.size();
 				}
 			}
-			count_edges >>= 1; // Divide by 2
+			count_edges >>= 1; // Divide by 2 (each edge counted twice)
 			edges.reserve(count_edges);
-			// Finalise edges
+
+			// Finalize edges
 			for (const auto& cell : cells) {
 				for (const auto& edge : cell.edges) {
 					if (edge->get_state() == State::DELETE)
@@ -780,18 +1070,19 @@ namespace cpplib::voronoi {
 				}
 			}
 
-			// Merge polygons
+			// Merge polygons (faces)
 			for (const auto& cell : cells) {
 				for (const auto& face : cell.faces) {
 					if (face->get_state() == State::DELETE)
 						continue;
+					// Skip duplicate internal faces (keep only one copy)
 					if (cells[face->other_id].vertices.empty() == false &&
 					   face->other_shiftcode == 13 &&
 					   face->owner_id > face->other_id) {
 						continue;
 					}
 
-					// All checks passed
+					// Create polygon entry
 					polygons.emplace_back();
 					auto& cur_poly = polygons.back();
 					cur_poly.vert_ids.reserve(face->vertices.size());
@@ -805,44 +1096,55 @@ namespace cpplib::voronoi {
 					}
 				}
 			}
-
 		}
+
+		/// @brief Merge two vertices into one
+		/// @param a Target vertex (will contain merged data)
+		/// @param b Source vertex (will be invalidated)
+		///
+		/// Updates all edges and faces referencing b to reference a instead,
+		/// then copies all connectivity information from b to a.
 		void unite_vertices(Vertex* a, Vertex* b) const {
-			// To remember about strong dependency to Container type.
+			// Check container type dependency
 			static_assert(std::is_same_v<cpplib::voronoi::Container<Vertex*>, std::unordered_set<Vertex*>>,
 						  "Method was written for case when Container == unordered_set. Rewrite method elsewhere.");
 			if (a == b) {
-				assert(false); // Should be unreacheble
+				assert(false); // Should be unreachable
 				return;
 			}
 
-			// Cleanup refs in a->edges (but using refs from b)
+			// Update refs in edges
 			for (auto& edge : b->edges) {
 				edge->vertices.erase(b);
 				edge->vertices.insert(a);
 			}
-			// Cleanup refs in a->faces (but using refs from b)
+			// Update refs in faces
 			for (auto& face : b->faces) {
 				face->vertices.erase(b);
 				face->vertices.insert(a);
 			}
-			// Copy "refs" from b to a
+			// Copy connectivity from b to a
 			a->edges.insert(b->edges.cbegin(), b->edges.cend());
 			a->faces.insert(b->faces.cbegin(), b->faces.cend());
-
 		}
+
+		/// @brief Merge two edges into one
+		/// @param a Target edge (will contain merged data)
+		/// @param b Source edge (will be marked for deletion)
+		///
+		/// Updates all faces referencing b to reference a instead,
+		/// then copies face connectivity from b to a. Vertex merging is not needed.
 		void unite_edges(Edge* a, Edge* b) const {
-			// To remember about strong dependency to Container type.
+			// Check container type dependency
 			static_assert(std::is_same_v<cpplib::voronoi::Container<Vertex*>, std::unordered_set<Vertex*>>,
 						  "Method was written for case when Container == unordered_set. Rewrite method elsewhere.");
 			if (a == b) {
-				assert(false); // Should be unreacheble
+				assert(false); // Should be unreachable
 				return;
 			}
-			// Coping vertexes is not nessesary
-			// So we need to copy only faces
+			// Vertex copying is not necessary (vertices already merged)
 
-			// Cleanup refs in a->faces (but using refs from b)
+			// Update refs in faces
 			for (auto& face : b->faces) {
 				face->edges.erase(b);
 				face->edges.insert(a);
@@ -850,6 +1152,13 @@ namespace cpplib::voronoi {
 			a->faces.insert(b->faces.cbegin(), b->faces.cend());
 			b->set_state(State::DELETE);
 		}
+
+		/// @brief Find and merge duplicate edges connected to a vertex
+		/// @param v Vertex to check
+		/// @return Count of unique edges after merging
+		///
+		/// Searches for edges connected to v that have the same endpoints
+		/// (i.e., duplicate edges) and merges them.
 		uint32_t find_dublicate_and_count_edges(const Vertex* v) const {
 			uint32_t count = v->edges.size();
 			auto left = v->edges.cbegin();
@@ -860,16 +1169,17 @@ namespace cpplib::voronoi {
 					continue;
 				}
 				auto second1 = cur_left->get_second_vertex(v)->get_id();
-				// Copy of left iterator
+				// Check all remaining edges
 				auto right = left;
 				right++;
 				for (; right != end; right++) {
-                    auto cur_right = *right;
+					auto cur_right = *right;
 					if (cur_right->get_state() == State::DELETE) {
 						continue;
 					}
 					auto second2 = cur_right->get_second_vertex(v)->get_id();
 					if (second1 == second2) {
+						// Found duplicate - merge them
 						unite_edges(*left, *right);
 						count--;
 					}
