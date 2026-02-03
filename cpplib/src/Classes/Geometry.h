@@ -40,7 +40,25 @@
 #include <utility>
 #include <vector>
 
-namespace cpplib::geometry {
+/**
+			 * Convert an angle in degrees to radians.
+			 * @tparam T numeric type of the angle.
+			 * @param a Angle in degrees.
+			 * @returns Angle in radians.
+			 */
+			/**
+			 * Convert an angle in radians to degrees.
+			 * @tparam T numeric type of the angle.
+			 * @param a Angle in radians.
+			 * @returns Angle in degrees.
+			 */
+			/**
+			 * Compute a hash value for a Point by combining its three coordinates.
+			 * Suitable for use in unordered containers.
+			 * @param point Point to hash.
+			 * @returns Combined hash value for the point.
+			 */
+			namespace cpplib::geometry {
 	template <class T> inline T GradtoRad(T a) {
 		return a * static_cast<T>(0.0174532925199432957692);
 	}
@@ -84,8 +102,16 @@ namespace cpplib::geometry {
 		// Constructors
 		constexpr Point() noexcept = default;
 		constexpr Point(value_type x, value_type y, value_type z) noexcept : a{x, y, z} {};
-		explicit constexpr Point(const array_type& other) noexcept : a(other) {};
-		explicit constexpr Point(array_type&& other) noexcept : a(::std::move(other)) {};
+		/**
+ * Construct a Point from an array of coordinates.
+ * @param other Array containing the coordinates in order {x, y, z}.
+ */
+explicit constexpr Point(const array_type& other) noexcept : a(other) {};
+		/**
+ * Construct a Point by taking ownership of the given coordinate array.
+ * @param other Rvalue array of three coordinates used as the point's x, y, z components.
+ */
+explicit constexpr Point(array_type&& other) noexcept : a(::std::move(other)) {};
 
 		template <typename T2>
 			requires ((::std::integral<T2> || ::std::floating_point<T2>) && ::std::is_convertible<T2, T>::value)
@@ -95,7 +121,14 @@ namespace cpplib::geometry {
 			a[2] = static_cast<T>(other[2]);
 		}
 		/// @brief Calculate distance to [0,0,0]. Don't use as (point[a]-point[b]).r().
-		/// @return Distance
+		/**
+		 * Compute the Euclidean distance from the origin.
+		 * @return Euclidean distance (sqrt of the sum of squared components).
+		 */
+		/**
+		 * Compute the squared Euclidean distance from the origin.
+		 * @return Sum of squared components (distance squared).
+		 */
 		constexpr value_type r() const noexcept {
 			return sqrt(fma(a[0], a[0], fma(a[1], a[1], a[2] * a[2])));
 		}
@@ -105,6 +138,10 @@ namespace cpplib::geometry {
 			return fma(a[0], a[0], fma(a[1], a[1], a[2] * a[2]));
 		}
 
+		/**
+		 * Map the point's coordinates into the unit cubic cell by replacing each component with its fractional part in [0, 1).
+		 * @returns Reference to this point after coordinates have been wrapped into the unit cell.
+		 */
 		constexpr Point& MoveToCell() noexcept {
 			a[0] -= ::std::floor(a[0]);
 			a[1] -= ::std::floor(a[1]);
@@ -119,18 +156,41 @@ namespace cpplib::geometry {
 		static constexpr Point Vector(const Point& left, const Point& right) noexcept {
 			return Point(left.a[1] * right.a[2] - left.a[2] * right.a[1], left.a[2] * right.a[0] - left.a[0] * right.a[2], left.a[0] * right.a[1] - left.a[1] * right.a[0]);
 		}
+		/**
+		 * Compute the Euclidean distance between two points.
+		 *
+		 * @param a First point.
+		 * @param b Second point.
+		 * @returns Euclidean distance between `a` and `b`.
+		 */
 		static constexpr value_type distance(const Point& a, const Point& b) noexcept {
 			value_type d0 = a.a[0] - b.a[0];
 			value_type d1 = a.a[1] - b.a[1];
 			value_type d2 = a.a[2] - b.a[2];
 			return sqrt(fma(d0, d0, fma(d1, d1, d2 * d2)));
 		}
+		/**
+		 * Compute squared Euclidean distance between two points.
+		 * @param a First point.
+		 * @param b Second point.
+		 * @returns Squared Euclidean distance (sum of squared differences of each coordinate).
+		 */
 		static constexpr value_type distanceSq(const Point& a, const Point& b) noexcept {
 			value_type d0 = a.a[0] - b.a[0];
 			value_type d1 = a.a[1] - b.a[1];
 			value_type d2 = a.a[2] - b.a[2];
 			return fma(d0, d0, fma(d1, d1, d2 * d2));
 		}
+		/**
+		 * Compute the minimum-image Euclidean distance between two points inside a unit cubic cell.
+		 *
+		 * Both points are treated in fractional coordinates within the unit cube [0,1)^3;
+		 * differences are wrapped into the range [-0.5, 0.5) along each axis before distance calculation.
+		 *
+		 * @param a First point (fractional coordinates).
+		 * @param b Second point (fractional coordinates).
+		 * @returns The shortest Euclidean distance between `a` and `b` under periodic boundary conditions of the unit cube.
+		 */
 		static constexpr value_type distanceInCubicCell(const Point& a, const Point& b) noexcept {
 			value_type d0 = fmod(a.a[0] - b.a[0] + T(0.5), T(1.0)) - T(0.5);
 			value_type d1 = fmod(a.a[1] - b.a[1] + T(0.5), T(1.0)) - T(0.5);
@@ -138,11 +198,25 @@ namespace cpplib::geometry {
 			return sqrt(fma(d0, d0, fma(d1, d1, d2 * d2)));
 		}
 
+		/**
+		 * Check whether two points are equal within a tolerance after wrapping their coordinates into the unit cubic cell.
+		 * @param a First point (coordinates treated modulo 1.0).
+		 * @param b Second point (coordinates treated modulo 1.0).
+		 * @param epsilon Maximum allowed componentwise difference after cubic wrapping.
+		 * @returns `true` if the componentwise wrapped differences are each less than or equal to `epsilon`, `false` otherwise.
+		 */
 		static constexpr value_type isSameInCubicCell(const Point& a, const Point& b, T epsilon) noexcept {
 			return abs(fmod(a.a[0] - b.a[0] + T(0.5), T(1.0)) - T(0.5)) <= epsilon &&
 				abs(fmod(a.a[1] - b.a[1] + T(0.5), T(1.0)) - T(0.5)) <= epsilon &&
 				abs(fmod(a.a[2] - b.a[2] + T(0.5), T(1.0)) - T(0.5)) <= epsilon;
 		}
+		/**
+		 * Check if two points are equal within a per-component absolute tolerance.
+		 * @param a First point to compare.
+		 * @param b Second point to compare.
+		 * @param epsilon Maximum allowed absolute difference for each coordinate.
+		 * @returns `true` if |a.x - b.x|, |a.y - b.y|, and |a.z - b.z| are each <= `epsilon`, `false` otherwise.
+		 */
 		static constexpr bool isSame(const Point& a, const Point& b, T epsilon) noexcept {
 			return abs(a.a[0] - b.a[0]) <= epsilon &&
 				abs(a.a[1] - b.a[1]) <= epsilon &&
@@ -175,6 +249,48 @@ namespace cpplib::geometry {
 		static constexpr value_type torsionGrad(const Point& a, const Point& b, const Point& c, const Point& d) noexcept {
 			return RadtoGrad(torsionRad(a, b, c, d));
 		}
+		/**
+		 * Round each coordinate of the point to the nearest integer.
+		 * @returns A Point whose components are the coordinates rounded to the nearest integer.
+		 */
+		/**
+		 * Floor each coordinate of the point.
+		 * @returns A Point whose components are the coordinates rounded down to the nearest integer.
+		 */
+		/**
+		 * Snap a point to a regular grid defined by epsilon.
+		 * @param p Point to quantize.
+		 * @param epsilon Grid step size; if zero, returns a default-initialized point.
+		 * @returns A Point whose components are rounded to the nearest multiple of `epsilon`.
+		 */
+		/**
+		 * Read-only indexed access to a coordinate.
+		 * @param i Coordinate index (0 = x, 1 = y, 2 = z).
+		 * @returns The coordinate value at index `i`.
+		 */
+		/**
+		 * Writable indexed access to a coordinate.
+		 * @param i Coordinate index (0 = x, 1 = y, 2 = z).
+		 * @returns Reference to the coordinate value at index `i`.
+		 */
+		/**
+		 * Negate all coordinates of the point.
+		 * @returns A Point with each component negated.
+		 */
+		/**
+		 * Component-wise addition of two points.
+		 * @tparam OT Other point component type.
+		 * @param left Left operand point.
+		 * @param right Right operand point.
+		 * @returns A Point whose components are the sum of corresponding components of `left` and `right`.
+		 */
+		/**
+		 * Add a scalar to every coordinate of the point.
+		 * @tparam OT Scalar type.
+		 * @param left Point to be incremented.
+		 * @param b Scalar value to add to each component.
+		 * @returns A Point with `b` added to each component of `left`.
+		 */
 		constexpr Point round() const {
 			return Point(std::round(a[0]), std::round(a[1]), std::round(a[2]));
 		}
@@ -319,7 +435,15 @@ namespace cpplib::geometry {
 			A[2][1] = static_cast<T&&>(r.A[2][1]);
 			A[2][2] = static_cast<T&&>(r.A[2][2]);
 		}
-		explicit constexpr Matrix(const T v) noexcept : A{{ {v,0,0},{0,v,0},{0,0,v} }} {}
+		/**
+ * Construct a 3x3 diagonal matrix with the given scalar on the diagonal and zeros elsewhere.
+ * @param v Scalar value placed on the matrix diagonal (A[0][0], A[1][1], A[2][2]).
+ */
+explicit constexpr Matrix(const T v) noexcept : A{{ {v,0,0},{0,v,0},{0,0,v} }} {}
+		/**
+		 * Construct a 3x3 matrix by copying elements from a C-style 3x3 array.
+		 * @param input_massive Pointer to an array of three pointers, each pointing to an array of three elements; the values are copied into the matrix.
+		 */
 		explicit constexpr Matrix(const T** input_massive) noexcept {
 			for (size_t i = 0; i < 3; i++) {
 				for (size_t j = 0; j < 3; j++) {
@@ -343,6 +467,73 @@ namespace cpplib::geometry {
 			return A[a][b];
 		}
 		template<class T2>
+		/**
+		 * Multiply this 3x3 matrix by another 3x3 matrix producing their matrix product.
+		 * @tparam T2 Type of elements in the right-hand matrix.
+		 * @param right Right-hand operand matrix.
+		 * @returns A new Matrix whose elements are the product of this matrix and `right`.
+		 */
+		
+		/**
+		 * Multiply this 3x3 matrix by a 3-element column vector.
+		 * @tparam T2 Element type of the input vector.
+		 * @param right 3-element vector to multiply.
+		 * @returns A 3-element array containing the matrix-vector product.
+		 */
+		
+		/**
+		 * Divide every element of this matrix by a scalar.
+		 * @tparam T2 Type of the scalar divisor.
+		 * @param right Scalar divisor.
+		 * @returns A new Matrix with each element divided by `right`.
+		 */
+		
+		/**
+		 * Return the transpose of this matrix.
+		 * @returns A new Matrix equal to the transpose of this matrix.
+		 */
+		
+		/**
+		 * Return the inverse of this matrix.
+		 * @returns A new Matrix representing the inverse. Behavior is undefined if the matrix is singular.
+		 */
+		
+		/**
+		 * Return a matrix of element-wise absolute values.
+		 * @returns A new Matrix whose elements are the absolute values of the corresponding elements of this matrix.
+		 */
+		
+		/**
+		 * Return the average of the diagonal elements (trace divided by 3).
+		 * @returns The trace of the matrix divided by 3 as a double.
+		 */
+		
+		/**
+		 * Compute the determinant of this 3x3 matrix.
+		 * @returns The determinant value.
+		 */
+		
+		/**
+		 * Scale the columns of this matrix by the components of a 3-element array.
+		 * @tparam T2 Element type of the scaling vector.
+		 * @param sup Array with scaling factors for columns (x,y,z).
+		 */
+		
+		/**
+		 * Scale the columns of this matrix by three scalar factors.
+		 * @tparam T2 Type of the scaling factors.
+		 * @param x Scale factor for first column.
+		 * @param y Scale factor for second column.
+		 * @param z Scale factor for third column.
+		 */
+		
+		/**
+		 * Multiply a Matrix (left) by a Point (right) producing a transformed Point.
+		 * @tparam T2 Element type of the point coordinates.
+		 * @param left Left-hand matrix operand.
+		 * @param right Right-hand point operand.
+		 * @returns A Point containing the result of applying `left` to `right`.
+		 */
 		[[nodiscard]] constexpr Matrix<decltype(T()* T2())> operator*(const Matrix<T2>& right) const noexcept {
 			using resv = decltype(T()* T2());
 			std::array<resv, 3> a1 = {A[0][0] * right.A[0][0] + A[0][1] * right.A[1][0] + A[0][2] * right.A[2][0],
@@ -908,6 +1099,21 @@ namespace cpplib::geometry {
 		}
 
 		template <class I>
+		/**
+		 * Compute minimal integer supercell multipliers along the three lattice directions
+		 * such that tested inter-cell direction vectors exceed the provided cutoff distance.
+		 *
+		 * Starts from per-axis minima derived from ceil(cutoff / lattice_length) (clamped to
+		 * `minimum`) and increments the smallest relevant axis until all considered lattice
+		 * direction vectors (a short set covering triclinic short-contact cases) transformed
+		 * to Cartesian space have length greater than `cutoff`.
+		 *
+		 * @param cutoff Distance threshold in the same units as the lattice vectors.
+		 * @param minimum Smallest allowed multiplier for each lattice direction.
+		 * @returns A Point<I> containing the integer supercell multipliers for the three axes;
+		 *          each component is >= `minimum` and chosen so that the checked direction
+		 *          vectors mapped to Cartesian coordinates have length > `cutoff`.
+		 */
 		[[nodiscard]] constexpr geometry::Point<I> findOptimalSupercell(const value_type cutoff, I minimum) const noexcept {
 			constexpr char shortContactsInTriclinic = 10;
 
@@ -1025,7 +1231,22 @@ namespace cpplib::geometry {
 			return n;
 		}
 		std::pair<point_t, T> parse(const char* str, const size_t len) const {
-			point_t p{0,0,0};
+			/**
+		 * Parse an axis-and-offset specification from a character sequence and produce
+		 * a unit direction vector for the axis indicators together with a signed shift.
+		 *
+		 * The returned pair contains:
+		 * - first: a 3D integer direction vector where each component is -1, 0, or 1
+		 *   indicating presence and sign of 'x', 'y', 'z' axis letters found in the
+		 *   parsed sequence,
+		 * - second: the accumulated signed numeric shift parsed from the sequence.
+		 *
+		 * @param str Pointer to the character buffer containing the specification to parse.
+		 * @param len Number of characters available in the buffer.
+		 * @returns std::pair<point_t, T> where `point_t` is the parsed axis direction
+		 *          vector and `T` is the signed numeric shift value.
+		 */
+		point_t p{0,0,0};
 			T shift = 0;
 			bool minus = false;
 			for (unsigned int i = 0; i < len; i++) // iterator "i" modifies in parseshift function
@@ -1069,6 +1290,17 @@ namespace cpplib::geometry {
 			return std::make_pair(p, shift);
 
 		}
+		/**
+		 * Parse a numeric shift value from a substring of `str` starting at `iter`.
+		 *
+		 * Accepts integer, decimal (with '.'), or fractional (with '/') forms and advances
+		 * `iter` to the index of the last consumed character on return.
+		 *
+		 * @param str Null-terminated input character buffer containing the numeric text.
+		 * @param iter Index within `str` where parsing begins; updated to the last consumed character index.
+		 * @param len Length of the buffer `str` (upper bound for parsing).
+		 * @returns The parsed numeric value converted to type `T`.
+		 */
 		T parseshift(const char* str, unsigned int& iter, const size_t len) const {
 			bool dot = false;
 			bool slash = false;
@@ -1243,13 +1475,22 @@ namespace cpplib::geometry {
 
 		/// @brief Compress ShiftType[-1,+1] (usually Point<int8_t>) to char
 		/// @param s The shift
-		/// @return Compressed shift
+		/**
+		 * Encode a 3D box shift into a compact 0..26 code for the 3x3x3 neighborhood.
+		 * @param s Shift vector with components expected in {-1, 0, 1} for x, y, z.
+		 * @returns A char in the range 0..26 computed as (s.x+1) + (s.y+1)*3 + (s.z+1)*9 representing the shift code.
+		 */
 		static constexpr char compress_shift(ShiftType s) {
 			return (s[0] + 1) +
 				(s[1] + 1) * 3 +
 				(s[2] + 1) * 9;
 		}
 
+		/**
+		 * Compute the inverse neighbor shift code within the 27-element shift encoding.
+		 * @param code Shift code in the range 0..26 representing a neighbor offset in a 3x3x3 neighborhood.
+		 * @returns The inverse shift code in 0..26 such that applying this result reverses the original shift (i.e., inverse_code(inverse_code(code)) == code).
+		 */
 		static constexpr char inverse_code(char code) {
 			return 26 - code;
 		}
@@ -1268,6 +1509,12 @@ namespace cpplib::geometry {
 			{-1,  1,  1}, { 0,  1,  1}, { 1,  1,  1}  // code 24, 25, 26
 		}};
 
+		/**
+		 * Map a compact neighbor code to its 3D shift vector.
+		 * @param code Compact shift code (expected in range 0..26) identifying a neighbor in the 3×3×3 neighborhood.
+		 * @returns Reference to the corresponding ShiftType (`Point<int8_t>`) describing the integer shift.
+		 * @note Behavior is undefined if `code` is outside the valid range of `shiftTable`.
+		 */
 		static constexpr const ShiftType& decompress_shift(char code) {
 			return shiftTable[code];
 		}
@@ -1316,6 +1563,19 @@ namespace cpplib::geometry {
 		}
 
 
+		/**
+		 * Generate all bond entries for a single real box at indices (rx, ry, rz) and append them to `bonds`.
+		 *
+		 * This adds:
+		 * - internal bonds between points contained in the specified real box (shift code for no periodic shift),
+		 * - external bonds between points in the specified box and points in the 13 neighboring boxes to its "left" (using precomputed virtual→real mappings and compact shift codes).
+		 *
+		 * @param rx Index of the real box along the x dimension.
+		 * @param ry Index of the real box along the y dimension.
+		 * @param rz Index of the real box along the z dimension.
+		 * @param bonds Vector that will receive generated BondWithShift entries (appended).
+		 * @param double_sided If true, each added bond is also added in the opposite direction with the inverse shift code.
+		 */
 		void process_box_bonds(int rx, int ry, int rz, std::vector<BondWithShift>& bonds, bool double_sided) {
 			// Current box in virtual grid (center of the 3x3x3 neighborhood)
 			int vIdx = get_box_by_index(rx + 1, ry + 1, rz + 1, gridDimVirt);
@@ -1351,6 +1611,19 @@ namespace cpplib::geometry {
 			}
 		}
 
+		/**
+		 * Append a directed bond from one index to another to the bond list, optionally adding the inverse bond.
+		 *
+		 * Adds a BondWithShift representing a connection from `idxA` to `idxB` with `shiftCode` to `bonds`.
+		 * If `double_sided` is true, also appends the inverse bond from `idxB` to `idxA` using the inverse
+		 * of `shiftCode`.
+		 *
+		 * @param idxA Index of the first atom (source of the primary bond).
+		 * @param idxB Index of the second atom (target of the primary bond).
+		 * @param shiftCode Compressed shift code describing periodic-image offset for the primary bond.
+		 * @param bonds Vector to which one or two BondWithShift entries will be appended.
+		 * @param double_sided If true, also append the reverse bond with an inverted shift code.
+		 */
 		inline void add_bond_pair(int idxA, int idxB, char shiftCode, std::vector<BondWithShift>& bonds, bool double_sided) const {
 			// Basic bond a -> b
 			bonds.push_back(BondWithShift{idxA, idxB, shiftCode});
@@ -1362,7 +1635,12 @@ namespace cpplib::geometry {
 			}
 		}
 
-		// Assumes p has normalized coordinates [0,1); no validation performed for performance
+		/**
+		 * Map a point with normalized fractional coordinates into the corresponding virtual-box linear index.
+		 *
+		 * @param p Point with coordinates assumed to be in [0, 1) for each component (no validation performed).
+		 * @returns Linear index of the virtual box that contains `p` (suitable for indexing virtual-box arrays).
+		 */
 		inline int get_virtual_box_index(const PointType& p) const {
 			auto ix = static_cast<int>(p[0] * gridDim[0]) + 1;
 			auto iy = static_cast<int>(p[1] * gridDim[1]) + 1;
@@ -1370,7 +1648,11 @@ namespace cpplib::geometry {
 
 			return get_box_by_index(ix, iy, iz, gridDimVirt);
 		}
-		// Assumes p has normalized coordinates [0,1); no validation performed for performance
+		/**
+		 * Map a fractional point in [0,1) to the linear index of its real grid box.
+		 * @param p Point in fractional coordinates; each component is expected in [0,1).
+		 * @returns Linear index of the grid box that contains `p`. No bounds validation is performed; values equal to 1 or outside [0,1) lead to undefined indexing.
+		 */
 		inline int get_real_box_index(const PointType& p) const {
 			auto ix = static_cast<int>(p[0] * gridDim[0]);
 			auto iy = static_cast<int>(p[1] * gridDim[1]);
@@ -1379,7 +1661,21 @@ namespace cpplib::geometry {
 		}
 
 		// Grid dimensions are constrained by physical unit cell sizes (typically < 1000 Å).
-		// If larger cells are needed (gridDim > 253), change gridDim/gridDimVirt to uint32_t.
+		/**
+		 * Compute integer grid dimensions for spatial hashing from the cell and cutoff.
+		 *
+		 * Calculates per-axis grid counts based on the ratio of each lattice vector length
+		 * to `cutoff`, ensures a minimum of 1 cell per axis, sets the corresponding
+		 * virtual-grid counts to grid + 2 (for ghost/virtual boxes), and updates
+		 * `numBoxes` and `numBoxesVirt` as the Cartesian products of those dimensions.
+		 *
+		 * @param cell Lattice cell used to read lattice-direction lengths.
+		 * @param cutoff Distance cutoff used to size grid cells (typical bonding cutoff).
+		 *
+		 * @note If resulting grid dimensions must exceed 253 in any axis, change
+		 *       `gridDim`/`gridDimVirt` types from `uint8_t` to a wider integer type
+		 *       (e.g., `uint32_t`) to avoid overflow.
+		 */
 		constexpr void calculateGridDim(const CellType& cell, T cutoff) {
 			for (uint8_t i = 0; i < 3; i++) {
 				gridDim[i] = static_cast<uint8_t>(std::floor(cell.lat_dir(i) / cutoff));
@@ -1390,6 +1686,14 @@ namespace cpplib::geometry {
 			numBoxesVirt = gridDimVirt[0] * gridDimVirt[1] * gridDimVirt[2];
 		}
 
+		/**
+		 * Compute the linear box index for 3D box coordinates in a row-major layout.
+		 * @param ix X index of the box (0..grid[0]-1).
+		 * @param iy Y index of the box (0..grid[1]-1).
+		 * @param iz Z index of the box (0..grid[2]-1).
+		 * @param grid Array of grid dimensions {nx, ny, nz}.
+		 * @returns Linear index equal to ix + iy * nx + iz * nx * ny.
+		 */
 		inline int get_box_by_index(int ix, int iy, int iz,
 									const std::array<uint8_t, 3>& grid) const {
 			return ix + iy * grid[0] + iz * grid[0] * grid[1];

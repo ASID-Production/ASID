@@ -43,7 +43,14 @@
 #include "../Classes/Bond.h" // for Bond
 #include "../Classes/Engine.h" // for Node
 
-namespace cpplib {		
+/**
+		 * Collects all unique bonds present in the molecule and returns them as a vector of bond pairs.
+		 *
+		 * @param strategy Allocation hint for the returned vector; when `Exact` reserves the exact number of bonds,
+		 *                 when `Estimated` reserves a heuristic amount, and when `None` performs no pre-reservation.
+		 * @returns Vector of `BondType` where each element represents a bond (a, b) with `a < b` and both indices are atom IDs.
+		 */
+		namespace cpplib {		
 	enum class ReserveStrategy :char {
 		None,
 		Exact,

@@ -93,6 +93,16 @@ extern "C" {
 }
 
 template <std::floating_point FT>
+/**
+ * @brief Convert a vector of 3D points into a Python list of 3-tuples.
+ *
+ * Each point in the input vector becomes a Python tuple (x, y, z) with
+ * values cast to double.
+ *
+ * @return PyObject* A new reference to a Python list where each element is a
+ * tuple of three doubles representing a point (x, y, z). Returns `NULL` on
+ * error (e.g., memory allocation failure or Python object creation failure).
+ */
 PyObject* create_list_from_points(const std::vector<cpplib::geometry::Point<FT>>& vec) {
 	PyObject* o_ret = PyList_New(static_cast<Py_ssize_t>(vec.size()));
 	if (o_ret == NULL) {
@@ -253,7 +263,17 @@ extern "C" {
 		p_distances = &dist;
 	}
 
-	// Python section
+	/**
+	 * @brief Compute pairwise bonds from an iterable of atom tuples and return them to Python.
+	 *
+	 * Parses the Python argument as a sequence of (type, x, y, z) tuples, determines bonded
+	 * pairs using the module's distance rules, and returns a Python dictionary containing
+	 * the bond index pairs.
+	 *
+	 * @param self Unused Python module/self pointer.
+	 * @param arg Python sequence of tuples where each tuple contains an atom type and three coordinates.
+	 * @return PyObject* A Python dict with key "bonds" mapped to a list of (i, j) index pairs for each bond.
+	 */
 	static PyObject* cpplib_GenBonds(PyObject* self, PyObject* arg) {
 		useDistances(self);
 		auto& distances = *p_distances;
@@ -273,6 +293,13 @@ extern "C" {
 		return Py_BuildValue("{s:O}",
 							 "bonds", lst);
 	}
+	/**
+	 * @brief Generate pairwise bonds (with lengths) for the provided atom tuples.
+	 *
+	 * Parses the provided Python sequence of (type, x, y, z) tuples, computes bonds using the module's distance rules, and returns a dictionary containing the bond list.
+	 *
+	 * @returns PyObject* A Python dict with key "bonds" whose value is a list of tuples `(index_i, index_j, length)` where `index_i` and `index_j` are atom indices and `length` is the bond length as a float.
+	 */
 	static PyObject* cpplib_GenBondsEx(PyObject* self, PyObject* arg) {
 		useDistances(self);
 		auto& distances = *p_distances;
@@ -901,6 +928,18 @@ extern "C" {
 		}
 	}
 
+	/**
+	 * Run the Compaq compaction on the provided unit cell, symmetry, and atom tuples.
+	 *
+	 * Parses (cell, symm, tuples), invokes Compaq to produce compacted Cartesian coordinates and any error messages.
+	 *
+	 * @param self Unused; module or NULL as passed by the Python C API.
+	 * @param args Python arguments tuple expected to contain three objects: (cell, symm, tuples).
+	 * @return A Python dict with keys:
+	 *   - "errors": list of error strings produced during compaction.
+	 *   - "xyz_block": list of (x, y, z) float tuples for the compacted atom coordinates.
+	 *   Returns None if argument parsing fails.
+	 */
 	static PyObject* cpplib_compaq(PyObject* self, PyObject* args) {
 		PyObject* ocell = NULL;
 		PyObject* osymm = NULL;
@@ -952,7 +991,30 @@ extern "C" {
 		return PyUnicode_FromString(ret.c_str());
 	}
 
-	// Args: [cell,symm,tuples,anchors,radius]
+	/**
+	 * @brief Create clusters from atomic coordinates and anchors within a unit cell.
+	 *
+	 * Parses the provided cell, symmetry, and atom tuples, applies the given anchor
+	 * points and radius to generate cluster entries, and reports whether a polymer
+	 * was detected.
+	 *
+	 * @param self Unused Python module/self pointer.
+	 * @param args Python tuple of arguments: (cell, symm, tuples, anchors, radius)
+	 *   - cell: unit cell parameters (sequence of 6 floats).
+	 *   - symm: symmetry operation strings (sequence of strings).
+	 *   - tuples: atom list as Python tuples (type, x, y, z).
+	 *   - anchors: list of anchor entries; each anchor is a tuple (x, y, z, weight).
+	 *   - radius: floating-point over-radius used when forming clusters.
+	 *
+	 * @return PyObject* Python dictionary with keys:
+	 *   - "points": list of dictionaries for each cluster entry. Each dictionary contains:
+	 *       - "index" (int): original atom index.
+	 *       - "type"  (int): atom type.
+	 *       - "point_frac" (3-tuple of floats): fractional coordinates within the unit cell.
+	 *       - "symmref" (int): symmetry reference index.
+	 *       - "shift" (3-tuple of ints): periodic image shift (sx, sy, sz).
+	 *   - "hasPolymer" (bool): true if a polymer was detected, false otherwise.
+	 */
 	static PyObject* cpplib_ClusterCreate(PyObject* self, PyObject* args) {
 		PyObject* ocell = NULL;
 		PyObject* osymm = NULL;
@@ -1003,7 +1065,20 @@ extern "C" {
 							 "hasPolymer", b?Py_True:Py_False);
 	}
 
-	/// Args: [cell, symm, tuples, bools<int>, cutoff]
+	/**
+	 * @brief Build a Voronoi diagram from a unit cell and atomic positions.
+	 *
+	 * Parses Python arguments describing a unit cell, symmetry operations, atom tuples,
+	 * a list of inclusion flags, and a cutoff distance, then constructs spatial data
+	 * structures and computes a Voronoi diagram for the supplied atoms.
+	 *
+	 * @param ocell Python object representing the unit cell (fractional or cartesian coordinates).
+	 * @param osymm Python object containing symmetry operation descriptors.
+	 * @param otuples Python object with atom tuples (type and coordinates).
+	 * @param obools Python list of integer flags indicating which atomic sites to include.
+	 * @param cutoff Distance cutoff used when building the supercell and spatial grid.
+	 * @return PyObject* Always returns Python None.
+	 */
 	static PyObject* cpplib_Voronoi(PyObject* self, PyObject* args) {
 		using Diagram = cpplib::voronoi::VoronoiDiagram;
 

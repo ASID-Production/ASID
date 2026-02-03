@@ -32,7 +32,55 @@
 
 #include "../BaseHeaders/BaseTypes.h"
 #include "../BaseHeaders/Concepts.h"
-namespace cpplib {
+/**
+		 * Initialize a Bond with the given atom indices.
+		 * @param a1 Index of the first atom.
+		 * @param a2 Index of the second atom.
+		 */
+		
+		/**
+		 * Ensure the bond's atom indices are ordered so that `first <= second`.
+		 */
+		
+		/**
+		 * Return a textual representation of the bond in the form "(first, second)".
+		 * @returns A string formatted as "(<first>, <second>)".
+		 */
+		
+		/**
+		 * Default-construct a BondEx.
+		 */
+		
+		/**
+		 * Initialize a BondEx from a Bond and a length value; normalizes atom order.
+		 * @param bond The base Bond providing atom indices.
+		 * @param len The bond length.
+		 */
+		
+		/**
+		 * Initialize a BondEx with two atom indices and a length; atom indices are stored in ascending order.
+		 * @param a1 Index of the first atom.
+		 * @param a2 Index of the second atom.
+		 * @param l  Bond length.
+		 */
+		
+		/**
+		 * Initialize a BondEx with two atom indices.
+		 * @param a1 Index of the first atom.
+		 * @param a2 Index of the second atom.
+		 */
+		
+		/**
+		 * Compare two BondEx objects by their atom indices only, ignoring `length`.
+		 * @param other The BondEx to compare against.
+		 * @returns `true` if the base Bond portions are equal, `false` otherwise.
+		 */
+		
+		/**
+		 * Return a textual representation of the BondEx in the form "(first, second, {"distance": length})".
+		 * @returns A string formatted as "(<first>, <second>, {\"distance\": <length>})".
+		 */
+		namespace cpplib {
 	struct Bond {
 	public:
 		// Declarations
@@ -126,10 +174,18 @@ namespace cpplib {
 		using Bond::Bond;
 		using PointType = PT;
 
-		// Data
+		/**
+ * Positional offset associated with the bond.
+ *
+ * Holds the point/vector value for the bond's shift; default-initialized.
+ */
 		PointType shift{};
 
-		// Operators
+		/**
+		 * Determine whether two BondWithPoint objects have equal bond indices (compare only the base Bond).
+		 * @param other BondWithPoint to compare against.
+		 * @returns `true` if the base Bond members (`first` and `second`) are equal, `false` otherwise.
+		 */
 		constexpr bool operator==(const BondWithPoint& other) const noexcept {
 			return Bond::operator==(other);
 		}

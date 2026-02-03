@@ -36,7 +36,19 @@
 #include "../BaseHeaders/Concepts.h"
 #include "../BaseHeaders/DebugMes.h"
 
-namespace cpplib {
+/**
+	 * Represents a simple atom type stored as a single AtomTypeBase index.
+	 *
+	 * The object encapsulates one atom type value. get_bitset() yields a TypeBitset
+	 * with the corresponding bit set when the stored type is greater than zero.
+	 * contains(t) returns true when the stored type equals t (t must be > 0).
+	 *
+	 * @param input Valid atom type index for the explicit constructor; must be
+	 *              less than TypeBitset().size().
+	 * @returns For get_bitset(): a TypeBitset with the stored type bit set if the
+	 *          stored type is greater than zero, otherwise an empty bitset.
+	 */
+	namespace cpplib {
 
 	class SimpleAtom {
 	private:
@@ -83,7 +95,23 @@ namespace cpplib {
 
 	static_assert(AtomTypeConcept<SimpleAtom>, "SimpleAtom must satisfy AtomTypeConcept");
 
-	class CompositeAtom {
+	/**
+		 * Represents a composite atom type combining a base atom identifier with a bitset of contained types.
+		 *
+		 * Stores a base type (`basetype`) and a `TypeBitset` (`types`) where each set bit marks a contained atom type.
+		 * The class provides methods to add and query contained types, obtain the underlying bitset, test bitset
+		 * intersection with another composite atom, and compare by base type.
+		 *
+		 * @note Constructing with a positive `AtomTypeBase` sets the corresponding bit in the internal bitset.
+		 *
+		 * @remarks
+		 * - AddType(t) sets bit `t` in the internal bitset (expects `t > 0` and `t < constants::mend_size`).
+		 * - contains(t) returns whether bit `t` is set (expects `t > 0` and within bitset size).
+		 * - get_bitset() returns the internal `TypeBitset`.
+		 * - intersect(other) returns `true` if the two bitsets share any set bit.
+		 *
+		 */
+		class CompositeAtom {
 	private:
 		using ConstRef = const CompositeAtom&;
 	public:
@@ -121,7 +149,11 @@ namespace cpplib {
 			return basetype <=> other.basetype;
 		}
 
-		// Converts to AtomTypeBase
+		/**
+		 * Determines whether this coordinate interval overlaps another.
+		 * @param other The other coordinate interval to test for overlap.
+		 * @returns `true` if the intervals overlap (endpoints inclusive), `false` otherwise.
+		 */
 		constexpr explicit operator AtomTypeBase() const noexcept {
 			return basetype;
 		}
@@ -142,6 +174,10 @@ namespace cpplib {
 		innerType high = 0;
 	public:
 		constexpr Coord() noexcept = default;
+		/**
+		 * Initialize both interval endpoints to the same value.
+		 * @param mono Value to assign to both low and high.
+		 */
 		constexpr explicit Coord(argumentType mono) noexcept : low(mono), high(mono) {
 		}
 		constexpr Coord(argumentType first, argumentType second) noexcept : low(first), high(second) {
@@ -164,6 +200,26 @@ namespace cpplib {
 		}
 	};
 
+	/**
+	 * Represents a compact, fixed-capacity container of neighbour index shifts.
+	 *
+	 * Stores up to maxNeighbours shift values in contiguous storage and tracks the current
+	 * used count. Elements are stored in insertion order; removal shifts subsequent elements
+	 * left to keep storage dense. All index-based operations assert that the index is
+	 * within the current size.
+	 *
+	 * @note maxNeighbours is defined by constants::maxNeighbours.
+	 *
+	 * Member behavior:
+	 * - push_back(obj): appends a shift; asserts capacity not exceeded.
+	 * - size(): returns the current number of stored shifts.
+	 * - operator[](i): returns (or returns reference to) the shift at position `i`; asserts `i < size()`.
+	 * - erase(i): removes the element at `i` and shifts subsequent elements left; decrements size.
+	 * - exchange(cur, next): replaces the first occurrence of `cur` with `next`; returns `true` if a replacement occurred, `false` otherwise.
+	 * - simpleSort(): sorts only the active prefix [begin(), begin() + size()).
+	 * - addShift(add): adds `add` to each stored shift in the active range.
+	 * - begin()/end(): iterators spanning the underlying storage; the usable range is [begin(), begin() + size()).
+	 */
 	class NeighboursType {
 	public:
 		static constexpr size_t maxNeighbours = constants::maxNeighbours;
@@ -449,6 +505,12 @@ namespace cpplib {
 			a.neighbours_.size() == b.neighbours_.size() &&
 			a.coord_.intersect(b.coord_);
 	}
+	/**
+	 * Determine if a composite node is compatible with a simple node using relaxed constraints.
+	 * @param a Composite node to test for compatibility.
+	 * @param b Simple node to test against.
+	 * @returns `true` if `a`'s type contains `b`'s type, `a.hAtoms_` is less than or equal to `b.hAtoms_`, `a` has no more neighbours than `b`, and `a`'s coordinate interval intersects `b`'s; `false` otherwise.
+	 */
 	constexpr bool NotExactCompare(const Node<CompositeAtom>& a, const Node<SimpleAtom>& b) {
 		static_assert(std::is_same_v<SimpleAtom::AtomTypeBase, CompositeAtom::AtomTypeBase>);
 		return a.type_.contains(static_cast<typename CompositeAtom::AtomTypeBase>(b.type_)) &&
@@ -457,6 +519,11 @@ namespace cpplib {
 			a.coord_.intersect(b.coord_);
 	}
 }
+/**
+ * Exchange all state between two cpplib::Node objects, updating neighbour references so graph consistency is preserved.
+ * @param n1 First node to swap.
+ * @param n2 Second node to swap.
+ */
 namespace std {
 	// std::swap extention for Node class
 	template<cpplib::AtomTypeConcept A>

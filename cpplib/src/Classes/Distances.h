@@ -36,7 +36,38 @@
 #include "../BaseHeaders/BaseTypes.h"
 #include "../Classes/Geometry.h"
 
-namespace cpplib {
+/**
+	 * Determine whether a measured distance between two atom types falls below, inside, or above the allowed bond range.
+	 * @param i Atom type index of the first atom (must be in 1..MAX_TYPE).
+	 * @param j Atom type index of the second atom (must be in 1..MAX_TYPE).
+	 * @param length Observed distance between the two atoms.
+	 * @returns `1` if `length` is greater than the stored minimum and less than the stored maximum, `-1` if `length` is less than or equal to the stored minimum, `0` if `length` is greater than or equal to the stored maximum.
+	 */
+	
+	/**
+	 * Return the minimum allowed distance for a pair of atom types.
+	 * @param a1 Atom type index of the first atom (must be in 1..MAX_TYPE).
+	 * @param a2 Atom type index of the second atom (must be in 1..MAX_TYPE).
+	 * @returns The configured minimum distance for the (a1,a2) pair.
+	 */
+	
+	/**
+	 * Return the maximum allowed distance for a pair of atom types.
+	 * @param a1 Atom type index of the first atom (must be in 1..MAX_TYPE).
+	 * @param a2 Atom type index of the second atom (must be in 1..MAX_TYPE).
+	 * @returns The configured maximum distance for the (a1,a2) pair.
+	 */
+	
+	/**
+	 * Filter a bond list in-place by marking bonds whose current inter-atomic distance falls outside the allowed range.
+	 * For each bond entry, computes the (possibly shifted) position of the second atom, obtains the distance via `dist`,
+	 * and sets the bond's indices to zero when the distance is not considered a real bond.
+	 * @param bondlist Vector of bonds (with per-bond shift codes) to be filtered; entries are modified in-place.
+	 * @param types Per-atom type indices corresponding to `points`.
+	 * @param points Per-atom positions.
+	 * @param dist Callable that takes two `PointType` values and returns their distance.
+	 */
+	namespace cpplib {
 	class Distances {
 		// Order of values
 		// 1/1,1/2,1/3,1/4,1/5, 5/5, 2/2,2/3,2/4,2/5, 4/4,4/5, 3/3,3/4,3/5

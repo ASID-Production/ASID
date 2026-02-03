@@ -44,7 +44,117 @@
 #include "../Classes/Bond.h"
 #include "../Classes/Geometry.h"
 
-namespace cpplib::voronoi {
+/**
+	 * @brief Get the object's identifier.
+	 * @returns The stored identifier.
+	 */
+	/**
+	 * @brief Set the object's identifier.
+	 * @param i Identifier to assign to the object.
+	 */
+	/**
+	 * @brief Get the current state of the object.
+	 * @returns The object's state.
+	 */
+	/**
+	 * @brief Set the object's state.
+	 * @param s State value to assign to the object.
+	 */
+	/**
+	 * @brief Construct an Object with given id and initial state.
+	 * @param ID Identifier to assign.
+	 * @param s Initial state (defaults to State::INVALID).
+	 */
+	
+	/**
+	 * @brief Construct a Vertex with default id and valid state.
+	 */
+	/**
+	 * @brief Construct a Vertex with given id and valid state.
+	 * @param ID Identifier to assign.
+	 */
+	/**
+	 * @brief Construct a Vertex with given id and position.
+	 * @param ID Identifier to assign.
+	 * @param p Position to initialize the vertex point.
+	 */
+	/**
+	 * @brief Construct a Vertex with given id by moving the provided point.
+	 * @param ID Identifier to assign.
+	 * @param p Point to move into the vertex.
+	 */
+	/**
+	 * @brief Compare two vertices by spatial proximity.
+	 * @param a First vertex to compare.
+	 * @param b Second vertex to compare.
+	 * @returns `true` if all three coordinate differences are less than COMPARISON_EPSILON, `false` otherwise.
+	 */
+	
+	/**
+	 * @brief Construct an Edge linking two vertices and register the edge with those vertices.
+	 * @param ID Edge identifier.
+	 * @param v1 Pointer to the first endpoint vertex; must be non-null.
+	 * @param v2 Pointer to the second endpoint vertex; must be non-null.
+	 */
+	
+	/**
+	 * @brief Recompute and assign the edge's state based on its endpoint vertices and adjacent faces.
+	 * @returns The resulting state after calculation.
+	 */
+	
+	/**
+	 * @brief Compute the intersection point between the edge segment and a plane.
+	 * @details Requires the edge to be in State::MODIFICATION and that the segment intersects the plane strictly between endpoints.
+	 * @param plane Plane to intersect with the segment defined by the edge's two vertices.
+	 * @returns The 3D point of intersection along the segment.
+	 */
+	
+	/**
+	 * @brief Return the vertex at the other end of the edge.
+	 * @param v Pointer to one endpoint vertex.
+	 * @returns Pointer to the opposite endpoint vertex.
+	 */
+	
+	/**
+	 * @brief Construct a Face with the given identifier.
+	 * @param ID Identifier to assign to the face.
+	 */
+	
+	/**
+	 * @brief Recompute and assign the face's state based on the states of its edges and vertex/edge counts.
+	 * @returns The resulting state after calculation.
+	 */
+	
+	/**
+	 * @brief Default-construct an empty Cell.
+	 */
+	
+	/**
+	 * @brief Construct a cubic Cell centered at the given point with the specified id.
+	 * @param c Center point of the cell.
+	 * @param i Identifier to assign to the cell.
+	 */
+	
+	/**
+	 * @brief Add a vertex at the given position if not already present.
+	 * @param p Position of the vertex to add.
+	 * @returns Pointer to the existing or newly created Vertex with coordinates matching `p` within COMPARISON_EPSILON.
+	 */
+	
+	/**
+	 * @brief Clip the cell by a plane and add a capping face for the cut region.
+	 * @details Modifies vertex/edge/face collections and states to reflect the half-space cut. The plane must lie such that the cell center is on the positive side.
+	 * @param clipping_plane Plane used to clip the cell; must satisfy clipping_plane.side(center) > 0.
+	 * @param id_of_another_cell Identifier of the neighboring cell owning the new face's opposite side.
+	 * @param another_shiftcode Shiftcode associated with the neighboring cell for the new face.
+	 */
+	
+	/**
+	 * @brief Update cached squared distances of vertices from the cell center (transformed by fractocart) and return the farthest vertex.
+	 * @param fractocart Matrix used to transform (vertex.point - center) before computing squared radius.
+	 * @returns Pointer to the vertex with the maximum cached squared distance (skips vertices marked DELETE).
+	 */
+	namespace cpplib::voronoi {
 	class Vertex;
 	class Edge;
 	class Face;
@@ -532,7 +642,18 @@ namespace cpplib::voronoi {
 		}
 	};
 
-	class VoronoiDiagram {
+	/**
+		 * Construct a VoronoiDiagram from input sites, spatial bonds, and a fractional-to-cartesian transform.
+		 *
+		 * Initializes internal active-site flags (using provided flags or enabling all sites when omitted),
+		 * creates per-site cells, computes neighbor interactions from bonds, sorts neighbors by distance
+		 * using FtoC, and applies the per-cell manager to build clipped Voronoi cells for each active site.
+		 *
+		 * @param points_in_unit01 Input site coordinates in unit [0,1]^3 space used as cell centers.
+		 * @param bonds SpatialGrid bond entries (with shift codes) describing candidate neighbor relations.
+		 * @param FtoC Fractional-to-cartesian transformation matrix used to compute distances and planes.
+		 * @param flags Optional per-site activity flags; when empty all sites are treated as active.
+		class VoronoiDiagram {
 	public:
 		using FloatingPointType = basic_types::FloatingPointType;
 		using PointType = geometry::Point<FloatingPointType>;
@@ -570,6 +691,12 @@ namespace cpplib::voronoi {
 			}
 		}
 
+		/**
+		 * Extracts the internal list of cells and transfers ownership to the caller.
+		 *
+		 * @returns The vector of cells from this diagram; the returned vector is moved out of the object,
+		 *          leaving the diagram's internal cell container in a valid but unspecified (typically empty) state.
+		 */
 		CellVector extractCells() noexcept {
 			return std::move(cells_);
 		}
@@ -603,6 +730,13 @@ namespace cpplib::voronoi {
 			}
 			return ret;
 		}
+		/**
+		 * Compute squared distances from each active point to its neighbors (applying spatial shift and the FtoC transform) and sort each neighbor list by that distance.
+		 *
+		 * @param vec Per-point neighbor lists; each element is a vector of tuples (neighborIndex, shiftCode, lengthSq). The function updates the third element of each tuple with the squared distance and then sorts each list in ascending order by that value.
+		 * @param points_in_unit01 Positions of input points in unit [0,1] space; used as the source coordinates for distance computation.
+		 * @param FtoC Transformation matrix from fractional (unit) coordinates to cartesian coordinates; applied before computing squared distances.
+		 */
 		void calculate_and_sort(std::vector<PointsSorted>& vec, const PointVector& points_in_unit01, const Matrix& FtoC) {
 			auto vec_s = static_cast<uint32_t>(vec.size());
 			for (uint32_t i = 0; i < vec_s; i++)
@@ -625,7 +759,21 @@ namespace cpplib::voronoi {
 						  });
 			}
 		}
-		// NOTE: this function modifies only one cell  
+		/**
+				 * Perform iterative clipping of a single cell against neighboring sites to build its Voronoi region.
+				 *
+				 * For the given cell, ensures vertex distances are up to date, then iterates the provided neighbor list (sorted
+				 * by distance). For each neighbor it constructs the perpendicular bisector plane between the cell center and
+				 * the neighbor (taking the neighbor's periodic shift into account) and clips the cell by that plane, adding
+				 * a new face for the cut when necessary. The iteration exits early when remaining neighbors are farther than
+				 * twice the current farthest vertex distance (squared) and the cell is modified in-place.
+				 *
+				 * @param cell Cell to be modified by successive clipping operations.
+				 * @param vec Sorted list of neighbor entries; each entry is a tuple (neighbor_index, coded_shift, squared_distance).
+				 *            Entries are assumed ordered ascending by squared_distance.
+				 * @param points_in_unit01 Original point coordinates (unit cell) used to locate neighbor sites.
+				 * @param FtoC Transformation matrix used to update vertex distance metrics before clipping.
+				 */
 		void manager(VoronCell& cell, const PointsSorted& vec, const PointVector& points_in_unit01, const Matrix& FtoC) const {
 			const Vertex* maxVert = cell.update_vertices_distances(FtoC);
 			auto maxVertDoubleDistanceSq = maxVert->distance * 4; // Squared double distance
@@ -807,7 +955,27 @@ namespace cpplib::voronoi {
 			}
 
 		}
-		void unite_vertices(Vertex* a, Vertex* b) const {
+		/**
+			 * Merge vertex `b` into vertex `a` by redirecting all edge and face references from `b` to `a`.
+			 *
+			 * All edges and faces that referenced `b` will be updated to reference `a`, and `b`'s reference
+			 * sets will be copied into `a`. The function assumes `Container<Vertex*>` is `std::unordered_set<Vertex*>`
+			 * (enforced by a static_assert) and does not delete or otherwise clean up `b` itself.
+			 *
+			 * @param a Destination vertex that will remain and receive references.
+			 * @param b Source vertex whose references will be moved to `a`.
+			 */
+			/**
+			 * Merge edge `b` into edge `a` by redirecting face references from `b` to `a`.
+			 *
+			 * All faces that referenced `b` will be updated to reference `a`, `b`'s face set will be appended to `a`,
+			 * and `b` is marked for deletion (its state is set to DELETE). The function assumes
+			 * `Container<Vertex*>` is `std::unordered_set<Vertex*>` (enforced by a static_assert).
+			 *
+			 * @param a Destination edge that will remain and receive face references.
+			 * @param b Source edge whose face references will be moved to `a`.
+			 */
+			void unite_vertices(Vertex* a, Vertex* b) const {
 			// To remember about strong dependency to Container type.
 			static_assert(std::is_same_v<cpplib::voronoi::Container<Vertex*>, std::unordered_set<Vertex*>>,
 						  "Method was written for case when Container == unordered_set. Rewrite method elsewhere.");

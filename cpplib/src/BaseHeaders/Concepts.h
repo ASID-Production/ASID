@@ -6,15 +6,40 @@
 
 namespace cpplib {
     // Concepts
-    // Universal functions
+    /**
+     * Access the first atom from a bond-like object.
+     * @tparam T Type of the bond.
+     * @param bond Bond-like object that provides a `first` member.
+     * @returns The value of `bond.first`.
+     */
+    /**
+     * Access the second atom from a bond-like object.
+     * @tparam T Type of the bond.
+     * @param bond Bond-like object that provides a `second` member.
+     * @returns The value of `bond.second`.
+     */
     namespace concept_support {
         template<typename T>
-        constexpr auto getAtom1(const T& bond) {
+        constexpr /**
+         * Obtain the first atom from a bond-like object.
+         *
+         * @tparam T Type of the bond-like object providing a `first` member.
+         * @param bond Bond-like object whose `first` member will be returned.
+         * @returns The `first` member of `bond`.
+         */
+        auto getAtom1(const T& bond) {
             if constexpr (requires { bond.first; }) return bond.first;
         }
 
         template<typename T>
-        constexpr auto getAtom2(const T& bond) {
+        constexpr /**
+         * Retrieve the second atom from a bond-like object.
+         *
+         * @tparam T Type of the bond-like object.
+         * @param bond Bond-like object that exposes a member named `second`.
+         * @returns The `second` member of `bond`.
+         */
+        auto getAtom2(const T& bond) {
             if constexpr (requires { bond.second; }) return bond.second;
         }
     }

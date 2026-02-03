@@ -443,6 +443,22 @@ static cpplib::DATTuple& ConvertDATTuple(cpplib::DATTuple& dat, const cpplib::FA
 	return dat;
 }
 
+/**
+ * @brief Compute a compacted molecular representation from unit cell and atom data.
+ *
+ * Parses the provided atom types and coordinates into a FAM_Struct using the given
+ * unit cell and symmetry, finds bonds using the global distances table, and
+ * produces a compacted list of unique Cartesian points along with any errors
+ * encountered during bond detection.
+ *
+ * @param unit_cell Six-element array describing the unit cell parameters (a, b, c, alpha, beta, gamma).
+ * @param symm List of symmetry operation descriptors to apply when parsing the structure.
+ * @param types Container of atom type specifications; ownership may be moved by the function.
+ * @param points Container of atomic fractional coordinates; ownership may be moved by the function.
+ * @return std::tuple<std::vector<cpplib::geometry::Point<FloatingPointType>>, std::list<std::string>>
+ *   First element: vector of compacted Cartesian points (size equals number of unique parsed atoms).
+ *   Second element: list of error messages produced during processing (empty if none).
+ */
 std::tuple<std::vector<cpplib::geometry::Point<FloatingPointType>>, std::list<std::string>> Compaq(const std::array<cpplib::basic_types::FloatingPointType, 6>& unit_cell,
 												const std::vector<const char*>& symm,
 												cpplib::FAM_Struct::AtomContainerType& types,
@@ -475,6 +491,23 @@ std::tuple<std::vector<cpplib::geometry::Point<FloatingPointType>>, std::list<st
 	return std::make_tuple(std::move(compaqed), res_errors);
 }
 
+/**
+ * @brief Create and execute a clustering operation for the given atomic configuration.
+ *
+ * Builds a Cluster from the supplied unit cell, symmetry operations, atom types, coordinates,
+ * and anchors, executes clustering with the provided distance data, and returns the resulting
+ * ClusterData. The output parameter `hasPolymer` is set to indicate whether a polymeric
+ * structure was detected.
+ *
+ * @param unit_cell Six-element array describing the unit cell (e.g., a, b, c, alpha, beta, gamma).
+ * @param symm Vector of symmetry operation strings to apply to the cell.
+ * @param types Container of atom type descriptors for the structure.
+ * @param points Container of atomic coordinates corresponding to `types` (fractional coordinates relative to `unit_cell`).
+ * @param anchors Vector of anchor definitions used to seed or constrain clustering; ownership is transferred.
+ * @param polymer_cutoff Distance threshold used to identify polymeric connections.
+ * @param hasPolymer Output flag that will be set to `true` if a polymer is detected, `false` otherwise.
+ * @return Cluster::ClusterData Resulting clustering data, including clusters and related metadata.
+ */
 Cluster::ClusterData ClusterCreate(std::array<cpplib::basic_types::FloatingPointType, 6> unit_cell,
 			                       const std::vector<const char*>& symm,
 			                       cpplib::FAM_Struct::AtomContainerType& types,

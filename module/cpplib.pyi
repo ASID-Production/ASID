@@ -338,27 +338,25 @@ def Cluster(cell_params: List[float],
         "type":       int],
     "hasPolymer": bool]]:
     """
-        Create cluster around anchors.
-        Variables:
-          cell_params: List of exactly 6 cell parameters in strict order: [a, b, c, alpha, beta, gamma].
-            (a, b, c - are translation vectors (in Angstroms) and alpha, beta, gamma - are angles (in degrees)
-          symms:  SYMM-codes of structure. Should contain 'x,y,z' (equivalent) as first ([0]) symmetry - it is ignored.
-          atoms: List of Tuples of atomic type and three internal coordinates.
-            AtomType is integer, coordinates are floating point numbers.
-            example [ [1, 0.0, 0.0, 0.0], [9, 0.5, 0.5, 0.5], ... ]
-          anchors: List of Tuples of anchors' three internal coordinates and generation radius (in ang.).
-            Coordinates and generation radius are floating point numbers.
-            example [ [0.0, 0.0, 0.0, 4.0], [0.5, 0.5, 0.5, 2.3], ... ]
-        Returns:
-          Dictionary with keys ["points","hasPolymer"], where
-            "points": List of Dictionaries, where eqch dictionary represents atom, and contains:
-             | "index":      Index of atom in the initial set
-             | "point_frac": Tuple of Fractional coordinates (fx, fy, fz)
-             | "shift":      Tuple of translation shift (dx, dy, dz) from initial position of SYMM-code (NOT FROM [0,0,0] !!!)
-             | "symmref":    Reference to initial SYMM-code
-             | "type":       Atomic type
-            "hasPolymer": Boolian flag, equals True if cell contains polymer (MOF) structure
-    """
+            Create a cluster of generated atomic points around specified anchor positions inside the unit cell.
+            
+            Parameters:
+                cell_params (list of float): Six unit-cell parameters in order [a, b, c, alpha, beta, gamma]
+                    where a, b, c are lengths in angstroms and alpha, beta, gamma are angles in degrees.
+                symms (list of str): SYMM codes used to generate symmetry-equivalent atoms. The first entry (equivalent to "x,y,z") is ignored.
+                atoms (list of tuple): Input atoms as (type, fx, fy, fz) where type is an integer and fx,fy,fz are fractional (internal) coordinates.
+                anchors (list of tuple): Anchor definitions as (fx, fy, fz, radius) where fx,fy,fz are fractional coordinates and radius is the generation radius in angstroms.
+            
+            Returns:
+                dict: {
+                    "points": list of dicts, each with:
+                        "index" (int): Index of the atom in the original atoms list.
+                        "point_frac" (tuple of float): Fractional coordinates (fx, fy, fz) of the generated point.
+                        "shift" (tuple of int): Integer translation shift (dx, dy, dz) applied relative to the SYMM-code origin.
+                        "symmref" (int): Index of the SYMM-code that produced this point.
+                        "type" (int): Atomic type.
+                    "hasPolymer" (bool): True if the cell contains a polymeric (MOF) structure, False otherwise.
+            """
     ...
 def VoronoiCalculation(cell_params: List[float], 
                        symms: List[str], 
