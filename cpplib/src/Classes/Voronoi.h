@@ -61,13 +61,13 @@ namespace cpplib::voronoi {
 	};
 
 	class Object {
-		size_t id;
 		State state;
+		uint32_t id;
 	public:
-		inline size_t get_id() const noexcept {
+		inline uint32_t get_id() const noexcept {
 			return id;
 		}
-		inline void set_id(size_t i) noexcept {
+		inline void set_id(uint32_t i) noexcept {
 			id = i;
 		}
 		inline State get_state() const noexcept {
@@ -76,8 +76,8 @@ namespace cpplib::voronoi {
 		inline void set_state(State s) noexcept {
 			state = s;
 		}
-		constexpr explicit Object(size_t ID, State s = State::INVALID) noexcept
-			: id(ID), state(s) {}
+		constexpr explicit Object(uint32_t ID, State s = State::INVALID) noexcept
+			: state(s), id(ID) {}
 	};
 
 	struct Vertex : public Object{
@@ -97,21 +97,10 @@ namespace cpplib::voronoi {
 		Container<Face*> faces;
 
 		// Constructors
-		explicit Vertex(size_t ID) noexcept: Object(ID, State::VALID) {}
-		Vertex(size_t ID, const PointType& p) noexcept : Object(ID, State::VALID), point(p) {}
-		Vertex(size_t ID, PointType&& p) noexcept : Object(ID, State::VALID), point(std::move(p)) {}
-
-		inline void add_edge(Edge* edge) {
-			edges.insert(edge);
-		}
-
-		// Getters
-		inline const PointType& get_point() const {
-			return point;
-		}
-		inline const Container<Edge*>& get_edges() const {
-			return edges;
-		}
+		Vertex() noexcept : Object(0, State::VALID) {}
+		explicit Vertex(uint32_t ID) noexcept: Object(ID, State::VALID) {}
+		Vertex(uint32_t ID, const PointType& p) noexcept : Object(ID, State::VALID), point(p) {}
+		Vertex(uint32_t ID, PointType&& p) noexcept : Object(ID, State::VALID), point(std::move(p)) {}
 
 		// Special comparison
 		inline friend bool operator==(const Vertex& a, const Vertex& b) {
@@ -119,8 +108,6 @@ namespace cpplib::voronoi {
 				std::abs(a.point[1] - b.point[1]) < COMPARISON_EPSILON &&
 				std::abs(a.point[2] - b.point[2]) < COMPARISON_EPSILON;
 		}
-
-
 	};
 
 	struct Edge : public Object {
@@ -132,7 +119,7 @@ namespace cpplib::voronoi {
 		using PointType = geometry::Point<basic_types::FloatingPointType>;
 		using PlaneType = geometry::Plane<basic_types::FloatingPointType>;
 
-		Edge(size_t ID, Vertex* v1, Vertex* v2) : Object(ID), vertices({v1, v2}) {
+		Edge(uint32_t ID, Vertex* v1, Vertex* v2) : Object(ID), vertices({v1, v2}) {
 			assert(v1 != NULL && v1 != nullptr);
 			assert(v2 != NULL && v2 != nullptr);
 			v1->edges.emplace(this);
@@ -143,7 +130,7 @@ namespace cpplib::voronoi {
 		inline State calculateState() noexcept {
 			using enum State;
 			if (vertices.size() == 2 && faces.size() == 2) {
-				size_t counter = 0;
+				uint32_t counter = 0;
 				for (const auto v : vertices)
 				{
 					auto curstate = v->get_state();
@@ -177,7 +164,7 @@ namespace cpplib::voronoi {
 			it++;
 			auto v2 = *it;
 
-			PointType direction = v2->get_point() - v1->get_point();
+			PointType direction = v2->point - v1->point;
 			auto unnormalized_normal = PointType(plane.a[0], plane.a[1], plane.a[2]);
 			auto denom = PointType::Scalar(unnormalized_normal, direction);
 
@@ -185,31 +172,38 @@ namespace cpplib::voronoi {
 			assert(std::abs(denom) >= 1e-6);
 
 
-			auto t = -(plane.a[0] * v1->get_point()[0] +
-					   plane.a[1] * v1->get_point()[1] +
-					   plane.a[2] * v1->get_point()[2] +
+			auto t = -(plane.a[0] * v1->point[0] +
+					   plane.a[1] * v1->point[1] +
+					   plane.a[2] * v1->point[2] +
 					   plane.a[3]) / denom;
 
 			assert(t > 0.0 && t < 1.0);
 
-			return v1->get_point() + direction * t;
+			return v1->point + direction * t;
 		}
-
+		Vertex* get_second_vertex(const Vertex* v) const {
+			for (auto& i : vertices) {
+				if (i != v)
+					return i;
+			}
+			assert(false); // Code should not reach here
+			return nullptr;
+		}
 	};
 
 	struct Face : public Object {
 		// Data (not owning)
-		size_t owner_id;
-		size_t other_id;
+		uint32_t owner_id;
+		uint32_t other_id;
 		char other_shiftcode;
 		Container<Vertex*> vertices;
 		Container<Edge*> edges;
-		explicit Face(size_t ID) : Object(ID) {}
+		explicit Face(uint32_t ID) : Object(ID) {}
 		inline State calculateState() {
 			using enum State;
 
 			if (vertices.size() == edges.size()) {
-				size_t counter = 0;
+				uint32_t counter = 0;
 				set_state(VALID);
 				for (const auto e : edges)
 				{
@@ -311,10 +305,10 @@ namespace cpplib::voronoi {
 			vertices.reserve(128);
 			edges.reserve(128);
             faces.reserve(64);
-			for (size_t vert_id = 0; vert_id < 8; vert_id++) {
+			for (uint32_t vert_id = 0; vert_id < 8; vert_id++) {
 				vertices.emplace_back(std::make_unique<Vertex>(vert_id, base_vertices[vert_id] + center));
 			}
-			for (size_t edge_id = 0; edge_id < 12; edge_id++) {
+			for (uint32_t edge_id = 0; edge_id < 12; edge_id++) {
 				auto vertex1_ptr = vertices[edge_indices[edge_id][0]].get();
 				auto vertex2_ptr = vertices[edge_indices[edge_id][1]].get();
 				auto owner_ptr = std::make_unique<Edge>(edge_id, vertex1_ptr, vertex2_ptr); // smart pointer
@@ -322,7 +316,7 @@ namespace cpplib::voronoi {
 				edges.emplace_back(std::move(owner_ptr)); // smart pointer becomes invalid
 				edge_ptr->set_state(State::VALID);
 			}
-			for (size_t face_id = 0; face_id < 6; face_id++) {
+			for (uint32_t face_id = 0; face_id < 6; face_id++) {
 				auto face = std::make_unique<Face>(face_id);
 				face->owner_id = id;
 				face->other_id = id;
@@ -356,7 +350,7 @@ namespace cpplib::voronoi {
 			vertices.emplace_back(std::move(temp));
 			return simple_ptr;
 		}
-		void clipByPlaneAndAddNewFace(const PlaneType& clipping_plane, size_t id_of_another_cell, char another_shiftcode) {
+		void clipByPlaneAndAddNewFace(const PlaneType& clipping_plane, uint32_t id_of_another_cell, char another_shiftcode) {
 			using enum State;
 
 			// Check if the side is correct
@@ -371,7 +365,7 @@ namespace cpplib::voronoi {
 					continue;
 				}
 				// calculate side:
-				auto side = clipping_plane.side(v->get_point());
+				auto side = clipping_plane.side(v->point);
 				if (side < -limit) {
 					// Point cutted off
 					v->set_state(DELETE);
@@ -518,9 +512,9 @@ namespace cpplib::voronoi {
 		const Vertex* update_vertices_distances(const geometry::Matrix<FloatingPointType>& fractocart) {
 			const Vertex* ret = nullptr;
 			FloatingPointType m = FloatingPointType(0.0);
-			auto s = vertices.size();
+			auto s = static_cast<uint32_t>(vertices.size());
 
-			for (size_t i = 0; i < s; i++)
+			for (uint32_t i = 0; i < s; i++)
 			{
 				if (vertices[i]->get_state() == State::DELETE)
 					continue;
@@ -568,7 +562,7 @@ namespace cpplib::voronoi {
 			add_points(points_in_unit01, flags_);
 			auto vec = find_interactions(bonds);
 			calculate_and_sort(vec, points_in_unit01, FtoC);
-			for (size_t i = 0; i < cells_.size(); i++)
+			for (uint32_t i = 0; i < static_cast<uint32_t>(cells_.size()); i++)
 			{
 				if (flags_[i] == false)
 					continue;
@@ -582,7 +576,7 @@ namespace cpplib::voronoi {
 	private:
 		void add_points(const PointVector& points, const BoolVector& flags) noexcept {
 			cells_.reserve(points.size());
-			for (size_t i = 0; i < points.size(); i++)
+			for (uint32_t i = 0; i < static_cast<uint32_t>(points.size()); i++)
 			{
 				if (flags[i]) {
 					cells_.emplace_back(points[i], i);
@@ -610,7 +604,8 @@ namespace cpplib::voronoi {
 			return ret;
 		}
 		void calculate_and_sort(std::vector<PointsSorted>& vec, const PointVector& points_in_unit01, const Matrix& FtoC) {
-			for (size_t i = 0; i < vec.size(); i++)
+			auto vec_s = static_cast<uint32_t>(vec.size());
+			for (uint32_t i = 0; i < vec_s; i++)
 			{
 				// 1. Calculate distances
 				if (flags_[i] == false)
@@ -664,47 +659,40 @@ namespace cpplib::voronoi {
 		using PointType = geometry::Point<FloatingPointType>;
 
 		struct PolygonIn {
-			::std::vector<::std::size_t>   vert_ids;
-			::std::vector<::std::size_t>   edge_ids;
-			::std::array<::std::size_t, 2> atom_ids;
+			::std::vector<uint32_t>   vert_ids;
+			::std::vector<uint32_t>   edge_ids;
+			::std::array<uint32_t, 2> atom_ids;
 
 		};
 		struct EdgeIn {
-			::std::vector<::std::size_t>   atom_ids;
-			::std::array<::std::size_t, 2> vert_ids;
+			::std::array<uint32_t, 2> vert_ids;
 		};
 
 
-		static constexpr FloatingPointType EPSILON = 0.0001;
+		static constexpr FloatingPointType EPSILON = 256 * std::numeric_limits<FloatingPointType>::epsilon();
 	public:
 		//Data
 		::std::vector<PointType> vertices;
 		::std::vector<EdgeIn> edges;
 		::std::vector<PolygonIn> polygons;
 	public:
-		explicit VoronoiFused(const ::std::vector<voronoi::Cell>& cells) {
+		explicit VoronoiFused(::std::vector<voronoi::Cell>& cells) {
 
-			size_t count_vertices = 0;
-			size_t count_edges = 0;
-			size_t count_pol = 0;
+			uint32_t count_vertices = 0;
+			uint32_t count_edges = 0;
+			uint32_t count_pol = 0;
 
 			for (const auto& cell : cells) {
 				count_vertices += cell.vertices.size();
-				count_edges += cell.edges.size();
-				count_pol += cell.faces.size();
 			}
-			// reserve memory
-			vertices.reserve(count_vertices);
-			edges.reserve(count_edges);
-			polygons.reserve(count_pol);
 
 			struct SortEntry {
-				FloatingPointType key;
-				uint32_t vIdx;   // glogal index
+				bool is_merged;
 				uint32_t lIdx;   // local index
-				const Vertex* ptr;
+				FloatingPointType key;
+				Vertex* ptr;
 			};
-			
+
 			std::vector<SortEntry> sortentries;
 			sortentries.reserve(count_vertices);
 
@@ -713,34 +701,190 @@ namespace cpplib::voronoi {
 				for (const auto& vert : cell.vertices) {
 					if (vert->get_state() == State::DELETE)
 						continue;
-					sortentries.emplace_back(vert->point[0] + vert->point[1] + vert->point[2],
-											 sortentries.size(),
+					sortentries.emplace_back(false,
 											 vert->get_id(),
+											 vert->point[0] + vert->point[1] + vert->point[2],
 											 vert.get());
-					
+
 				}
 			}
 			// Sort by key
 			std::sort(sortentries.begin(), sortentries.end(), [](auto& a, auto& b) {
 				return a.key < b.key;
-	        });
-			vertices.reserve(sortentries.size());
-			
+			});
+
 			// Two-eyes comparator
-			size_t cur_size = 0;
-			size_t right = 0;
-			for (size_t left = 0; left < sortentries.size(); left++) {
-				for (; right < sortentries.size(); right++) {
+			count_vertices = static_cast<uint32_t>(sortentries.size());
+			uint32_t right = 0;
+			for (uint32_t left = 0; left < count_vertices; left++) {
+				if (sortentries[left].ptr == nullptr)
+					continue;
+				for (; right < count_vertices; right++) {
 					if (sortentries[right].key - sortentries[left].key >= EPSILON)
 						break;
 				}
-				for (size_t iter = left + 1; iter < right; iter++) {
-					if (PointType::distanceSq(sortentries[left].ptr->point, sortentries[iter].ptr->point) < EPSILON*EPSILON) {
-
+				for (uint32_t iter = left + 1; iter < right; iter++) {
+					if (sortentries[iter].ptr == nullptr)
+						continue;
+					if (PointType::isSame(sortentries[left].ptr->point, sortentries[iter].ptr->point, EPSILON)) {
+						// Copy data to the left ptr
+						unite_vertices(sortentries[left].ptr, sortentries[iter].ptr);
+						// mark iter as deleted
+						sortentries[iter].ptr = nullptr;
+						sortentries[left].is_merged = true;
 					}
 				}
 			}
+			// Erase and finalise vertices
+			std::erase_if(sortentries, [](const auto& entry) {
+				return entry.ptr == nullptr;
+			});
+			count_vertices = static_cast<uint32_t>(sortentries.size());
+			vertices.reserve(sortentries.size());
+			for (uint32_t i = 0; i < count_vertices; ++i) {
+				sortentries[i].ptr->set_id(i);
+				vertices.emplace_back(sortentries[i].ptr->point);
+			}
 
+			// Merge edges
+			for (uint32_t i = 0; i < count_vertices; i++)
+			{
+				if (sortentries[i].is_merged == true) {
+					count_edges += find_dublicate_and_count_edges(sortentries[i].ptr);
+				}
+				else {
+					count_edges += sortentries[i].ptr->edges.size();
+				}
+			}
+			count_edges >>= 1; // Divide by 2
+			edges.reserve(count_edges);
+			// Finalise edges
+			for (const auto& cell : cells) {
+				for (const auto& edge : cell.edges) {
+					if (edge->get_state() == State::DELETE)
+						continue;
+					edge->set_id(edges.size());
+					auto v1 = *(edge->vertices.begin());
+					auto v2 = edge->get_second_vertex(v1);
+					edges.emplace_back(EdgeIn{{v1->get_id(), v2->get_id()}});
+				}
+			}
+
+			// TODO: DELETE. FOR DEBUG
+			for (auto& e : edges) {
+				if (e.vert_ids[0] > e.vert_ids[1]) 
+					std::swap(e.vert_ids[0], e.vert_ids[1]);
+			}
+			std::sort(edges.begin(), edges.end(), [](auto& a, auto& b) {
+				if(a.vert_ids[0] == b.vert_ids[0])
+					return a.vert_ids[1] < b.vert_ids[1];
+				else
+					return a.vert_ids[0] < b.vert_ids[0];
+
+			});
+			auto last = std::unique(edges.begin(), edges.end(), [](auto& a, auto& b) {
+				return a.vert_ids[0] == b.vert_ids[0] && a.vert_ids[1] == b.vert_ids[1];
+			});
+			if (last != edges.end())
+				return;
+			// TODO: END OF DELETE
+
+			// Merge polygons
+			for (const auto& cell : cells) {
+				for (const auto& face : cell.faces) {
+					if (face->get_state() == State::DELETE)
+						continue;
+					if (cells[face->other_id].vertices.empty() == false &&
+					   face->other_shiftcode == 13 &&
+					   face->owner_id > face->other_id) {
+						continue;
+					}
+
+					// All checks passed
+					polygons.emplace_back();
+					auto& cur_poly = polygons.back();
+					cur_poly.vert_ids.reserve(face->vertices.size());
+					cur_poly.edge_ids.reserve(face->edges.size());
+					cur_poly.atom_ids = {face->owner_id, face->other_id};
+					for (const auto& vert : face->vertices) {
+						cur_poly.vert_ids.push_back(vert->get_id());
+					}
+					for (const auto& edge : face->edges) {
+						cur_poly.edge_ids.push_back(edge->get_id());
+					}
+				}
+
+			}
+		}
+		void unite_vertices(Vertex* a, Vertex* b) const {
+			// To remember about strong dependency to Container type.
+			static_assert(std::is_same_v<cpplib::voronoi::Container<Vertex*>, std::unordered_set<Vertex*>>,
+						  "Method was written for case when Container == unordered_set. Rewrite method elsewhere.");
+			if (a == b) {
+				assert(false); // Should be unreacheble
+				return;
+			}
+
+			// Cleanup refs in a->edges (but using refs from b)
+			for (auto& edge : b->edges) {
+				edge->vertices.erase(b);
+				edge->vertices.insert(a);
+			}
+			// Cleanup refs in a->faces (but using refs from b)
+			for (auto& face : b->faces) {
+				face->vertices.erase(b);
+				face->vertices.insert(a);
+			}
+			// Copy "refs" from b to a
+			a->edges.insert(b->edges.cbegin(), b->edges.cend());
+			a->faces.insert(b->faces.cbegin(), b->faces.cend());
+
+		}
+		void unite_edges(Edge* a, Edge* b) const {
+			// To remember about strong dependency to Container type.
+			static_assert(std::is_same_v<cpplib::voronoi::Container<Vertex*>, std::unordered_set<Vertex*>>,
+						  "Method was written for case when Container == unordered_set. Rewrite method elsewhere.");
+			if (a == b) {
+				assert(false); // Should be unreacheble
+				return;
+			}
+			// Coping vertexes is not nessesary
+			// So we need to copy only faces
+
+			// Cleanup refs in a->faces (but using refs from b)
+			for (auto& face : b->faces) {
+				face->edges.erase(b);
+				face->edges.insert(a);
+			}
+			a->faces.insert(b->faces.cbegin(), b->faces.cend());
+			b->set_state(State::DELETE);
+		}
+		uint32_t find_dublicate_and_count_edges(const Vertex* v) const {
+			uint32_t count = v->edges.size();
+			auto left = v->edges.cbegin();
+			auto end = v->edges.cend();
+			for (; left != end; left++) {
+				auto cur_left = *left;
+				if (cur_left->get_state() == State::DELETE) {
+					continue;
+				}
+				auto second1 = cur_left->get_second_vertex(v)->get_id();
+				// Copy of left iterator
+				auto right = left;
+				right++;
+				for (; right != end; right++) {
+                    auto cur_right = *right;
+					if (cur_right->get_state() == State::DELETE) {
+						continue;
+					}
+					auto second2 = cur_right->get_second_vertex(v)->get_id();
+					if (second1 == second2) {
+						unite_edges(*left, *right);
+						count--;
+					}
+				}
+			}
+			return count;
 		}
 	};
 }

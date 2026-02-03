@@ -143,7 +143,7 @@ namespace cpplib::geometry {
 				abs(fmod(a.a[1] - b.a[1] + T(0.5), T(1.0)) - T(0.5)) <= epsilon &&
 				abs(fmod(a.a[2] - b.a[2] + T(0.5), T(1.0)) - T(0.5)) <= epsilon;
 		}
-		static constexpr value_type isSame(const Point& a, const Point& b, T epsilon) noexcept {
+		static constexpr bool isSame(const Point& a, const Point& b, T epsilon) noexcept {
 			return abs(a.a[0] - b.a[0]) <= epsilon &&
 				abs(a.a[1] - b.a[1]) <= epsilon &&
 				abs(a.a[2] - b.a[2]) <= epsilon;
@@ -1151,7 +1151,7 @@ namespace cpplib::geometry {
 
 		/// @brief Build the spatial grid from a set of points. 
 		/// 
-		/// All points must have coordinates in[0, 1). Unnormalized coordinates
+		/// @note All points must have coordinates in[0, 1). Unnormalized coordinates
 		/// will produce undefined behavior(out - of - bounds access).
 		/// 
 		/// @param points Vector of points with coordinates normalized to[0, 1) in fractional space

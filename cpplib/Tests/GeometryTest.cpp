@@ -849,10 +849,10 @@ TEST_F(VoronoiTest, AlexTest) {
 
 
 
-	voronoi::VoronoiDiagram::BoolVector bools{false, false, false, false,
-                                              false, true,  false, true, 
-                                              false, false, false, false, 
-                                              false, false, false, false};
+	voronoi::VoronoiDiagram::BoolVector bools{true, true, true, true,
+                                              true, true,  true, true, 
+                                              true, true, true, true, 
+                                              true, true, true, true};
 
 	std::vector<geometry::Symm<FloatingPointType>> symmvec;
 	symmvec.reserve(symms.size());
@@ -874,6 +874,72 @@ TEST_F(VoronoiTest, AlexTest) {
 
 	voronoi::VoronoiDiagram vd(buildresult.atoms.points,bonds,cell.fracToCart(), bools);
     auto cells = vd.extractCells();
+
+
+	std::array< std::array<uint32_t, 3>, 16> dead = {{{96, 100,26},
+													  {104,108,26},
+													  {71, 75, 19},
+													  {94, 98, 24},
+													  {98, 102,24},
+													  {59, 63, 19},
+													  {86, 90, 22},
+													  {81, 85, 22},
+													  {91, 95, 24},
+													  {81, 85, 22},
+													  {72, 76, 20},
+													  {70, 74, 20},
+													  {63, 67, 18},
+													  {88, 92, 24},
+													  {77, 81, 21},
+													  {85, 89, 24}}};
+
+	std::array< std::array<uint32_t, 3>, 16> alive = {{{32, 48, 18},
+	                                                  {36, 54, 20},
+	                                                  {22, 33, 13},
+	                                                  {30, 45, 17},
+	                                                  {30, 45, 17},
+	                                                  {18, 27, 11},
+	                                                  {26, 39, 15},
+	                                                  {26, 39, 15},
+	                                                  {28, 42, 16},
+	                                                  {26, 39, 15},
+	                                                  {24, 36, 14},
+	                                                  {22, 33, 13},
+	                                                  {20, 30, 12},
+	                                                  {30, 45, 17},
+	                                                  {22, 33, 13},
+	                                                  {28, 42, 16}}};
+
+	for (size_t i = 0; i < 16; i++)
+	{
+		ASSERT_EQ(cells[i].vertices.size(), dead[i][0]);
+		ASSERT_EQ(cells[i].edges.size(), dead[i][1]);
+		ASSERT_EQ(cells[i].faces.size(), dead[i][2]);
+
+		int a=0, b=0, c=0;
+		for (auto& v : cells[i].vertices)
+		{
+			if (v->get_state() == voronoi::State::VALID) a++;
+		}
+		for (auto& v : cells[i].edges)
+		{
+			if (v->get_state() == voronoi::State::VALID) b++;
+
+		}
+		for (auto& v : cells[i].faces)
+		{
+			if (v->get_state() == voronoi::State::VALID) c++;
+
+		}
+
+		ASSERT_EQ(a, alive[i][0]);
+		ASSERT_EQ(b, alive[i][1]);
+		ASSERT_EQ(c, alive[i][2]);
+	}
+	voronoi::VoronoiFused vf(cells);
+	ASSERT_EQ(vf.vertices.size(), 281);
+	ASSERT_EQ(vf.edges.size(), 475);
+	ASSERT_EQ(vf.polygons.size(), 212);
 }
 TEST_F(VoronoiTest, Benzene) {
 	geometry::Cell<FloatingPointType> cell(7.243, 9.310, 6.756, 90.0, 90.0, 90.0);
