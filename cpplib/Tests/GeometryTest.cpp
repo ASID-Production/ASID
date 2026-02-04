@@ -875,7 +875,6 @@ TEST_F(VoronoiTest, AlexTest) {
 	voronoi::VoronoiDiagram vd(buildresult.atoms.points,bonds,cell.fracToCart(), bools);
     auto cells = vd.extractCells();
 
-
 	std::array< std::array<uint32_t, 3>, 16> dead = {{{96, 100,26},
 													  {104,108,26},
 													  {71, 75, 19},
@@ -940,6 +939,13 @@ TEST_F(VoronoiTest, AlexTest) {
 	ASSERT_EQ(vf.vertices.size(), 281);
 	ASSERT_EQ(vf.edges.size(), 475);
 	ASSERT_EQ(vf.polygons.size(), 212);
+	for (size_t i = 0; i < 16; i++)
+	{
+		ASSERT_EQ(vf.polyhedra[i].vert_ids.size(), alive[i][0]);
+		ASSERT_EQ(vf.polyhedra[i].edge_ids.size(), alive[i][1]);
+		ASSERT_EQ(vf.polyhedra[i].poly_ids.size(), alive[i][2]);
+	}
+
 }
 TEST_F(VoronoiTest, Benzene) {
 	geometry::Cell<FloatingPointType> cell(7.243, 9.310, 6.756, 90.0, 90.0, 90.0);

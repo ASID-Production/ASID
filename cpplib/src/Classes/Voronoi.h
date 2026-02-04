@@ -942,6 +942,14 @@ namespace cpplib::voronoi {
 			::std::vector<uint32_t>   poly_ids;   ///< Polygon indices in this polyhedron
 		};
 
+		/// @brief Helper structure for sorting and merging vertices
+		struct SortEntry {
+			bool is_merged;                  ///< Whether this vertex was merged with others
+			std::vector<uint32_t> cIdx;      ///< Cell indices this vertex belongs to
+			FloatingPointType key;           ///< Sort key (sum of coordinates)
+			Vertex* ptr;                     ///< Pointer to original vertex
+		};
+
 		/// @brief Epsilon for merging coincident vertices
 		///
 		/// Vertices within this distance are considered identical and merged.
@@ -974,13 +982,6 @@ namespace cpplib::voronoi {
 				count_vertices += cell.vertices.size();
 			}
 
-			/// @brief Helper structure for sorting and merging vertices
-			struct SortEntry {
-				bool is_merged;                  ///< Whether this vertex was merged with others
-				std::vector<uint32_t> cIdx;      ///< Cell indices this vertex belongs to
-				FloatingPointType key;           ///< Sort key (sum of coordinates)
-				Vertex* ptr;                     ///< Pointer to original vertex
-			};
 
 			std::vector<SortEntry> sortentries;
 			sortentries.reserve(count_vertices);
@@ -1040,6 +1041,7 @@ namespace cpplib::voronoi {
 			for (uint32_t i = 0; i < count_vertices; ++i) {
 				sortentries[i].ptr->set_id(i);
 				vertices.emplace_back(sortentries[i].ptr->point);
+				std::sort(sortentries[i].cIdx.begin(), sortentries[i].cIdx.end());
 				for (auto& c : sortentries[i].cIdx) {
 					polyhedra[c].vert_ids.push_back(i);
 				}
@@ -1066,6 +1068,7 @@ namespace cpplib::voronoi {
 					edge->set_id(edges.size());
 					auto v1 = *(edge->vertices.begin());
 					auto v2 = edge->get_second_vertex(v1);
+					add_edge_to_polyhedra(v1->get_id(), v2->get_id(), edges.size(), sortentries);
 					edges.emplace_back(EdgeIn{{v1->get_id(), v2->get_id()}});
 				}
 			}
@@ -1083,6 +1086,11 @@ namespace cpplib::voronoi {
 					}
 
 					// Create polygon entry
+					polyhedra[face->owner_id].poly_ids.push_back(polygons.size());
+					if (cells[face->other_id].vertices.empty() == false &&
+					    face->other_shiftcode == 13) {
+						polyhedra[face->other_id].poly_ids.push_back(polygons.size());
+					}
 					polygons.emplace_back();
 					auto& cur_poly = polygons.back();
 					cur_poly.vert_ids.reserve(face->vertices.size());
@@ -1186,6 +1194,30 @@ namespace cpplib::voronoi {
 				}
 			}
 			return count;
+		}
+
+
+		void add_edge_to_polyhedra(uint32_t a, uint32_t b, uint32_t edge, const std::vector<SortEntry>& sort_entries) {
+			uint32_t i1 = 0;
+			uint32_t i2 = 0;
+			uint32_t s1 = sort_entries[a].cIdx.size();
+			uint32_t s2 = sort_entries[b].cIdx.size();
+
+			while (i1 < s1 && i2 < s2) {
+				auto v1 = sort_entries[a].cIdx[i1];
+				auto v2 = sort_entries[b].cIdx[i2];
+				if (v1 == v2) {
+					polyhedra[v1].edge_ids.push_back(edge);
+					i1++;
+					i2++;
+				}
+				else if (v1 < v2) {
+					i1++;
+				}
+				else {
+					i2++;
+				}
+			}
 		}
 	};
 }
