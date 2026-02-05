@@ -25,12 +25,10 @@
 //  ORCID:       0009-0003-5298-6836
 //
 // ******************************************************************************************
-#define Py_LIMITED_API 0x030A0000
-#include <Python.h>
-
 #include <array>
 #include <cmath>
-#include <concepts>
+#include <list>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -40,6 +38,7 @@
 #include "../Classes/FindMolecules.h"
 #include "../Classes/Geometry.h"
 #include "../Classes/Voronoi.h"
+#include "../Python/PythonInterface.h"
 
 extern const cpplib::Distances* p_distances;
 
@@ -47,8 +46,6 @@ using namespace cpplib;
 using namespace cpplib::currents;
 using namespace cpplib::basic_types;
 using PointType = cpplib::FAM_Cell::PointType;
-
-// Utilities section
 
 enum class ErrorState {
 	OK = 0,
@@ -90,107 +87,6 @@ struct Prepare_IC : public Prepare_WC {
 
 extern "C" {
 	inline static void useDistances(PyObject* self);
-}
-
-template <std::floating_point FT>
-PyObject* create_list_from_points(const std::vector<cpplib::geometry::Point<FT>>& vec) {
-	PyObject* o_ret = PyList_New(static_cast<Py_ssize_t>(vec.size()));
-	if (o_ret == NULL) {
-		return NULL;
-	}
-
-	// Fill o_ret
-	for (Py_ssize_t i = 0; i < vec.size(); i++) {
-		PyObject* o_point = Py_BuildValue("(ddd)",
-										  static_cast<double>(vec[i][0]),  // px
-										  static_cast<double>(vec[i][1]),  // py
-										  static_cast<double>(vec[i][2])); // pz
-		if (o_point == NULL) {
-			Py_DECREF(o_ret);
-			return NULL;
-		}
-		if (PyList_SetItem(o_ret, i, o_point) < 0) {
-			Py_DECREF(o_ret);
-			Py_DECREF(o_point);
-			return NULL;
-		}
-	}
-	return o_ret;
-}
-
-template <std::integral IT>
-PyObject* create_list_from_points(const std::vector<cpplib::geometry::Point<IT>>& vec) {
-	PyObject* o_ret = PyList_New(static_cast<Py_ssize_t>(vec.size()));
-	if (o_ret == NULL) {
-		return NULL;
-	}
-
-	// Fill o_ret
-	for (Py_ssize_t i = 0; i < vec.size(); i++) {
-		PyObject* o_point = Py_BuildValue("(lll)",
-										  static_cast<long>(vec[i][0]),  // px
-										  static_cast<long>(vec[i][1]),  // py
-										  static_cast<long>(vec[i][2])); // pz
-		if (o_point == NULL) {
-			Py_DECREF(o_ret);
-			return NULL;
-		}
-		if (PyList_SetItem(o_ret, i, o_point) < 0) {
-			Py_DECREF(o_ret);
-			Py_DECREF(o_point);
-			return NULL;
-		}
-	}
-	return o_ret;
-}
-
-template <std::integral T>
-PyObject* create_list_from_vector_int(const std::vector<T>& vec) {
-	auto s = static_cast<Py_ssize_t>(vec.size());
-	PyObject* ret = PyList_New(s);
-	if (ret == NULL) {
-		return NULL;
-	}
-
-	for (Py_ssize_t i = 0; i < s; i++) {
-		PyObject* py_int = PyLong_FromLong(static_cast<long>(vec[i]));
-		if (py_int == NULL) {
-			// Allocation Error
-			Py_DECREF(ret);
-			return NULL;
-		}
-		if (PyList_SetItem(ret, j, py_int) < 0) {
-			// Failed to set item
-			Py_DECREF(ret);
-			Py_DECREF(py_int);
-			return NULL;
-		}
-	}
-	return ret;
-}
-
-template <std::integral T, size_t size>
-PyObject* create_list_from_array_int(const std::array<T, size>& vec) {
-	PyObject* ret = PyList_New(size);
-	if (ret == NULL) {
-		return NULL;
-	}
-
-	for (Py_ssize_t i = 0; i < size; i++) {
-		PyObject* py_int = PyLong_FromLong(static_cast<long>(vec[i]));
-		if (py_int == NULL) {
-			// Allocation Error
-			Py_DECREF(ret);
-			return NULL;
-		}
-		if (PyList_SetItem(ret, j, py_int) < 0) {
-			// Failed to set item
-			Py_DECREF(ret);
-			Py_DECREF(py_int);
-			return NULL;
-		}
-	}
-	return ret;
 }
 
 template <char times>
@@ -1102,7 +998,9 @@ extern "C" {
 		space.build(buildresult.atoms.points,fcell, cutoff);
 		auto bonds = space.get_bonds();
 		geometry::Cell cell(all.cell);
-		
+
+		// Flags intentionally correspond only to the asymmetric-unit inputs; 
+		// VoronoiDiagram resizes the flag vector and treats symmetry-expanded sites as false.
 		Diagram diag(buildresult.atoms.points,bonds, cell.fracToCart(), bools);
 
 		auto ce = diag.extractCells();
@@ -1113,98 +1011,8 @@ extern "C" {
 
 		deb_write("vertexes.size() = ", vf.vertices.size());
 
-		PyObject* o_vertexes = create_list_from_points(vf.vertices);
-		PyObject* o_polygons = PyList_New(vf.polygons.size());
-		PyObject* o_polyhedra = PyList_New(vf.polyhedra.size());
-
-		for (size_t i = 0; i < vf.polygons.size(); i++)
-		{
-			PyObject* verts = create_list_from_vector_int(vf.polygons[i].vert_ids);
-			if (verts == NULL) {
-				Py_DECREF(o_polygons);
-				return NULL;
-			}
-			PyObject* edges = create_list_from_vector_int(vf.polygons[i].edge_ids);
-			if (edges == NULL) {
-				Py_DECREF(o_polygons);
-				Py_DECREF(verts);
-				return NULL;
-			}
-			PyObject* cells = create_list_from_array_int(vf.polygons[i].atom_ids);
-			if (cells == NULL) {
-				Py_DECREF(o_polygons);
-				Py_DECREF(verts);
-				Py_DECREF(edges);
-				return NULL;
-			}
-
-			if (PyList_SetItem(o_polygons, i, Py_BuildValue("{s:O,s:O,s:O}", 
-															"vertices", verts, 
-															"edges", edges,
-															"cells", cells)) < 0) {
-				Py_DECREF(o_polygons);
-				Py_DECREF(verts);
-				Py_DECREF(edges);
-				Py_DECREF(cells);
-				return NULL;
-			}
-
-		}
-
-
-		//for (Py_ssize_t i = 0; i < vf.polygons.size(); i++) {
-		//	PyObject* polygon_list = PyList_New(vf.polygons[i].vert_ids.size());
-		//	for (Py_ssize_t j = 0; j < vf.polygons[i].vert_ids.size(); j++) {
-		//		PyObject* py_int = PyLong_FromLong(static_cast<long>(vf.polygons[i].vert_ids[j]));
-		//		if (py_int == NULL) {
-		//			// Allocation Error
-		//			Py_DECREF(polygon_list);
-		//			Py_RETURN_NONE;
-		//		}
-		//		if (PyList_SetItem(polygon_list, j, py_int) < 0) {
-		//			// Failed to set item
-		//			Py_DECREF(polygon_list);
-		//			Py_DECREF(py_int);
-		//			Py_RETURN_NONE;
-		//		}
-		//	}
-		//	if (PyList_SetItem(o_polygons, i, polygon_list) < 0) {
-		//		// Failed to set item
-		//		Py_DECREF(polygon_list);
-		//		Py_RETURN_NONE;
-		//	}
-		//}
-
-		//for (Py_ssize_t i = 0; i < vf.polyhedra.size(); i++) {
-		//	PyObject* polyhedra_dict = PyList_New(vf.polyhedra[i].size());
-		//	for (Py_ssize_t j = 0; j < vf.polyhedra[i].size(); j++) {
-		//		PyObject* py_int = PyLong_FromLong(static_cast<long>(vf.polyhedra[i][j]));
-		//		if (py_int == NULL) {
-		//			// Allocation Error
-		//			Py_DECREF(polyhedra_list);
-		//			Py_RETURN_NONE;
-		//		}
-		//		if (PyList_SetItem(polyhedra_list, j, py_int) < 0) {
-		//			// Failed to set item
-		//			Py_DECREF(polyhedra_list);
-		//			Py_DECREF(py_int);
-		//			Py_RETURN_NONE;
-		//		}
-
-		//	}
-		//	if (PyList_SetItem(o_polyhedra, i, polyhedra_list) < 0) {
-		//		// Failed to set item
-		//		Py_DECREF(polyhedra_list);
-		//		Py_RETURN_NONE;
-		//	}
-		//}
-
 		// Build return value
-		return Py_BuildValue("{s:O,s:O,s:O}",
-							 "vertexes", o_vertexes,
-							 "polygons", o_polygons,
-							 "polyhedra", o_polyhedra);
-		Py_RETURN_NONE;
+		return py_util::convert(vf);
 	}
 
 	static struct PyMethodDef methods[] = {

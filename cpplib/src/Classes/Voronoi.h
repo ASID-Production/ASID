@@ -506,7 +506,7 @@ namespace cpplib::voronoi {
 		/// If a vertex at this position already exists (within epsilon), returns
 		/// the existing vertex. Otherwise, creates a new vertex.
 		Vertex* add_vertex(const PointType& p) {
-			auto temp = std::make_unique<Vertex>(vertices.size(), p);
+			auto temp = std::make_unique<Vertex>(static_cast<uint32_t>(vertices.size()), p);
 			for (auto& v : vertices) {
 				if (*v == *temp)
 					return v.get();

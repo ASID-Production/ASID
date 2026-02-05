@@ -365,10 +365,16 @@ def VoronoiCalculation(cell_params: List[float],
                        atoms: List[Tuple[int, float, float, float]], 
                        bools: List[bool], 
                        cutoff: float) -> Dict[
-    "centers":   List[Tuple[float,float,float]],
     "vertexes":  List[Tuple[float,float,float]],
-    "polygons":  List[List[int]],
-    "polyhedra": List[List[int]]]:
+    "edges":  List[List[int,int]],
+    "polygons":  List[Dict[
+        "vertexes": List[int],
+        "edges":  List[int],
+        "atoms":  List[int]]],
+    "polyhedra": List[Dict[
+        "vertexes": List[int],
+        "edges":  List[int],
+        "polygons":  List[int]]]]:
     """
         Calculate Voronoi cells.
         Variables:
