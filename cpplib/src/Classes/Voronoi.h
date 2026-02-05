@@ -114,6 +114,12 @@ namespace cpplib::voronoi {
 			: state(s), id(ID) {}
 	};
 
+	/// @brief Epsilon for comparing vertex positions
+	///
+	/// Vertices within this distance are considered equal to handle
+	/// floating-point precision issues.
+	constexpr basic_types::FloatingPointType EPSILON = 256 * std::numeric_limits<basic_types::FloatingPointType>::epsilon();
+
 	/// @brief Represents a vertex in a Voronoi diagram
 	///
 	/// A Vertex stores a 3D point position, distance metric, and maintains
@@ -123,11 +129,6 @@ namespace cpplib::voronoi {
 		/// @brief 3D point type for vertex position
 		using PointType = geometry::Point<basic_types::FloatingPointType>;
 
-		/// @brief Epsilon for comparing vertex positions
-		///
-		/// Vertices within this distance are considered equal to handle
-		/// floating-point precision issues.
-		static constexpr typename PointType::value_type COMPARISON_EPSILON = 1.0 / (1 << 16);
 
 		/// @brief 3D position of this vertex
 		PointType point;
@@ -163,11 +164,11 @@ namespace cpplib::voronoi {
 		/// @param b Second vertex
 		/// @return True if vertices are spatially equivalent
 		///
-		/// Uses COMPARISON_EPSILON to handle floating-point precision.
+		/// Uses EPSILON to handle floating-point precision.
 		inline friend bool operator==(const Vertex& a, const Vertex& b) {
-			return std::abs(a.point[0] - b.point[0]) < COMPARISON_EPSILON &&
-				std::abs(a.point[1] - b.point[1]) < COMPARISON_EPSILON &&
-				std::abs(a.point[2] - b.point[2]) < COMPARISON_EPSILON;
+			return std::abs(a.point[0] - b.point[0]) < EPSILON &&
+				std::abs(a.point[1] - b.point[1]) < EPSILON &&
+				std::abs(a.point[2] - b.point[2]) < EPSILON;
 		}
 	};
 
@@ -646,7 +647,8 @@ namespace cpplib::voronoi {
 					}
 					iter_vertex++;
 				}
-				assert(iter_vertex != f->vertices.cend());
+				if(iter_vertex == f->vertices.cend())
+					assert(iter_vertex != f->vertices.cend());
 
 				// Create edge connecting the two new vertices
 				const auto& new_edge = edges.emplace_back(std::make_unique<Edge>(edges.size(), v1, v2));
@@ -777,7 +779,7 @@ namespace cpplib::voronoi {
 		/// the asymmetric unit cells while using symmetry-expanded points for boundaries.
 		explicit VoronoiDiagram(const PointVector& points_in_unit01,
 								const std::vector<SpatialGrid::BondWithShift>& bonds,
-								const Matrix& FtoC,
+								const geometry::Cell<FloatingPointType>& unitcell,
 								const BoolVector& flags = BoolVector()) : flags_(flags) {
 			if (flags.empty()) {
 				flags_.resize(points_in_unit01.size(), true);
@@ -786,12 +788,12 @@ namespace cpplib::voronoi {
 			}
 			add_points(points_in_unit01, flags_);
 			auto vec = find_interactions(bonds);
-			calculate_and_sort(vec, points_in_unit01, FtoC);
+			calculate_and_sort(vec, points_in_unit01, unitcell.fracToCart());
 			for (uint32_t i = 0; i < static_cast<uint32_t>(cells_.size()); i++)
 			{
 				if (flags_[i] == false)
 					continue;
-				manager(cells_[i], vec[i], points_in_unit01, FtoC);
+				manager(cells_[i], vec[i], points_in_unit01, unitcell);
 			}
 		}
 
@@ -882,14 +884,14 @@ namespace cpplib::voronoi {
 		/// Iteratively clips the cell by planes perpendicular to neighbors (sorted by distance).
 		/// Uses early exit optimization: stops when the nearest unprocessed neighbor is farther
 		/// than twice the distance to the farthest vertex of the current cell.
-		void manager(VoronCell& cell, const PointsSorted& vec, const PointVector& points_in_unit01, const Matrix& FtoC) const {
-			const Vertex* maxVert = cell.update_vertices_distances(FtoC);
+		void manager(VoronCell& cell, const PointsSorted& vec, const PointVector& points_in_unit01, const geometry::Cell<FloatingPointType>& unitcell) const {
+			const Vertex* maxVert = cell.update_vertices_distances(unitcell.fracToCart());
 			auto maxVertDoubleDistanceSq = maxVert->distance * 4; // Squared double distance
 
 			for (auto& [second, code, lengthsq] : vec) {
 				// Update max vertex if it was deleted
 				if (maxVert->get_state() == State::DELETE) {
-					maxVert = cell.update_vertices_distances(FtoC);
+					maxVert = cell.update_vertices_distances(unitcell.fracToCart());
 					maxVertDoubleDistanceSq = maxVert->distance * 4;
 				}
 
@@ -900,13 +902,54 @@ namespace cpplib::voronoi {
 
 				// Calculate clipping plane
 				auto sumsecond = points_in_unit01[second] + SpatialGrid::decompress_shift(code);
-				auto inter = (cell.center + sumsecond) * FloatingPointType(0.5); // Midpoint
-				auto normal = cell.center - sumsecond;
-				normal /= normal.r(); // Normalize
 
-				PlaneType plane(inter, normal);
+				auto cartA = unitcell.fracToCart() * cell.center;
+				auto cartB = unitcell.fracToCart() * sumsecond;
 
-				cell.clipByPlaneAndAddNewFace(plane, second, code);
+				auto normal_cart = cartA - cartB;
+
+				auto inter_frac = (cell.center + sumsecond) * FloatingPointType(0.5); // Midpoint
+				auto hkl = unitcell.fracToCart().TransposeMultiply(normal_cart);
+
+				PlaneType plane(inter_frac, hkl);
+
+
+				auto inter_cart = (cartA + cartB) * FloatingPointType(0.5);
+
+				PlaneType plane_cart(inter_cart, normal_cart);
+
+				PointType b = inter_cart;
+				PointType c = inter_cart;
+
+				auto nx = plane_cart.a[0];
+				auto ny = plane_cart.a[1];
+				auto nz = plane_cart.a[2];
+
+				if (std::abs(nx) > EPSILON) {
+					b[1] += 1.0;
+					b[0] -= ny / nx;
+
+					c[2] += 1.0;
+					c[0] -= nz / nx;
+				} else if (std::abs(ny) > 1e-9) {
+					b[0] += 1.0;
+
+					c[2] += 1.0; 
+					c[1] -= nz / ny; 
+				} else {
+					b[0] += 1.0;
+					c[1] += 1.0;
+				}
+
+				PlaneType plane_other(inter_frac, unitcell.cartToFrac() * b, unitcell.cartToFrac() * c);
+				if (plane_other.side(cell.center) < 0) {
+					plane_other.a[0] = -plane_other.a[0];
+					plane_other.a[1] = -plane_other.a[1];
+					plane_other.a[2] = -plane_other.a[2];
+					plane_other.a[3] = -plane_other.a[3];
+				}
+				
+				cell.clipByPlaneAndAddNewFace(plane_other, second, code);
 			}
 		}
 	};
@@ -940,6 +983,7 @@ namespace cpplib::voronoi {
 			::std::vector<uint32_t>   vert_ids;   ///< Vertex indices in this polyhedron
 			::std::vector<uint32_t>   edge_ids;   ///< Edge indices in this polyhedron
 			::std::vector<uint32_t>   poly_ids;   ///< Polygon indices in this polyhedron
+			PointType center;
 		};
 
 		/// @brief Helper structure for sorting and merging vertices
@@ -953,7 +997,6 @@ namespace cpplib::voronoi {
 		/// @brief Epsilon for merging coincident vertices
 		///
 		/// Vertices within this distance are considered identical and merged.
-		static constexpr FloatingPointType EPSILON = 256 * std::numeric_limits<FloatingPointType>::epsilon();
 
 	public:
 		//Data
@@ -978,6 +1021,10 @@ namespace cpplib::voronoi {
 		explicit VoronoiFused(::std::vector<voronoi::Cell>& cells) {
 			uint32_t count_vertices = 0;
 			polyhedra.resize(cells.size());
+			for (uint32_t i = 0; i < cells.size(); i++) {
+				polyhedra[i].center = cells[i].center;
+			}
+
 			for (const auto& cell : cells) {
 				count_vertices += cell.vertices.size();
 			}
@@ -1093,15 +1140,13 @@ namespace cpplib::voronoi {
 					}
 					polygons.emplace_back();
 					auto& cur_poly = polygons.back();
-					cur_poly.vert_ids.reserve(face->vertices.size());
+					cur_poly.vert_ids.resize(face->vertices.size());
 					cur_poly.edge_ids.reserve(face->edges.size());
 					cur_poly.atom_ids = {face->owner_id, face->other_id};
-					for (const auto& vert : face->vertices) {
-						cur_poly.vert_ids.push_back(vert->get_id());
-					}
 					for (const auto& edge : face->edges) {
 						cur_poly.edge_ids.push_back(edge->get_id());
 					}
+					reorder_vertices_and_edges_in_polygon(cur_poly);
 				}
 			}
 		}
@@ -1218,6 +1263,42 @@ namespace cpplib::voronoi {
 					i2++;
 				}
 			}
+		}
+
+	private:
+		void reorder_vertices_and_edges_in_polygon(PolygonIn& p) {
+			assert(p.edge_ids.size() >= 3);
+			assert(p.edge_ids.size() == p.vert_ids.size());
+
+			auto current_edge = (edges[p.edge_ids[0]].vert_ids);
+			const auto base_vertex = current_edge[0];
+			auto next_vertex = current_edge[1];
+			const auto s = static_cast<uint32_t>(p.edge_ids.size());
+			const auto s1 = s - 1;
+
+			p.vert_ids[0] = base_vertex;
+			for (uint32_t i = 1; i < s1; i++)
+			{
+				assert(next_vertex != base_vertex);
+
+				p.vert_ids[i] = next_vertex;
+
+				for (uint32_t j = i; j < s; j++) {
+					auto v1 = edges[p.edge_ids[j]].vert_ids[0];
+					auto v2 = edges[p.edge_ids[j]].vert_ids[1];
+					if (v1 != next_vertex && v2 != next_vertex) {
+						continue;
+					}
+					if (v1 == next_vertex) {
+						next_vertex = v2;
+					} else {
+						next_vertex = v1;
+					}
+					std::swap(p.edge_ids[i], p.edge_ids[j]);
+					break;
+				}
+			}
+			p.vert_ids[s1] = next_vertex;
 		}
 	};
 }

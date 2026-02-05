@@ -202,6 +202,7 @@ namespace py_util {
 			};
 
 		if (!add_to_dict("vertices", convert(p.vert_ids)) ||
+			!add_to_dict("center", convert(p.center)) ||
 			!add_to_dict("edges", convert(p.edge_ids)) ||
 			!add_to_dict("polygons", convert(p.poly_ids))) {
 			Py_DECREF(dict);

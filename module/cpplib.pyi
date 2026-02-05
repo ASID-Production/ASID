@@ -1,7 +1,7 @@
 from typing import List, Dict, Tuple
 
 
-def GenBonds(atoms: List[Tuple[int, float, float, float]]) -> Dict["bonds" : List[(int,int)]]:
+def GenBonds(atoms: List[Tuple[int, float, float, float]]) -> Dict[str, List[Tuple[int, int]]]:
     """
         Finds all bonds in a cluster (real space).
         Variables:
@@ -13,7 +13,7 @@ def GenBonds(atoms: List[Tuple[int, float, float, float]]) -> Dict["bonds" : Lis
             which form a bond.
     """
     ...
-def GenBondsEx(atoms: List[Tuple[int, float, float, float]]) -> Dict["bonds" : List[(int,int,float)]]:
+def GenBondsEx(atoms: List[Tuple[int, float, float, float]]) -> Dict[str, List[(int,int,float)]]:
     """
         Finds all bonds and it's length in a cluster (real space).
         Variables:
@@ -365,7 +365,7 @@ def VoronoiCalculation(cell_params: List[float],
                        atoms: List[Tuple[int, float, float, float]], 
                        bools: List[bool], 
                        cutoff: float) -> Dict[
-    "vertexes":  List[Tuple[float,float,float]],
+    "vertices":  List[Tuple[float,float,float]],
     "edges":  List[List[int,int]],
     "polygons":  List[Dict[
         "vertexes": List[int],

@@ -430,6 +430,16 @@ namespace cpplib::geometry {
 			return res;
 		}
 
+		template<class T2>
+		constexpr Point<decltype(T()* T2())> TransposeMultiply(const Point<T2>& right) const noexcept {
+			Point<decltype(T()* T2())> res;
+			for (int i = 0; i < 3; i++) {
+				for (int j = 0; j < 3; j++) {
+					res[i] = std::fma(A[j][i], right[j], res[i]);
+				}
+			}
+			return res;
+		}
 	};
 
 

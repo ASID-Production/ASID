@@ -648,10 +648,10 @@ TEST(VoronoiTest, VertexEquality) {
 
 	// Test vertex equality with epsilon
 	Vertex v1(0, Point<FloatingPointType>(1.0, 2.0, 3.0));
-	Vertex v2(1, Point<FloatingPointType>(1.0 + Vertex::COMPARISON_EPSILON / 2,
-										  2.0 + Vertex::COMPARISON_EPSILON / 2,
-										  3.0 + Vertex::COMPARISON_EPSILON / 2));
-	Vertex v3(2, Point<FloatingPointType>(1.0 + Vertex::COMPARISON_EPSILON * 2,
+	Vertex v2(1, Point<FloatingPointType>(1.0 + voronoi::EPSILON / 2,
+										  2.0 + voronoi::EPSILON / 2,
+										  3.0 + voronoi::EPSILON / 2));
+	Vertex v3(2, Point<FloatingPointType>(1.0 + voronoi::EPSILON * 2,
 										  2.0, 3.0));
 
 	EXPECT_TRUE(v1 == v2);  // Within epsilon
@@ -738,9 +738,9 @@ TEST(VoronoiTest, EdgeIntersection) {
 
 	auto intersection = edge.intersectSegmentPlane(plane);
 
-	EXPECT_NEAR(intersection[0], 0.5, EPSILON);
-	EXPECT_NEAR(intersection[1], 0.0, EPSILON);
-	EXPECT_NEAR(intersection[2], 0.0, EPSILON);
+	EXPECT_NEAR(intersection[0], 0.5, voronoi::EPSILON);
+	EXPECT_NEAR(intersection[1], 0.0, voronoi::EPSILON);
+	EXPECT_NEAR(intersection[2], 0.0, voronoi::EPSILON);
 }
 
 TEST(VoronoiTest, FaceStateCalculation) {
@@ -847,7 +847,7 @@ TEST(VoronoiTest, VoronoiFusedVertexMerging) {
 	for (size_t i = 0; i < fused.vertices.size(); ++i) {
 		for (size_t j = i + 1; j < fused.vertices.size(); ++j) {
 			FloatingPointType dist = (fused.vertices[i] - fused.vertices[j]).r();
-			EXPECT_GT(dist, VoronoiFused::EPSILON);
+			EXPECT_GT(dist, voronoi::EPSILON);
 		}
 	}
 
@@ -923,7 +923,7 @@ TEST(VoronoiTest, DegenerateCases) {
 	// Should not crash
 	EXPECT_NO_THROW({
 		voronoi::VoronoiDiagram vd(buildresult.atoms.points, bonds,
-									 cell.fracToCart());
+									 cell);
 		auto cells = vd.extractCells();
 	});
 }
@@ -937,7 +937,7 @@ TEST(VoronoiTest, EmptyDiagram) {
 	std::vector<geometry::SpatialGrid<FloatingPointType>::BondWithShift> emptyBonds;
 
 	EXPECT_NO_THROW({
-		voronoi::VoronoiDiagram vd(emptyPoints, emptyBonds, cell.fracToCart());
+		voronoi::VoronoiDiagram vd(emptyPoints, emptyBonds, cell);
 		auto cells = vd.extractCells();
 		EXPECT_EQ(cells.size(), 0);
 	});
@@ -983,7 +983,7 @@ TEST(VoronoiTest, AlexTest) {
 	space.build(buildresult.atoms.points, cell, 6);
 	auto bonds = space.get_bonds();
 
-	voronoi::VoronoiDiagram vd(buildresult.atoms.points,bonds,cell.fracToCart(), bools);
+	voronoi::VoronoiDiagram vd(buildresult.atoms.points,bonds,cell, bools);
     auto cells = vd.extractCells();
 
 	std::array< std::array<uint32_t, 3>, 16> dead = {{{96, 100,26},
@@ -1022,9 +1022,9 @@ TEST(VoronoiTest, AlexTest) {
 
 	for (size_t i = 0; i < 16; i++)
 	{
-		ASSERT_EQ(cells[i].vertices.size(), dead[i][0]);
-		ASSERT_EQ(cells[i].edges.size(), dead[i][1]);
-		ASSERT_EQ(cells[i].faces.size(), dead[i][2]);
+		EXPECT_EQ(cells[i].vertices.size(), dead[i][0]);
+		EXPECT_EQ(cells[i].edges.size(), dead[i][1]);
+		EXPECT_EQ(cells[i].faces.size(), dead[i][2]);
 
 		int a=0, b=0, c=0;
 		for (auto& v : cells[i].vertices)
@@ -1039,12 +1039,11 @@ TEST(VoronoiTest, AlexTest) {
 		for (auto& v : cells[i].faces)
 		{
 			if (v->get_state() == voronoi::State::VALID) c++;
-
 		}
 
-		ASSERT_EQ(a, alive[i][0]);
-		ASSERT_EQ(b, alive[i][1]);
-		ASSERT_EQ(c, alive[i][2]);
+		EXPECT_EQ(a, alive[i][0]);
+		EXPECT_EQ(b, alive[i][1]);
+		EXPECT_EQ(c, alive[i][2]);
 	}
 	voronoi::VoronoiFused vf(cells);
 	// Verify polygon topology
@@ -1127,7 +1126,7 @@ TEST(VoronoiTest, Benzene) {
 	space.build(buildresult.atoms.points, cell, 6);
 	auto bonds = space.get_bonds();
 
-	voronoi::VoronoiDiagram vd(buildresult.atoms.points, bonds, cell.fracToCart(), bools);
+	voronoi::VoronoiDiagram vd(buildresult.atoms.points, bonds, cell, bools);
 	auto cells = vd.extractCells();
 }
 

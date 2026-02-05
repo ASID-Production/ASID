@@ -1001,15 +1001,16 @@ extern "C" {
 
 		// Flags intentionally correspond only to the asymmetric-unit inputs; 
 		// VoronoiDiagram resizes the flag vector and treats symmetry-expanded sites as false.
-		Diagram diag(buildresult.atoms.points,bonds, cell.fracToCart(), bools);
+		Diagram diag(buildresult.atoms.points,bonds, cell, bools);
 
 		auto ce = diag.extractCells();
 
 		deb_write("cells.size() = ", ce.size());
 		
-		const cpplib::voronoi::VoronoiFused vf(ce);
+		cpplib::voronoi::VoronoiFused vf(ce);
+		vf.polyhedra.resize(all.points.size());
 
-		deb_write("vertexes.size() = ", vf.vertices.size());
+		deb_write("vertices.size() = ", vf.vertices.size());
 
 		// Build return value
 		return py_util::convert(vf);
