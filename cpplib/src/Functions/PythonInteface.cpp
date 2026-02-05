@@ -144,6 +144,55 @@ PyObject* create_list_from_points(const std::vector<cpplib::geometry::Point<IT>>
 	return o_ret;
 }
 
+template <std::integral T>
+PyObject* create_list_from_vector_int(const std::vector<T>& vec) {
+	auto s = static_cast<Py_ssize_t>(vec.size());
+	PyObject* ret = PyList_New(s);
+	if (ret == NULL) {
+		return NULL;
+	}
+
+	for (Py_ssize_t i = 0; i < s; i++) {
+		PyObject* py_int = PyLong_FromLong(static_cast<long>(vec[i]));
+		if (py_int == NULL) {
+			// Allocation Error
+			Py_DECREF(ret);
+			return NULL;
+		}
+		if (PyList_SetItem(ret, j, py_int) < 0) {
+			// Failed to set item
+			Py_DECREF(ret);
+			Py_DECREF(py_int);
+			return NULL;
+		}
+	}
+	return ret;
+}
+
+template <std::integral T, size_t size>
+PyObject* create_list_from_array_int(const std::array<T, size>& vec) {
+	PyObject* ret = PyList_New(size);
+	if (ret == NULL) {
+		return NULL;
+	}
+
+	for (Py_ssize_t i = 0; i < size; i++) {
+		PyObject* py_int = PyLong_FromLong(static_cast<long>(vec[i]));
+		if (py_int == NULL) {
+			// Allocation Error
+			Py_DECREF(ret);
+			return NULL;
+		}
+		if (PyList_SetItem(ret, j, py_int) < 0) {
+			// Failed to set item
+			Py_DECREF(ret);
+			Py_DECREF(py_int);
+			return NULL;
+		}
+	}
+	return ret;
+}
+
 template <char times>
 static std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>, times> FindDParamsParse(PyObject* self, PyObject* oparams, const std::array<int, times + 1> type, char& d) {
 	std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>, times> value;
@@ -1057,32 +1106,52 @@ extern "C" {
 		Diagram diag(buildresult.atoms.points,bonds, cell.fracToCart(), bools);
 
 		auto ce = diag.extractCells();
+
 		deb_write("cells.size() = ", ce.size());
 		
-		cpplib::voronoi::VoronoiFused vf(ce);
-		
+		const cpplib::voronoi::VoronoiFused vf(ce);
 
 		deb_write("vertexes.size() = ", vf.vertices.size());
 
-		//PyObject* o_centers = create_list_from_points(vf.centers);
-		//PyObject* o_vertexes = create_list_from_points(vf.vertexes);
-		//PyObject* o_polygons = PyList_New(vf.polygons.size());
-		//PyObject* o_polyhedra = PyList_New(vf.polyhedra.size());
-		//auto cleanup = [&]() {
-		//	Py_DECREF(o_centers);
-		//	Py_DECREF(o_vertexes);
-		//	Py_DECREF(o_polygons);
-		//	Py_DECREF(o_polyhedra);
-		//	};
-		//if (o_centers == NULL ||
-		//	o_vertexes == NULL ||
-		//	o_polygons == NULL ||
-		//	o_polyhedra == NULL) {
-		//	cleanup();
-		//	Py_RETURN_NONE;
-		//}
+		PyObject* o_vertexes = create_list_from_points(vf.vertices);
+		PyObject* o_polygons = PyList_New(vf.polygons.size());
+		PyObject* o_polyhedra = PyList_New(vf.polyhedra.size());
 
-		//// Fill o_polygons
+		for (size_t i = 0; i < vf.polygons.size(); i++)
+		{
+			PyObject* verts = create_list_from_vector_int(vf.polygons[i].vert_ids);
+			if (verts == NULL) {
+				Py_DECREF(o_polygons);
+				return NULL;
+			}
+			PyObject* edges = create_list_from_vector_int(vf.polygons[i].edge_ids);
+			if (edges == NULL) {
+				Py_DECREF(o_polygons);
+				Py_DECREF(verts);
+				return NULL;
+			}
+			PyObject* cells = create_list_from_array_int(vf.polygons[i].atom_ids);
+			if (cells == NULL) {
+				Py_DECREF(o_polygons);
+				Py_DECREF(verts);
+				Py_DECREF(edges);
+				return NULL;
+			}
+
+			if (PyList_SetItem(o_polygons, i, Py_BuildValue("{s:O,s:O,s:O}", 
+															"vertices", verts, 
+															"edges", edges,
+															"cells", cells)) < 0) {
+				Py_DECREF(o_polygons);
+				Py_DECREF(verts);
+				Py_DECREF(edges);
+				Py_DECREF(cells);
+				return NULL;
+			}
+
+		}
+
+
 		//for (Py_ssize_t i = 0; i < vf.polygons.size(); i++) {
 		//	PyObject* polygon_list = PyList_New(vf.polygons[i].vert_ids.size());
 		//	for (Py_ssize_t j = 0; j < vf.polygons[i].vert_ids.size(); j++) {
@@ -1090,43 +1159,35 @@ extern "C" {
 		//		if (py_int == NULL) {
 		//			// Allocation Error
 		//			Py_DECREF(polygon_list);
-		//			cleanup();
 		//			Py_RETURN_NONE;
 		//		}
 		//		if (PyList_SetItem(polygon_list, j, py_int) < 0) {
 		//			// Failed to set item
 		//			Py_DECREF(polygon_list);
 		//			Py_DECREF(py_int);
-		//			cleanup();
 		//			Py_RETURN_NONE;
 		//		}
-
 		//	}
 		//	if (PyList_SetItem(o_polygons, i, polygon_list) < 0) {
 		//		// Failed to set item
 		//		Py_DECREF(polygon_list);
-		//		cleanup();
 		//		Py_RETURN_NONE;
 		//	}
 		//}
 
-
-		//// Fill o_polyhedra
 		//for (Py_ssize_t i = 0; i < vf.polyhedra.size(); i++) {
-		//	PyObject* polyhedra_list = PyList_New(vf.polyhedra[i].size());
+		//	PyObject* polyhedra_dict = PyList_New(vf.polyhedra[i].size());
 		//	for (Py_ssize_t j = 0; j < vf.polyhedra[i].size(); j++) {
 		//		PyObject* py_int = PyLong_FromLong(static_cast<long>(vf.polyhedra[i][j]));
 		//		if (py_int == NULL) {
 		//			// Allocation Error
 		//			Py_DECREF(polyhedra_list);
-		//			cleanup();
 		//			Py_RETURN_NONE;
 		//		}
 		//		if (PyList_SetItem(polyhedra_list, j, py_int) < 0) {
 		//			// Failed to set item
 		//			Py_DECREF(polyhedra_list);
 		//			Py_DECREF(py_int);
-		//			cleanup();
 		//			Py_RETURN_NONE;
 		//		}
 
@@ -1134,17 +1195,15 @@ extern "C" {
 		//	if (PyList_SetItem(o_polyhedra, i, polyhedra_list) < 0) {
 		//		// Failed to set item
 		//		Py_DECREF(polyhedra_list);
-		//		cleanup();
 		//		Py_RETURN_NONE;
 		//	}
 		//}
 
-		//// Build return value
-		//return Py_BuildValue("{s:O,s:O,s:O,s:O}",
-		//					 "centers", o_centers,
-		//					 "vertexes", o_vertexes,
-		//					 "polygons", o_polygons,
-		//					 "polyhedra", o_polyhedra);
+		// Build return value
+		return Py_BuildValue("{s:O,s:O,s:O}",
+							 "vertexes", o_vertexes,
+							 "polygons", o_polygons,
+							 "polyhedra", o_polyhedra);
 		Py_RETURN_NONE;
 	}
 
