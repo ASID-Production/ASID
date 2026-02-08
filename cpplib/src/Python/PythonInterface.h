@@ -84,6 +84,15 @@ namespace py_util {
 	inline PyObject* convert(const cpplib::voronoi::VoronoiFused::Polyhedron& p);
 	inline PyObject* convert(const cpplib::voronoi::VoronoiFused& vf);
 
+	inline bool add_to_dict(const char* key, PyObject* val, PyObject* dict) {
+		if (!val) return false;
+		if (PyDict_SetItemString(dict, key, val) != 0) {
+			Py_DECREF(val);
+			return false;
+		}
+		Py_DECREF(val);
+		return true;
+	}
 
 	inline PyObject* convert(cpplib::basic_types::FloatingPointType v) {
 		return PyFloat_FromDouble(static_cast<double>(v));
@@ -134,9 +143,13 @@ namespace py_util {
 		for (Py_ssize_t i = 0; i < n; ++i) {
 			PyObject* item = convert(vec[i]);
 			if (!item) {
-				Py_DECREF(list); return nullptr;
+				Py_DECREF(list); 
+				return nullptr;
 			}
-			PyList_SetItem(list, i, item);
+			if (PyList_SetItem(list, i, item) != 0) {
+				Py_DECREF(list);
+				return nullptr;
+			}
 		}
 		return list;
 	}
@@ -173,16 +186,9 @@ namespace py_util {
 		PyObject* dict = PyDict_New();
 		if (!dict) return nullptr;
 
-		auto add_to_dict = [&](const char* key, PyObject* val) {
-			if (!val) return false;
-			PyDict_SetItemString(dict, key, val);
-			Py_DECREF(val);
-			return true;
-			};
-
-		if (!add_to_dict("vertices", convert(p.vert_ids)) ||
-			!add_to_dict("edges",    convert(p.edge_ids)) ||
-			!add_to_dict("atoms",    convert(p.atom_ids))) {
+		if (!add_to_dict("vertices", convert(p.vert_ids), dict) ||
+			!add_to_dict("edges",    convert(p.edge_ids), dict) ||
+			!add_to_dict("atoms",    convert(p.atom_ids), dict)) {
 			Py_DECREF(dict);
 			return nullptr;
 		}
@@ -194,17 +200,11 @@ namespace py_util {
 		PyObject* dict = PyDict_New();
 		if (!dict) return nullptr;
 
-		auto add_to_dict = [&](const char* key, PyObject* val) {
-			if (!val) return false;
-			PyDict_SetItemString(dict, key, val);
-			Py_DECREF(val);
-			return true;
-			};
 
-		if (!add_to_dict("vertices", convert(p.vert_ids)) ||
-			!add_to_dict("center", convert(p.center)) ||
-			!add_to_dict("edges", convert(p.edge_ids)) ||
-			!add_to_dict("polygons", convert(p.poly_ids))) {
+		if (!add_to_dict("vertices", convert(p.vert_ids), dict) ||
+			!add_to_dict("center", convert(p.center), dict) ||
+			!add_to_dict("edges", convert(p.edge_ids), dict) ||
+			!add_to_dict("polygons", convert(p.poly_ids), dict)) {
 			Py_DECREF(dict);
 			return nullptr;
 		}
@@ -217,17 +217,10 @@ namespace py_util {
 		PyObject* dict = PyDict_New();
 		if (!dict) return nullptr;
 
-		auto add_to_dict = [&](const char* key, PyObject* val) {
-			if (!val) return false;
-			PyDict_SetItemString(dict, key, val);
-			Py_DECREF(val);
-			return true;
-			};
-
-		if (!add_to_dict("vertices", convert(vf.vertices)) ||
-			!add_to_dict("edges", convert(vf.edges)) ||
-			!add_to_dict("polygons", convert(vf.polygons)) ||
-			!add_to_dict("polyhedra", convert(vf.polyhedra))) {
+		if (!add_to_dict("vertices", convert(vf.vertices), dict) ||
+			!add_to_dict("edges", convert(vf.edges), dict) ||
+			!add_to_dict("polygons", convert(vf.polygons), dict) ||
+			!add_to_dict("polyhedra", convert(vf.polyhedra), dict)) {
 			Py_DECREF(dict);
 			return nullptr;
 		}

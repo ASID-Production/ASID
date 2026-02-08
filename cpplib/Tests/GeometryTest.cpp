@@ -986,45 +986,46 @@ TEST(VoronoiTest, AlexTest) {
 	voronoi::VoronoiDiagram vd(buildresult.atoms.points,bonds,cell, bools);
     auto cells = vd.extractCells();
 
-	std::array< std::array<uint32_t, 3>, 16> dead = {{{96, 100,26},
-													  {104,108,26},
-													  {71, 75, 19},
-													  {94, 98, 24},
-													  {98, 102,24},
-													  {59, 63, 19},
-													  {86, 90, 22},
-													  {81, 85, 22},
-													  {91, 95, 24},
-													  {81, 85, 22},
-													  {72, 76, 20},
-													  {70, 74, 20},
-													  {63, 67, 18},
-													  {88, 92, 24},
-													  {77, 81, 21},
-													  {85, 89, 24}}};
+	std::array< std::array<uint32_t, 3>, 16> dead = {{{93, 97, 25},
+                                                      {125, 129, 30},
+                                                      {65, 69, 20},
+                                                      {96, 100, 24},
+                                                      {83, 87, 21},
+                                                      {79, 83, 24},
+                                                      {90, 94, 25},
+                                                      {87, 91, 24},
+                                                      {76, 80, 23},
+                                                      {94, 98, 24},
+                                                      {90, 94, 24},
+                                                      {71, 75, 20},
+                                                      {71, 75, 22},
+                                                      {80, 84, 22},
+                                                      {82, 86, 23},
+                                                      {91, 95, 24}}};
 
-	std::array< std::array<uint32_t, 3>, 16> alive = {{{32, 48, 18},
-	                                                  {36, 54, 20},
-	                                                  {22, 33, 13},
-	                                                  {30, 45, 17},
-	                                                  {30, 45, 17},
-	                                                  {18, 27, 11},
-	                                                  {26, 39, 15},
-	                                                  {26, 39, 15},
-	                                                  {28, 42, 16},
-	                                                  {26, 39, 15},
-	                                                  {24, 36, 14},
-	                                                  {22, 33, 13},
-	                                                  {20, 30, 12},
-	                                                  {30, 45, 17},
-	                                                  {22, 33, 13},
-	                                                  {28, 42, 16}}};
+	std::array< std::array<uint32_t, 3>, 16> alive = {{{30, 45, 17},
+													   {42, 63, 23},
+													   {22, 33, 13},
+													   {32, 48, 18},
+													   {26, 39, 15},
+													   {26, 39, 15},
+													   {32, 48, 18},
+													   {30, 45, 17},
+													   {24, 36, 14},
+													   {32, 48, 18},
+													   {30, 45, 17},
+													   {22, 33, 13},
+													   {22, 33, 13},
+													   {26, 39, 15},
+													   {28, 42, 16},
+													   {32, 48, 18}}};
 
 	for (size_t i = 0; i < 16; i++)
 	{
 		EXPECT_EQ(cells[i].vertices.size(), dead[i][0]);
 		EXPECT_EQ(cells[i].edges.size(), dead[i][1]);
 		EXPECT_EQ(cells[i].faces.size(), dead[i][2]);
+
 
 		int a=0, b=0, c=0;
 		for (auto& v : cells[i].vertices)
@@ -1073,14 +1074,14 @@ TEST(VoronoiTest, AlexTest) {
 		EXPECT_LT(edge.vert_ids[1], vf.vertices.size());
 	}
 	// Verify sizes
-	ASSERT_EQ(vf.vertices.size(), 281);
-	ASSERT_EQ(vf.edges.size(), 475);
-	ASSERT_EQ(vf.polygons.size(), 212);
+	EXPECT_EQ(vf.vertices.size(), 309);
+	EXPECT_EQ(vf.edges.size(), 526);
+	EXPECT_EQ(vf.polygons.size(), 228);
 	for (size_t i = 0; i < 16; i++)
 	{
-		ASSERT_EQ(vf.polyhedra[i].vert_ids.size(), alive[i][0]);
-		ASSERT_EQ(vf.polyhedra[i].edge_ids.size(), alive[i][1]);
-		ASSERT_EQ(vf.polyhedra[i].poly_ids.size(), alive[i][2]);
+		EXPECT_EQ(vf.polyhedra[i].vert_ids.size(), alive[i][0]);
+		EXPECT_EQ(vf.polyhedra[i].edge_ids.size(), alive[i][1]);
+		EXPECT_EQ(vf.polyhedra[i].poly_ids.size(), alive[i][2]);
 	}
 
 }

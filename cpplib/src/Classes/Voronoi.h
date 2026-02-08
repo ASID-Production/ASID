@@ -195,8 +195,8 @@ namespace cpplib::voronoi {
 		///
 		/// Automatically registers this edge with both vertices.
 		Edge(uint32_t ID, Vertex* v1, Vertex* v2) : Object(ID), vertices({v1, v2}) {
-			assert(v1 != NULL && v1 != nullptr);
-			assert(v2 != NULL && v2 != nullptr);
+			assert(v1 != nullptr);
+			assert(v2 != nullptr);
 			v1->edges.emplace(this);
 			v2->edges.emplace(this);
 		}

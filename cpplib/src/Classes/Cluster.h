@@ -146,7 +146,7 @@ namespace cpplib::cluster_detail {
 			constexpr auto smin = std::numeric_limits<ShiftType::value_type>::min();
 			constexpr auto smax = std::numeric_limits<ShiftType::value_type>::max();
 
-			if (radius < 0.0) {
+			if (radius <= 0.0) {
 				throw std::runtime_error("Anchor radius must be positive");
 			}
 
