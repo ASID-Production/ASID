@@ -841,7 +841,8 @@ TEST(VoronoiTest, VoronoiFusedVertexMerging) {
 	);
 	cells[1].clipByPlaneAndAddNewFace(plane2, 0, 13);
 
-	VoronoiFused fused(cells);
+	geometry::Cell<FloatingPointType> cell(10.0, 10.0, 10.0, 90.0, 90.0, 90.0);
+	VoronoiFused fused(cells, cell.fracToCart());
 
 	// Verify that duplicate vertices were merged
 	for (size_t i = 0; i < fused.vertices.size(); ++i) {
@@ -876,7 +877,8 @@ TEST(VoronoiTest, VoronoiFusedEdgePolygonPopulation) {
 	);
 	cells[1].clipByPlaneAndAddNewFace(plane2, 0, 13);
 
-	VoronoiFused fused(cells);
+	geometry::Cell<FloatingPointType> cell(10.0, 10.0, 10.0, 90.0, 90.0, 90.0);
+	VoronoiFused fused(cells, cell.fracToCart());
 
 	// Verify that polyhedra have edge_ids and poly_ids populated
 	for (size_t i = 0; i < fused.polyhedra.size(); ++i) {
@@ -1046,7 +1048,7 @@ TEST(VoronoiTest, AlexTest) {
 		EXPECT_EQ(b, alive[i][1]);
 		EXPECT_EQ(c, alive[i][2]);
 	}
-	voronoi::VoronoiFused vf(cells);
+	voronoi::VoronoiFused vf(cells, cell.fracToCart());
 	// Verify polygon topology
 	for (const auto& polygon : vf.polygons) {
 		// Each polygon should have equal number of vertices and edges

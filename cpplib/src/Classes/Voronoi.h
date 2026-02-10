@@ -968,6 +968,7 @@ namespace cpplib::voronoi {
 
 		/// @brief Polygon (face) in the fused structure
 		struct PolygonIn {
+			FloatingPointType area;               ///< Area of Polygon
 			::std::vector<uint32_t>   vert_ids;   ///< Vertex indices forming the polygon
 			::std::vector<uint32_t>   edge_ids;   ///< Edge indices forming the polygon
 			::std::array<uint32_t, 2> atom_ids;   ///< IDs of the two atoms separated by this face
@@ -980,6 +981,7 @@ namespace cpplib::voronoi {
 
 		/// @brief Polyhedron (cell) in the fused structure
 		struct Polyhedron {
+			FloatingPointType volume;
 			::std::vector<uint32_t>   vert_ids;   ///< Vertex indices in this polyhedron
 			::std::vector<uint32_t>   edge_ids;   ///< Edge indices in this polyhedron
 			::std::vector<uint32_t>   poly_ids;   ///< Polygon indices in this polyhedron
@@ -993,10 +995,6 @@ namespace cpplib::voronoi {
 			FloatingPointType key;           ///< Sort key (sum of coordinates)
 			Vertex* ptr;                     ///< Pointer to original vertex
 		};
-
-		/// @brief Epsilon for merging coincident vertices
-		///
-		/// Vertices within this distance are considered identical and merged.
 
 	public:
 		//Data
@@ -1018,7 +1016,7 @@ namespace cpplib::voronoi {
 		/// 2. Merges duplicate edges
 		/// 3. Merges duplicate faces (polygons)
 		/// 4. Builds unified polyhedra (cells) referencing the merged geometry
-		explicit VoronoiFused(::std::vector<voronoi::Cell>& cells) {
+		explicit VoronoiFused(::std::vector<voronoi::Cell>& cells, const geometry::Matrix<FloatingPointType>& FtoC) {
 			uint32_t count_vertices = 0;
 			polyhedra.resize(cells.size());
 			for (uint32_t i = 0; i < cells.size(); i++) {
@@ -1147,7 +1145,14 @@ namespace cpplib::voronoi {
 						cur_poly.edge_ids.push_back(edge->get_id());
 					}
 					reorder_vertices_and_edges_in_polygon(cur_poly);
+
+					// Calculate area
+					cur_poly.area = calculate_area(cur_poly, FtoC);
 				}
+			}
+			// Calculate volumes
+			for (auto& p : polyhedra) {
+				p.volume = calculate_volume(p, FtoC);
 			}
 		}
 
@@ -1299,6 +1304,46 @@ namespace cpplib::voronoi {
 				}
 			}
 			p.vert_ids[s1] = next_vertex;
+		}
+
+		// Requires correct order of vertices in polygon
+		FloatingPointType calculate_area(const PolygonIn& p, const geometry::Matrix<FloatingPointType>& FtoC) const {
+			PointType center(0,0,0);
+
+			for (auto v : p.vert_ids) {
+				center += vertices[v];
+			}
+			center /= p.vert_ids.size();
+
+			std::vector<PointType> cart_verts;
+			cart_verts.reserve(p.vert_ids.size());
+
+			for (auto v : p.vert_ids) {
+				cart_verts.emplace_back(FtoC * (vertices[v] - center));
+			}
+
+			FloatingPointType area = PointType::Vector(cart_verts.front(), cart_verts.back()).r()* FloatingPointType(0.5);
+			for (uint32_t i = 1; i < p.vert_ids.size(); i++) {
+				area += PointType::Vector(cart_verts[i], cart_verts[i - 1]).r() * FloatingPointType(0.5);
+			}
+
+			return area;
+		}
+
+
+		// Requires area to be calculated in polygons
+		FloatingPointType calculate_volume(const Polyhedron& p, const geometry::Matrix<FloatingPointType>& FtoC) const {
+			FloatingPointType volume = 0;
+
+			for (auto poly : p.poly_ids) {
+				auto i1 = polygons[poly].vert_ids[0];
+				auto i2 = polygons[poly].vert_ids[1];
+				auto i3 = polygons[poly].vert_ids[2];
+				geometry::Plane plane(FtoC * vertices[i1], FtoC * vertices[i2], FtoC * vertices[i3]);
+				volume += plane.distance(FtoC * p.center) * polygons[poly].area * FloatingPointType(1./3);
+			}
+
+			return volume;
 		}
 	};
 }

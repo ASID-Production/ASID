@@ -113,10 +113,10 @@ namespace cpplib::geometry {
 		}
 
 		// Static constexpr functions
-		static constexpr value_type Scalar(const Point& left, const Point& right) noexcept {
+		[[nodiscard]] static constexpr value_type Scalar(const Point& left, const Point& right) noexcept {
 			return (left.a[0] * right.a[0] + left.a[1] * right.a[1] + left.a[2] * right.a[2]);
 		}
-		static constexpr Point Vector(const Point& left, const Point& right) noexcept {
+		[[nodiscard]] static constexpr Point Vector(const Point& left, const Point& right) noexcept {
 			return Point(left.a[1] * right.a[2] - left.a[2] * right.a[1], left.a[2] * right.a[0] - left.a[0] * right.a[2], left.a[0] * right.a[1] - left.a[1] * right.a[0]);
 		}
 		static constexpr value_type distance(const Point& a, const Point& b) noexcept {

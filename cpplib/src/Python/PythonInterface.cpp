@@ -1006,7 +1006,7 @@ extern "C" {
 
 		deb_write("cells.size() = ", ce.size());
 		
-		cpplib::voronoi::VoronoiFused vf(ce);
+		cpplib::voronoi::VoronoiFused vf(ce, cell.fracToCart());
 		vf.polyhedra.resize(all.points.size());
 
 		deb_write("vertices.size() = ", vf.vertices.size());
