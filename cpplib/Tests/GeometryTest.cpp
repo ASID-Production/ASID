@@ -1076,8 +1076,8 @@ TEST(VoronoiTest, AlexTest) {
 		EXPECT_LT(edge.vert_ids[1], vf.vertices.size());
 	}
 	// Verify sizes
-	EXPECT_EQ(vf.vertices.size(), 309);
-	EXPECT_EQ(vf.edges.size(), 526);
+	EXPECT_EQ(vf.vertices.size(), 305);
+	EXPECT_EQ(vf.edges.size(), 515);
 	EXPECT_EQ(vf.polygons.size(), 228);
 	for (size_t i = 0; i < 16; i++)
 	{

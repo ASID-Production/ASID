@@ -245,7 +245,7 @@ namespace cpplib::cluster_detail {
 						transformed.type,
 						transformed.point,
 						transformed.symm,
-						transformed.shift
+						-transformed.shift
 					);
 					result.generated_count++;
 				}
@@ -536,7 +536,7 @@ namespace cpplib {
 				cell.fracToCart() * ShiftType(0,1,0),
 				cell.fracToCart() * ShiftType(0,0,1)
 			};
-			const std::array<Plane, 3> plane = {Plane(zeroPoint, e[1], e[2]), Plane(zeroPoint, e[0], e[2]), Plane(zeroPoint, e[0], e[1])};
+			const std::array<Plane, 3> plane = {Plane(zeroPoint, e[1], e[2]), Plane(e[0], zeroPoint, e[2]), Plane(zeroPoint, e[0], e[1])};
 
 			// 1. Fill Utit cell [0,1) with atoms
 			cluster_detail::UnitCellBuilder ucb(symm);
@@ -629,7 +629,11 @@ namespace cpplib {
 		}
 
 
-
+		inline FloatingPointType dist0(const Plane& plane, const PointType& p) const {
+			return plane.side(p) / sqrt(fma(plane.a[0], plane.a[0], 
+											fma(plane.a[1], plane.a[1], 
+												plane.a[2]* plane.a[2])));
+		}
 
 		void constructBox(const AnchorType& anchor,
 						  FloatingPointType cutoff,
@@ -637,25 +641,16 @@ namespace cpplib {
 						  BoxSet& box,
 						  const std::array<Plane, 3>& plane) const {
 
-			ShiftType b(anchor.point.floor());
-			std::array < FloatingPointType, 3> low{
-				plane[0].distance(cell.fracToCart() * anchor.point) - b[0] * dp[0],
-				plane[1].distance(cell.fracToCart() * anchor.point) - b[1] * dp[1],
-				plane[2].distance(cell.fracToCart() * anchor.point) - b[2] * dp[2]};
-
-			std::array < FloatingPointType, 3> high{
-				dp[0] - low[0],
-				dp[1] - low[1],
-				dp[2] - low[2]};
+			auto real_anchor = cell.fracToCart() * anchor.point;
 
 			// [ -x, +x, -y, +y, -z, +z ]
 			const std::array<ShiftType::value_type, 6> maxr{
-				b[0] - static_cast<ShiftType::value_type>(std::ceil((cutoff - low[0]) / dp[0])),
-				b[0] + static_cast<ShiftType::value_type>(std::ceil((cutoff - high[0]) / dp[0])),
-				b[1] - static_cast<ShiftType::value_type>(std::ceil((cutoff - low[1]) / dp[1])),
-				b[1] + static_cast<ShiftType::value_type>(std::ceil((cutoff - high[1]) / dp[1])),
-				b[2] - static_cast<ShiftType::value_type>(std::ceil((cutoff - low[2]) / dp[2])),
-				b[2] + static_cast<ShiftType::value_type>(std::ceil((cutoff - high[2]) / dp[2]))};
+				static_cast<ShiftType::value_type>(std::floor((dist0(plane[0], real_anchor) - cutoff) / dp[0])),
+				static_cast<ShiftType::value_type>(std::floor((dist0(plane[0], real_anchor) + cutoff) / dp[0])),
+				static_cast<ShiftType::value_type>(std::floor((dist0(plane[1], real_anchor) - cutoff) / dp[1])),
+				static_cast<ShiftType::value_type>(std::floor((dist0(plane[1], real_anchor) + cutoff) / dp[1])),
+				static_cast<ShiftType::value_type>(std::floor((dist0(plane[2], real_anchor) - cutoff) / dp[2])),
+				static_cast<ShiftType::value_type>(std::floor((dist0(plane[2], real_anchor) + cutoff) / dp[2]))};
 
 
 			for (ShiftType::value_type i = maxr[0]; i <= maxr[1]; i++) {

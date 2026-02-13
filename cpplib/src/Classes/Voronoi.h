@@ -118,7 +118,7 @@ namespace cpplib::voronoi {
 	///
 	/// Vertices within this distance are considered equal to handle
 	/// floating-point precision issues.
-	constexpr basic_types::FloatingPointType EPSILON = 256 * std::numeric_limits<basic_types::FloatingPointType>::epsilon();
+	constexpr basic_types::FloatingPointType EPSILON = (2<<16) * std::numeric_limits<basic_types::FloatingPointType>::epsilon();
 
 	/// @brief Represents a vertex in a Voronoi diagram
 	///

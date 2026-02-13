@@ -186,7 +186,7 @@ namespace py_util {
 		PyObject* dict = PyDict_New();
 		if (!dict) return nullptr;
 
-		if (!add_to_dict("area",     convert(p.vert_ids), dict) ||
+		if (!add_to_dict("area",     convert(p.area), dict) ||
 			!add_to_dict("vertices", convert(p.vert_ids), dict) ||
 			!add_to_dict("edges",    convert(p.edge_ids), dict) ||
 			!add_to_dict("atoms",    convert(p.atom_ids), dict)) {
