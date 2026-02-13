@@ -38,6 +38,7 @@
 
 #include "../Functions/Functions.h"
 #include "../BaseHeaders/BaseTypes.h"
+#include "../Classes/Cluster.h"
 #include "../Classes/Geometry.h"
 #include "../Classes/Voronoi.h"
 
@@ -176,6 +177,39 @@ namespace py_util {
 		}
 		return list;
 	}
+
+
+	// (cluster_detail::ClusterData -> Dict)
+	inline PyObject* convert(const cpplib::cluster_detail::ClusterData& cd) {
+		auto N = static_cast<Py_ssize_t>(cd.indices.size());
+		PyObject* list = PyList_New(N);
+		if (!list) return nullptr;
+
+		for (Py_ssize_t i = 0; i < N; ++i) {
+			PyObject* dict = PyDict_New();
+			if (!dict) {
+				Py_DECREF(list);
+				return nullptr;
+			}
+
+			if (!add_to_dict("index", convert(cd.indices[i]), dict) ||
+				!add_to_dict("point_frac", convert(cd.points[i]), dict) ||
+				!add_to_dict("symm_index", convert(cd.symm_indices[i]), dict) ||
+				!add_to_dict("shift", convert(cd.shifts[i]), dict)) {
+				Py_DECREF(list);
+				Py_DECREF(dict);
+				return nullptr;
+			}
+
+			if (PyList_SetItem(list, i, dict) != 0) {
+				Py_DECREF(list);
+				return nullptr;
+			}
+		}
+		return list;
+	}
+
+
 
 	// (VoronoiFused::EdgeIn -> Dict)
 	inline PyObject* convert(const cpplib::voronoi::VoronoiFused::EdgeIn& e) {

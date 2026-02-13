@@ -254,15 +254,8 @@ extern "C" {
 		deb_write("py_SearchMain invoke SearchMain");
 		const auto ret = SearchMain(search, std::move(data), np, (exact != 0));
 		deb_write("py_SearchMain closes SearchMain");
-		const auto ret_s = ret.size();
-		PyObject* ret_o = PyList_New(0);
-		deb_write("py_SearchMain create return list");
-
-		for (Py_ssize_t i = 0; i < ret_s; i++) {
-			PyList_Append(ret_o, PyLong_FromLong(ret[i]));
-		}
 		deb_write("py_SearchMain return");
-		return ret_o;
+		return py_util::convert(ret);
 	}
 	static PyObject* cpplib_CompareGraph(PyObject* self, PyObject* args) {
 		deb_write("cpplib_CompareGraph: start");
@@ -942,7 +935,7 @@ extern "C" {
 											   "symmref", static_cast<long>(ret[i].symm),
 											   "shift", py_shift));
 		}
-		return Py_BuildValue("{s:O,s:O}",
+		return Py_BuildValue("{s:N,s:N}",
 							 "points", o_ret,
 							 "hasPolymer", b?Py_True:Py_False);
 	}
@@ -1012,7 +1005,9 @@ extern "C" {
 		deb_write("vertices.size() = ", vf.vertices.size());
 
 		// Build return value
-		return py_util::convert(vf);
+		return Py_BuildValue("{s:N,s:N}",
+							 "Voronoi cells", py_util::convert(vf),
+							 "Unit cell", py_util::convert(buildresult.atoms));
 	}
 
 	static struct PyMethodDef methods[] = {
