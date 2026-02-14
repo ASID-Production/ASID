@@ -513,6 +513,13 @@ namespace cpplib {
 
 		{
 			assert(asymmetric_types.size() == asymmetric_points.size());
+
+			const size_t s = anchors_frac.size();
+			anchors_cart.reserve(s);
+			for (size_t i = 0; i < s; i++)
+			{
+				anchors_cart.emplace_back(cell.fracToCart() * anchors_frac[i].point, anchors_frac[i].radius);
+			}
 		}
 
 
@@ -520,6 +527,7 @@ namespace cpplib {
 		CellType& cell;
 		std::vector<SymmType>& symm;
 		std::vector<AnchorType> anchors_frac;
+		std::vector<AnchorType> anchors_cart;
 		std::vector<AtomTypeBase> asymmetric_types;
 		std::vector<PointType> asymmetric_points;
 		FloatingPointType polymer_cutoff_radius;
@@ -667,12 +675,13 @@ namespace cpplib {
 		bool check_molecule(const ShiftType& shift,
 							const Molecule& mol,
 							const ClusterData& unit01) const {
-			for (const auto& anchor : anchors_frac) {
-				for (const auto& node : mol.nodes) {
-					// Calculate distance to anchor
-					PointType vec = cell.fracToCart() * (unit01.points[node.id] + node.shift + shift - anchor.point);
+			for (const auto& node : mol.nodes) {
+				auto point = cell.fracToCart() * (unit01.points[node.id] + node.shift + shift);
 
-					if (vec.r() < anchor.radius) {
+				for (const auto& anchor : anchors_cart) {
+					// Calculate distance to anchor
+
+					if(PointType::distanceSq(point, anchor.point) < anchor.radius* anchor.radius) {
 						return true;
 					}
 				}
