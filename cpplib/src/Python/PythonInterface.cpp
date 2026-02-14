@@ -28,6 +28,7 @@
 #include <array>
 #include <cmath>
 #include <list>
+#include <string>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -187,8 +188,10 @@ extern "C" {
 			return;
 		}
 		deb_write("useDistances parse __file__");
-		Py_ssize_t us;
-		std::string full(PyUnicode_AsUTF8AndSize(PyObject_GetAttrString(self, "__file__"), &us));
+		Py_ssize_t us; 
+		PyObject* file_obj = PyObject_GetAttrString(self, "__file__");
+		std::string full(PyUnicode_AsUTF8AndSize(file_obj, &us));
+		Py_DECREF(file_obj);
 
 		auto found = full.find_last_of("\\/");
 		auto bond_filename = full.substr(0, found + 1) + "BondLength.ini";
@@ -208,13 +211,8 @@ extern "C" {
 		std::string errM;
 		auto&& bonds = famstr.findBonds(distances, errM, [](const PointType& p1, const PointType& p2) {return (p1 - p2).r(); }).first;
 
-		PyObject* lst = PyList_New(0);
-		for (size_t i = 0; i < bonds.size(); i++) {
-			PyList_Append(lst, Py_BuildValue("(ll)",
-											 static_cast<long>(bonds[i].first),
-											 static_cast<long>(bonds[i].second)));
-		}
-		return Py_BuildValue("{s:O}",
+		PyObject* lst = py_util::convert(bonds);
+		return Py_BuildValue("{s:N}",
 							 "bonds", lst);
 	}
 	static PyObject* cpplib_GenBondsEx(PyObject* self, PyObject* arg) {
@@ -226,14 +224,8 @@ extern "C" {
 		// TODO: Don't use famstr anymore
 		auto&& bonds = famstr.findBondsEx(distances, errM, [](const PointType& p1, const PointType& p2) {return (p1 - p2).r(); }).first;
 
-		PyObject* lst = PyList_New(0);
-		for (size_t i = 0; i < bonds.size(); i++) {
-			PyList_Append(lst, Py_BuildValue("(llf)",
-											 static_cast<long>(bonds[i].first),
-											 static_cast<long>(bonds[i].second),
-											 static_cast<float>(bonds[i].length)));
-		}
-		return Py_BuildValue("{s:O}",
+		PyObject* lst = py_util::convert(bonds);
+		return Py_BuildValue("{s:N}",
 							 "bonds", lst);
 	}
 
@@ -243,7 +235,7 @@ extern "C" {
 		int np = 0;
 		int exact = 0;
 		if (!PyArg_ParseTuple(args, "sOip", &search, &o, &np, &exact)) {
-			deb_write("! Critic Error: Parse Error - return None");
+			deb_write("! Critical Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
 		deb_write("search = ", search);
@@ -264,7 +256,7 @@ extern "C" {
 		int b = 0;
 		deb_write("cpplib_CompareGraph: arg parse start");
 		if (!PyArg_ParseTuple(args, "ssp", &s1, &s2, &b)) {
-			deb_write("! Critic Error: Parse Error - return None");
+			deb_write("! Critical Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
 		deb_write("s1 = ", s1);
@@ -280,12 +272,13 @@ extern "C" {
 	}
 
 	static PyObject* cpplib_FindMoleculesInCell(PyObject* self, PyObject* args) {
+		// TODO: Repair memory leaks!
 		useDistances(self);
 		PyObject* ocell = NULL;
 		PyObject* osymm = NULL;
 		PyObject* otuple = NULL;
 		if (!PyArg_ParseTuple(args, "OOO", &ocell, &osymm, &otuple)) {
-			deb_write("! Critic Error: Parse Error - return None");
+			deb_write("! Critical Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
 
@@ -298,9 +291,9 @@ extern "C" {
 			PyObject* o_molecule = PyList_New(0);
 			for (auto& [point, type] : atoms) {
 				PyObject* o_atom = Py_BuildValue("{s:f,s:f,s:f,s:l}",
-												 "x", cpplib::basic_types::FloatingPointType(point[0]),
-												 "y", cpplib::basic_types::FloatingPointType(point[1]),
-												 "z", cpplib::basic_types::FloatingPointType(point[2]),
+												 "x", float(point[0]),
+												 "y", float(point[1]),
+												 "z", float(point[2]),
 												 "init_idx", long(id));
 				PyList_Append(o_molecule, o_atom);
 			}
@@ -321,6 +314,7 @@ extern "C" {
 							 "xyz_block", o_xyz_block);
 	}
 	static PyObject* cpplib_FindMoleculesWithoutCell(PyObject* self, PyObject* otuple) {
+		// TODO: Repair memory leaks!
 		useDistances(self);
 
 		Prepare_WC all(otuple);
@@ -358,13 +352,14 @@ extern "C" {
 	}
 
 	static PyObject* cpplib_GenSymm(PyObject* self, PyObject* args) {
+		// TODO: Repair memory leaks!
 		PyObject* osymm = NULL;
 		PyObject* otuples = NULL;
 		std::byte flags;
 
 		deb_write("cpplib_GenSymm: Parsing start");
 		if (!PyArg_ParseTuple(args, "OBO", &otuples, &flags, &osymm)) {
-			deb_write("! Critic Error: Parse Error - return None");
+			deb_write("! Critical Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
 		bool movetocell = (flags & std::byte(1)) != std::byte(0);
@@ -439,7 +434,7 @@ extern "C" {
 		PyObject* oparams = NULL;
 
 		if (!PyArg_ParseTuple(args, "OOOO", &ocell, &osymm, &otuples, &oparams)) {
-			deb_write("! Critic Error: Parse Error - return None");
+			deb_write("! Critical Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
 		Prepare_IC all(ocell, osymm, otuples);
@@ -475,7 +470,7 @@ extern "C" {
 		PyObject* otuples = NULL;
 		PyObject* oparams = NULL;
 		if (!PyArg_ParseTuple(args, "OO", &otuples, &oparams)) {
-			deb_write("! Critic Error: Parse Error - return None");
+			deb_write("! Critical Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
 		Prepare_WC all(otuples);
@@ -515,7 +510,7 @@ extern "C" {
 		PyObject* otuples = NULL;
 		PyObject* oparams = NULL;
 		if (!PyArg_ParseTuple(args, "OOOO", &ocell, &osymm, &otuples, &oparams)) {
-			deb_write("! Critic Error: Parse Error - return None");
+			deb_write("! Critical Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
 		Prepare_IC all(ocell, osymm, otuples);
@@ -549,7 +544,7 @@ extern "C" {
 		PyObject* otuples = NULL;
 		PyObject* oparams = NULL;
 		if (!PyArg_ParseTuple(args, "OO", &otuples, &oparams)) {
-			deb_write("! Critic Error: Parse Error - return None");
+			deb_write("! Critical Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
 
@@ -586,7 +581,7 @@ extern "C" {
 		PyObject* otuples = NULL;
 		PyObject* oparams = NULL;
 		if (!PyArg_ParseTuple(args, "OOOO", &ocell, &osymm, &otuples, &oparams)) {
-			deb_write("! Critic Error: Parse Error - return None");
+			deb_write("! Critical Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
 
@@ -624,7 +619,7 @@ extern "C" {
 		PyObject* otuples = NULL;
 		PyObject* oparams = NULL;
 		if (!PyArg_ParseTuple(args, "OO", &otuples, &oparams)) {
-			deb_write("! Critic Error: Parse Error - return None");
+			deb_write("! Critical Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
 
@@ -663,7 +658,7 @@ extern "C" {
 		PyObject* osymm = NULL;
 		PyObject* otuples = NULL;
 		if (!PyArg_ParseTuple(args, "OOO", &ocell, &osymm, &otuples)) {
-			deb_write("! Critic Error: Parse Error - return None");
+			deb_write("! Critical Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
 		Prepare_IC all(ocell, osymm, otuples);
@@ -759,7 +754,7 @@ extern "C" {
 		std::vector<FloatingPointType> himp;
 
 		if (!PyArg_ParseTuple(args, "OO", &o_tuple, &o_himp)) {
-			deb_write("! Critic Error: Parse Error - return None");
+			deb_write("! Critical Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
 		Prepare_WC all(o_tuple);
@@ -793,18 +788,9 @@ extern "C" {
 			all.points[i] = (all.points[best] + ((all.points[i] - all.points[best]) * (himp[all.types[best]] / dist)));
 		}
 
-		// Return section
-		PyObject* o_xyz_block = PyList_New(0);
-		for (int i = 0; i < s; i++) {
-			PyObject* o_atom = Py_BuildValue("(fff)",
-											 static_cast<float>(all.points[i][0]),
-											 static_cast<float>(all.points[i][1]),
-											 static_cast<float>(all.points[i][2]));
-			PyList_Append(o_xyz_block, o_atom);
-		}
 		// returns List[Tuple(atom1, atom2), ...] 
-		return Py_BuildValue("{s:O}",
-							 "atoms", o_xyz_block);
+		return Py_BuildValue("{s:N}",
+							 "atoms", py_util::convert(all.points));
 	}
 
 	static PyObject* cpplib_SubSearch(PyObject* self, PyObject* args) {
@@ -813,7 +799,7 @@ extern "C" {
 		const char* s1 = NULL;
 		const char* s2 = NULL;
 		if (!PyArg_ParseTuple(args, "ss", &s1, &s2)) {
-			deb_write("! Critic Error: Parse Error - return None");
+			deb_write("! Critical Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
 		deb_write("s1 = ", s1);
@@ -845,7 +831,7 @@ extern "C" {
 
 		deb_write("cpplib_compaq argument parsing start");
 		if (!PyArg_ParseTuple(args, "OOO", &ocell, &osymm, &otuple)) {
-			deb_write("cpplib_compaq! Critic Error: Parse Error - return None");
+			deb_write("cpplib_compaq! Critical Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
 
@@ -897,7 +883,7 @@ extern "C" {
 		PyObject* ocoords = NULL;
 		cpplib::basic_types::FloatingPointType over_radius = 0;
 		if (!PyArg_ParseTuple(args, "OOOOf", &ocell, &osymm, &otuples, &ocoords, &over_radius)) {
-			deb_write("! Critic Error: Parse Error - return None");
+			deb_write("! Critical Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
 		Prepare_IC all(ocell, osymm, otuples);
@@ -913,31 +899,12 @@ extern "C" {
 																			static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 2)))),
 								 static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 3))));
 		}
-		bool b = false;
-		auto ret = ClusterCreate(all.cell, all.symm, all.types, all.points, anchors, over_radius, b);
-		PyObject* o_ret = PyList_New(0);
-		auto ret_s = ret.size();
-		for (size_t i = 0; i < ret_s; i++) {
-			auto py_point = Py_BuildValue("(fff)",
-										  static_cast<float>(ret[i].point[0]), // px
-										  static_cast<float>(ret[i].point[1]), // py
-										  static_cast<float>(ret[i].point[2]));// pz 
+		bool hasPolymer = false;
+		auto ret = ClusterCreate(all.cell, all.symm, all.types, all.points, anchors, over_radius, hasPolymer);
 
-			auto py_shift = Py_BuildValue("(lll)",
-										  static_cast<long>(ret[i].shift[0]),  // sx
-										  static_cast<long>(ret[i].shift[1]),  // sy
-										  static_cast<long>(ret[i].shift[2])); // sz
-
-			PyList_Append(o_ret, Py_BuildValue("{s:l,s:l,s:O,s:l,s:O}",
-											   "index", static_cast<long>(ret[i].index),
-											   "type", static_cast<long>(ret[i].type),
-											   "point_frac", py_point,
-											   "symmref", static_cast<long>(ret[i].symm),
-											   "shift", py_shift));
-		}
 		return Py_BuildValue("{s:N,s:N}",
-							 "points", o_ret,
-							 "hasPolymer", b?Py_True:Py_False);
+							 "points", py_util::convert(ret),
+							 "hasPolymer", PyBool_FromLong(hasPolymer?1:0));
 	}
 
 	/// Args: [cell, symm, tuples, bools<int>, cutoff]
@@ -950,7 +917,7 @@ extern "C" {
 		PyObject* obools = NULL;
 		float cutoff = 6.0;
 		if (!PyArg_ParseTuple(args, "OOOOf", &ocell, &osymm, &otuples, &obools, &cutoff)) {
-			deb_write("! Critic Error: Parse Error - return None");
+			deb_write("! Critical Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
 

@@ -38,6 +38,7 @@
 
 #include "../Functions/Functions.h"
 #include "../BaseHeaders/BaseTypes.h"
+#include "../Classes/Bond.h"
 #include "../Classes/Cluster.h"
 #include "../Classes/Geometry.h"
 #include "../Classes/Voronoi.h"
@@ -79,6 +80,10 @@ namespace py_util {
 
 	template <typename T> inline PyObject* convert(const cpplib::geometry::Point<T>& p);
 
+	inline PyObject* convert(const cpplib::Bond& b);
+	inline PyObject* convert(const cpplib::BondEx& b);
+
+	inline PyObject* convert(const cpplib::cluster_detail::ClusterData& cd);
 
 	inline PyObject* convert(const cpplib::voronoi::VoronoiFused::EdgeIn& e);
 	inline PyObject* convert(const cpplib::voronoi::VoronoiFused::PolygonIn& p);
@@ -154,7 +159,6 @@ namespace py_util {
 		}
 		return list;
 	}
-
 	// (std::array -> List)
 	template<typename T, std::size_t N>
 	inline PyObject* convert(const std::array<T, N>& arr) {
@@ -178,6 +182,14 @@ namespace py_util {
 		return list;
 	}
 
+	// (Bond -> Tuple(Int,Int))
+	inline PyObject* convert(const cpplib::Bond& b) {
+		return Py_BuildValue("(NN)", convert(b.first), convert(b.second));
+	}
+	// (BondEx -> Tuple(Int,Int))
+	inline PyObject* convert(const cpplib::BondEx& b) {
+		return Py_BuildValue("(NNN)", convert(b.first), convert(b.second), convert(b.length));
+	}
 
 	// (cluster_detail::ClusterData -> Dict)
 	inline PyObject* convert(const cpplib::cluster_detail::ClusterData& cd) {
@@ -193,8 +205,9 @@ namespace py_util {
 			}
 
 			if (!add_to_dict("index", convert(cd.indices[i]), dict) ||
+				!add_to_dict("type", convert(cd.types[i]), dict) ||
 				!add_to_dict("point_frac", convert(cd.points[i]), dict) ||
-				!add_to_dict("symm_index", convert(cd.symm_indices[i]), dict) ||
+				!add_to_dict("symmref", convert(cd.symm_indices[i]), dict) ||
 				!add_to_dict("shift", convert(cd.shifts[i]), dict)) {
 				Py_DECREF(list);
 				Py_DECREF(dict);
@@ -208,8 +221,6 @@ namespace py_util {
 		}
 		return list;
 	}
-
-
 
 	// (VoronoiFused::EdgeIn -> Dict)
 	inline PyObject* convert(const cpplib::voronoi::VoronoiFused::EdgeIn& e) {
