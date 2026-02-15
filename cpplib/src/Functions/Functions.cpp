@@ -66,26 +66,21 @@ static cpplib::DATTuple& ConvertDATTuple(cpplib::DATTuple& dat, const cpplib::FA
 const Distances* p_distances = nullptr;
 
 bool CompareGraph(const char* search1, const char* search2, const bool exact) {
-	deb_write("CompareGraph start");
 	SearchGraph graph;
 
-	deb_write("CompareGraph CurrentSearchGraph start ReadInput");
-	auto&& inputpair = cpplib::MoleculeParser<AtomTypeRequest>::Read(search1);
+	auto&& inputpair = WITH_LOG(cpplib::MoleculeParser<AtomTypeRequest>::Read<AtomTypeRequest>, search1);
 	auto map = inputpair.first.getTypeMap();
 	graph.setupInput(std::move(inputpair.first));
-	deb_write("CompareGraph CurrentSearchGraph start ReadData");
-	auto&& d_pair = cpplib::MoleculeParser<AtomTypeData>::Read(search2, inputpair.second, map);
+	auto&& d_pair = WITH_LOG(cpplib::MoleculeParser<AtomTypeData>::Read<AtomTypeData>, search2, inputpair.second, map);
 
 	if (!d_pair.second) return false;
 	graph.setupData(std::move(d_pair.first));
-	deb_write("CompareGraph CurrentSearchGraph start prepareSearch");
 	graph.prepareToSearch();
-	deb_write("CompareGraph CurrentSearchGraph start FullSearch");
 	return graph.startFullSearch(exact);
 }
 std::vector<int> SearchMain(const char* search, std::vector<const char*>&& data, const int np, const bool exact) {
 
-	auto&& inputpair = cpplib::MoleculeParser<AtomTypeRequest>::Read(search);
+	auto&& inputpair = WITH_LOG(cpplib::MoleculeParser<AtomTypeRequest>::Read<AtomTypeRequest>, search);
 	SearchDataInterface databuf(std::move(data), std::move(inputpair.second));
 	std::vector<std::thread> threads;
 	const size_t nThreads = std::min(std::min(static_cast<unsigned int>(np), std::thread::hardware_concurrency()),
@@ -349,7 +344,7 @@ static void ChildThreadFunc(const SearchGraph::RequestGraphType& input, const Se
 		auto map = input.getTypeMap();
 		auto tempinput = input;
 		graph.setupInput(std::move(tempinput));
-		auto&& molData = cpplib::MoleculeParser<AtomTypeData>::Read(next, multi, map);
+		auto&& molData = WITH_LOG(cpplib::MoleculeParser<AtomTypeData>::Read<AtomTypeData>, next, multi, map);
 		if (!molData.second) continue;
 		auto id = molData.first.getID();
 		graph.setupData(std::move(molData.first));
@@ -414,28 +409,24 @@ static cpplib::DATTuple& ConvertDATTuple(cpplib::DATTuple& dat, const cpplib::FA
 	auto s_tors = tors.size();
 
 	for (size_t i = 0; i < s_dists; i++) {
-		deb_write("ConvertDATTuple: reorder dist: ", i);
 		reorder(dists[i], fs);
 	}
 	for (size_t i = 0; i < s_angles; i++) {
-		deb_write("ConvertDATTuple: reorder angl: ", i);
 		reorder(angles[i], fs);
 	}
 	for (size_t i = 0; i < s_tors; i++) {
-		deb_write("ConvertDATTuple: reorder tors: ", i);
 		reorder(tors[i], fs);
 	}
 	// erase dublicates
 
-	deb_write("ConvertDATTuple: erase dist");
 	eraseDoubles(dists, std::function<bool(std::remove_reference<decltype(dists)>::type::iterator, std::remove_reference< decltype(dists)>::type::iterator)>(
 		[](std::remove_reference< decltype(dists)>::type::iterator it, std::remove_reference< decltype(dists)>::type::iterator it2)
 		{return (std::get<0>(*it) == std::get<0>(*it2)) && (std::get<1>(*it) == std::get<1>(*it2)) && (::std::abs(std::get<2>(*it) - std::get<2>(*it2)) < 0.0001); }));
-	deb_write("ConvertDATTuple: erase angl");
+
 	eraseDoubles(angles, std::function<bool(std::remove_reference< decltype(angles)>::type::iterator, std::remove_reference< decltype(angles)>::type::iterator)>(
 		[](std::remove_reference< decltype(angles)>::type::iterator it, std::remove_reference< decltype(angles)>::type::iterator it2)
 		{return (std::get<0>(*it) == std::get<0>(*it2)) && (std::get<1>(*it) == std::get<1>(*it2)) && (std::get<2>(*it) == std::get<2>(*it2)) && (::std::abs(std::get<3>(*it) - std::get<3>(*it2)) < 0.0001); }));
-	deb_write("ConvertDATTuple: erase tors");
+
 	eraseDoubles(tors, std::function<bool(std::remove_reference< decltype(tors)>::type::iterator, std::remove_reference< decltype(tors)>::type::iterator)>(
 		[](std::remove_reference< decltype(tors)>::type::iterator it, std::remove_reference< decltype(tors)>::type::iterator it2)
 		{return (std::get<0>(*it) == std::get<0>(*it2)) && (std::get<1>(*it) == std::get<1>(*it2)) &&
@@ -447,31 +438,23 @@ std::tuple<std::vector<cpplib::geometry::Point<FloatingPointType>>, std::list<st
 												const std::vector<const char*>& symm,
 												cpplib::FAM_Struct::AtomContainerType& types,
 												cpplib::FAM_Struct::PointConteinerType& points) {
-	deb_write("Compaq invoked");
 	auto& distances = *p_distances;
 	if (p_distances->isReady() == false) {
 		return std::make_tuple(std::vector<cpplib::geometry::Point<FloatingPointType>>(), std::list<std::string>(1, "Error!Could not open BondLength.ini"));
 	}
-	deb_write("Compaq p_distances prepared");
 	FAM_Struct fs;
-	deb_write("Compaq FAM_Cell creation start");
 	FAM_Cell fc(FAM_Cell::base(unit_cell, true));
-	deb_write("Compaq call constructor ParseData");
 	ParseData(fs, fc, symm, std::move(types), std::move(points), false);
 
 	const auto su = fs.sizeUnique;
 	std::string errorMsg;
 	std::list<std::string> res_errors;
-	deb_write("Compaq call fs.findBonds");
 	auto res = fs.findBonds(distances, errorMsg, [fc](const PointType& p1, const PointType& p2) {return fc.distanceInCell(p1, p2); });
 	if (!errorMsg.empty()) res_errors.emplace_back(std::move(errorMsg));
 
-	deb_write("Compaq create fm");
 	FindMolecules fm(std::move(fs));
-	deb_write("Compaq call fm.compaq");
 	auto& compaqed = fm.compaq(res.first);
 	compaqed.resize(su);
-	deb_write("Compaq return");
 	return std::make_tuple(std::move(compaqed), res_errors);
 }
 
@@ -482,7 +465,6 @@ Cluster::ClusterData ClusterCreate(std::array<cpplib::basic_types::FloatingPoint
 			                       std::vector<cpplib::Cluster::AnchorType>& anchors,
 			                       cpplib::basic_types::FloatingPointType polymer_cutoff,
 			                       bool& hasPolymer) {
-	deb_write("ClusterCreate invoked");
 
 	using ShiftType = Cluster::ShiftType;
 	auto& distances = *p_distances;
@@ -503,6 +485,5 @@ Cluster::ClusterData ClusterCreate(std::array<cpplib::basic_types::FloatingPoint
 
 	auto ret = cluster.execute(distances, hasPolymer);
 
-	deb_write("ClusterCreate return");
 	return ret;
 }

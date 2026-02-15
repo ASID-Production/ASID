@@ -259,7 +259,6 @@ TEST(CompaqTest, AAXTHP) {
 }
 
 TEST(SubSearch, Same) {
-	deb_write("cpplib_SubSearch started");
 
 	const char* s1 = "1 6 5 6 2 4 4 6 2 4 4 6 2 4 4 6 2 4 4 6 2 4 4 6 2 4 4 1 2 2 3 3 4 4 5 1 6";
 	const char* s2 = "1 6 5 6 2 4 4 6 2 4 4 6 2 4 4 6 2 4 4 6 2 4 4 6 2 4 4 2 3 3 4 4 5 5 6 1 6";
@@ -268,12 +267,9 @@ TEST(SubSearch, Same) {
 
 	auto&& inputpair = cpplib::MoleculeParser<AtomTypeRequest>::Read(s1);
 	graph.setupInput(std::move(inputpair.first));
-	deb_write("cpplib_SubSearch start ReadData");
 	auto datg = cpplib::MoleculeParser<AtomTypeRequest>::Read(s2).first.makeCopyEx<AtomTypeData>();
 	graph.setupData(std::move(datg));
-	deb_write("cpplib_SubSearch start prepareSearch");
 	graph.prepareToSearch();
-	deb_write("cpplib_SubSearch start FullSearch");
 	EXPECT_TRUE(graph.startFullSearch(false));
 }
 

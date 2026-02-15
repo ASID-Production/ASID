@@ -35,6 +35,7 @@
 
 #include "../Functions/Functions.h"
 #include "../BaseHeaders/BaseTypes.h"
+#include "../BaseHeaders/DebugMes.h"
 #include "../Classes/Distances.h"
 #include "../Classes/FindMolecules.h"
 #include "../Classes/Geometry.h"
@@ -77,7 +78,6 @@ struct Prepare_IC : public Prepare_WC {
 			cell[i] = static_cast<FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(ocell, i)));
 		}
 		const Py_ssize_t s = PyList_Size(osymm);
-		deb_write("pyListToVectorCharP s =", s);
 		symm.resize(s);
 		for (Py_ssize_t i = 0; i < s; i++) {
 			Py_ssize_t us;
@@ -153,17 +153,12 @@ extern "C" {
 	inline static ErrorState pyListToVectorCharP(PyObject* plist, std::vector<const char*>* pret) {
 
 		std::vector<const char*>& ret = *pret;
-		deb_write("pyListToVectorCharP called");
 		const Py_ssize_t s = PyList_Size(plist);
-		deb_write("pyListToVectorCharP s =", s);
 		ret.resize(s);
 		for (Py_ssize_t i = 0; i < s; i++) {
-			deb_write("pyListToVectorCharP start i = ", i);
 			Py_ssize_t us;
 			ret[i] = PyUnicode_AsUTF8AndSize(PyList_GetItem(plist, i), &us);
-			deb_write("pyListToVectorCharP end   i = ", i);
 		}
-		deb_write("pyListToVectorCharP return");
 		return ErrorState::OK;
 	}
 	inline static ErrorState pyTXYZparse(PyObject* o_list, std::vector<AtomTypeBase>* types, std::vector<PointType>* points) {
@@ -183,11 +178,9 @@ extern "C" {
 		return ErrorState::OK;
 	}
 	inline static void useDistances(PyObject* self) {
-		deb_write("useDistances check p_dist");
 		if (p_distances != nullptr) {
 			return;
 		}
-		deb_write("useDistances parse __file__");
 		Py_ssize_t us; 
 		PyObject* file_obj = PyObject_GetAttrString(self, "__file__");
 		std::string full(PyUnicode_AsUTF8AndSize(file_obj, &us));
@@ -196,7 +189,6 @@ extern "C" {
 		auto found = full.find_last_of("\\/");
 		auto bond_filename = full.substr(0, found + 1) + "BondLength.ini";
 
-		deb_write("Create dist");
 		static Distances dist(bond_filename);
 		p_distances = &dist;
 	}
@@ -235,34 +227,19 @@ extern "C" {
 		int np = 0;
 		int exact = 0;
 		if (!PyArg_ParseTuple(args, "sOip", &search, &o, &np, &exact)) {
-			deb_write("! Critical Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
-		deb_write("search = ", search);
-		deb_write("np = ", np);
-		deb_write("exact = ", exact);
 		std::vector< const char*> data; pyListToVectorCharP(o, &data);
-		deb_write("data.size = ", data.size());
-		deb_write("py_SearchMain invoke SearchMain");
 		const auto ret = SearchMain(search, std::move(data), np, (exact != 0));
-		deb_write("py_SearchMain closes SearchMain");
-		deb_write("py_SearchMain return");
 		return py_util::convert(ret);
 	}
 	static PyObject* cpplib_CompareGraph(PyObject* self, PyObject* args) {
-		deb_write("cpplib_CompareGraph: start");
 		const char* s1 = NULL;
 		const char* s2 = NULL;
 		int b = 0;
-		deb_write("cpplib_CompareGraph: arg parse start");
 		if (!PyArg_ParseTuple(args, "ssp", &s1, &s2, &b)) {
-			deb_write("! Critical Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
-		deb_write("s1 = ", s1);
-		deb_write("s2 = ", s2);
-		deb_write("exact = ", b);
-		deb_write("cpplib_CompareGraph: invoke CompareGraph");
 		if (CompareGraph(s1, s2, (b != 0))) {
 			Py_RETURN_TRUE;
 		}
@@ -278,7 +255,6 @@ extern "C" {
 		PyObject* osymm = NULL;
 		PyObject* otuple = NULL;
 		if (!PyArg_ParseTuple(args, "OOO", &ocell, &osymm, &otuple)) {
-			deb_write("! Critical Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
 
@@ -319,9 +295,7 @@ extern "C" {
 
 		Prepare_WC all(otuple);
 
-		deb_write("cpplib_FindMoleculesWithoutCell invoke FindMoleculesInCell");
 		auto ret = FindMoleculesWithoutCell(all.types, all.points);
-		deb_write("cpplib_FindMoleculesWithoutCell returned from FindMoleculesInCell");
 		PyObject* o_xyz_block = PyList_New(0);
 
 		for (auto& mol : std::get<2>(ret)) {
@@ -357,34 +331,24 @@ extern "C" {
 		PyObject* otuples = NULL;
 		std::byte flags;
 
-		deb_write("cpplib_GenSymm: Parsing start");
 		if (!PyArg_ParseTuple(args, "OBO", &otuples, &flags, &osymm)) {
-			deb_write("! Critical Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
 		bool movetocell = (flags & std::byte(1)) != std::byte(0);
 		bool movemasstocell = (flags & std::byte(2)) != std::byte(0);
 
 		Prepare_WC all(otuples);
-		deb_write("cpplib_GenSymm: atom parsing ended");
-
-		deb_write("cpplib_GenSymm: pyListToVectorCharP invoking");
 		std::vector<const char*> nsymm; pyListToVectorCharP(osymm, &nsymm);
-		deb_write("cpplib_GenSymm: pyListToVectorCharP returned");
-
-		deb_write("cpplib_GenSymm: symm parsing started");
 		std::vector<geometry::Symm<FloatingPointType>> symm;
 		const size_t ss = nsymm.size();
 		for (size_t i = 0; i < ss; i++) {
 			symm.emplace_back(nsymm[i]);
 		}
-		deb_write("cpplib_GenSymm: Parsing ended");
 
 		// Move center of mass to cell
 		const auto s_points = all.points.size();
 		const auto sf_points = static_cast<FloatingPointType>(s_points);
 		if (movemasstocell) {
-			deb_write("cpplib_GenSymm: Move center of mass started");
 			PointType centerofmass(0, 0, 0);
 			for (size_t i = 0; i < s_points; i++) {
 				centerofmass += all.points[i];
@@ -401,18 +365,11 @@ extern "C" {
 									std::ceil(movedcenter[2]));
 				symm[i].point += ceilmass - ceilmoved;
 			}
-
-			deb_write("cpplib_GenSymm: Move center of mass ended");
 		}
 
 		FAM_Struct famstr(std::move(all.types), std::move(all.points));
 		FAM_Cell fcell(FAM_Cell::base(32, 32, 32, 90, 90, 90, true));
-		fcell.GenerateSymm(famstr, symm, movetocell, true);
-
-		deb_write("cpplib_GenSymm: famstr.types.size() = ", famstr.types.size());
-		deb_write("cpplib_GenSymm: famstr.points.size() = ", famstr.points.size());
-		deb_write("cpplib_GenSymm: famstr.parseIndex.size() = ", famstr.parseIndex.size());
-		deb_write("cpplib_GenSymm: famstr.sizePoints = ", famstr.sizePoints);
+		WITH_LOG_M(fcell, GenerateSymm, famstr, symm, movetocell, true);
 
 		for (Py_ssize_t i = s_points; i < famstr.sizePoints; i++) {
 			PyList_Append(otuples, Py_BuildValue("(Ifff)",
@@ -426,7 +383,6 @@ extern "C" {
 	}
 
 	static PyObject* cpplib_FindDistanceIC(PyObject* self, PyObject* args) {
-		deb_write("cpplib_FindDistanceIC: invoked");
 
 		PyObject* ocell = NULL;
 		PyObject* osymm = NULL;
@@ -434,7 +390,6 @@ extern "C" {
 		PyObject* oparams = NULL;
 
 		if (!PyArg_ParseTuple(args, "OOOO", &ocell, &osymm, &otuples, &oparams)) {
-			deb_write("! Critical Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
 		Prepare_IC all(ocell, osymm, otuples);
@@ -444,15 +399,7 @@ extern "C" {
 		char d = 2;
 		auto value = FindDParamsParse<1>(self, oparams, type, d);
 
-		deb_write("cpplib_FindDistanceIC: all.types.size: ", all.types.size());
-		deb_write("cpplib_FindDistanceIC: all.points.size: ", all.points.size());
-		deb_write("cpplib_FindDistanceIC: param type1: ", type[0]);
-		deb_write("cpplib_FindDistanceIC: param type2: ", type[1]);
-		deb_write("cpplib_FindDistanceIC: param min: ", value[0].first);
-		deb_write("cpplib_FindDistanceIC: param max: ", value[0].second);
-		deb_write("cpplib_FindDistanceIC: invoke FindDistanceIC");
-		auto res = FindDistanceIC(all.cell, all.symm, all.types, all.points, type, value[0]);
-		deb_write("cpplib_FindDistanceIC: FindDistanceIC returned");
+		auto res = WITH_LOG(FindDistanceIC, all.cell, all.symm, all.types, all.points, type, value[0]);
 
 		auto res_s = res.size();
 		PyObject* lst = PyList_New(0);
@@ -462,15 +409,12 @@ extern "C" {
 											 static_cast<unsigned int>(std::get<1>(res[i])),
 											 static_cast<float>(std::get<2>(res[i]))));
 		}
-		deb_write("cpplib_FindDistanceIC: List[...] completed. size = ", res_s);
 		return Py_BuildValue("{s:O}", "distances", lst);
 	}
 	static PyObject* cpplib_FindDistanceWC(PyObject* self, PyObject* args) {
-		deb_write("cpplib_FindDistanceWC: invoked");
 		PyObject* otuples = NULL;
 		PyObject* oparams = NULL;
 		if (!PyArg_ParseTuple(args, "OO", &otuples, &oparams)) {
-			deb_write("! Critical Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
 		Prepare_WC all(otuples);
@@ -481,15 +425,7 @@ extern "C" {
 		auto value = FindDParamsParse<1>(self, oparams, type, d);
 
 
-		deb_write("cpplib_FindDistanceWC: all.types.size: ", all.types.size());
-		deb_write("cpplib_FindDistanceWC: all.points.size: ", all.points.size());
-		deb_write("cpplib_FindDistanceWC: param type1: ", type[0]);
-		deb_write("cpplib_FindDistanceWC: param type2: ", type[1]);
-		deb_write("cpplib_FindDistanceWC: param min: ", value[0].first);
-		deb_write("cpplib_FindDistanceWC: param max: ", value[0].second);
-		deb_write("cpplib_FindDistanceWC: invoke FindDistanceWC");
 		auto res = FindDistanceWC(all.types, all.points, type, value[0]);
-		deb_write("cpplib_FindDistanceWC: FindDistanceWC return");
 
 		auto res_s = res.size();
 		PyObject* lst = PyList_New(0);
@@ -499,18 +435,15 @@ extern "C" {
 											 static_cast<unsigned int>(std::get<1>(res[i])),
 											 static_cast<float>(std::get<2>(res[i]))));
 		}
-		deb_write("cpplib_FindDistanceWC: List[...] completed. size = ", res_s);
 		return Py_BuildValue("{s:O}", "distances", lst);
 	}
 
 	static PyObject* cpplib_FindAngleIC(PyObject* self, PyObject* args) {
-		deb_write("cpplib_FindAngleIC: invoked");
 		PyObject* ocell = NULL;
 		PyObject* osymm = NULL;
 		PyObject* otuples = NULL;
 		PyObject* oparams = NULL;
 		if (!PyArg_ParseTuple(args, "OOOO", &ocell, &osymm, &otuples, &oparams)) {
-			deb_write("! Critical Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
 		Prepare_IC all(ocell, osymm, otuples);
@@ -523,9 +456,7 @@ extern "C" {
 		auto value_a = FindATParamsParse<1>(oparams, d);
 
 
-		deb_write("cpplib_FindAngleIC: invoke FindAngleIC");
 		auto res = FindAngleIC(all.cell, all.symm, all.types, all.points, type, value_d, value_a[0]);
-		deb_write("cpplib_FindAngleIC: FindAngleIC return");
 
 		auto res_s = res.size();
 		PyObject* lst = PyList_New(0);
@@ -536,15 +467,12 @@ extern "C" {
 											 static_cast<unsigned int>(std::get<2>(res[i])),
 											 static_cast<float>(cpplib::geometry::RadtoGrad(std::get<3>(res[i])))));
 		}
-		deb_write("cpplib_FindAngleIC: List[...] completed. size = ", res_s);
 		return Py_BuildValue("{s:O}", "angles", lst);
 	}
 	static PyObject* cpplib_FindAngleWC(PyObject* self, PyObject* args) {
-		deb_write("cpplib_FindAngleWC: invoked");
 		PyObject* otuples = NULL;
 		PyObject* oparams = NULL;
 		if (!PyArg_ParseTuple(args, "OO", &otuples, &oparams)) {
-			deb_write("! Critical Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
 
@@ -558,9 +486,7 @@ extern "C" {
 		auto value_a = FindATParamsParse<1>(oparams, d);
 
 
-		deb_write("cpplib_FindAngleWC: invoke FindAngleWC");
 		auto res = FindAngleWC(all.types, all.points, type, value_d, value_a[0]);
-		deb_write("cpplib_FindAngleWC: FindAngleWC return");
 
 		auto res_s = res.size();
 		PyObject* lst = PyList_New(0);
@@ -571,7 +497,6 @@ extern "C" {
 											 static_cast<unsigned int>(std::get<2>(res[i])),
 											 static_cast<float>(cpplib::geometry::RadtoGrad(std::get<3>(res[i])))));
 		}
-		deb_write("cpplib_FindAngleWC: List[...] completed. size = ", res_s);
 		return Py_BuildValue("{s:O}", "angles", lst);
 	}
 	static PyObject* cpplib_FindTorsionIC(PyObject* self, PyObject* args) {
@@ -581,7 +506,6 @@ extern "C" {
 		PyObject* otuples = NULL;
 		PyObject* oparams = NULL;
 		if (!PyArg_ParseTuple(args, "OOOO", &ocell, &osymm, &otuples, &oparams)) {
-			deb_write("! Critical Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
 
@@ -597,9 +521,7 @@ extern "C" {
 		auto value_a = FindATParamsParse<2>(oparams, d);
 		auto value_t = FindATParamsParse<2>(oparams, d);
 
-		deb_write("cpplib_FindTorsionIC: invoke FindTorsionIC");
-		auto res = FindTorsionIC(all.cell, all.symm, all.types, all.points, type, value_d, value_a, value_t[0]);
-		deb_write("cpplib_FindTorsionIC: FindTorsionIC return");
+		auto res = WITH_LOG(FindTorsionIC, all.cell, all.symm, all.types, all.points, type, value_d, value_a, value_t[0]);
 
 		auto res_s = res.size();
 		PyObject* lst = PyList_New(0);
@@ -611,7 +533,6 @@ extern "C" {
 											 static_cast<unsigned int>(std::get<3>(res[i])),
 											 static_cast<cpplib::basic_types::FloatingPointType>(cpplib::geometry::RadtoGrad(std::get<4>(res[i])))));
 		}
-		deb_write("cpplib_FindTorsionIC: List[...] completed. size = ", res_s);
 		return Py_BuildValue("{s:O}", "tors", lst);
 	}
 	static PyObject* cpplib_FindTorsionWC(PyObject* self, PyObject* args) {
@@ -619,7 +540,6 @@ extern "C" {
 		PyObject* otuples = NULL;
 		PyObject* oparams = NULL;
 		if (!PyArg_ParseTuple(args, "OO", &otuples, &oparams)) {
-			deb_write("! Critical Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
 
@@ -635,9 +555,7 @@ extern "C" {
 		auto value_a = FindATParamsParse<2>(oparams, d);
 		auto value_t = FindATParamsParse<2>(oparams, d);
 
-		deb_write("cpplib_FindTorsionWC: invoke FindTorsionWC");
 		auto res = FindTorsionWC(all.types, all.points, type, value_d, value_a, value_t[0]);
-		deb_write("cpplib_FindTorsionWC: FindTorsionWC return");
 
 		auto res_s = res.size();
 		PyObject* lst = PyList_New(0);
@@ -647,9 +565,8 @@ extern "C" {
 											 static_cast<unsigned int>(std::get<1>(res[i])),
 											 static_cast<unsigned int>(std::get<2>(res[i])),
 											 static_cast<unsigned int>(std::get<3>(res[i])),
-											 static_cast<cpplib::basic_types::FloatingPointType>(cpplib::geometry::RadtoGrad(std::get<4>(res[i])))));
+											 static_cast<float>(cpplib::geometry::RadtoGrad(std::get<4>(res[i])))));
 		}
-		deb_write("cpplib_FindTorsionWC: List[...] completed. size = ", res_s);
 		return Py_BuildValue("{s:O}", "tors", lst);
 	}
 	static PyObject* cpplib_FindDAT_IC(PyObject* self, PyObject* args) {
@@ -658,7 +575,6 @@ extern "C" {
 		PyObject* osymm = NULL;
 		PyObject* otuples = NULL;
 		if (!PyArg_ParseTuple(args, "OOO", &ocell, &osymm, &otuples)) {
-			deb_write("! Critical Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
 		Prepare_IC all(ocell, osymm, otuples);
@@ -674,7 +590,7 @@ extern "C" {
 			PyList_Append(list_d, Py_BuildValue("(IIf)",
 												static_cast<unsigned int>(std::get<0>(datdist[i])),
 												static_cast<unsigned int>(std::get<1>(datdist[i])),
-												static_cast<cpplib::basic_types::FloatingPointType>(std::get<2>(datdist[i]))));
+												static_cast<float>(std::get<2>(datdist[i]))));
 		}
 		PyDict_SetItemString(ret, "bonds", list_d);
 
@@ -684,7 +600,7 @@ extern "C" {
 												static_cast<unsigned int>(std::get<0>(datang[i])),
 												static_cast<unsigned int>(std::get<1>(datang[i])),
 												static_cast<unsigned int>(std::get<2>(datang[i])),
-												static_cast<cpplib::basic_types::FloatingPointType>(cpplib::geometry::RadtoGrad(std::get<3>(datang[i])))));
+												static_cast<float>(cpplib::geometry::RadtoGrad(std::get<3>(datang[i])))));
 		}
 		PyDict_SetItemString(ret, "angles", list_a);
 
@@ -695,14 +611,13 @@ extern "C" {
 												static_cast<unsigned int>(std::get<1>(dattor[i])),
 												static_cast<unsigned int>(std::get<2>(dattor[i])),
 												static_cast<unsigned int>(std::get<3>(dattor[i])),
-												static_cast<cpplib::basic_types::FloatingPointType>(cpplib::geometry::RadtoGrad(std::get<4>(dattor[i])))));
+												static_cast<float>(cpplib::geometry::RadtoGrad(std::get<4>(dattor[i])))));
 		}
 		PyDict_SetItemString(ret, "tors", list_t);
 
 		return ret;
 	}
 	static PyObject* cpplib_FindDAT_WC(PyObject* self, PyObject* otuples) {
-		deb_write("cpplib_FindDAT_WC started");
 
 		Prepare_WC all(otuples);
 
@@ -717,7 +632,7 @@ extern "C" {
 			PyList_Append(list_d, Py_BuildValue("(IIf)",
 												static_cast<unsigned int>(std::get<0>(datdist[i])),
 												static_cast<unsigned int>(std::get<1>(datdist[i])),
-												static_cast<cpplib::basic_types::FloatingPointType>(std::get<2>(datdist[i]))));
+												static_cast<float>(std::get<2>(datdist[i]))));
 		}
 		PyDict_SetItemString(ret, "bonds", list_d);
 
@@ -727,7 +642,7 @@ extern "C" {
 												static_cast<unsigned int>(std::get<0>(datang[i])),
 												static_cast<unsigned int>(std::get<1>(datang[i])),
 												static_cast<unsigned int>(std::get<2>(datang[i])),
-												static_cast<cpplib::basic_types::FloatingPointType>(cpplib::geometry::RadtoGrad(std::get<3>(datang[i])))));
+												static_cast<float>(cpplib::geometry::RadtoGrad(std::get<3>(datang[i])))));
 		}
 		PyDict_SetItemString(ret, "angles", list_a);
 
@@ -738,7 +653,7 @@ extern "C" {
 												static_cast<unsigned int>(std::get<1>(dattor[i])),
 												static_cast<unsigned int>(std::get<2>(dattor[i])),
 												static_cast<unsigned int>(std::get<3>(dattor[i])),
-												static_cast<cpplib::basic_types::FloatingPointType>(cpplib::geometry::RadtoGrad(std::get<4>(dattor[i])))));
+												static_cast<float>(cpplib::geometry::RadtoGrad(std::get<4>(dattor[i])))));
 		}
 		PyDict_SetItemString(ret, "tors", list_t);
 
@@ -754,7 +669,6 @@ extern "C" {
 		std::vector<FloatingPointType> himp;
 
 		if (!PyArg_ParseTuple(args, "OO", &o_tuple, &o_himp)) {
-			deb_write("! Critical Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
 		Prepare_WC all(o_tuple);
@@ -794,28 +708,20 @@ extern "C" {
 	}
 
 	static PyObject* cpplib_SubSearch(PyObject* self, PyObject* args) {
-		deb_write("cpplib_SubSearch started");
 
 		const char* s1 = NULL;
 		const char* s2 = NULL;
 		if (!PyArg_ParseTuple(args, "ss", &s1, &s2)) {
-			deb_write("! Critical Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
-		deb_write("s1 = ", s1);
-		deb_write("s2 = ", s2);
-		deb_write("cpplib_SubSearch: invoke CompareGraph");
 		bool res = false;
 
 		cpplib::SearchGraph graph;
 		auto&& inputpair = cpplib::MoleculeParser<AtomTypeRequest>::Read(s1);
 		graph.setupInput(std::move(inputpair.first));
-		deb_write("cpplib_SubSearch start ReadData");
 		auto datg = cpplib::MoleculeParser<AtomTypeRequest>::Read(s2).first.makeCopyEx<AtomTypeData>();
 		graph.setupData(std::move(datg));
-		deb_write("cpplib_SubSearch start prepareSearch");
 		graph.prepareToSearch();
-		deb_write("cpplib_SubSearch start FullSearch");
 		if (graph.startFullSearch(false)) {
 			Py_RETURN_TRUE;
 		}
@@ -829,24 +735,16 @@ extern "C" {
 		PyObject* osymm = NULL;
 		PyObject* otuple = NULL;
 
-		deb_write("cpplib_compaq argument parsing start");
 		if (!PyArg_ParseTuple(args, "OOO", &ocell, &osymm, &otuple)) {
-			deb_write("cpplib_compaq! Critical Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
-
-		deb_write("cpplib_compaq call useDistances");
 		useDistances(self);
 
-		deb_write("cpplib_compaq call Prepare_IC");
 		Prepare_IC all(ocell, osymm, otuple);
 
-		deb_write("cpplib_compaq call Compaq");
-		auto [ret_v, ret_l] = Compaq(all.cell, all.symm, all.types, all.points);
-		deb_write("cpplib_compaq Compaq successful");
+		auto [ret_v, ret_l] = WITH_LOG(Compaq, all.cell, all.symm, all.types, all.points);
 
 
-		deb_write("cpplib_compaq return Dict {errors, xyz_block}");
 		return Py_BuildValue("{s:N,s:N}",
 							 "errors", py_util::convert(ret_l),
 							 "xyz_block", py_util::convert(ret_v));
@@ -865,9 +763,10 @@ extern "C" {
 		PyObject* ocoords = NULL;
 		cpplib::basic_types::FloatingPointType over_radius = 0;
 		if (!PyArg_ParseTuple(args, "OOOOf", &ocell, &osymm, &otuples, &ocoords, &over_radius)) {
-			deb_write("! Critical Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
+
+		LOG_INTERFACE_GUARD("cpplib_ClusterCreate");
 		Prepare_IC all(ocell, osymm, otuples);
 
 		Py_ssize_t s = PyList_Size(ocoords);
@@ -876,13 +775,14 @@ extern "C" {
 
 		for (Py_ssize_t i = 0; i < s; i++) {
 			PyObject* o_tuple = PyList_GetItem(ocoords, i);
-			anchors.emplace_back(cpplib::geometry::Point<FloatingPointType>(static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 0))),
-																			static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 1))),
-																			static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 2)))),
-								 static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 3))));
+			anchors.emplace_back(cpplib::geometry::Point<FloatingPointType>(
+				static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 0))),
+				static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 1))),
+				static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 2)))),
+				static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 3))));
 		}
 		bool hasPolymer = false;
-		auto ret = ClusterCreate(all.cell, all.symm, all.types, all.points, anchors, over_radius, hasPolymer);
+		auto ret = WITH_LOG(ClusterCreate, all.cell, all.symm, all.types, all.points, anchors, over_radius, hasPolymer);
 
 		return Py_BuildValue("{s:N,s:N}",
 							 "points", py_util::convert(ret),
@@ -899,9 +799,10 @@ extern "C" {
 		PyObject* obools = NULL;
 		float cutoff = 6.0;
 		if (!PyArg_ParseTuple(args, "OOOOf", &ocell, &osymm, &otuples, &obools, &cutoff)) {
-			deb_write("! Critical Error: Parse Error - return None");
 			Py_RETURN_NONE;
 		}
+
+		LOG_INTERFACE_GUARD("cpplib_Voronoi");
 
 		Prepare_IC all(ocell, osymm, otuples);
 		auto ps = all.points.size();
@@ -914,13 +815,7 @@ extern "C" {
 			bools[i] = intbools[i] != 0;
 		}
 
-		FAM_Cell fcell(FAM_Cell::base(all.cell));
-		auto supercell_indexes = fcell.CreateSupercell(all.points, cutoff, 1);
-
-
-		deb_write("supercell_indexes[0] = ", int(supercell_indexes[0]));
-		deb_write("supercell_indexes[1] = ", int(supercell_indexes[1]));
-		deb_write("supercell_indexes[2] = ", int(supercell_indexes[2]));
+		geometry::Cell cell(all.cell);
 
 		bools.resize(all.points.size(), false);
 
@@ -935,23 +830,18 @@ extern "C" {
 		auto buildresult = ucb.build(all.points, all.types);
 
 
-		cpplib::geometry::SpatialGrid<FloatingPointType> space;
-		space.build(buildresult.atoms.points,fcell, cutoff);
-		auto bonds = space.get_bonds();
-		geometry::Cell cell(all.cell);
+		geometry::SpatialGrid<FloatingPointType> space;
+		space.build(buildresult.atoms.points, cell, cutoff);
+		auto bonds = WITH_LOG_M(space, get_bonds, false);
 
 		// Flags intentionally correspond only to the asymmetric-unit inputs; 
 		// VoronoiDiagram resizes the flag vector and treats symmetry-expanded sites as false.
 		Diagram diag(buildresult.atoms.points,bonds, cell, bools);
 
 		auto ce = diag.extractCells();
-
-		deb_write("cells.size() = ", ce.size());
-		
+				
 		cpplib::voronoi::VoronoiFused vf(ce, cell.fracToCart());
 		vf.polyhedra.resize(all.points.size());
-
-		deb_write("vertices.size() = ", vf.vertices.size());
 
 		// Build return value
 		return Py_BuildValue("{s:N,s:N}",

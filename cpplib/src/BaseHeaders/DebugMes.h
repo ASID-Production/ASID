@@ -1,20 +1,59 @@
 #pragma once
 
 #ifdef DEBUG_MESS_ON
+#include <concepts>
 #include <iostream>
-inline void deb_write(const char* mes) {
-	std::cerr << mes << std::endl;
-}
-template <class T>
-inline void deb_write(const char* mes, const T& val) {
-	std::cerr << mes  << val << std::endl;
-}
-#else
-inline void deb_write(const char*) { /*empty debug function*/ }
-template <class T>
-inline void deb_write(const char*, const T&) { /*empty debug function*/ }
+#include <string_view>
+#include <utility>
 
-#endif // DEBUG_MESS_ON
-#ifndef WIN32
-#define _ASSERT(a) (0);
+namespace debug {
+    struct LogDepth {
+        static inline thread_local int level = 0; // thread_local for multithreadting
+        static void print_indent() {
+            for (int i = 0; i < level; ++i) std::cerr << "  ";
+        }
+    };
+
+    struct InterfaceGuard {
+        std::string_view name;
+
+        explicit InterfaceGuard(std::string_view n) : name(n) {
+            LogDepth::print_indent();
+            std::cerr << "[START] " << name << std::endl;
+            LogDepth::level++;
+        }
+
+        ~InterfaceGuard() {
+            LogDepth::level--;
+            LogDepth::print_indent();
+            std::cerr << "[END]   " << name << std::endl;
+        }
+
+        InterfaceGuard(const InterfaceGuard&) = delete;
+        InterfaceGuard& operator=(const InterfaceGuard&) = delete;
+    };
+
+    template <typename F, typename... Args>
+        requires std::invocable<F, Args...>
+    decltype(auto) execute(std::string_view name, F&& func, Args&&... args) {
+        InterfaceGuard scope(name);
+        return std::forward<F>(func)(std::forward<Args>(args)...);
+    }
+
+    template <typename Obj, typename Method, typename... Args>
+    decltype(auto) execute_method(std::string_view method_name, Obj& obj, Method method, Args&&... args) {
+        InterfaceGuard scope(method_name);
+        return (obj.*method)(std::forward<Args>(args)...);
+    }
+}
+
+#define WITH_LOG(func, ...) debug::execute(#func, func, ##__VA_ARGS__)
+#define LOG_INTERFACE_GUARD(name) debug::InterfaceGuard guard_##__LINE__(name)
+#define WITH_LOG_M(obj, method, ...) \
+    debug::execute_method(#method, obj, &std::remove_pointer_t<decltype(&obj)>::method, ##__VA_ARGS__)
+
+#else
+#define WITH_LOG(func, ...) func(__VA_ARGS__)
+#define WITH_LOG_M(obj, method, ...) (obj.method(__VA_ARGS__))
+#define LOG_INTERFACE_GUARD(name) [[maybe_unused]] int dummy_##__LINE__ = 0
 #endif
