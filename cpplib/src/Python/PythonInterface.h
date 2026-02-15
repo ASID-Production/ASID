@@ -43,32 +43,6 @@
 #include "../Classes/Geometry.h"
 #include "../Classes/Voronoi.h"
 
-class SmartPyObj {
-	PyObject* ptr;
-public:
-	explicit SmartPyObj(PyObject* p) : ptr(p) {}
-
-	~SmartPyObj() {
-		Py_XDECREF(ptr);
-	}
-
-	SmartPyObj(const SmartPyObj&) = delete;
-	SmartPyObj& operator=(const SmartPyObj&) = delete;
-
-	PyObject* release() {
-		PyObject* tmp = ptr;
-		ptr = nullptr;
-		return tmp;
-	}
-
-	PyObject* get() const {
-		return ptr;
-	}
-	bool is_null() const {
-		return ptr == nullptr;
-	}
-};
-
 namespace py_util {
 
 	template<std::integral I> inline PyObject* convert(I v);
@@ -90,9 +64,11 @@ namespace py_util {
 	inline PyObject* convert(const cpplib::voronoi::VoronoiFused::Polyhedron& p);
 	inline PyObject* convert(const cpplib::voronoi::VoronoiFused& vf);
 
+	inline PyObject* convert(const std::tuple<std::vector<cpplib::geometry::Point<cpplib::basic_types::FloatingPointType>>, std::list<std::string>>& compaq_ret);
+
 	inline bool add_to_dict(const char* key, PyObject* val, PyObject* dict) {
 		if (!val) return false;
-		if (PyDict_SetItemString(dict, key, val) != 0) {
+		if (PyDict_SetItemString(dict, key, val) != 0) [[unlikely]] {
 			Py_DECREF(val);
 			return false;
 		}
@@ -126,12 +102,12 @@ namespace py_util {
 
 		for (Py_ssize_t i = 0; i < 3; i++) {
 			PyObject* val = convert(p[i]);
-			if (!val) {
+			if (!val) [[unlikely]] {
 				Py_DECREF(tuple);
 				return nullptr;
 			}
 
-			if (PyTuple_SetItem(tuple, i, val) != 0) {
+			if (PyTuple_SetItem(tuple, i, val) != 0) [[unlikely]] {
 				Py_DECREF(val);
 				Py_DECREF(tuple);
 				return nullptr;
@@ -148,14 +124,36 @@ namespace py_util {
 		if (!list) return nullptr;
 		for (Py_ssize_t i = 0; i < n; ++i) {
 			PyObject* item = convert(vec[i]);
-			if (!item) {
+			if (!item) [[unlikely]] {
 				Py_DECREF(list); 
 				return nullptr;
 			}
-			if (PyList_SetItem(list, i, item) != 0) {
+			if (PyList_SetItem(list, i, item) != 0) [[unlikely]] {
 				Py_DECREF(list);
 				return nullptr;
 			}
+		}
+		return list;
+	}
+	// (std::list -> List)
+	template<typename T>
+	PyObject* convert(const std::list<T>& l) {
+		Py_ssize_t n = static_cast<Py_ssize_t>(l.size());
+		PyObject* list = PyList_New(n);
+		if (!list) return nullptr;
+		int i = 0;
+		for (const auto& e : l) {
+			PyObject* item = convert(e);
+			if (!item) [[unlikely]] {
+				Py_DECREF(list);
+				return nullptr;
+			}
+			if (PyList_SetItem(list, i, item) != 0) [[unlikely]] {
+
+				Py_DECREF(list);
+				return nullptr;
+			}
+			i++;
 		}
 		return list;
 	}
@@ -168,13 +166,12 @@ namespace py_util {
 		for (std::size_t i = 0; i < N; ++i) {
 			PyObject* item = convert(arr[i]);
 
-			if (!item) {
+			if (!item) [[unlikely]] {
 				Py_DECREF(list);
 				return nullptr;
 			}
 
-			if (PyList_SetItem(list, static_cast<Py_ssize_t>(i), item) != 0) {
-				Py_DECREF(item);
+			if (PyList_SetItem(list, static_cast<Py_ssize_t>(i), item) != 0) [[unlikely]] {
 				Py_DECREF(list);
 				return nullptr;
 			}
@@ -199,7 +196,7 @@ namespace py_util {
 
 		for (Py_ssize_t i = 0; i < N; ++i) {
 			PyObject* dict = PyDict_New();
-			if (!dict) {
+			if (!dict) [[unlikely]] {
 				Py_DECREF(list);
 				return nullptr;
 			}
@@ -208,13 +205,13 @@ namespace py_util {
 				!add_to_dict("type", convert(cd.types[i]), dict) ||
 				!add_to_dict("point_frac", convert(cd.points[i]), dict) ||
 				!add_to_dict("symmref", convert(cd.symm_indices[i]), dict) ||
-				!add_to_dict("shift", convert(cd.shifts[i]), dict)) {
+				!add_to_dict("shift", convert(cd.shifts[i]), dict)) [[unlikely]] {
 				Py_DECREF(list);
 				Py_DECREF(dict);
 				return nullptr;
 			}
 
-			if (PyList_SetItem(list, i, dict) != 0) {
+			if (PyList_SetItem(list, i, dict) != 0) [[unlikely]] {
 				Py_DECREF(list);
 				return nullptr;
 			}
@@ -229,12 +226,15 @@ namespace py_util {
 	// (VoronoiFused::PolygonIn -> Dict)
 	inline PyObject* convert(const cpplib::voronoi::VoronoiFused::PolygonIn& p) {
 		PyObject* dict = PyDict_New();
-		if (!dict) return nullptr;
+		if (!dict) [[unlikely]] {
+			Py_DECREF(dict);
+			return nullptr;
+		}
 
 		if (!add_to_dict("area",     convert(p.area), dict) ||
 			!add_to_dict("vertices", convert(p.vert_ids), dict) ||
 			!add_to_dict("edges",    convert(p.edge_ids), dict) ||
-			!add_to_dict("atoms",    convert(p.atom_ids), dict)) {
+			!add_to_dict("atoms",    convert(p.atom_ids), dict)) [[unlikely]] {
 			Py_DECREF(dict);
 			return nullptr;
 		}
@@ -244,14 +244,16 @@ namespace py_util {
 	// (VoronoiFused::Polyhedron -> Dict)
 	inline PyObject* convert(const cpplib::voronoi::VoronoiFused::Polyhedron& p) {
 		PyObject* dict = PyDict_New();
-		if (!dict) return nullptr;
-
+		if (!dict) [[unlikely]] {
+			Py_DECREF(dict);
+			return nullptr;
+		}
 
 		if (!add_to_dict("vertices", convert(p.vert_ids), dict) ||
 			!add_to_dict("center",   convert(p.center), dict) ||
 			!add_to_dict("edges",    convert(p.edge_ids), dict) ||
 			!add_to_dict("volume",   convert(p.volume), dict) ||
-			!add_to_dict("polygons", convert(p.poly_ids), dict)) {
+			!add_to_dict("polygons", convert(p.poly_ids), dict)) [[unlikely]] {
 			Py_DECREF(dict);
 			return nullptr;
 		}
@@ -262,12 +264,15 @@ namespace py_util {
 	// (VoronoiFused)
 	inline PyObject* convert(const cpplib::voronoi::VoronoiFused& vf) {
 		PyObject* dict = PyDict_New();
-		if (!dict) return nullptr;
+		if (!dict) [[unlikely]] {
+			Py_DECREF(dict);
+			return nullptr;
+		}
 
 		if (!add_to_dict("vertices",  convert(vf.vertices), dict) ||
 			!add_to_dict("edges",     convert(vf.edges), dict) ||
 			!add_to_dict("polygons",  convert(vf.polygons), dict) ||
-			!add_to_dict("polyhedra", convert(vf.polyhedra), dict)) {
+			!add_to_dict("polyhedra", convert(vf.polyhedra), dict)) [[unlikely]] {
 			Py_DECREF(dict);
 			return nullptr;
 		}

@@ -842,32 +842,14 @@ extern "C" {
 		Prepare_IC all(ocell, osymm, otuple);
 
 		deb_write("cpplib_compaq call Compaq");
-		auto ret = Compaq(all.cell, all.symm, all.types, all.points);
+		auto [ret_v, ret_l] = Compaq(all.cell, all.symm, all.types, all.points);
 		deb_write("cpplib_compaq Compaq successful");
 
-		PyObject* o_xyz_block = PyList_New(0);
-		PyObject* o_errors = PyList_New(0);
-
-		deb_write("cpplib_compaq create List[txyz]");
-		deb_write("cpplib_compaq std::get<0>(ret).size() = ", std::get<0>(ret).size());
-		for (int i = 0; i < std::get<0>(ret).size(); i++) {
-			PyObject* o_atom = Py_BuildValue("(fff)",
-											 static_cast<float>(std::get<0>(ret)[i][0]),
-											 static_cast<float>(std::get<0>(ret)[i][1]),
-											 static_cast<float>(std::get<0>(ret)[i][2]));
-			PyList_Append(o_xyz_block, o_atom);
-		}
-
-		deb_write("cpplib_compaq create List[error_str]");
-		while (std::get<1>(ret).empty() == false) {
-			PyList_Append(o_errors, Py_BuildValue("s", (std::get<1>(ret)).front().c_str()));
-			(std::get<1>(ret)).pop_front();
-		}
 
 		deb_write("cpplib_compaq return Dict {errors, xyz_block}");
-		return Py_BuildValue("{s:O,s:O}",
-							 "errors", o_errors,
-							 "xyz_block", o_xyz_block);
+		return Py_BuildValue("{s:N,s:N}",
+							 "errors", py_util::convert(ret_l),
+							 "xyz_block", py_util::convert(ret_v));
 	}
 	static PyObject* cpplib_SortDatabase(PyObject* self, PyObject* arg) {
 		Py_ssize_t us;
