@@ -574,6 +574,7 @@ namespace cpplib::geometry {
 		constexpr void create(const matrix_type& Mat, const bool is_FracToCart = true) noexcept {
 			if (is_FracToCart) createFromFracToCart(Mat);
 			else createFromCartToFrac(Mat);
+			assert(check_corectness());
 		}
 		constexpr void create(const value_type a = 10, const value_type b = 10, const value_type c = 10, const value_type alpha = 90, const value_type beta = 90, const value_type gamma = 90, const bool is_grad = true) {
 			lattice_[0] = a;
@@ -595,6 +596,7 @@ namespace cpplib::geometry {
 				}
 			}
 			createMatrix();
+			assert(check_corectness());
 		}
 
 		[[nodiscard]] constexpr const value_type& getAngleRad(const unsigned char i) const noexcept {
@@ -614,6 +616,24 @@ namespace cpplib::geometry {
 		}
 		[[nodiscard]] constexpr const matrix_type& cartToFrac() const noexcept {
 			return cartToFrac_;
+		}
+		bool check_corectness() const noexcept {
+			constexpr std::array<Point<int8_t>, 10> shiftTable = {{
+				{-1, -1, -1}, { 0, -1, -1}, { 1, -1, -1},
+				{-1,  0, -1}, { 1,  0, -1}, {-1,  1, -1}, 
+				{ 0,  1, -1}, { 1,  1, -1}, {-1, -1,  0}, 
+				{ 1, -1,  0}
+			}};
+
+			T minlatSq = std::min(lattice_[0], std::min(lattice_[1], lattice_[2]));
+			minlatSq *= minlatSq;
+
+			for (char i = 0; i < 10; i++) {
+				auto rsq = (fracToCart_ * shiftTable[i]).rSq();
+                if (minlatSq - rsq > 1e-5)
+					return false;
+			}
+			return true;
 		}
 
 		value_type distance_in_01(const PointType& a, const PointType& b) const {
