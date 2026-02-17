@@ -845,8 +845,8 @@ extern "C" {
 
 		// Build return value
 		return Py_BuildValue("{s:N,s:N}",
-							 "Voronoi cells", py_util::convert(vf),
-							 "Unit cell", py_util::convert(buildresult.atoms));
+							 "voronoi_cells", py_util::convert(vf),
+							 "unit_cell", py_util::convert(buildresult.atoms));
 	}
 
 	static struct PyMethodDef methods[] = {

@@ -969,6 +969,7 @@ namespace cpplib::voronoi {
 		/// @brief Polygon (face) in the fused structure
 		struct PolygonIn {
 			FloatingPointType area;               ///< Area of Polygon
+			FloatingPointType solidangle;         ///< Solid angle of Polygon
 			::std::vector<uint32_t>   vert_ids;   ///< Vertex indices forming the polygon
 			::std::vector<uint32_t>   edge_ids;   ///< Edge indices forming the polygon
 			::std::array<uint32_t, 2> atom_ids;   ///< IDs of the two atoms separated by this face
@@ -1148,6 +1149,7 @@ namespace cpplib::voronoi {
 
 					// Calculate area
 					cur_poly.area = calculate_area(cur_poly, FtoC);
+					cur_poly.solidangle = calculate_solid_angle(cur_poly, FtoC);
 				}
 			}
 			// Calculate volumes
@@ -1308,7 +1310,7 @@ namespace cpplib::voronoi {
 
 		// Requires correct order of vertices in polygon
 		FloatingPointType calculate_area(const PolygonIn& p, const geometry::Matrix<FloatingPointType>& FtoC) const {
-			PointType center(0,0,0);
+			PointType center(0, 0, 0);
 
 			for (auto v : p.vert_ids) {
 				center += vertices[v];
@@ -1322,14 +1324,41 @@ namespace cpplib::voronoi {
 				cart_verts.emplace_back(FtoC * (vertices[v] - center));
 			}
 
-			FloatingPointType area = PointType::Vector(cart_verts.front(), cart_verts.back()).r()* FloatingPointType(0.5);
+			FloatingPointType area = PointType::Vector(cart_verts.front(), cart_verts.back()).r() ;
 			for (uint32_t i = 1; i < p.vert_ids.size(); i++) {
-				area += PointType::Vector(cart_verts[i], cart_verts[i - 1]).r() * FloatingPointType(0.5);
+				area += PointType::Vector(cart_verts[i], cart_verts[i - 1]).r();
 			}
 
-			return area;
+			return area * FloatingPointType(0.5);
 		}
 
+		// Requires correct order of vertices in polygon
+		FloatingPointType calculate_solid_angle(const PolygonIn& p, const geometry::Matrix<FloatingPointType>& FtoC) const {
+
+			const auto& realO = polyhedra[p.atom_ids[0]].center;
+
+			std::vector<PointType> cart_verts;
+			std::vector<FloatingPointType> cart_verts_r;
+			const auto cart_size = p.vert_ids.size();
+			cart_verts.reserve(cart_size);
+			cart_verts_r.reserve(cart_size);
+
+			for (uint32_t i = 0; i < cart_size; i++) {
+				cart_verts.emplace_back(FtoC * (vertices[p.vert_ids[i]] - realO));
+				cart_verts_r.emplace_back(cart_verts.back().r());
+			}
+
+			FloatingPointType angle = 0;
+			for (uint32_t i = 2; i < cart_size; i++) {
+				angle += atan2(abs(PointType::Scalar(cart_verts[0], PointType::Vector(cart_verts[i - 1], cart_verts[i]))),
+							   cart_verts_r[0]* cart_verts_r[i-1] * cart_verts_r[i] +
+							   PointType::Scalar(cart_verts[0], cart_verts[i - 1]) * cart_verts_r[i] +
+							   PointType::Scalar(cart_verts[0], cart_verts[i]) * cart_verts_r[i - 1] +
+							   PointType::Scalar(cart_verts[i - 1], cart_verts[i]) * cart_verts_r[0]);
+			}
+
+			return angle*2;
+		}
 
 		// Requires area to be calculated in polygons
 		FloatingPointType calculate_volume(const Polyhedron& p, const geometry::Matrix<FloatingPointType>& FtoC) const {
