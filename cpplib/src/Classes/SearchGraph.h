@@ -34,6 +34,7 @@
 #include <utility>
 
 #include "../BaseHeaders/BaseTypes.h"
+#include "../BaseHeaders/DebugMes.h"
 #include "../BaseHeaders/Currents.h"
 #include "../Classes/Engine.h"
 #include "../Classes/MoleculeGraph.h"
@@ -108,6 +109,7 @@ namespace cpplib {
 		}
 		// destroys all data, need reinitialization!
 		bool startFullSearch(const bool exact, AtomIndex startAtom = 1) {
+			LOG_INTERFACE_GUARD("startFullSearch");
 			for (AtomIndex i = 1; i < dataSize_; i++) {
 				if (compare(input_[startAtom], data_[i], exact) == false) {
 					continue;

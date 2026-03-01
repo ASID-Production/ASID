@@ -93,6 +93,25 @@ struct FMIC_TS {
 	}
 };
 
+TEST(CreateClusterTest, SingleNegative) {
+	p_distances = &testdistances;
+	std::array<cpplib::basic_types::FloatingPointType, 6> cell{10.0, 10.0, 10.0, 90.0, 90.0, 90.0};
+	std::vector<const char*> symm{
+		"x, y, z"
+	};
+
+	std::vector<AtomTypeBase> types{10};
+	std::vector<cpplib::basic_types::FloatingPointType> xyz{
+		-0.1, -0.1, -0.1
+	};
+
+	bool hasPoly = false;
+	FMIC_TS ts(cell, symm, types, xyz);
+	std::vector<FloatingPointType> anchors{-0.1, -2.1, -1.3, 2.9};
+	auto res = ts.cluster(anchors, 10.0, hasPoly);
+	EXPECT_EQ(res.size(), 1);
+	EXPECT_FALSE(hasPoly);
+}
 
 TEST(CreateClusterTest, Benzene) {
 	p_distances = &testdistances;
@@ -240,7 +259,6 @@ TEST(CompaqTest, AAXTHP) {
 }
 
 TEST(SubSearch, Same) {
-	deb_write("cpplib_SubSearch started");
 
 	const char* s1 = "1 6 5 6 2 4 4 6 2 4 4 6 2 4 4 6 2 4 4 6 2 4 4 6 2 4 4 1 2 2 3 3 4 4 5 1 6";
 	const char* s2 = "1 6 5 6 2 4 4 6 2 4 4 6 2 4 4 6 2 4 4 6 2 4 4 6 2 4 4 2 3 3 4 4 5 5 6 1 6";
@@ -249,12 +267,9 @@ TEST(SubSearch, Same) {
 
 	auto&& inputpair = cpplib::MoleculeParser<AtomTypeRequest>::Read(s1);
 	graph.setupInput(std::move(inputpair.first));
-	deb_write("cpplib_SubSearch start ReadData");
 	auto datg = cpplib::MoleculeParser<AtomTypeRequest>::Read(s2).first.makeCopyEx<AtomTypeData>();
 	graph.setupData(std::move(datg));
-	deb_write("cpplib_SubSearch start prepareSearch");
 	graph.prepareToSearch();
-	deb_write("cpplib_SubSearch start FullSearch");
 	EXPECT_TRUE(graph.startFullSearch(false));
 }
 

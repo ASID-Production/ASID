@@ -32,6 +32,7 @@
 
 #include <BaseTypes.h>
 #include "Engine.h"
+#include "Bond.h"
 
 using namespace cpplib;
 

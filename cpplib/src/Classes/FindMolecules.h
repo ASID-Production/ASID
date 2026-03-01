@@ -545,7 +545,6 @@ namespace cpplib {
 		PointConteinerType& compaq(std::vector<BondType>& bonds) {
 
 			// 1. Find closest atoms
-			deb_write("FM::compaq Phase 1. Find closest atoms");
 			std::vector<AtomIndex> closest(fs_.sizeUnique, 0);
 			std::iota(closest.begin(), closest.end(), 0);
 			for (AtomIndex i = 0; i < fs_.sizePoints; i++)
@@ -558,7 +557,6 @@ namespace cpplib {
 			}
 
 			// 2. Create Nodes in net
-			deb_write("FM::compaq Phase 2. Create Nodes in net");
 			std::vector<NodeType> net;
 			net.reserve(fs_.sizePoints);
 			for (size_type i = 0; i < fs_.sizePoints; i++) {
@@ -566,14 +564,12 @@ namespace cpplib {
 			}
 
 			// 3. Add bonds to net
-			deb_write("FM::compaq Phase 3. Add bonds to net");
 			auto bond_size = bonds.size();
 			for (decltype(bond_size) i = 0; i < bond_size; i++) {
 				net[bonds[i].first].addBondSimple(net[bonds[i].second]);
 			}
 
 			// 4. Find molecules
-			deb_write("FM::compaq Phase 4. Find molecules");
 			std::vector<bool> seen(fs_.sizeUnique, false); // seen unique atoms
 
 			for (AtomIndex i = 0; i < fs_.sizeUnique; i++) {
@@ -581,15 +577,11 @@ namespace cpplib {
 					continue;
 				seen[i] = true;
 
-				deb_write("FM::compaq Phase 4.0. invoke FM::findNextUniquePart");
 				std::vector<AtomIndex> singleTable = findNextUniquePart(closest[i], net, seen);
-				deb_write("FM::compaq Phase 4.0. FM::findNextUniquePart successful");
 
 				auto singleTableSize = static_cast<size_type>(singleTable.size());
 
 				// 4.1. Shift Center of Mass
-				deb_write("FM::compaq Phase 4.1. Shift Center of Mass");
-				deb_write("Center of Mass");
 				PointType center(0., 0., 0.);
 				for (size_type j = 0; j < singleTableSize; j++)
 				{
@@ -606,8 +598,6 @@ namespace cpplib {
 				}
 
 				// 4.2. Swap coordinates
-
-				deb_write("FM::compaq Phase 4.2. Swap coordinates");
 				for (size_type j = 0; j < singleTableSize; j++) {
 					if(singleTable[j] != std::get<0>(fs_.parseIndex[singleTable[j]]))
 						std::swap(fs_.points[singleTable[j]], fs_.points[std::get<0>(fs_.parseIndex[singleTable[j]])]);

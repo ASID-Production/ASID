@@ -52,20 +52,32 @@ if (WIN32)
     endif (WIN32)
     include_directories(SYSTEM ${Python3_INCLUDE_DIRS})
     
-    add_library(cpplibLib "cpplib/src/Functions/Functions.cpp" 
-                           "cpplib/src/BaseHeaders/Support.h"
+    add_library(cpplibLib  "cpplib/src/Functions/Functions.cpp"
+                           "cpplib/src/Python/PythonInterface.cpp"  
+
+                           "cpplib/src/BaseHeaders/BaseTypes.h" 
+                           "cpplib/src/BaseHeaders/Concepts.h" 
+                           "cpplib/src/BaseHeaders/Currents.h" 
                            "cpplib/src/BaseHeaders/DebugMes.h"
+                           "cpplib/src/BaseHeaders/Support.h"
+
+                           "cpplib/src/Classes/Bond.h"
+                           "cpplib/src/Classes/Cluster.h" 
                            "cpplib/src/Classes/Distances.h"
+                           "cpplib/src/Classes/DSU.h" 
+                           "cpplib/src/Classes/Engine.h"
+                           "cpplib/src/Classes/FindGeometry.h" 
                            "cpplib/src/Classes/FindMolecules.h"
+                           "cpplib/src/Classes/Geometry.h"
                            "cpplib/src/Classes/Hash.h"
                            "cpplib/src/Classes/Interfaces.h"
                            "cpplib/src/Classes/MoleculeGraph.h"
-                           "cpplib/src/Classes/Engine.h"
-                           "cpplib/src/Classes/Geometry.h"
                            "cpplib/src/Classes/SearchGraph.h"
-                           "cpplib/src/Functions/Functions.h"
+                           "cpplib/src/Classes/Voronoi.h"
                             
-                           "cpplib/src/Classes/FindGeometry.h" "cpplib/src/Functions/PythonInteface.cpp" "cpplib/src/BaseHeaders/Currents.h" "cpplib/src/Classes/Cluster.h" "cpplib/src/BaseHeaders/Concepts.h" "cpplib/src/BaseHeaders/BaseTypes.h" "cpplib/src/Classes/DSU.h")
+                           "cpplib/src/Functions/Functions.h"
+
+                           "cpplib/src/Python/PythonInterface.h")
     target_link_libraries(cpplibLib)
 
     target_include_directories(cpplibLib PUBLIC 
@@ -95,7 +107,7 @@ project(cpplib)
     #Generate the shared library from the library sources
     if(CMAKE_BUILD_TYPE MATCHES Release)
         add_library(cpplib SHARED "cpplib/src/Functions/Functions.cpp" 
-                                  "cpplib/src/Functions/PythonInteface.cpp")
+                                  "cpplib/src/Python/PythonInterface.cpp")
         if(WIN32)
             target_link_libraries(cpplib PRIVATE ${Python_LIBRARY_DIRS}/python3.lib)
         else()
@@ -127,5 +139,3 @@ project(cpplib)
 if((IS_DIRECTORY ${CMAKE_SOURCE_DIR}/cpplib/Tests) AND COMPILE_TESTS)
     add_subdirectory ("cpplib/Tests")
 endif((IS_DIRECTORY ${CMAKE_SOURCE_DIR}/cpplib/Tests) AND COMPILE_TESTS)
-
-

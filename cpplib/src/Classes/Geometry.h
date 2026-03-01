@@ -26,22 +26,27 @@
 //
 // ******************************************************************************************
 #pragma once
-#include <cstdint>
-#include <type_traits>
-#include <array>
-#include <vector>
-#include <list>
-#include <utility>
 #include <algorithm>
-#include <optional>
-#include <concepts>
+#include <array>
 #include <cassert>
-
-#include "../BaseHeaders/Concepts.h"
+#include <cstdlib>
+#include <cmath>
+#include <concepts>
+#include <cstdint>
+#include <functional>
+#include <limits>
+#include <optional>
+#include <type_traits>
+#include <utility>
+#include <vector>
 
 namespace cpplib::geometry {
-	template <class T> inline T GradtoRad(T a) { return a * static_cast<T>(0.0174532925199432957692); }
-	template <class T> inline T RadtoGrad(T a) { return a * static_cast<T>(57.295779513082320877); }
+	template <class T> inline T GradtoRad(T a) {
+		return a * static_cast<T>(0.0174532925199432957692);
+	}
+	template <class T> inline T RadtoGrad(T a) {
+		return a * static_cast<T>(57.295779513082320877);
+	}
 
 	constexpr double crystallography_eq_position_eps_realspace = 0.01; // Angstrom
 	constexpr double crystallography_eq_position_eps_fractalspace = crystallography_eq_position_eps_realspace / 100;
@@ -62,8 +67,7 @@ namespace cpplib::geometry {
 					std::size_t hz = std::hash<T>{}(point[2]);
 
 					return hx ^ (hy << 1) ^ (hz << 2) ^ (hx >> 31);
-				}
-				else {
+				} else {
 					return
 						(point[0] * std::size_t(73856093)) ^
 						(point[1] * std::size_t(19349663)) ^
@@ -74,12 +78,12 @@ namespace cpplib::geometry {
 
 
 	public:
-		array_type a = { 0,0,0 };
+		array_type a = {0,0,0};
 
 	public:
 		// Constructors
 		constexpr Point() noexcept = default;
-		constexpr Point(value_type x, value_type y, value_type z) noexcept : a{ x, y, z } {};
+		constexpr Point(value_type x, value_type y, value_type z) noexcept : a{x, y, z} {};
 		explicit constexpr Point(const array_type& other) noexcept : a(other) {};
 		explicit constexpr Point(array_type&& other) noexcept : a(::std::move(other)) {};
 
@@ -90,10 +94,17 @@ namespace cpplib::geometry {
 			a[1] = static_cast<T>(other[1]);
 			a[2] = static_cast<T>(other[2]);
 		}
-
+		/// @brief Calculate distance to [0,0,0]. Don't use as (point[a]-point[b]).r().
+		/// @return Distance
 		constexpr value_type r() const noexcept {
 			return sqrt(fma(a[0], a[0], fma(a[1], a[1], a[2] * a[2])));
 		}
+		/// @brief Calculate square of distance to [0,0,0]. Use for comparisons
+		/// @return Distance^2
+		constexpr value_type rSq() const noexcept {
+			return fma(a[0], a[0], fma(a[1], a[1], a[2] * a[2]));
+		}
+
 		constexpr Point& MoveToCell() noexcept {
 			a[0] -= ::std::floor(a[0]);
 			a[1] -= ::std::floor(a[1]);
@@ -102,10 +113,10 @@ namespace cpplib::geometry {
 		}
 
 		// Static constexpr functions
-		static constexpr value_type Scalar(const Point& left, const Point& right) noexcept {
+		[[nodiscard]] static constexpr value_type Scalar(const Point& left, const Point& right) noexcept {
 			return (left.a[0] * right.a[0] + left.a[1] * right.a[1] + left.a[2] * right.a[2]);
 		}
-		static constexpr Point Vector(const Point& left, const Point& right) noexcept {
+		[[nodiscard]] static constexpr Point Vector(const Point& left, const Point& right) noexcept {
 			return Point(left.a[1] * right.a[2] - left.a[2] * right.a[1], left.a[2] * right.a[0] - left.a[0] * right.a[2], left.a[0] * right.a[1] - left.a[1] * right.a[0]);
 		}
 		static constexpr value_type distance(const Point& a, const Point& b) noexcept {
@@ -113,6 +124,12 @@ namespace cpplib::geometry {
 			value_type d1 = a.a[1] - b.a[1];
 			value_type d2 = a.a[2] - b.a[2];
 			return sqrt(fma(d0, d0, fma(d1, d1, d2 * d2)));
+		}
+		static constexpr value_type distanceSq(const Point& a, const Point& b) noexcept {
+			value_type d0 = a.a[0] - b.a[0];
+			value_type d1 = a.a[1] - b.a[1];
+			value_type d2 = a.a[2] - b.a[2];
+			return fma(d0, d0, fma(d1, d1, d2 * d2));
 		}
 		static constexpr value_type distanceInCubicCell(const Point& a, const Point& b) noexcept {
 			value_type d0 = fmod(a.a[0] - b.a[0] + T(0.5), T(1.0)) - T(0.5);
@@ -126,7 +143,7 @@ namespace cpplib::geometry {
 				abs(fmod(a.a[1] - b.a[1] + T(0.5), T(1.0)) - T(0.5)) <= epsilon &&
 				abs(fmod(a.a[2] - b.a[2] + T(0.5), T(1.0)) - T(0.5)) <= epsilon;
 		}
-		static constexpr value_type isSame(const Point& a, const Point& b, T epsilon) noexcept {
+		static constexpr bool isSame(const Point& a, const Point& b, T epsilon) noexcept {
 			return abs(a.a[0] - b.a[0]) <= epsilon &&
 				abs(a.a[1] - b.a[1]) <= epsilon &&
 				abs(a.a[2] - b.a[2]) <= epsilon;
@@ -173,8 +190,12 @@ namespace cpplib::geometry {
 			};
 		}
 
-		constexpr value_type operator[](const uint8_t i) const noexcept { return a[i]; }
-		constexpr value_type& operator[](const uint8_t i) noexcept { return a[i]; }
+		constexpr value_type operator[](const uint8_t i) const noexcept {
+			return a[i];
+		}
+		constexpr value_type& operator[](const uint8_t i) noexcept {
+			return a[i];
+		}
 
 		// Operators
 		constexpr Point operator-() const noexcept {
@@ -231,7 +252,7 @@ namespace cpplib::geometry {
 		template <class OT> inline Point<OT>& operator-=(const Point<OT>& right) noexcept {
 			a[0] -= static_cast<T>(right.a[0]);
 			a[1] -= static_cast<T>(right.a[1]);
-			a[2] += static_cast<T>(right.a[2]);
+			a[2] -= static_cast<T>(right.a[2]);
 			return *this;
 		}
 		inline Point& operator-=(const value_type right) noexcept {
@@ -270,7 +291,7 @@ namespace cpplib::geometry {
 		using array_type = ::std::array< ::std::array<T, 3>, 3>;
 		using const_array_type = const array_type;
 	private:
-		array_type A{ { {0,0,0},{0,0,0},{0,0,0} } };
+		array_type A{{ {0,0,0},{0,0,0},{0,0,0} }};
 		template<class T2> friend class Matrix; // for constructors
 	public:
 		constexpr Matrix() noexcept = default;
@@ -298,7 +319,7 @@ namespace cpplib::geometry {
 			A[2][1] = static_cast<T&&>(r.A[2][1]);
 			A[2][2] = static_cast<T&&>(r.A[2][2]);
 		}
-		explicit constexpr Matrix(const T v) noexcept : A{ { {v,0,0},{0,v,0},{0,0,v} } } {}
+		explicit constexpr Matrix(const T v) noexcept : A{{ {v,0,0},{0,v,0},{0,0,v} }} {}
 		explicit constexpr Matrix(const T** input_massive) noexcept {
 			for (size_t i = 0; i < 3; i++) {
 				for (size_t j = 0; j < 3; j++) {
@@ -324,16 +345,16 @@ namespace cpplib::geometry {
 		template<class T2>
 		[[nodiscard]] constexpr Matrix<decltype(T()* T2())> operator*(const Matrix<T2>& right) const noexcept {
 			using resv = decltype(T()* T2());
-			std::array<resv, 3> a1 = { A[0][0] * right.A[0][0] + A[0][1] * right.A[1][0] + A[0][2] * right.A[2][0],
+			std::array<resv, 3> a1 = {A[0][0] * right.A[0][0] + A[0][1] * right.A[1][0] + A[0][2] * right.A[2][0],
 										A[0][0] * right.A[0][1] + A[0][1] * right.A[1][1] + A[0][2] * right.A[2][1],
-										A[0][0] * right.A[0][2] + A[0][1] * right.A[1][2] + A[0][2] * right.A[2][2] };
-			std::array<resv, 3> a2 = { A[1][0] * right.A[0][0] + A[1][1] * right.A[1][0] + A[1][2] * right.A[2][0],
+										A[0][0] * right.A[0][2] + A[0][1] * right.A[1][2] + A[0][2] * right.A[2][2]};
+			std::array<resv, 3> a2 = {A[1][0] * right.A[0][0] + A[1][1] * right.A[1][0] + A[1][2] * right.A[2][0],
 										A[1][0] * right.A[0][1] + A[1][1] * right.A[1][1] + A[1][2] * right.A[2][1],
-										A[1][0] * right.A[0][2] + A[1][1] * right.A[1][2] + A[1][2] * right.A[2][2] };
-			std::array<resv, 3> a3 = { A[2][0] * right.A[0][0] + A[2][1] * right.A[1][0] + A[2][2] * right.A[2][0],
+										A[1][0] * right.A[0][2] + A[1][1] * right.A[1][2] + A[1][2] * right.A[2][2]};
+			std::array<resv, 3> a3 = {A[2][0] * right.A[0][0] + A[2][1] * right.A[1][0] + A[2][2] * right.A[2][0],
 										A[2][0] * right.A[0][1] + A[2][1] * right.A[1][1] + A[2][2] * right.A[2][1],
-										A[2][0] * right.A[0][2] + A[2][1] * right.A[1][2] + A[2][2] * right.A[2][2] };
-			std::array<std::array<resv, 3>, 3> b{ a1, a2, a3 };
+										A[2][0] * right.A[0][2] + A[2][1] * right.A[1][2] + A[2][2] * right.A[2][2]};
+			std::array<std::array<resv, 3>, 3> b{a1, a2, a3};
 			return Matrix<resv>(b);
 		}
 		template<class T2>
@@ -346,33 +367,33 @@ namespace cpplib::geometry {
 		}
 		template<class T2>
 		[[nodiscard]] constexpr Matrix<decltype(T() / T2())> operator/(const T2 right) const noexcept {
-			std::array<T, 3> a1 = { A[0][0] / right, A[0][1] / right, A[0][2] / right };
-			std::array<T, 3> a2 = { A[1][0] / right, A[1][1] / right, A[1][2] / right };
-			std::array<T, 3> a3 = { A[2][0] / right, A[2][1] / right, A[2][2] / right };
-			array_type b{ a1, a2, a3 };
+			std::array<T, 3> a1 = {A[0][0] / right, A[0][1] / right, A[0][2] / right};
+			std::array<T, 3> a2 = {A[1][0] / right, A[1][1] / right, A[1][2] / right};
+			std::array<T, 3> a3 = {A[2][0] / right, A[2][1] / right, A[2][2] / right};
+			array_type b{a1, a2, a3};
 			return Matrix(std::move(b));
 		}
 		[[nodiscard]] constexpr Matrix<T> Transponate() const noexcept {
-			std::array<T, 3> a1 = { A[0][0],A[1][0],A[2][0] };
-			std::array<T, 3> a2 = { A[0][1],A[1][1],A[2][1] };
-			std::array<T, 3> a3 = { A[0][2],A[1][2],A[2][2] };
-			array_type b{ a1, a2, a3 };
+			std::array<T, 3> a1 = {A[0][0],A[1][0],A[2][0]};
+			std::array<T, 3> a2 = {A[0][1],A[1][1],A[2][1]};
+			std::array<T, 3> a3 = {A[0][2],A[1][2],A[2][2]};
+			array_type b{a1, a2, a3};
 			return Matrix(b);
 		}
 		[[nodiscard]] constexpr Matrix<T> Invert() const {
 			const T det = Det();
-			std::array<T, 3> a1 = { (A[1][1] * A[2][2] - A[1][2] * A[2][1]) / det, (A[0][2] * A[2][1] - A[0][1] * A[2][2]) / det, (A[0][1] * A[1][2] - A[0][2] * A[1][1]) / det };
-			std::array<T, 3> a2 = { (A[1][2] * A[2][0] - A[1][0] * A[2][2]) / det, (A[0][0] * A[2][2] - A[0][2] * A[2][0]) / det, (A[0][2] * A[1][0] - A[0][0] * A[1][2]) / det };
-			std::array<T, 3> a3 = { (A[1][0] * A[2][1] - A[2][0] * A[1][1]) / det, (A[0][1] * A[2][0] - A[0][0] * A[2][1]) / det, (A[1][1] * A[0][0] - A[1][0] * A[0][1]) / det };
-			array_type b = { a1,a2,a3 };
+			std::array<T, 3> a1 = {(A[1][1] * A[2][2] - A[1][2] * A[2][1]) / det, (A[0][2] * A[2][1] - A[0][1] * A[2][2]) / det, (A[0][1] * A[1][2] - A[0][2] * A[1][1]) / det};
+			std::array<T, 3> a2 = {(A[1][2] * A[2][0] - A[1][0] * A[2][2]) / det, (A[0][0] * A[2][2] - A[0][2] * A[2][0]) / det, (A[0][2] * A[1][0] - A[0][0] * A[1][2]) / det};
+			std::array<T, 3> a3 = {(A[1][0] * A[2][1] - A[2][0] * A[1][1]) / det, (A[0][1] * A[2][0] - A[0][0] * A[2][1]) / det, (A[1][1] * A[0][0] - A[1][0] * A[0][1]) / det};
+			array_type b = {a1,a2,a3};
 			return Matrix(b);
 		}
 		[[nodiscard]] constexpr Matrix<T> Modul() const noexcept {
 			constexpr T zero = 0;
-			std::array<T, 3> a1 = { A[0][0] < zero ? A[0][0] : -A[0][0], A[0][1] < zero ? A[0][1] : -A[0][1], A[0][2] < zero ? A[0][2] : -A[0][2] };
-			std::array<T, 3> a2 = { A[1][0] < zero ? A[1][0] : -A[1][0], A[1][1] < zero ? A[1][1] : -A[1][1], A[1][2] < zero ? A[1][2] : -A[1][2] };
-			std::array<T, 3> a3 = { A[2][0] < zero ? A[2][0] : -A[2][0], A[2][1] < zero ? A[2][1] : -A[2][1], A[2][2] < zero ? A[2][2] : -A[2][2] };
-			array_type b{ a1, a2, a3 };
+			std::array<T, 3> a1 = {A[0][0] < zero?A[0][0]:-A[0][0], A[0][1] < zero?A[0][1]:-A[0][1], A[0][2] < zero?A[0][2]:-A[0][2]};
+			std::array<T, 3> a2 = {A[1][0] < zero?A[1][0]:-A[1][0], A[1][1] < zero?A[1][1]:-A[1][1], A[1][2] < zero?A[1][2]:-A[1][2]};
+			std::array<T, 3> a3 = {A[2][0] < zero?A[2][0]:-A[2][0], A[2][1] < zero?A[2][1]:-A[2][1], A[2][2] < zero?A[2][2]:-A[2][2]};
+			array_type b{a1, a2, a3};
 			return Matrix(std::move(b));
 		}
 		constexpr double Trace() const noexcept {
@@ -409,6 +430,16 @@ namespace cpplib::geometry {
 			return res;
 		}
 
+		template<class T2>
+		constexpr Point<decltype(T()* T2())> TransposeMultiply(const Point<T2>& right) const noexcept {
+			Point<decltype(T()* T2())> res;
+			for (int i = 0; i < 3; i++) {
+				for (int j = 0; j < 3; j++) {
+					res[i] = std::fma(A[j][i], right[j], res[i]);
+				}
+			}
+			return res;
+		}
 	};
 
 
@@ -418,7 +449,7 @@ namespace cpplib::geometry {
 	template<class T>
 	struct Plane {
 		using value_type = T; // the same as T
-		std::array<T, 4> a = { T(0), T(0), T(0), T(0) }; // [ A, B, C, D]
+		std::array<T, 4> a = {T(0), T(0), T(0), T(0)}; // [ A, B, C, D]
 
 		constexpr Plane() noexcept = default;
 		constexpr Plane(const Point<T>& a1, const Point<T>& a2, const Point<T>& a3) noexcept {
@@ -466,790 +497,6 @@ namespace cpplib::geometry {
 		T side(const Point<T>& p) const {
 			return a[0] * p[0] + a[1] * p[1] + a[2] * p[2] + a[3];
 		}
-	};
-
-	template<class T>
-	class Polygon {
-	public:
-		using PointType = Point<T>;
-		using PlaneType = Plane<T>;
-		static constexpr T limit = ::std::numeric_limits<T>::epsilon();
-	private:
-		std::vector<PointType> vertices_;
-		PlaneType plane_;
-		bool is_valid_ = false;
-
-	public:
-		// Default Constructor
-		Polygon() = default;
-
-		// Construct from vector of vertices
-		explicit Polygon(const std::vector<PointType>& verts) : vertices_(verts) {
-			if (verts.size() >= 3) {
-				plane_ = PlaneType(verts[0], verts[1], verts[2]);
-				is_valid_ = true;
-			}
-			else {
-				is_valid_ = false;
-			}
-		}
-
-		Polygon(const PlaneType& plane, const PointType& center, T side_length)
-			: plane_(plane), is_valid_(true) {
-			// Create normal vector by hand (need to check initial length)
-			PointType normal(plane.a[0], plane.a[1], plane.a[2]);
-
-			if (T normal_length = normal.r(); normal_length > 1e-10) {
-				normal = normal / normal_length;
-			}
-			else {
-				// if normal is zero, the plane is XY plane
-				normal = PointType(0, 0, 1);
-				plane_ = PlaneType(PointType(0, 0, 0), PointType(1, 0, 0), PointType(0, 1, 0));
-			}
-
-			// Find first vector in plane
-			PointType u;
-			if (std::abs(normal[0]) > std::abs(normal[1])) {
-				u = PointType(-normal[2], 0, normal[0]);
-			}
-			else {
-				u = PointType(0, normal[2], -normal[1]);
-			}
-			u = u / u.r();
-
-			// Find second vector in plane
-			PointType v = PointType::Vector(normal, u);
-			v = v / v.r();
-
-			// Resize to half side length
-			T half_side = side_length / 2;
-			u = u * half_side;
-			v = v * half_side;
-
-			// Create vertices of square
-			vertices_.reserve(4);
-			vertices_.push_back(center + u + v);
-			vertices_.push_back(center - u + v);
-			vertices_.push_back(center - u - v);
-			vertices_.push_back(center + u - v);
-		}
-
-		Polygon(const std::vector<PointType>& verts, const PlaneType& pl)
-			: vertices_(verts), plane_(pl), is_valid_(true) {
-			bool t = isConvex();
-			assert(isConvex());
-		}
-
-		// Method to clip the polygon by a plane
-		std::optional<std::pair<PointType, PointType>> clipByPlane(const PlaneType& clipping_plane) {
-			if (!is_valid_ || vertices_.empty())
-				return std::optional<std::pair<PointType, PointType>>();
-
-			auto intersect = [](const PointType& a, const PointType& b, const PlaneType& plane)->PointType {
-				PointType d = b - a;
-				T denominator = d[0] * plane.a[0] + d[1] * plane.a[1] + d[2] * plane.a[2];
-				assert(abs(denominator) > limit);
-				T t = -plane.side(a) / denominator;
-				return a + d * t;
-				};
-			auto vs = vertices_.size();
-
-			auto [e1, e2] = find_inner_region(clipping_plane);
-
-			// Check: all points are outide of the plane?
-			if (e1 == vs && e2 == vs) {
-				vertices_.clear();
-				is_valid_ = false;
-				return std::optional<std::pair<PointType, PointType>>();
-			}
-
-			// Check: all points are inside?
-			if (e1 == 0 && e2 == vs - 1) {
-				// No modification needed
-				return std::optional<std::pair<PointType, PointType>>();
-			}
-
-			// erase from e2 (excluding) to e1 (excluding)
-			// find intersection points
-			PointType inter1 = intersect(vertices_[(e1 + vs - 1) % vs], vertices_[e1], clipping_plane);
-			PointType inter2 = intersect(vertices_[(e2 + vs + 1) % vs], vertices_[e2], clipping_plane);
-			if (e1 > e2) {
-				auto de = e1 - e2 - 1;
-				// At least one point should be deleted. So, lets overwrite it:
-				vertices_[e2 + 1] = inter2;
-
-
-				if (de >= 2) {
-					vertices_[e2 + 2] = inter1;
-					// Now, if de > 2 delete all other points
-					if (de > 2) {
-						vertices_.erase(vertices_.begin() + e2 + 3, vertices_.begin() + e1);
-					}
-				}
-				else { // de == 1
-					vertices_.insert(vertices_.begin() + e2 + 2, inter1);
-				}
-			}
-			else { // e1 <= e2
-				if (e2 != vs - 1) {
-					vertices_.erase(vertices_.begin() + e2 + 1, vertices_.end());
-				}
-				if (e1 != 0) {
-					vertices_.erase(vertices_.begin(), vertices_.begin() + e1);
-				}
-				vertices_.push_back(inter2);
-				vertices_.push_back(inter1);
-			}
-
-			assert(isConvex());
-			return std::make_optional(std::pair<PointType, PointType>(inter1, inter2));
-
-
-
-			return std::optional<std::pair<PointType, PointType>>();
-		}
-
-		constexpr const PointType& operator[](size_t i) const noexcept {
-			return vertices_[i];
-		}
-		constexpr size_t size() const noexcept {
-			return vertices_.size();
-		}
-
-		bool isConvex() const {
-			if (vertices_.size() < 3) return false;
-			auto normal = plane_.normal();
-			for (size_t i = 0; i < vertices_.size(); i++) {
-				PointType current = vertices_[i];
-				PointType next = vertices_[(i + 1) % vertices_.size()];
-				PointType nextNext = vertices_[(i + 2) % vertices_.size()];
-
-				PointType edge1 = next - current;
-				PointType edge2 = nextNext - next;
-
-				PointType cross = PointType::Vector(edge1, edge2);
-				if (PointType::Scalar(cross, normal) < -limit) {
-					return false;
-				}
-			}
-			return true;
-		}
-		void fixVertexOrder() {
-			if (vertices_.size() < 3) return;
-
-			// Calculate the center of the polygon 
-			Point<T> center(0, 0, 0);
-			for (const auto& vertex : vertices_) {
-				center += vertex;
-			}
-			center = center / static_cast<T>(vertices_.size());
-
-			// Calculate the normal vector of the plane
-			Point<T> normal = plane_.normal();
-
-			// Sort the vertices in counter-clockwise order around the center
-			std::ranges::sort(vertices_,
-							  [&](const Point<T>& a, const Point<T>& b) {
-								  Point<T> vecA = a - center;
-								  Point<T> vecB = b - center;
-
-								  Point<T> cross = Point<T>::Vector(vecA, vecB);
-								  T dot_with_normal = Point<T>::Scalar(cross, normal);
-
-								  return dot_with_normal > 0;
-							  });
-		}
-
-		bool isValid() const {
-			return is_valid_ && vertices_.size() >= 3;
-		}
-
-		const std::vector<PointType>& getVertixes() const {
-			return vertices_;
-		}
-	private:
-		std::pair<size_t, size_t> findIntersectionPoints(const PlaneType& clipping_plane) const {
-			size_t e1 = vertices_.size();
-			size_t e2 = vertices_.size();
-			const size_t vs = vertices_.size();
-
-			PointType inter1;
-			PointType inter2;
-
-			// Prepare dist to plane vector
-			::std::vector<T> dists(vs, 0);
-			for (size_t iter = 0; iter < vs; iter++)
-			{
-				dists[iter] = clipping_plane.side(vertices_[iter]);
-			}
-
-			if (dists.front() < 0 && dists.back() > 0)
-			{
-				e1 = 0;
-			}
-
-			if (dists.front() > 0 && dists.back() < 0)
-			{
-				e2 = 0;
-			}
-
-			for (size_t i = 1; i < vs; i++)
-			{
-				if (dists[i - 1] > 0 && dists[i] < 0)
-				{
-					e1 = i;
-				}
-
-				if (dists[i - 1] < 0 && dists[i] > 0)
-				{
-					e2 = i;
-				}
-			}
-
-			return std::make_pair(e1, e2);
-		}
-
-		// Special values:
-		// [0, size-1] = All inside
-		// [size, size] = All outside
-		std::pair<size_t, size_t> find_inner_region(const PlaneType& clipping_plane) const {
-			size_t e1 = vertices_.size();
-			size_t e2 = vertices_.size();
-			const size_t vs = vertices_.size();
-			bool has_negative = false;
-			bool has_positive = false;
-
-			PointType inter1;
-			PointType inter2;
-
-			// Prepare dist to plane vector
-			::std::vector<T> dists(vs, 0);
-			for (size_t iter = 0; iter < vs; iter++)
-			{
-				dists[iter] = clipping_plane.side(vertices_[iter]);
-				if (dists[iter] > 0) {
-					has_positive = true;
-					e2 = iter;
-					e1 = iter;
-				}
-				else if (dists[iter] < 0) has_negative = true;
-			}
-
-			// Check all points non-negative = all points inside
-			if (has_negative == false)
-				return { 0, vs - 1 };
-
-			// Check all points non-positive = at maximum - corner or angle touch
-			if (has_positive == false)
-				return { vs, vs };
-
-
-			// Find left corner 
-			for (size_t iter = e1 + vs - 1; iter > e2; iter--)
-			{
-				auto iter_t = iter % vs;
-				if (dists[iter_t] > 0) {
-					e1 = iter_t;
-				}
-				else {
-					break;
-				}
-			}
-
-			const auto e1_t = e1 + vs;
-			// Find right corner 
-			for (size_t iter = e2 + 1; iter < e1_t; iter++)
-			{
-				auto iter_t = iter % vs;
-				if (dists[iter_t] > 0) {
-					e2 = iter_t;
-				}
-				else {
-					break;
-				}
-			}
-			return { e1, e2 };
-		}
-	};
-
-	template<class T>
-	class VoronoiCell {
-	public:
-		using PointType = Point<T>;
-		using Face = Polygon<T>;
-		using PlaneType = typename Face::PlaneType;
-		using FaceVector = ::std::vector<Face>;
-
-	private:
-		FaceVector faces_;
-		PointType seed_ = PointType(0, 0, 0);
-
-	public:
-		// Default constructor creates cube around [0,0,0]
-		constexpr VoronoiCell() noexcept {
-			initiate_cube_faces_on_seed();
-		}
-		// Creates cube around seed
-		constexpr explicit VoronoiCell(const PointType& seed, bool init = true) noexcept : seed_(seed) {
-			if (init) { initiate_cube_faces_on_seed(); }
-		}
-
-		/// <summary>
-		/// Cut both VoronoiCells by each other
-		/// </summary>
-		/// <returns> 0 - if correct even if any of the cells are empty, 
-		///           1 - if Cells are too close</returns>
-		static int interact(VoronoiCell& a, VoronoiCell& b) {
-			// Define if faces are not empty
-			bool empty_a = a.faces_.empty();
-			bool empty_b = b.faces_.empty();
-
-			if (empty_a && empty_b)
-				return 0; // Both cells are empty
-
-			PointType d = b.seed_ - a.seed_;
-
-			// Move interval "d" to [-0.5; 0.5]
-			for (int i = 0; i < 3; ++i) {
-				if (d[i] > 0.5) d[i] -= 1.0;
-				else if (d[i] < -0.5) d[i] += 1.0;
-			}
-
-			// If points too close - stop
-			T d_length = d.r();
-			if (d_length < 1e-6)
-				return 1;
-
-			PointType normal = d / d_length;
-			PointType half_d = d * 0.5;
-
-			// Create plane and clip a by it
-			if (!empty_a) {
-				PointType midpoint_a = a.seed_ + half_d;
-				PlaneType plane(midpoint_a, -normal);
-				a.clipByPlaneAndAddNewFace(plane);
-			}
-
-			// Using inverted plane for b
-			if (!empty_b) {
-				PointType midpoint_b = b.seed_ - half_d;
-				PlaneType inverted_plane(midpoint_b, normal);
-				b.clipByPlaneAndAddNewFace(inverted_plane);
-			}
-
-			return 0;
-		}
-		constexpr const PointType& getSeed() const noexcept { return seed_; }
-		constexpr const FaceVector& getFaces() const noexcept { return faces_; }
-
-	private:
-		void clipByPlaneAndAddNewFace(const PlaneType& clipping_plane) {
-			std::vector<PointType> intersection_points;
-			std::vector<Face> new_faces;
-
-			// Collect all intersection points and create new faces
-			for (auto& face : faces_) {
-				// Save original vertices for intersection detection
-				std::vector<PointType> original_vertices;
-				for (size_t i = 0; i < face.size(); ++i) {
-					original_vertices.push_back(face[i]);
-				}
-
-				// Clip the face
-				face.clipByPlane(clipping_plane);
-
-				// If face remains valid, add it
-				if (face.size() >= 3) {
-					new_faces.push_back(face);
-
-					// Collect intersection points with this face
-					collectIntersectionPoints(original_vertices, clipping_plane, intersection_points);
-				}
-				// If face becomes invalid (less than 3 vertices), it is not added - thus removed
-			}
-
-			// Replace old faces with new ones
-			faces_ = std::move(new_faces);
-
-			// Create new face from intersection points if there are enough
-			if (intersection_points.size() >= 3) {
-				createNewFaceFromIntersections(intersection_points, clipping_plane);
-			}
-		}
-
-		void collectIntersectionPoints(const std::vector<PointType>& vertices,
-									   const PlaneType& plane,
-									   std::vector<PointType>& intersection_points) {
-			const size_t n = vertices.size();
-			if (n < 3) return;
-
-			PointType prev_vertex = vertices.back();
-			T prev_dist = plane.side(prev_vertex);
-
-			for (size_t i = 0; i < n; i++) {
-				const PointType& current_vertex = vertices[i];
-				const T current_dist = plane.side(current_vertex);
-
-				// If edge intersects the plane, find intersection point
-				if (prev_dist * current_dist < 0) {
-					const T t = prev_dist / (prev_dist - current_dist);
-					const PointType intersection = prev_vertex + (current_vertex - prev_vertex) * t;
-					intersection_points.push_back(intersection);
-				}
-
-				prev_vertex = current_vertex;
-				prev_dist = current_dist;
-			}
-		}
-
-		void createNewFaceFromIntersections(std::vector<PointType>& points,
-											const PlaneType& plane) {
-			if (points.size() < 3) return;
-
-			// Order points in correct order (counter-clockwise relative to normal)
-			orderPointsOnPlane(points, plane);
-			// Remove duplicates
-			removeDuplicatePoints(points);
-
-			// Create new face
-			Face new_face(points, plane);
-			if (new_face.isConvex()) {
-				faces_.push_back(new_face);
-			}
-		}
-
-		void removeDuplicatePoints(std::vector<PointType>& points) const {
-			const auto s = points.size();
-
-			// Remove consecutive duplicates
-			for (size_t i = s - 1; i > 0; --i)
-			{
-				if (PointType::distance(points[i], points[i - 1]) < static_cast<T>(1e-6)) {
-					points.erase(points.begin() + i);
-				}
-			}
-
-			// Check first and last element
-			if (PointType::distance(points.front(), points.back()) < static_cast<T>(1e-6)) {
-				points.pop_back();
-			}
-		}
-
-		void orderPointsOnPlane(std::vector<PointType>& points, const PlaneType& plane) {
-			if (points.size() < 3) return;
-
-			// Find center of mass of points
-			PointType center(0, 0, 0);
-			for (const auto& p : points) {
-				center += p;
-			}
-			center = center / static_cast<T>(points.size());
-
-			// Get plane normal
-			PointType normal = plane.normal();
-
-			// Choose arbitrary vector in plane (perpendicular to normal)
-			PointType reference_vector;
-			if (std::abs(normal[0]) > std::abs(normal[1])) {
-				reference_vector = PointType(-normal[2], 0, normal[0]);
-			}
-			else {
-				reference_vector = PointType(0, normal[2], -normal[1]);
-			}
-			reference_vector = reference_vector / reference_vector.r();
-
-			// Sort points by angle relative to center
-			std::ranges::sort(points,
-							  [&](const PointType& a, const PointType& b)
-							  {
-								  PointType vecA = a - center;
-								  PointType vecB = b - center;
-
-								  // Project onto plane
-								  PointType projA = vecA - normal * PointType::Scalar(vecA, normal);
-								  PointType projB = vecB - normal * PointType::Scalar(vecB, normal);
-
-								  if (projA.r() < 1e-10 || projB.r() < 1e-10) {
-									  return false; // Points too close to center
-								  }
-
-								  // Normalize
-								  projA = projA / projA.r();
-								  projB = projB / projB.r();
-
-								  // Calculate angles using scalar and vector products
-								  T cosA = PointType::Scalar(reference_vector, projA);
-								  T sinA = PointType::Scalar(PointType::Vector(reference_vector, projA), normal);
-								  T angleA = std::atan2(sinA, cosA);
-
-								  T cosB = PointType::Scalar(reference_vector, projB);
-								  T sinB = PointType::Scalar(PointType::Vector(reference_vector, projB), normal);
-								  T angleB = std::atan2(sinB, cosB);
-
-								  return angleA < angleB;
-							  });
-		}
-
-
-		inline void clipByPlane(const PlaneType& clipping_plane) {
-			for (auto& face : faces_) {
-				face.clipByPlane(clipping_plane);
-			}
-		}
-		constexpr void initiate_cube_faces_on_seed() {
-			std::array<PointType, 8> cube;
-			for (int i = 0; i < 8; ++i) {
-				cube[i] = base_vertices[i] + seed_;
-			}
-			faces_.reserve(6);
-			for (int i = 0; i < 6; ++i) {
-				faces_.emplace_back(Face({ cube[face_indices[i][0]],
-										   cube[face_indices[i][1]],
-										   cube[face_indices[i][2]],
-										   cube[face_indices[i][3]] }));
-			}
-		}
-
-		// Base array of vertices for a cube
-		static constexpr std::array<PointType, 8> base_vertices = { {
-			PointType{-0.5, -0.5, -0.5}, // 0
-			PointType{ 0.5, -0.5, -0.5}, // 1
-			PointType{ 0.5,  0.5, -0.5}, // 2
-			PointType{-0.5,  0.5, -0.5}, // 3
-			PointType{-0.5, -0.5,  0.5}, // 4
-			PointType{ 0.5, -0.5,  0.5}, // 5
-			PointType{ 0.5,  0.5,  0.5}, // 6
-			PointType{-0.5,  0.5,  0.5}  // 7
-		} };
-
-		// Indexes for each face of the cube (conter-clockwise from outside)
-		static constexpr std::array<std::array<int, 4>, 6> face_indices = { {
-			{4, 7, 6, 5}, // front face
-			{0, 1, 2, 3}, // back face
-			{0, 3, 7, 4}, // left face
-			{1, 5, 6, 2}, // right face
-			{0, 4, 5, 1}, // bottom face
-			{3, 2, 6, 7}  // top face
-		} };
-	};
-
-	template<class T, class AI> class HashedSpace;
-
-	template<class T>
-	class VoronoiDiagram {
-	public:
-		using PointType = Point<T>;
-		using VoronCell = VoronoiCell<T>;
-
-		template <class AI>
-		using BondList = ::std::vector<::std::pair<AI, AI>>;
-		using PointVector = ::std::vector<PointType>;
-		using CellVector = ::std::vector<VoronCell>;
-		using BoolVector = ::std::vector<bool>;
-
-		enum class State : unsigned char {
-			Uninitialized = 0,
-			Cubic_cells = 1,
-			Correct_cells = 2
-		};
-	private:
-		//Data
-		BoolVector flags_;
-		CellVector cells_;
-		State state = State::Uninitialized;
-	public:
-		constexpr VoronoiDiagram() noexcept = default;
-		constexpr explicit VoronoiDiagram(const PointVector& points, const BoolVector& flags = BoolVector()) noexcept : flags_(flags) {
-			if (flags.empty()) {
-				flags_.resize(points.size(), true);
-			}
-			addPoints(points, flags_);
-		}
-
-		template<class AI>
-		constexpr VoronoiDiagram(const PointVector& points, const BondList<AI>& bonds, const BoolVector& flags = BoolVector()) noexcept : flags_(flags) {
-			if (flags.empty()) {
-				flags_.resize(points.size(), true);
-			}
-			addPoints(points, flags_);
-			calculateFaces<AI>(bonds);
-		}
-		void addPoints(const PointVector& points, const BoolVector& flags) noexcept {
-			cells_.reserve(points.size());
-			for (size_t i = 0; i < points.size(); i++)
-			{
-				cells_.emplace_back(points[i], flags[i]);
-			}
-			state = State::Cubic_cells;
-		}
-
-		template <class AI>
-		int calculateFaces(const BondList<AI>& bonds) noexcept {
-			if (state == State::Uninitialized)
-				return 1; // Error: VoronoiDiagram not initialized
-			for (auto& bond : bonds) {
-				auto interaction_result = VoronCell::interact(cells_[bond.first], cells_[bond.second]);
-				if (interaction_result != 0)
-					return 2; // Error: Cells too close
-			}
-			state = State::Correct_cells;
-			return 0;
-		}
-
-		constexpr T calculateLongestDiagonal(const Matrix<T>& mat) const noexcept {
-			T ret = 0;
-			for (auto& vcell : cells_) {
-				const PointType seed = vcell.getSeed();
-				for (const auto& face : vcell.getFaces()) {
-					for (size_t i = 0; i < face.size(); i++)
-					{
-						T val = (mat * (face[i] - seed)).r();
-						if (val > ret) ret = val;
-					}
-				}
-			}
-			return ret * 2;
-		}
-
-		CellVector extractCells() noexcept {
-			if (state == State::Uninitialized) {
-				return {};
-			}
-			state = State::Uninitialized;
-			return std::move(cells_);
-		}
-	};
-
-	template<class T>
-	class VoronoiFused {
-	public:
-		using PointType = Point<T>;
-
-		class Polygon {
-		public:
-			bool is_inner = false;
-			::std::vector<::std::size_t> vert_ids;
-
-			void rotateToCanonical() {
-				const size_t n = vert_ids.size();
-				if (n <= 1) return;
-
-				// 1. Find position of minimum, O(n)
-				size_t min_idx = 0;
-				for (size_t i = 1; i < n; ++i) {
-					if (vert_ids[i] < vert_ids[min_idx]) {
-						min_idx = i;
-					}
-				}
-
-				// 2. Find right diraction of ring
-				const size_t prev_idx = (min_idx == 0) ? n - 1 : min_idx - 1;
-				const size_t next_idx = (min_idx == n - 1) ? 0 : min_idx + 1;
-				const bool need_reverse = (vert_ids[prev_idx] < vert_ids[next_idx]);
-
-				// 3. Final rotation on possible reversion
-				if (need_reverse) {
-					std::reverse(vert_ids.begin(), vert_ids.end());
-					// change minimum position after reverse
-					const size_t new_min_idx = n - 1 - min_idx;
-					if (new_min_idx != 0) {
-						std::rotate(vert_ids.begin(), vert_ids.begin() + new_min_idx, vert_ids.end());
-					}
-				}
-				else {
-					if (min_idx != 0) {
-						std::rotate(vert_ids.begin(), vert_ids.begin() + min_idx, vert_ids.end());
-					}
-				}
-			}
-		};
-
-		using Polyhedra = ::std::vector<size_t>; // Polygon indexes, equal center index
-
-		static constexpr T EPSILON = 0.0001;
-	public:
-		//Data
-		::std::vector<PointType> centers;
-		::std::vector<PointType> vertexes;
-		::std::vector<Polygon> polygons;
-		::std::vector<Polyhedra> polyhedra;
-	public:
-		void AddCells(const ::std::vector<VoronoiCell<T>>& cells) {
-
-			auto cells_s = cells.size();
-
-			vertexes.reserve(120 * cells_s);
-			polygons.reserve(30 * cells_s);
-
-			polyhedra.clear();
-			polyhedra.resize(cells_s);
-			centers.clear();
-			centers.resize(cells_s);
-
-			// fill vetexes with coppies
-			for (size_t i = 0; i < cells_s; i++)
-			{
-				centers[i] = cells[i].getSeed();
-				auto& faces = cells[i].getFaces();
-				auto faces_s = faces.size();
-				for (size_t j = 0; j < faces_s; j++)
-				{
-					Polygon p;
-
-					auto& vert = faces[j].getVertixes();
-					auto vert_s = vert.size();
-					for (size_t k = 0; k < vert_s; k++)
-					{
-						auto iter = add_to_vertex_union(vertexes, vert[k]);
-						p.vert_ids.push_back(iter);
-					}
-					p.rotateToCanonical();
-					auto pgon_it = add_to_polygon_union(polygons, p);
-					polyhedra[i].push_back(pgon_it);
-				}
-			}
-
-		}
-
-	private:
-		inline size_t add_to_vertex_union(::std::vector<PointType>& v, const PointType& x) const {
-			auto f_It = ::std::ranges::find_if(v,
-											   [&x](const PointType& p) {
-												   return PointType::distance(x, p) <= EPSILON;
-											   });
-			if (f_It != v.end())
-				return ::std::distance(v.begin(), f_It);
-			else {
-				v.push_back(x);
-				return v.size() - 1;
-			}
-		}
-		inline size_t add_to_polygon_union(::std::vector<Polygon>& v, const Polygon& x) const {
-			auto f_It = ::std::ranges::find_if(v,
-											   [&x](const Polygon& p) {
-												   if (p.is_inner) return false;
-												   for (size_t i = 0; i < 3; i++)
-												   {
-													   if (p.vert_ids[i] != x.vert_ids[i])
-														   return false;
-												   }
-												   return true;
-											   });
-			if (f_It != v.end()) {
-				f_It->is_inner = true;
-				return ::std::distance(v.begin(), f_It);
-			}
-			else {
-				v.push_back(x);
-				return v.size() - 1;
-			}
-
-
-		}
-
-
-
 	};
 
 	template<class T>
@@ -1327,6 +574,7 @@ namespace cpplib::geometry {
 		constexpr void create(const matrix_type& Mat, const bool is_FracToCart = true) noexcept {
 			if (is_FracToCart) createFromFracToCart(Mat);
 			else createFromCartToFrac(Mat);
+			assert(check_corectness());
 		}
 		constexpr void create(const value_type a = 10, const value_type b = 10, const value_type c = 10, const value_type alpha = 90, const value_type beta = 90, const value_type gamma = 90, const bool is_grad = true) {
 			lattice_[0] = a;
@@ -1339,8 +587,7 @@ namespace cpplib::geometry {
 				for (int i = 0; i < 3; i++) {
 					angleRad_[i] = GradtoRad(angleGrad_[i]);
 				}
-			}
-			else {
+			} else {
 				angleRad_[0] = alpha;
 				angleRad_[1] = beta;
 				angleRad_[2] = gamma;
@@ -1349,6 +596,7 @@ namespace cpplib::geometry {
 				}
 			}
 			createMatrix();
+			assert(check_corectness());
 		}
 
 		[[nodiscard]] constexpr const value_type& getAngleRad(const unsigned char i) const noexcept {
@@ -1368,6 +616,24 @@ namespace cpplib::geometry {
 		}
 		[[nodiscard]] constexpr const matrix_type& cartToFrac() const noexcept {
 			return cartToFrac_;
+		}
+		bool check_corectness() const noexcept {
+			constexpr std::array<Point<int8_t>, 10> shiftTable = {{
+				{-1, -1, -1}, { 0, -1, -1}, { 1, -1, -1},
+				{-1,  0, -1}, { 1,  0, -1}, {-1,  1, -1}, 
+				{ 0,  1, -1}, { 1,  1, -1}, {-1, -1,  0}, 
+				{ 1, -1,  0}
+			}};
+
+			T minlatSq = std::min(lattice_[0], std::min(lattice_[1], lattice_[2]));
+			minlatSq *= minlatSq;
+
+			for (char i = 0; i < 10; i++) {
+				auto rsq = (fracToCart_ * shiftTable[i]).rSq();
+                if (minlatSq - rsq > 1e-5)
+					return false;
+			}
+			return true;
 		}
 
 		value_type distance_in_01(const PointType& a, const PointType& b) const {
@@ -1392,7 +658,7 @@ namespace cpplib::geometry {
 				geometry::Point<I>(1, 1, 1),
 				geometry::Point<I>(1, 1,-1),
 				geometry::Point<I>(1,-1, 1),
-				geometry::Point<I>(1,-1,-1) };
+				geometry::Point<I>(1,-1,-1)};
 
 			geometry::Point<I> currentSuperCell(
 				std::max(static_cast<I>(std::ceil(cutoff / lattice_[0])), minimum),
@@ -1408,25 +674,25 @@ namespace cpplib::geometry {
 
 				unsigned char minDimention = 0;
 				switch (i) {
-				case 0:
-				case 1:
-					if (lattice_[1] * currentSuperCell[1] > lattice_[2] * currentSuperCell[2]) minDimention = 2;
-					else minDimention = 1;
-					break;
-				case 2:
-				case 3:
-					if (lattice_[0] * currentSuperCell[0] > lattice_[2] * currentSuperCell[2]) minDimention = 2;
-					else minDimention = 0;
-					break;
-				case 4:
-				case 5:
-					if (lattice_[0] * currentSuperCell[0] > lattice_[1] * currentSuperCell[1]) minDimention = 1;
-					else minDimention = 0;
-					break;
-				default:
-					if (lattice_[minDimention] * currentSuperCell[minDimention] > lattice_[1] * currentSuperCell[1]) minDimention = 1;
-					if (lattice_[minDimention] * currentSuperCell[minDimention] > lattice_[2] * currentSuperCell[2]) minDimention = 2;
-					break;
+					case 0:
+					case 1:
+						if (lattice_[1] * currentSuperCell[1] > lattice_[2] * currentSuperCell[2]) minDimention = 2;
+						else minDimention = 1;
+						break;
+					case 2:
+					case 3:
+						if (lattice_[0] * currentSuperCell[0] > lattice_[2] * currentSuperCell[2]) minDimention = 2;
+						else minDimention = 0;
+						break;
+					case 4:
+					case 5:
+						if (lattice_[0] * currentSuperCell[0] > lattice_[1] * currentSuperCell[1]) minDimention = 1;
+						else minDimention = 0;
+						break;
+					default:
+						if (lattice_[minDimention] * currentSuperCell[minDimention] > lattice_[1] * currentSuperCell[1]) minDimention = 1;
+						if (lattice_[minDimention] * currentSuperCell[minDimention] > lattice_[2] * currentSuperCell[2]) minDimention = 2;
+						break;
 				}
 				currentSuperCell[minDimention] = currentSuperCell[minDimention] + 1;
 			}
@@ -1435,8 +701,7 @@ namespace cpplib::geometry {
 	};
 
 	template<class T>
-	struct Symm
-	{
+	struct Symm {
 		using matrix_t = geometry::Matrix<T>;
 		using point_t = geometry::Point<T>;
 		matrix_t mat;
@@ -1497,45 +762,45 @@ namespace cpplib::geometry {
 			return n;
 		}
 		std::pair<point_t, T> parse(const char* str, const size_t len) const {
-			point_t p{ 0,0,0 };
+			point_t p{0,0,0};
 			T shift = 0;
 			bool minus = false;
 			for (unsigned int i = 0; i < len; i++) // iterator "i" modifies in parseshift function
 			{
 				switch (str[i]) {
-				case 'x': [[fallthrough]];
-				case 'X':
-					if (minus == true) p[0] = -1;
-					else p[0] = 1;
-					minus = false;
-					break;
-				case 'y': [[fallthrough]];
-				case 'Y':
-					if (minus == true) p[1] = -1;
-					else p[1] = 1;
-					minus = false;
-					break;
-				case 'z': [[fallthrough]];
-				case 'Z':
-					if (minus == true) p[2] = -1;
-					else p[2] = 1;
-					minus = false;
-					break;
-				case ' ': [[fallthrough]];
-				case '\'': [[fallthrough]];
-				case '\"': [[fallthrough]];
-				case '+':
-					break;
-				case '-':
-					minus = !minus;
-					break;
-				default:
+					case 'x': [[fallthrough]];
+					case 'X':
+						if (minus == true) p[0] = -1;
+						else p[0] = 1;
+						minus = false;
+						break;
+					case 'y': [[fallthrough]];
+					case 'Y':
+						if (minus == true) p[1] = -1;
+						else p[1] = 1;
+						minus = false;
+						break;
+					case 'z': [[fallthrough]];
+					case 'Z':
+						if (minus == true) p[2] = -1;
+						else p[2] = 1;
+						minus = false;
+						break;
+					case ' ': [[fallthrough]];
+					case '\'': [[fallthrough]];
+					case '\"': [[fallthrough]];
+					case '+':
+						break;
+					case '-':
+						minus = !minus;
+						break;
+					default:
 
-					T partshift = parseshift(str, i, len); // Modifies "i"
-					if (minus) shift -= partshift;
-					else shift += partshift;
-					minus = false;
-					break;
+						T partshift = parseshift(str, i, len); // Modifies "i"
+						if (minus) shift -= partshift;
+						else shift += partshift;
+						minus = false;
+						break;
 				}
 			}
 			return std::make_pair(p, shift);
@@ -1549,238 +814,378 @@ namespace cpplib::geometry {
 			int lower = 1;
 			for (; iter < len; iter++)
 			{
-				if (str[iter] < '0' || str[iter] > '9')
+				if (str[iter] < '0' || str[iter] > '9') {
 					switch (str[iter]) {
-					case '.':
-						dot = true;
-						break;
-					case '+':
-					case '-':
-						iter--;
-						return upper / static_cast<T>(lower);
-					case '/':
-						slash = true;
-						iter++;
-						lower = (str[iter] - '0');
-						break;
-					default:
-						// unexpected symbol
-						break;
+						case '.':
+							dot = true;
+							break;
+						case '+':
+						case '-':
+							iter--;
+							return upper / static_cast<T>(lower);
+						case '/':
+							slash = true;
+							iter++;
+							lower = (str[iter] - '0');
+							break;
+						default:
+							// unexpected symbol
+							break;
 					}
-				else {
+				} else {
 					int num = (str[iter] - '0');
 					if (dot) {
 						upper = upper * 10 + num;
 						lower *= 10;
-					}
-					else if (slash) {
+					} else if (slash) {
 						lower = lower * 10 + num;
-					}
-					else {
+					} else {
 						upper = upper * 10 + num;
 					}
 				}
+
 			}
 			iter--;
 			return upper / static_cast<T>(lower);
 		}
 	};
 
-	template<class T, class AI>
-	class HashedSpace {
-	public:
-		using AtomIndex = AI;
-		using FloatingPointType = T;
-		using PointType = Point<T>;
-		using CellType = Cell<T>;
-		using DimentionType = unsigned char;
+	struct ShiftCode {
+		using ShiftPoint = Point<int8_t>;
 
-		using SupListType = ::std::list<AtomIndex>;
-		using SupType = ::std::vector<::std::vector<::std::vector<SupListType>>>;
-		using SupPoint = geometry::Point<size_t>;
-
-		/// <summary>
-		/// Constructor
-		/// </summary>
-		/// <param name="cell"> - Unit cell</param>
-		/// <param name="maxbond"> - calculated in Distances</param>
-		constexpr HashedSpace(const CellType& cell, FloatingPointType maxbond) noexcept :
-			cell_(cell) {
-			calculateSep(maxbond);
+		constexpr ShiftCode() noexcept = default;
+		constexpr explicit ShiftCode(uint8_t c) noexcept : code(c) {
+			assert(c <= 26);
+		}
+		constexpr explicit ShiftCode(ShiftPoint sp) noexcept {
+			assert(sp[0] >= -1 && sp[0] <= 1);
+			assert(sp[1] >= -1 && sp[1] <= 1);
+			assert(sp[2] >= -1 && sp[2] <= 1);
+			code = compress_shift(sp);
 		}
 
-		/// <summary>
-		/// Constant function to estimate theoretic effectivness of HashedSpace
-		/// </summary>
-		/// <returns>true if effective</returns>
-		constexpr bool is_effective() const noexcept {
-			return sep_[0] > 3 || sep_[1] > 3 || sep_[2] > 3;
+		ShiftCode& operator=(uint8_t c) noexcept {
+			assert(c <= 26);
+			code = c;
+			return *this;
 		}
 
-		/// <summary>
-		/// Creates theoretical overestimated vector of Bonds
-		/// </summary>
-		/// <param name="points"> - vector of Points</param>
-		/// <returns>vector with all bonds in boxes and between adjacent ones</returns>
-		template<BondConcept BondType, typename ExtendedPointType>
-		::std::vector<BondType> create_hash_bonds(const ::std::vector<ExtendedPointType>& points, 
-												  std::function<const PointType&(const ExtendedPointType&)> func = standard_point_unpacker) const {
-			::std::vector<BondType> ret;
-			if (is_effective() == false) {
-				// use standard algorithm
-				ret.reserve((points.size() * (points.size() + 1)) >> 1);
-				for (size_t i = 0; i < points.size(); i++)
-				{
-					for (size_t j = i + 1; j < points.size(); j++)
-					{
-						ret.emplace_back(i, j);
-					}
-				}
-				return ret;
-			}
-			size_t estimated_size = points.size() * points.size() * sizemod();
-			ret.reserve(estimated_size);
-			SupType supply_table(sep_[0],
-								 typename SupType::value_type(sep_[1],
-													 typename SupType::value_type::value_type(sep_[2])));
+		ShiftCode& operator=(ShiftPoint sp) noexcept {
+			assert(sp[0] >= -1 && sp[0] <= 1);
+			assert(sp[1] >= -1 && sp[1] <= 1);
+			assert(sp[2] >= -1 && sp[2] <= 1);
+			code = compress_shift(sp);
+			return *this;
+		}
 
-			// Fill supply_table
-			for (AtomIndex i = 0; i < points.size(); i++)
-			{
-				auto p = func(points[i]);
-				p.MoveToCell();
-				auto c = coordinate_of_point(func(points[i]));
+		constexpr ShiftPoint get_shift() const noexcept {
+			return shiftTable[code];
+		}
+		constexpr uint8_t get_code() const noexcept {
+			return code;
+		}
+		static constexpr ShiftPoint get_shift(uint8_t c) noexcept {
+			assert( c <= 26);
+			return shiftTable[c];
+		}
+		constexpr void inverse() noexcept {
+			code = 26 - code;
+		}
+		static constexpr uint8_t inverse(uint8_t c) noexcept {
+			assert(c <= 26);
+			return 26 - c;
+		}
+		static constexpr ShiftCode inverse(ShiftCode sc) noexcept {
+			assert(sc.code <= 26);
+			return ShiftCode(26 - sc.code);
+		}
 				
-				supply_table[c[0]][c[1]][c[2]].emplace_back(i);
-			}
+		static constexpr std::array<ShiftPoint, 27> shiftTable = {{
+			{-1, -1, -1}, { 0, -1, -1}, { 1, -1, -1}, // code 0, 1, 2
+			{-1,  0, -1}, { 0,  0, -1}, { 1,  0, -1}, // code 3, 4, 5
+			{-1,  1, -1}, { 0,  1, -1}, { 1,  1, -1}, // code 6, 7, 8
 
-			// Create all bonds
-			for (size_t i = 0; i < sep_[0]; i++) {
-				for (size_t j = 0; j < sep_[1]; j++) {
-					for (size_t k = 0; k < sep_[2]; k++) {
-						box_working(ret, supply_table, i, j, k);
-					}
-				}
-			}
-			return ret;
-		}
+			{-1, -1,  0}, { 0, -1,  0}, { 1, -1,  0}, // code 9, 10, 11
+			{-1,  0,  0}, { 0,  0,  0}, { 1,  0,  0}, // code 12, 13 (Center), 14
+			{-1,  1,  0}, { 0,  1,  0}, { 1,  1,  0}, // code 15, 16, 17
 
+			{-1, -1,  1}, { 0, -1,  1}, { 1, -1,  1}, // code 18, 19, 20
+			{-1,  0,  1}, { 0,  0,  1}, { 1,  0,  1}, // code 21, 22, 23
+			{-1,  1,  1}, { 0,  1,  1}, { 1,  1,  1}  // code 24, 25, 26
+		}};
 	private:
-		static constexpr FloatingPointType modifier_ = 1.05;
+		uint8_t code = 13;
 
-		static const PointType& standard_point_unpacker (const PointType& p) {
-			return p; 
+		/// @brief Compress ShiftType[-1,+1] (usually Point<int8_t>) to char
+		/// @param s The shift
+		/// @return Compressed shift
+		static constexpr uint8_t compress_shift(ShiftPoint s) {
+			return (s[0] + uint8_t(1)) +
+				(s[1] + uint8_t(1)) * uint8_t(3) +
+				(s[2] + uint8_t(1)) * uint8_t(9);
 		}
-
-		template<BondConcept BondType>
-		void box_working(::std::vector<BondType>& ret, const SupType& supply_table, size_t i, size_t j, size_t k) const {
-			create_bonds_in_box(ret, supply_table[i][j][k]);
-
-			bool is_x = sep_[0] != 1;
-			bool is_y = sep_[1] != 1;
-			bool is_z = sep_[2] != 1;
-
-			auto dx = (i + 1 == sep_[0]) ? 0 : i + 1;
-			auto dy = (j + 1 == sep_[1]) ? 0 : j + 1;
-			auto dz = (k + 1 == sep_[2]) ? 0 : k + 1;
-
-			// dx
-			if (is_x) {
-				create_bonds_between_boxes(ret, supply_table[i][j][k], supply_table[dx][j][k]);
-			}
-			// dy
-			if (is_y) {
-				create_bonds_between_boxes(ret, supply_table[i][j][k], supply_table[i][dy][k]);
-			}
-			// dz
-			if (is_z) {
-				create_bonds_between_boxes(ret, supply_table[i][j][k], supply_table[i][j][dz]);
-			}
-
-			// dxdy
-			if (is_x && is_y) {
-				create_bonds_between_boxes(ret, supply_table[i][j][k], supply_table[dx][dy][k]);
-			}
-			// dxdz
-			if (is_x && is_z) {
-				create_bonds_between_boxes(ret, supply_table[i][j][k], supply_table[dx][j][dz]);
-			}
-			// dydz
-			if (is_y && is_z) {
-				create_bonds_between_boxes(ret, supply_table[i][j][k], supply_table[i][dy][dz]);
-			}
-
-			// dxdydz
-			if (is_x && is_y && is_z) {
-				create_bonds_between_boxes(ret, supply_table[i][j][k], supply_table[dx][dy][dz]);
-			}
-		}
-		template<BondConcept BondType>
-		void create_bonds_in_box(::std::vector<BondType>& ret, const SupListType& l) const {
-			for (auto iter1 = l.begin(); iter1 != l.end(); iter1++)
-			{
-				auto iter2 = iter1;
-				iter2++;
-				for (; iter2 != l.end(); iter2++)
-				{
-					ret.emplace_back(*iter1, *iter2);
-				}
-			}
-		}
-		template<BondConcept BondType>
-		void create_bonds_between_boxes(::std::vector<BondType>& ret, const SupListType& l1, const SupListType& l2) const {
-			for (auto v1 : l1)
-			{
-				for (auto v2 : l2)
-				{
-					if (v2 > v1) {
-						ret.emplace_back(v1, v2);
-					}
-					else {
-						ret.emplace_back(v2, v1);
-					}
-				}
-			}
-		}
-
-		constexpr SupPoint coordinate_of_point(const PointType& p) const noexcept {
-			return {
-				static_cast<size_t>(std::floor(p[0] * sep_[0])),
-				static_cast<size_t>(std::floor(p[1] * sep_[1])),
-				static_cast<size_t>(std::floor(p[2] * sep_[2]))
-			};
-		}
-		constexpr FloatingPointType sizemod() const noexcept {
-			FloatingPointType ret = 1;
-			for (DimentionType i = 0; i < 3; i++)
-			{
-				if (sep_[i] > 3) {
-					ret *= 3;
-					ret /= sep_[i];
-					ret *= modifier_;
-				}
-			}
-			return ret;
-		}
-		constexpr void calculateSep(FloatingPointType maxbond) {
-			maxbond *= modifier_;
-			for (DimentionType i = 0; i < 3; i++) {
-				sep_[i] = static_cast<size_t>(floor(cell_.lat_dir(i) / maxbond));
-				if (sep_[i] == 0) sep_[i] = 1;
-			}
-		}
-
-	private:
-		// Data
-		const CellType& cell_;
-		::std::array<size_t, 3> sep_;
 	};
 
-}
+
+	/// @brief Class for using spartial hashing algorithm to find all bonds in 3D periodic space.
+	/// @tparam T Floating point type
+	template <class T>
+	struct SpatialGrid {
+		using ShiftType = Point<int8_t>;
+		using PointType = Point<T>;
+		using CellType = Cell<T>;
+		struct BondWithShift {
+			int first = 0;
+			int second = 0;
+			ShiftCode shiftcode = 13;
+			BondWithShift() = default;
+			BondWithShift(int a, int b)
+				: first(a), second(b) {}
+			BondWithShift(int a, int b, ShiftCode scode)
+				: first(a), second(b), shiftcode(scode) {}
+
+		};
+
+		struct VirtualNeighbour {
+			int realBoxIndex;
+			ShiftCode shiftcode;
+		};
+
+		std::vector<int> pointIndices;          // [N] All point indices in box order
+		std::vector<int> boxOffsets;            // [C+1] Offsets in pointIndices array where each virtual box starts
+		std::vector<int> realBoxOffsets;        // [C_real+1] Offsets for real boxes
+		std::vector<VirtualNeighbour> virtMap;  // Mapping from virtual box to real box
+
+		std::array<uint8_t, 3> gridDim = {1,1,1};      // Real grid dimensions
+		std::array<uint8_t, 3> gridDimVirt = {1,1,1};  // Virtual grid dimensions
+		int numBoxes = 1;       // number of real boxes
+		int numBoxesVirt = 1;   // number of virtual boxes
+
+		std::array<int, 13> left_boxes_shifts;
+
+		/// @brief Build the spatial grid from a set of points. 
+		/// 
+		/// @note All points must have coordinates in[0, 1). Unnormalized coordinates
+		/// will produce undefined behavior(out - of - bounds access).
+		/// 
+		/// @param points Vector of points with coordinates normalized to[0, 1) in fractional space
+		/// @param cell   The unit cell definition
+		/// @param cutoff Distance cutoff for bonding
+		void build(const std::vector<Point<T>>& points, const CellType& cell, const T cutoff) {
+			// Calculate grid dimensions
+			calculateGridDim(cell, cutoff);
+
+			// Prepare vectors
+			std::vector<int> realBoxCount(numBoxes, 0);
+			std::vector<int> virtBoxCount(numBoxesVirt, 0);
+			realBoxOffsets.resize(numBoxes + 1, 0);
+			boxOffsets.resize(numBoxesVirt + 1, 0);
+
+			// Initialize virtual box mapping
+			virtMap.resize(numBoxesVirt);
+
+			// Build virtual-to-real mapping with periodic boundary conditions
+			build_virtual_mapping();
+
+			// Temporary array for storing point-to-virtual-box assignment
+			std::vector<int> temp_virt_box_IDx(points.size(), 0);
+			pointIndices.resize(points.size(), 0);
+
+			// Count atoms in virtual boxes
+			for (size_t i = 0; i < points.size(); i++) {
+				auto temp = get_virtual_box_index(points[i]);
+				temp_virt_box_IDx[i] = temp;
+				virtBoxCount[temp]++;
+
+				// Also count for real boxes (for fast access)
+				realBoxCount[get_real_box_index(points[i])]++;
+			}
+
+			// Build offsets for virtual boxes
+			int currentOffset = 0;
+			for (int i = 0; i < numBoxesVirt; i++) {
+				boxOffsets[i] = currentOffset;
+				currentOffset += virtBoxCount[i];
+				virtBoxCount[i] = 0;  // Reset for filling
+			}
+			boxOffsets[numBoxesVirt] = currentOffset;
+
+			// Build offsets for real boxes
+			currentOffset = 0;
+			for (int i = 0; i < numBoxes; i++) {
+				realBoxOffsets[i] = currentOffset;
+				currentOffset += realBoxCount[i];
+			}
+			realBoxOffsets[numBoxes] = currentOffset;
+
+			// Fill pointIndices in virtual box order
+			for (size_t i = 0; i < points.size(); i++) {
+				int vIdx = temp_virt_box_IDx[i];
+				int destPos = boxOffsets[vIdx] + virtBoxCount[vIdx];
+				pointIndices[destPos] = i;
+				virtBoxCount[vIdx]++;
+			}
+
+			// Calculate shifts for 13 left boxes
+			auto baseshift = get_box_by_index(1, 1, 1, gridDimVirt);
+			for (int i = 0; i < 13; i++) {
+				auto temp = get_box_by_index(ShiftCode::shiftTable[i][0] + 1,
+											 ShiftCode::shiftTable[i][1] + 1,
+											 ShiftCode::shiftTable[i][2] + 1,
+											 gridDimVirt);
+				left_boxes_shifts[i] = temp - baseshift;
+			}
+		}
+		/// @brief Create bonds, based on the spatial grid.
+		/// @param double_sided Default: false. Boolian, whether to create bonds in both directions.
+		/// @return vector of all possible bonds
+		std::vector<BondWithShift> get_bonds(bool double_sided = false) {
+			std::vector<BondWithShift> bonds;
+			// Preliminary memory reservation to reduce reallocations
+			bonds.reserve(pointIndices.size() * (double_sided?26:13));
+
+			// Iterate through real grid dimensions
+			for (int rz = 0; rz < gridDim[2]; ++rz) {
+				for (int ry = 0; ry < gridDim[1]; ++ry) {
+					for (int rx = 0; rx < gridDim[0]; ++rx) {
+						process_box_bonds(rx, ry, rz, bonds, double_sided);
+					}
+				}
+			}
+			return bonds;
+		}
+
+
+
+	private:
+		// Build virtual box mapping
+		void build_virtual_mapping() {
+			const int virtDimX = gridDimVirt[0];
+			const int virtDimY = gridDimVirt[1];
+			const int virtDimXY = virtDimX * virtDimY;
+
+			for (int virtIdx = 0; virtIdx < numBoxesVirt; virtIdx++) {
+				// Decompose linear index
+				std::array<int, 3> v;
+				v[2] = virtIdx / virtDimXY;
+				v[1] = (virtIdx % virtDimXY) / virtDimX;
+				v[0] = virtIdx % virtDimX;
+
+				// Map virtual coordinates to real coordinates
+				std::array<int, 3> r;
+				ShiftType s(0, 0, 0);
+
+				for (char j = 0; j < 3; j++)
+				{
+					const int dim = gridDim[j];
+					r[j] = v[j] - 1;
+					if (r[j] < 0) {
+						s[j] = -1;
+						r[j] += dim;
+					} else if (r[j] >= dim) {
+						r[j] -= dim;
+						s[j] = 1;
+					}
+
+				}
+
+				// Calculate real box index				
+				int realIdx = get_box_by_index(r[0], r[1], r[2], gridDim);
+
+				virtMap[virtIdx] = {
+					.realBoxIndex = realIdx,
+					.shiftcode = geometry::ShiftCode(s)
+				};
+			}
+		}
+
+		void process_box_bonds(int rx, int ry, int rz, std::vector<BondWithShift>& bonds, bool double_sided) {
+			// Current box in virtual grid (center of the 3x3x3 neighborhood)
+			int vIdx = get_box_by_index(rx + 1, ry + 1, rz + 1, gridDimVirt);
+			int rIdx = get_box_by_index(rx, ry, rz, gridDim);
+
+			int start_a = realBoxOffsets[rIdx];
+			int end_a = realBoxOffsets[rIdx + 1];
+
+			// 1. Internal bonds: Shift code is always 13 (0,0,0)
+			for (int i = start_a; i < end_a; ++i) {
+				for (int j = i + 1; j < end_a; ++j) {
+					add_bond_pair(pointIndices[i], pointIndices[j], ShiftCode(), bonds, double_sided);
+				}
+			}
+
+			// 2. External bonds: Get shift code from the neighbor's virtual mapping
+			for (int s = 0; s < 13; ++s) {
+				int neighborVIdx = vIdx + left_boxes_shifts[s];
+				int neighborRIdx = virtMap[neighborVIdx].realBoxIndex;
+
+				// The shiftcode is stored in virtMap for each virtual cell
+				ShiftCode sCode = virtMap[neighborVIdx].shiftcode;
+
+
+				int start_b = realBoxOffsets[neighborRIdx];
+				int end_b = realBoxOffsets[neighborRIdx + 1];
+
+				for (int i = start_a; i < end_a; ++i) {
+					for (int j = start_b; j < end_b; ++j) {
+						add_bond_pair(pointIndices[i], pointIndices[j], sCode, bonds, double_sided);
+					}
+				}
+			}
+		}
+
+		inline void add_bond_pair(int idxA, int idxB, ShiftCode shiftCode, std::vector<BondWithShift>& bonds, bool double_sided) const {
+			// Basic bond a -> b
+			bonds.push_back(BondWithShift{idxA, idxB, shiftCode});
+
+			if (double_sided) {
+				// Inverse bond b -> a
+				// The shift for the opposite direction must be inverted
+				ShiftCode sc = shiftCode;
+				sc.inverse();
+				bonds.push_back(BondWithShift{idxB, idxA, sc});
+			}
+		}
+
+		// Assumes p has normalized coordinates [0,1); no validation performed for performance
+		inline int get_virtual_box_index(const PointType& p) const {
+			auto ix = static_cast<int>(p[0] * gridDim[0]) + 1;
+			auto iy = static_cast<int>(p[1] * gridDim[1]) + 1;
+			auto iz = static_cast<int>(p[2] * gridDim[2]) + 1;
+
+			return get_box_by_index(ix, iy, iz, gridDimVirt);
+		}
+		// Assumes p has normalized coordinates [0,1); no validation performed for performance
+		inline int get_real_box_index(const PointType& p) const {
+			auto ix = static_cast<int>(p[0] * gridDim[0]);
+			auto iy = static_cast<int>(p[1] * gridDim[1]);
+			auto iz = static_cast<int>(p[2] * gridDim[2]);
+			return get_box_by_index(ix, iy, iz, gridDim);
+		}
+
+		// Grid dimensions are constrained by physical unit cell sizes (typically < 1000 Å).
+		// If larger cells are needed (gridDim > 253), change gridDim/gridDimVirt to uint32_t.
+		constexpr void calculateGridDim(const CellType& cell, T cutoff) {
+			assert(cutoff > static_cast<T>(0));
+			for (uint8_t i = 0; i < 3; i++) {
+				gridDim[i] = static_cast<uint8_t>(std::floor(cell.lat_dir(i) / cutoff));
+				if (gridDim[i] == 0) gridDim[i] = 1;
+				gridDimVirt[i] = gridDim[i] + 2;  // +2 for virtual grid
+			}
+			numBoxes = gridDim[0] * gridDim[1] * gridDim[2];
+			numBoxesVirt = gridDimVirt[0] * gridDimVirt[1] * gridDimVirt[2];
+		}
+
+		inline int get_box_by_index(int ix, int iy, int iz,
+									const std::array<uint8_t, 3>& grid) const {
+			return ix + iy * grid[0] + iz * grid[0] * grid[1];
+		}
+	};
+
+} // namespace cpplib::geometry
 
 template<class T>
-struct std::hash<cpplib::geometry::Point<T>>
-{
+struct std::hash<cpplib::geometry::Point<T>> {
 	std::size_t operator()(const cpplib::geometry::Point<T>& s) const noexcept
 	{
 		std::size_t h1 = std::hash<T>{}(s[0]);

@@ -33,8 +33,10 @@
 #include <vector>
 #include <utility>
 
-#include <Geometry.h>
-#include <BaseTypes.h>
+#include "../../src/BaseHeaders/BaseTypes.h"
+#include "../../src/Classes/Cluster.h"
+#include "../../src/Classes/Geometry.h"
+#include "../../src/Classes/Voronoi.h"
 
 using namespace std;
 using namespace cpplib;
@@ -640,354 +642,497 @@ TEST(SymmTest, ValidityChecks) {
 	EXPECT_FALSE(valid3.is_Eq());
 }
 
-// ==================== TESTS FOR Polygon ====================
-class PolygonTest : public ::testing::Test {
-protected:
-	using PointType = Point<FloatingPointType>;
-
-	void SetUp() override {
-		// Standard polygons for testing
-		square = {PointType(0,0,0), PointType(1,0,0),
-				   PointType(1,1,0), PointType(0,1,0)};
-
-		triangle = {PointType(0,0,0), PointType(1,0,0), PointType(0,1,0)};
-
-		concaveShape = {PointType(0,0,0), PointType(2,0,0),
-						 PointType(1,1,0), PointType(2,2,0), PointType(0,2,0)};
-	}
-
-	// Helper method to validate polygon convexity
-	void validateConvexity(const Polygon<FloatingPointType>& poly, bool expectedConvex) {
-		EXPECT_EQ(poly.isConvex(), expectedConvex);
-
-		if (poly.size() >= 3 && expectedConvex) {
-			// Additional validation for convex polygons
-			for (size_t i = 0; i < poly.size(); ++i) {
-				size_t j = (i + 1) % poly.size();
-				size_t k = (i + 2) % poly.size();
-
-				PointType edge1 = poly[j] - poly[i];
-				PointType edge2 = poly[k] - poly[j];
-				PointType cross = PointType::Vector(edge1, edge2);
-
-				// All cross products should have the same sign for convex polygons
-				EXPECT_GT(cross[2], -EPSILON); // For 2D polygons in XY plane
-			}
-		}
-	}
-
-	std::vector<PointType> square;
-	std::vector<PointType> triangle;
-	std::vector<PointType> concaveShape;
-};
-
-TEST_F(PolygonTest, CreationFromPoints) {
-	// Test square creation
-	Polygon<FloatingPointType> polySquare(square);
-	ASSERT_EQ(polySquare.size(), 4);
-	validateConvexity(polySquare, true);
-
-	// Test triangle creation
-	Polygon<FloatingPointType> polyTriangle(triangle);
-	ASSERT_EQ(polyTriangle.size(), 3);
-	validateConvexity(polyTriangle, true);
-
-	// Test concave shape creation
-	Polygon<FloatingPointType> polyConcave(concaveShape);
-	validateConvexity(polyConcave, false);
-}
-
-TEST_F(PolygonTest, CreationFromPlaneAndCenter) {
-	// Test polygon creation from plane and center
-	PointType center(0.5, 0.5, 0);
-	Plane<FloatingPointType> plane(center, PointType(0, 0, 1));
-
-	Polygon<FloatingPointType> poly(plane, center, 1.0);
-	ASSERT_EQ(poly.size(), 4);
-
-	// All points should lie in the plane
-	for (size_t i = 0; i < poly.size(); ++i) {
-		EXPECT_NEAR(plane.distance(poly[i]), 0.0, EPSILON);
-	}
-
-	validateConvexity(poly, true);
-}
-
-TEST_F(PolygonTest, AccessOperations) {
-	Polygon<FloatingPointType> poly(square);
-
-	// Test element access
-	EXPECT_EQ(poly[0], square[0]);
-	EXPECT_EQ(poly[1], square[1]);
-	EXPECT_EQ(poly[2], square[2]);
-	EXPECT_EQ(poly[3], square[3]);
-}
-
-TEST_F(PolygonTest, ClippingSimple) {
-	Polygon<FloatingPointType> polySquare(square);
-	Plane<FloatingPointType> plane1(PointType(0.5, 0, 0), PointType(1, 0, 0));
-	polySquare.clipByPlane(plane1);
-
-	for (size_t i = 0; i < polySquare.size(); ++i) {
-		EXPECT_GE(polySquare[i][0], 0.5 - EPSILON);
-	}
-	validateConvexity(polySquare, true);
-}
-TEST_F(PolygonTest, ClippingOrderProblem) {
-	Polygon<FloatingPointType> polySquare1(square);
-	Plane<FloatingPointType> plane1(PointType(0.5, 0.5, 0), PointType(-1, -1, 0));
-	polySquare1.clipByPlane(plane1);
-
-	EXPECT_EQ(polySquare1.size(), 3);
-	validateConvexity(polySquare1, true);
-
-	Polygon<FloatingPointType> polySquare2(square);
-	Plane<FloatingPointType> plane2(PointType(0.0, 0.0, 0), PointType(-1, -1, 0));
-	polySquare2.clipByPlane(plane2);
-
-	EXPECT_EQ(polySquare2.size(), 0);
-	validateConvexity(polySquare2, false);
-
-	Polygon<FloatingPointType> polySquare3(square);
-	Plane<FloatingPointType> plane3(PointType(0.0, 0.0, 0), PointType(1, 1, 0));
-	polySquare3.clipByPlane(plane3);
-
-	EXPECT_EQ(polySquare3.size(), 4);
-	validateConvexity(polySquare3, true);
-
-}
-TEST_F(PolygonTest, ClippingCorrectSides) {
-	Polygon<FloatingPointType> polySquare5(square);
-	Plane<FloatingPointType> plane5(PointType(0.75, 0.75, 0), PointType(-1, -1, 0));
-	polySquare5.clipByPlane(plane5);
-
-	EXPECT_EQ(polySquare5.size(), 5);
-	validateConvexity(polySquare5, true);
-
-	Polygon<FloatingPointType> polySquare3(square);
-	Plane<FloatingPointType> plane3(PointType(0.75, 0.75, 0), PointType(1, 1, 0));
-	polySquare3.clipByPlane(plane3);
-
-	EXPECT_EQ(polySquare3.size(), 3);
-	validateConvexity(polySquare3, true);
-}
-
-TEST_F(PolygonTest, EdgeCases) {
-	// Insufficient number of points
-	std::vector<PointType> insufficient = {PointType(0,0,0), PointType(1,0,0)};
-	Polygon<FloatingPointType> smallPoly(insufficient);
-	EXPECT_FALSE(smallPoly.isConvex());
-
-	// Empty polygon
-	Polygon<FloatingPointType> emptyPoly;
-	EXPECT_EQ(emptyPoly.size(), 0);
-}
-
 // ==================== TESTS FOR Voronoi ====================
-class VoronoiTest : public ::testing::Test {
-protected:
-	using PointType = Point<FloatingPointType>;
+TEST(VoronoiTest, VertexEquality) {
+	using namespace cpplib::voronoi;
 
-    void SetUp() override {
-        // Common points for Voronoi tests
-        commonPoints = {
-            PointType(0.1, 0.1, 0.1),
-            PointType(0.4, 0.4, 0.4),
-            PointType(0.254, 0.4, 0.364),
-            PointType(0.954, 0.866, 0.23),
-            PointType(0.7, 0.7, 0.7)
-        };
-        singlePoint = {
-            PointType(0.0, 0.0, 0.0)
-        };
-    }
+	// Test vertex equality with epsilon
+	Vertex v1(0, Point<FloatingPointType>(1.0, 2.0, 3.0));
+	Vertex v2(1, Point<FloatingPointType>(1.0 + voronoi::EPSILON / 2,
+										  2.0 + voronoi::EPSILON / 2,
+										  3.0 + voronoi::EPSILON / 2));
+	Vertex v3(2, Point<FloatingPointType>(1.0 + voronoi::EPSILON * 2,
+										  2.0, 3.0));
 
-	// Helper method to validate Voronoi cell properties
-	void validateVoronoiCell(const VoronoiCell<FloatingPointType>& cell) {
-		const auto& seed = cell.getSeed();
-		const auto& faces = cell.getFaces();
+	EXPECT_TRUE(v1 == v2);  // Within epsilon
+	EXPECT_FALSE(v1 == v3); // Outside epsilon
+}
 
-		EXPECT_FALSE(faces.empty());
+TEST(VoronoiTest, VertexDistanceCalculation) {
+	using namespace cpplib::voronoi;
 
-		for (const auto& face : faces) {
-			EXPECT_TRUE(face.isConvex());
+	voronoi::Cell cell(Point<FloatingPointType>(0.5, 0.5, 0.5), 0);
+	geometry::Matrix<FloatingPointType> fractocart(1.0); // Identity
 
-			// Verify that seed is on the correct side of the face
-			VoronoiCell<FloatingPointType>::Face::PlaneType plane(face[0], face[1], face[2]);
-			EXPECT_GE(plane.side(seed), 0.0 - EPSILON);
+	const auto* maxVert = cell.update_vertices_distances(fractocart);
+
+	EXPECT_NE(maxVert, nullptr);
+	EXPECT_GT(maxVert->distance, 0.0);
+
+	// Verify all vertices have computed distances
+	for (const auto& vert : cell.vertices) {
+		if (vert->get_state() != voronoi::State::DELETE) {
+			EXPECT_GT(vert->distance, 0.0);
+		}
+	}
+}
+
+TEST(VoronoiTest, EdgeStateCalculation) {
+	using namespace cpplib::voronoi;
+
+	// Create vertices
+	auto v1 = std::make_unique<Vertex>(0, Point<FloatingPointType>(0.0, 0.0, 0.0));
+	auto v2 = std::make_unique<Vertex>(1, Point<FloatingPointType>(1.0, 0.0, 0.0));
+
+	Edge edge(0, v1.get(), v2.get());
+
+	// Initially, edge should be in INVALID state (no faces)
+	EXPECT_EQ(edge.calculateState(), State::INVALID);
+
+	// Create faces
+	auto f1 = std::make_unique<Face>(0);
+	auto f2 = std::make_unique<Face>(1);
+
+	// Add edge to faces
+	f1->edges.insert(&edge);
+	f2->edges.insert(&edge);
+	edge.faces.insert(f1.get());
+	edge.faces.insert(f2.get());
+
+	// Now edge should be VALID (2 vertices, 2 faces, both vertices valid)
+	EXPECT_EQ(edge.calculateState(), State::VALID);
+
+	// Delete one vertex
+	v1->set_state(State::DELETE);
+	EXPECT_EQ(edge.calculateState(), State::MODIFICATION);
+
+	// Delete both vertices
+	v2->set_state(State::DELETE);
+	EXPECT_EQ(edge.calculateState(), State::DELETE);
+}
+
+TEST(VoronoiTest, EdgeIntersection) {
+	using namespace cpplib::voronoi;
+
+	auto v1 = std::make_unique<Vertex>(0, Point<FloatingPointType>(0.0, 0.0, 0.0));
+	auto v2 = std::make_unique<Vertex>(1, Point<FloatingPointType>(1.0, 0.0, 0.0));
+	v1->set_state(State::VALID);
+	v2->set_state(State::DELETE);
+
+	Edge edge(0, v1.get(), v2.get());
+	auto f1 = std::make_unique<Face>(0);
+	auto f2 = std::make_unique<Face>(1);
+	f1->edges.insert(&edge);
+	f2->edges.insert(&edge);
+	edge.faces.insert(f1.get());
+	edge.faces.insert(f2.get());
+
+	// Edge in MODIFICATION state
+	EXPECT_EQ(edge.calculateState(), State::MODIFICATION);
+
+	// Create a plane cutting the edge at x=0.5
+	geometry::Plane<FloatingPointType> plane(
+		Point<FloatingPointType>(0.5, 0.0, 0.0),
+		Point<FloatingPointType>(1.0, 0.0, 0.0)
+	);
+
+	auto intersection = edge.intersectSegmentPlane(plane);
+
+	EXPECT_NEAR(intersection[0], 0.5, voronoi::EPSILON);
+	EXPECT_NEAR(intersection[1], 0.0, voronoi::EPSILON);
+	EXPECT_NEAR(intersection[2], 0.0, voronoi::EPSILON);
+}
+
+TEST(VoronoiTest, FaceStateCalculation) {
+	using namespace cpplib::voronoi;
+
+	Face face(0);
+
+	// Create vertices
+	auto v1 = std::make_unique<Vertex>(0, Point<FloatingPointType>(0.0, 0.0, 0.0));
+	auto v2 = std::make_unique<Vertex>(1, Point<FloatingPointType>(1.0, 0.0, 0.0));
+	auto v3 = std::make_unique<Vertex>(2, Point<FloatingPointType>(1.0, 1.0, 0.0));
+
+	// Create edges
+	Edge e1(0, v1.get(), v2.get());
+	Edge e2(1, v2.get(), v3.get());
+	Edge e3(2, v3.get(), v1.get());
+
+	face.edges.insert({&e1, &e2, &e3});
+	face.vertices.insert({v1.get(), v2.get(), v3.get()});
+
+	// All edges VALID -> face VALID
+	e1.set_state(State::VALID);
+	e2.set_state(State::VALID);
+	e3.set_state(State::VALID);
+	EXPECT_EQ(face.calculateState(), State::VALID);
+
+	// One edge MODIFICATION -> face MODIFICATION
+	e1.set_state(State::MODIFICATION);
+	EXPECT_EQ(face.calculateState(), State::MODIFICATION);
+
+	// All edges DELETE -> face DELETE
+	e1.set_state(State::DELETE);
+	e2.set_state(State::DELETE);
+	e3.set_state(State::DELETE);
+	EXPECT_EQ(face.calculateState(), State::DELETE);
+}
+
+TEST(VoronoiTest, CellClippingParallelPlane) {
+	using namespace cpplib::voronoi;
+
+	voronoi::Cell cell(Point<FloatingPointType>(0.5, 0.5, 0.5), 0);
+
+	size_t initialVertexCount = cell.vertices.size();
+	size_t initialEdgeCount = cell.edges.size();
+	size_t initialFaceCount = cell.faces.size();
+
+	// Plane parallel to a face of the cube (shouldn't clip anything)
+	geometry::Plane<FloatingPointType> parallelPlane(
+		Point<FloatingPointType>(2.0, 0.5, 0.5),
+		Point<FloatingPointType>(-1.0, 0.0, 0.0)
+	);
+
+	cell.clipByPlaneAndAddNewFace(parallelPlane, 1, ShiftCode(14));
+
+	// Should not change the cell
+	EXPECT_EQ(cell.vertices.size(), initialVertexCount);
+	EXPECT_EQ(cell.edges.size(), initialEdgeCount);
+	EXPECT_EQ(cell.faces.size(), initialFaceCount);
+}
+
+TEST(VoronoiTest, CellClippingTangent) {
+	using namespace cpplib::voronoi;
+
+	voronoi::Cell cell(Point<FloatingPointType>(0.5, 0.5, 0.5), 0);
+
+	// Plane tangent to the cube (just touches an edge)
+	geometry::Plane<FloatingPointType> tangentPlane(
+		Point<FloatingPointType>(1.0, 0.5, 0.5),
+		Point<FloatingPointType>(-1.0, 0.0, 0.0)
+	);
+
+	size_t initialVertexCount = cell.vertices.size();
+
+	cell.clipByPlaneAndAddNewFace(tangentPlane, 1, ShiftCode(14));
+
+	// Should add some vertices at the tangent points
+	EXPECT_GE(cell.vertices.size(), initialVertexCount);
+}
+
+TEST(VoronoiTest, VoronoiFusedVertexMerging) {
+	using namespace cpplib::voronoi;
+
+	// Create two cells with overlapping vertices
+	std::vector<voronoi::Cell > cells;
+	cells.emplace_back(Point<FloatingPointType>(0.3, 0.5, 0.5), 0);
+	cells.emplace_back(Point<FloatingPointType>(0.7, 0.5, 0.5), 1);
+
+	// Clip both cells so they share a face
+	geometry::Plane<FloatingPointType> plane1(
+		Point<FloatingPointType>(0.5, 0.5, 0.5),
+		Point<FloatingPointType>(-1.0, 0.0, 0.0)
+	);
+	cells[0].clipByPlaneAndAddNewFace(plane1, 1, ShiftCode());
+
+	geometry::Plane<FloatingPointType> plane2(
+		Point<FloatingPointType>(0.5, 0.5, 0.5),
+		Point<FloatingPointType>(1.0, 0.0, 0.0)
+	);
+	cells[1].clipByPlaneAndAddNewFace(plane2, 0, ShiftCode());
+
+	geometry::Cell<FloatingPointType> cell(10.0, 10.0, 10.0, 90.0, 90.0, 90.0);
+	VoronoiFused fused(cells, cell.fracToCart());
+
+	// Verify that duplicate vertices were merged
+	for (size_t i = 0; i < fused.vertices.size(); ++i) {
+		for (size_t j = i + 1; j < fused.vertices.size(); ++j) {
+			FloatingPointType dist = (fused.vertices[i] - fused.vertices[j]).r();
+			EXPECT_GT(dist, voronoi::EPSILON);
 		}
 	}
 
-    std::vector<PointType> commonPoints;
-    std::vector<PointType> singlePoint;
-};
+	// Verify polyhedra have correct vertex references
+	EXPECT_GT(fused.polyhedra[0].vert_ids.size(), 0);
+	EXPECT_GT(fused.polyhedra[1].vert_ids.size(), 0);
+}
 
+TEST(VoronoiTest, VoronoiFusedEdgePolygonPopulation) {
+	using namespace cpplib::voronoi;
 
-TEST_F(VoronoiTest, AlexTest) {
+	// Use the simple two-cell setup
+	std::vector<voronoi::Cell> cells;
+	cells.emplace_back(Point<FloatingPointType>(0.3, 0.5, 0.5), 0);
+	cells.emplace_back(Point<FloatingPointType>(0.7, 0.5, 0.5), 1);
+
+	geometry::Plane<FloatingPointType> plane1(
+		Point<FloatingPointType>(0.5, 0.5, 0.5),
+		Point<FloatingPointType>(-1.0, 0.0, 0.0)
+	);
+	cells[0].clipByPlaneAndAddNewFace(plane1, 1, ShiftCode());
+
+	geometry::Plane<FloatingPointType> plane2(
+		Point<FloatingPointType>(0.5, 0.5, 0.5),
+		Point<FloatingPointType>(1.0, 0.0, 0.0)
+	);
+	cells[1].clipByPlaneAndAddNewFace(plane2, 0, ShiftCode());
+
+	geometry::Cell<FloatingPointType> cell(10.0, 10.0, 10.0, 90.0, 90.0, 90.0);
+	VoronoiFused fused(cells, cell.fracToCart());
+
+	// Verify that polyhedra have edge_ids and poly_ids populated
+	for (size_t i = 0; i < fused.polyhedra.size(); ++i) {
+		EXPECT_GT(fused.polyhedra[i].edge_ids.size(), 0)
+			<< "Polyhedron " << i << " should have edges";
+		EXPECT_GT(fused.polyhedra[i].poly_ids.size(), 0)
+			<< "Polyhedron " << i << " should have polygons";
+
+		// Verify all edge IDs are valid
+		for (auto edge_id : fused.polyhedra[i].edge_ids) {
+			EXPECT_LT(edge_id, fused.edges.size());
+		}
+
+		// Verify all polygon IDs are valid
+		for (auto poly_id : fused.polyhedra[i].poly_ids) {
+			EXPECT_LT(poly_id, fused.polygons.size());
+		}
+	}
+}
+
+TEST(VoronoiTest, DegenerateCases) {
+	using namespace cpplib::voronoi;
+
+	// Test with points very close together
+	geometry::Cell<FloatingPointType> cell(10.0, 10.0, 10.0, 90.0, 90.0, 90.0);
+
+	voronoi::VoronoiDiagram::PointVector closePoints = {
+		Point<FloatingPointType>(0.5, 0.5, 0.5),
+		Point<FloatingPointType>(0.5001, 0.5, 0.5)
+	};
+
+	std::vector<geometry::Symm<FloatingPointType>> symms = {
+		geometry::Symm<FloatingPointType>("x, y, z")
+	};
+
+	cpplib::cluster_detail::UnitCellBuilder ucb(symms);
+	auto buildresult = ucb.build(closePoints,
+								   std::vector<AtomTypeBase>(closePoints.size(), 1));
+
+	geometry::SpatialGrid<FloatingPointType> space;
+	space.build(buildresult.atoms.points, cell, 6.0);
+	auto bonds = space.get_bonds();
+
+	// Should not crash
+	EXPECT_NO_THROW({
+		voronoi::VoronoiDiagram vd(buildresult.atoms.points, bonds,
+									 cell);
+		auto cells = vd.extractCells();
+	});
+}
+
+TEST(VoronoiTest, EmptyDiagram) {
+	using namespace cpplib::voronoi;
+
+	voronoi::VoronoiDiagram::PointVector emptyPoints;
+	geometry::Cell<FloatingPointType> cell(10.0, 10.0, 10.0, 90.0, 90.0, 90.0);
+
+	std::vector<geometry::SpatialGrid<FloatingPointType>::BondWithShift> emptyBonds;
+
+	EXPECT_NO_THROW({
+		voronoi::VoronoiDiagram vd(emptyPoints, emptyBonds, cell);
+		auto cells = vd.extractCells();
+		EXPECT_EQ(cells.size(), 0);
+	});
+}
+
+TEST(VoronoiTest, AlexTest) {
     cpplib::geometry::Cell cell (10.9815, 6.8214, 8.9974, 90.0, 101.511, 90.0);
     std::vector<const char*> symms{"x, y, z", "-x, y+1/2, -z+1/2", "-x, -y, -z", "x, -y-1/2, z-1/2"};
 
+    voronoi::VoronoiDiagram::PointVector data = {{0.85991, 0.6099,  0.54993},
+                                                 {0.9802,  0.2973,  0.68819},
+                                                 {0.45147, 0.2722, -0.01408},
+                                                 {0.4257,  0.369,  -0.0692 },
+                                                 {0.54605, 0.33304, 0.10639},
+                                                 {0.59711, 0.18811, 0.18507},
+                                                 {0.5699,  0.0585,  0.1577 },
+                                                 {0.6972,  0.22032, 0.31696},
+                                                 {0.73155, 0.40837, 0.37126},
+                                                 {0.6897,  0.5202,  0.323  },
+                                                 {0.8262,  0.42976, 0.49478},
+                                                 {0.88775, 0.26835, 0.56724},
+                                                 {0.85479, 0.08196, 0.51712},
+                                                 {0.8965, -0.0288,  0.5674 },
+                                                 {0.75907, 0.05834, 0.39111},
+                                                 {0.7356, -0.0699,  0.3552 }};
 
+	voronoi::VoronoiDiagram::BoolVector bools{true, true, true, true,
+                                              true, true,  true, true, 
+                                              true, true, true, true, 
+                                              true, true, true, true};
 
-
-
-    cpplib::geometry::VoronoiDiagram<double>::PointVector data = {{0.85991, 0.6099,  0.54993},
-                                                                  {0.9802,  0.2973,  0.68819},
-                                                                  {0.45147, 0.2722, -0.01408},
-                                                                  {0.4257,  0.369,  -0.0692 },
-                                                                  {0.54605, 0.33304, 0.10639},
-                                                                  {0.59711, 0.18811, 0.18507},
-                                                                  {0.5699,  0.0585,  0.1577 },
-                                                                  {0.6972,  0.22032, 0.31696},
-                                                                  {0.73155, 0.40837, 0.37126},
-                                                                  {0.6897,  0.5202,  0.323  },
-                                                                  {0.8262,  0.42976, 0.49478},
-                                                                  {0.88775, 0.26835, 0.56724},
-                                                                  {0.85479, 0.08196, 0.51712},
-                                                                  {0.8965, -0.0288,  0.5674 },
-                                                                  {0.75907, 0.05834, 0.39111},
-                                                                  {0.7356, -0.0699,  0.3552 }};
-
-
-
-
-    cpplib::geometry::VoronoiDiagram<double>::BoolVector bools{false, false, false, false, 
-                                                               false, true,  false, true, 
-                                                               false, false, false, false, 
-                                                               false, false, false, false};
-    VoronoiDiagram<FloatingPointType> vd(data, bools);
-    HashedSpace<FloatingPointType, AtomIndex> hs(cell, 6.0);
-    auto bonds = hs.create_hash_bonds<std::pair<AtomIndex, AtomIndex>>(data);
-    vd.calculateFaces(bonds);
-}
-
-TEST_F(VoronoiTest, CellConstruction) {
-	// Default constructor
-	VoronoiCell<FloatingPointType> defaultCell;
-	EXPECT_EQ(defaultCell.getSeed(), PointType(0, 0, 0));
-	validateVoronoiCell(defaultCell);
-
-	// Constructor with specified seed
-	PointType seed(1.0, 2.0, 3.0);
-	VoronoiCell<FloatingPointType> customCell(seed);
-	EXPECT_EQ(customCell.getSeed(), seed);
-	validateVoronoiCell(customCell);
-}
-
-TEST_F(VoronoiTest, CellInteraction) {
-	// Normal cell interaction
-	VoronoiCell<FloatingPointType> cell1(PointType(0.1, 0.1, 0.1));
-	VoronoiCell<FloatingPointType> cell2(PointType(0.4, 0.4, 0.4));
-
-	int result = VoronoiCell<FloatingPointType>::interact(cell1, cell2);
-	EXPECT_EQ(result, 0); // Normal interaction
-
-	// Cells with close seeds
-	VoronoiCell<FloatingPointType> cell3(PointType(0.1, 0.1, 0.1));
-	VoronoiCell<FloatingPointType> cell4(PointType(0.1000001, 0.1000001, 0.1000001));
-
-	result = VoronoiCell<FloatingPointType>::interact(cell3, cell4);
-	EXPECT_EQ(result, 1); // Too close seeds
-}
-
-TEST_F(VoronoiTest, DiagramConstructionCommon) {
-    // Basic constructor
-    VoronoiDiagram<FloatingPointType> vd(commonPoints);
-    auto cells = vd.extractCells();
-
-	EXPECT_EQ(cells.size(), commonPoints.size());
-	for (const auto& cell : cells) {
-		validateVoronoiCell(cell);
+	std::vector<geometry::Symm<FloatingPointType>> symmvec;
+	symmvec.reserve(symms.size());
+	for (int i = 0; i < symms.size(); i++)
+	{
+		symmvec.emplace_back(symms[i]);
 	}
 
-    // Constructor with flags
-    std::vector<bool> flags(commonPoints.size(), true);
-    VoronoiDiagram<FloatingPointType> vdWithFlags(commonPoints, flags);
+	cpplib::cluster_detail::UnitCellBuilder ucb(symmvec);
+	auto buildresult = ucb.build(data, std::vector<AtomTypeBase>(data.size(), AtomTypeBase(1)));
 
-	cells = vdWithFlags.extractCells();
-	EXPECT_EQ(cells.size(), commonPoints.size());
-}
-TEST_F(VoronoiTest, DiagramConstructionSingle) {
-    // Basic constructor
-    VoronoiDiagram<FloatingPointType> vd(singlePoint);
+	cpplib::geometry::SpatialGrid<FloatingPointType> space;
+	space.build(buildresult.atoms.points, cell, 6);
+	auto bonds = space.get_bonds();
+
+	voronoi::VoronoiDiagram vd(buildresult.atoms.points,bonds,cell, bools);
     auto cells = vd.extractCells();
 
-    EXPECT_EQ(cells.size(), singlePoint.size());
-    for (const auto& cell : cells) {
-        validateVoronoiCell(cell);
-    }
+	std::array< std::array<uint32_t, 3>, 16> dead = {{{93, 97, 25},
+                                                      {125, 129, 30},
+                                                      {65, 69, 20},
+                                                      {96, 100, 24},
+                                                      {83, 87, 21},
+                                                      {79, 83, 24},
+                                                      {90, 94, 25},
+                                                      {87, 91, 24},
+                                                      {76, 80, 23},
+                                                      {94, 98, 24},
+                                                      {90, 94, 24},
+                                                      {71, 75, 20},
+                                                      {71, 75, 22},
+                                                      {80, 84, 22},
+                                                      {82, 86, 23},
+                                                      {91, 95, 24}}};
 
-    // Constructor with flags
-    std::vector<bool> flags(singlePoint.size(), true);
-    VoronoiDiagram<FloatingPointType> vdWithFlags(singlePoint, flags);
+	std::array< std::array<uint32_t, 3>, 16> alive = {{{30, 45, 17},
+													   {42, 63, 23},
+													   {22, 33, 13},
+													   {32, 48, 18},
+													   {26, 39, 15},
+													   {26, 39, 15},
+													   {32, 48, 18},
+													   {30, 45, 17},
+													   {24, 36, 14},
+													   {32, 48, 18},
+													   {30, 45, 17},
+													   {22, 33, 13},
+													   {22, 33, 13},
+													   {26, 39, 15},
+													   {28, 42, 16},
+													   {32, 48, 18}}};
 
-    cells = vdWithFlags.extractCells();
-    EXPECT_EQ(cells.size(), singlePoint.size());
-}
+	for (size_t i = 0; i < 16; i++)
+	{
+		EXPECT_EQ(cells[i].vertices.size(), dead[i][0]);
+		EXPECT_EQ(cells[i].edges.size(), dead[i][1]);
+		EXPECT_EQ(cells[i].faces.size(), dead[i][2]);
 
-TEST_F(VoronoiTest, DiagramOperations) {
-	VoronoiDiagram<FloatingPointType> vd;
 
-	// Adding points to diagram
-	std::vector<PointType> points = {PointType(0.2, 0.2, 0.2), PointType(0.5, 0.5, 0.5)};
-	std::vector<bool> flags(points.size(), true);
-	vd.addPoints(points, flags);
+		int a=0, b=0, c=0;
+		for (auto& v : cells[i].vertices)
+		{
+			if (v->get_state() == voronoi::State::VALID) a++;
+		}
+		for (auto& v : cells[i].edges)
+		{
+			if (v->get_state() == voronoi::State::VALID) b++;
 
-	auto cells = vd.extractCells();
-	EXPECT_EQ(cells.size(), points.size());
+		}
+		for (auto& v : cells[i].faces)
+		{
+			if (v->get_state() == voronoi::State::VALID) c++;
+		}
 
-	// Calculating faces using bond list
-	std::vector<std::pair<int, int>> bondlist = {
-		{0,1}, {0,2}, {0,3}, {0,4},
-		{1,2}, {1,3}, {1,4},
-		{2,3}, {2,4},
-		{3,4}
-	};
-
-	vd.calculateFaces<int>(bondlist);
-	cells = vd.extractCells();
-
-	for (const auto& cell : cells) {
-		validateVoronoiCell(cell);
+		EXPECT_EQ(a, alive[i][0]);
+		EXPECT_EQ(b, alive[i][1]);
+		EXPECT_EQ(c, alive[i][2]);
 	}
-}
+	voronoi::VoronoiFused vf(cells, cell.fracToCart());
+	// Verify polygon topology
+	for (const auto& polygon : vf.polygons) {
+		// Each polygon should have equal number of vertices and edges
+		EXPECT_EQ(polygon.vert_ids.size(), polygon.edge_ids.size())
+			<< "Polygon should have equal vertices and edges";
 
-TEST_F(VoronoiTest, SpecializedOperations) {
-	// Calculating longest diagonal
-	std::vector<PointType> points = {PointType(0.1, 0.1, 0.1), PointType(0.9, 0.9, 0.9)};
-	VoronoiDiagram<FloatingPointType> vd(points);
+		// Each polygon should have at least 3 vertices
+		EXPECT_GE(polygon.vert_ids.size(), 3)
+			<< "Polygon should have at least 3 vertices";
 
-    Cell<FloatingPointType> cell(10, 10, 10, 90, 90, 120, true);
-    FloatingPointType diagonal = vd.calculateLongestDiagonal(cell.fracToCart());
-    EXPECT_GT(diagonal, 0.0);
-    HashedSpace<FloatingPointType,AtomIndex> hs(cell, diagonal);
-    auto bonds = hs.create_hash_bonds<std::pair<AtomIndex,AtomIndex>>(points);
-    vd.calculateFaces(bonds);
-    
-
-	// Working with VoronoiFused
-	auto cells = vd.extractCells();
-	VoronoiFused<FloatingPointType> vf;
-	vf.AddCells(cells);
-
-	// Verifying vertex uniqueness
-	for (size_t i = 0; i < vf.vertexes.size(); ++i) {
-		for (size_t j = i + 1; j < vf.vertexes.size(); ++j) {
-			EXPECT_GT((vf.vertexes[i] - vf.vertexes[j]).r(), 0.0001);
+		// Verify all vertex and edge IDs are valid
+		for (auto vid : polygon.vert_ids) {
+			EXPECT_LT(vid, vf.vertices.size());
+		}
+		for (auto eid : polygon.edge_ids) {
+			EXPECT_LT(eid, vf.edges.size());
 		}
 	}
 
-	EXPECT_EQ(vf.centers.size(), cells.size());
+	// Verify edge topology
+	for (const auto& edge : vf.edges) {
+		// Each edge should connect two different vertices
+		EXPECT_NE(edge.vert_ids[0], edge.vert_ids[1]);
+		EXPECT_LT(edge.vert_ids[0], vf.vertices.size());
+		EXPECT_LT(edge.vert_ids[1], vf.vertices.size());
+	}
+	// Verify sizes
+	EXPECT_EQ(vf.vertices.size(), 305);
+	EXPECT_EQ(vf.edges.size(), 515);
+	EXPECT_EQ(vf.polygons.size(), 228);
+	for (size_t i = 0; i < 16; i++)
+	{
+		EXPECT_EQ(vf.polyhedra[i].vert_ids.size(), alive[i][0]);
+		EXPECT_EQ(vf.polyhedra[i].edge_ids.size(), alive[i][1]);
+		EXPECT_EQ(vf.polyhedra[i].poly_ids.size(), alive[i][2]);
+	}
+
 }
 
-TEST_F(VoronoiTest, BoundaryConditions) {
-	// Testing cell interactions at boundaries
-	VoronoiCell<FloatingPointType> cell1(PointType(0.0, 0.0, 0.0));
-	VoronoiCell<FloatingPointType> cell2(PointType(0.999, 0.999, 0.999));
+TEST(VoronoiTest, Benzene) {
+	using namespace cpplib::voronoi;
 
-	int result = VoronoiCell<FloatingPointType>::interact(cell1, cell2);
-	EXPECT_EQ(result, 0); // Should interact normally
+	geometry::Cell<FloatingPointType> cell(7.243, 9.310, 6.756, 90.0, 90.0, 90.0);
+	std::vector<const char*> symms{
+		"x, y, z",
+		"-x+1/2, -y, z+1/2",
+		"-x, y+1/2, -z+1/2",
+		"x+1/2, -y+1/2, -z",
+		"-x, -y, -z",
+		"x+1/2, y, -z+1/2",
+		"x, -y+1/2, z+1/2",
+		"-x+1/2, y+1/2, z"
+	};
+
+	VoronoiDiagram::PointVector data = {{
+		{-0.06070, 0.13930, -0.00690},
+		{-0.13770, 0.04470,  0.12600},
+		{ 0.07700, 0.09580, -0.13250},
+		{-0.10460, 0.25020, -0.01230},
+		{-0.24580, 0.07810,  0.22410},
+		{ 0.13710, 0.16810, -0.23600}
+	}};
+
+	voronoi::VoronoiDiagram::BoolVector bools{false, true, false, false,
+											  false, true};
+
+	std::vector<geometry::Symm<FloatingPointType>> symmvec;
+	symmvec.reserve(symms.size());
+	for (int i = 0; i < symms.size(); i++)
+	{
+		symmvec.emplace_back(symms[i]);
+	}
+
+	cpplib::cluster_detail::UnitCellBuilder ucb(symmvec);
+	auto buildresult = ucb.build(data, std::vector<AtomTypeBase>(data.size(), AtomTypeBase(1)));
+
+	cpplib::geometry::SpatialGrid<FloatingPointType> space;
+	space.build(buildresult.atoms.points, cell, 6);
+	auto bonds = space.get_bonds();
+
+	voronoi::VoronoiDiagram vd(buildresult.atoms.points, bonds, cell, bools);
+	auto cells = vd.extractCells();
 }
+
 
 // ==================== ENTRY POINT ====================
 int main(int argc, char** argv) {

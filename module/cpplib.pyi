@@ -1,7 +1,7 @@
 from typing import List, Dict, Tuple
 
 
-def GenBonds(atoms: List[Tuple[int, float, float, float]]) -> Dict["bonds" : List[(int,int)]]:
+def GenBonds(atoms: List[Tuple[int, float, float, float]]) -> Dict[str, List[Tuple[int, int]]]:
     """
         Finds all bonds in a cluster (real space).
         Variables:
@@ -13,7 +13,7 @@ def GenBonds(atoms: List[Tuple[int, float, float, float]]) -> Dict["bonds" : Lis
             which form a bond.
     """
     ...
-def GenBondsEx(atoms: List[Tuple[int, float, float, float]]) -> Dict["bonds" : List[(int,int,float)]]:
+def GenBondsEx(atoms: List[Tuple[int, float, float, float]]) -> Dict[str, List[(int,int,float)]]:
     """
         Finds all bonds and it's length in a cluster (real space).
         Variables:
@@ -332,7 +332,6 @@ def Cluster(cell_params: List[float],
             anchors: List[Tuple[float,float,float,float]]) -> Dict[
     "points":  List[Dict[
         "index":      int,
-        "point_cart": Tuple[float,float,float],
         "point_frac": Tuple[float,float,float],
         "shift":      Tuple[int,int,int],
         "symmref":    int,
@@ -354,7 +353,6 @@ def Cluster(cell_params: List[float],
           Dictionary with keys ["points","hasPolymer"], where
             "points": List of Dictionaries, where eqch dictionary represents atom, and contains:
              | "index":      Index of atom in the initial set
-             | "point_cart": Tuple of Cartesian coordinates  (cx, cy, cz)
              | "point_frac": Tuple of Fractional coordinates (fx, fy, fz)
              | "shift":      Tuple of translation shift (dx, dy, dz) from initial position of SYMM-code (NOT FROM [0,0,0] !!!)
              | "symmref":    Reference to initial SYMM-code
@@ -367,10 +365,16 @@ def VoronoiCalculation(cell_params: List[float],
                        atoms: List[Tuple[int, float, float, float]], 
                        bools: List[bool], 
                        cutoff: float) -> Dict[
-    "centers":   List[Tuple[float,float,float]],
-    "vertexes":  List[Tuple[float,float,float]],
-    "polygons":  List[List[int]],
-    "polyhedra": List[List[int]]]:
+    "vertices":  List[Tuple[float,float,float]],
+    "edges":  List[List[int,int]],
+    "polygons":  List[Dict[
+        "vertexes": List[int],
+        "edges":  List[int],
+        "atoms":  List[int]]],
+    "polyhedra": List[Dict[
+        "vertexes": List[int],
+        "edges":  List[int],
+        "polygons":  List[int]]]]:
     """
         Calculate Voronoi cells.
         Variables:
