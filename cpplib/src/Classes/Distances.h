@@ -28,17 +28,45 @@
 #pragma once
 #include <array>
 #include <cassert>
-#include <concepts>
 #include <cstdint>
 #include <fstream>
 #include <stdexcept>
 #include <string>
-#include <type_traits>
 #include <vector>
 #include "../BaseHeaders/BaseTypes.h"
 #include "../Classes/Geometry.h"
 
-namespace cpplib {
+/**
+	 * Indicates whether distance data has been successfully loaded and is available for queries.
+	 * @returns `true` if distance data has been loaded successfully, `false` otherwise.
+	 */
+	/**
+	 * Classify a pairwise distance relative to the stored bond range for two atom types.
+	 * @param i Atom type index of the first atom (must be in (0, MAX_TYPE]).
+	 * @param j Atom type index of the second atom (must be in (0, MAX_TYPE]).
+	 * @param length Observed distance between the two atoms.
+	 * @returns `1` if `length` is greater than the stored minimum and less than the stored maximum for the (i,j) pair; `-1` if `length` is less than or equal to the stored minimum; `0` if `length` is greater than or equal to the stored maximum.
+	 */
+	/**
+	 * Retrieve the minimum allowed distance for the specified atom-type pair.
+	 * @param a1 Atom type index of the first atom (must be in (0, MAX_TYPE]).
+	 * @param a2 Atom type index of the second atom (must be in (0, MAX_TYPE]).
+	 * @returns The minimum distance for the (a1,a2) atom-type pair.
+	 */
+	/**
+	 * Retrieve the maximum allowed distance for the specified atom-type pair.
+	 * @param a1 Atom type index of the first atom (must be in (0, MAX_TYPE]).
+	 * @param a2 Atom type index of the second atom (must be in (0, MAX_TYPE]).
+	 * @returns The maximum distance for the (a1,a2) atom-type pair.
+	 */
+	/**
+	 * Invalidate entries in a bond list whose computed interatomic distance falls outside the stored bond range.
+	 * @param bondlist Vector of SpatialGrid::BondWithShift entries; entries that are not considered real bonds will be zeroed (first and second set to 0).
+	 * @param types Per-atom atom-type indices corresponding to positions in `points`.
+	 * @param points Per-atom positions used to compute distances.
+	 * @param dist Callable that computes a distance between two PointType arguments (signature compatible with dist(PointType const&, PointType const&)).
+	 */
+	namespace cpplib {
 	class Distances {
 		// Order of values
 		// 1/1,1/2,1/3,1/4,1/5, 5/5, 2/2,2/3,2/4,2/5, 4/4,4/5, 3/3,3/4,3/5
@@ -85,13 +113,14 @@ namespace cpplib {
 		inline bool isReady() const {
 			return isReady_;
 		}
+
 		/// <summary>
 		/// Check if the distance is in the bond range
 		/// </summary>
 		/// <param name="i">Atom type of first atom</param>
 		/// <param name="j">Atom type of second atom</param>
 		/// <param name="length">Distance between atoms</param>
-		/// <returns> 0  if r > max, 1  if min < r < max, -1 if r < min </returns>
+		/// <returns> 0  if r() more than max, 1  if r() is betweet min and max, -1 if r() less than min </returns>
 		constexpr char isBond(AtomTypeBase i, AtomTypeBase j, FloatingPointType length) const noexcept {
 			assert(i <= MAX_TYPE && j <= MAX_TYPE);
 			assert(i > 0 && j > 0);
@@ -99,16 +128,13 @@ namespace cpplib {
 			if (length < max) {
 				if (min < length) {
 					return 1;
-				}
-				else {
+				} else {
 					return -1;
 				}
-			}
-			else {
+			} else {
 				return 0;
 			}
 		}
-
 		inline FloatingPointType minDistance(AtomTypeBase a1, AtomTypeBase a2) const noexcept {
 			assert(a1 <= MAX_TYPE && a2 <= MAX_TYPE);
 			assert(a1 > 0 && a2 > 0);
@@ -120,20 +146,22 @@ namespace cpplib {
 			return data_[a1][a2][1];
 		}
 
-		template<typename Func, typename BondConteiner>
-			requires std::invocable<Func, const PointType&, const PointType&>&&
-		std::same_as<std::invoke_result_t<Func, const PointType&, const PointType&>, FloatingPointType>
-			void filter_bond_list(BondConteiner& bondlist,
-								  const ::std::vector<AtomTypeBase>& types,
-								  const ::std::vector<PointType>& points,
-								  Func dist) const noexcept {
+		template<typename Func>
+		void filter_bond_list(std::vector<geometry::SpatialGrid<FloatingPointType>::BondWithShift>& bondlist,
+							  const ::std::vector<AtomTypeBase>& types,
+							  const ::std::vector<PointType>& points,
+							  Func dist) const noexcept {
 			auto iter = ::std::begin(bondlist);
 
 			while (iter != ::std::end(bondlist)) {
 				const auto l1 = iter->first;
 				const auto l2 = iter->second;
+				const auto shiftcode = iter->shiftcode;
 
-				auto moved_point2 = (points[l1] - points[l2]).round() + points[l2];
+				PointType moved_point2 = points[l2];
+				if (shiftcode.get_code() != 13) {
+					moved_point2 += shiftcode.get_shift();
+				}
 
 				char is_real_bond = isBond(types[l1], types[l2], dist(points[l1], moved_point2));
 
@@ -145,31 +173,5 @@ namespace cpplib {
 				iter++;
 			}
 		}
-
-		template<typename Func, typename BondConteiner, typename Datatype>
-			requires std::invocable<Func, const PointType&, const PointType&>&&
-		std::same_as<std::invoke_result_t<Func, const PointType&, const PointType&>, FloatingPointType>
-			void filter_bond_list(BondConteiner& bondlist,
-								  const ::std::vector<Datatype>& mergedData,
-								  Func dist) const noexcept {
-			auto iter = ::std::begin(bondlist);
-
-			while (iter != ::std::end(bondlist)) {
-				const auto l1 = iter->first;
-				const auto l2 = iter->second;
-
-				auto moved_point2 = (mergedData[l1].point - mergedData[l2].point).round() + mergedData[l2].point;
-
-				char is_real_bond = isBond(mergedData[l1].type, mergedData[l2].type, dist(mergedData[l1].point, moved_point2));
-
-				if (is_real_bond == 0) {
-					iter->first = 0;
-					iter->second = 0;
-				}
-
-				iter++;
-			}
-		}
-
 	};
 }

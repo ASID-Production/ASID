@@ -6,22 +6,37 @@
 
 namespace cpplib {
     // Concepts
-    // Universal functions
+    /**
+     * Obtain the first atom identifier from a bond-like object.
+     * @param bond Bond-like object exposing a `first` member representing the first atom.
+     * @returns The value of `bond.first`.
+     */
+    
+    /**
+     * Obtain the second atom identifier from a bond-like object.
+     * @param bond Bond-like object exposing a `second` member representing the second atom.
+     * @returns The value of `bond.second`.
+     */
     namespace concept_support {
         template<typename T>
-        constexpr auto getAtom1(const T& bond) {
-            if constexpr (requires { bond.atom1; }) return bond.atom1;
-            else if constexpr (requires { bond.first; }) return bond.first;
-            else if constexpr (requires { bond.first(); }) return bond.first();
-            else if constexpr (requires { bond.getFirstAtom(); }) return bond.getFirstAtom();
+        constexpr /**
+         * Retrieve the first atom identifier from a bond-like object.
+         * @param bond Bond-like object that exposes a readable `first` member.
+         * @returns The value of `bond.first`.
+         */
+        auto getAtom1(const T& bond) {
+            if constexpr (requires { bond.first; }) return bond.first;
         }
 
         template<typename T>
-        constexpr auto getAtom2(const T& bond) {
-            if constexpr (requires { bond.atom2; }) return bond.atom2;
-            else if constexpr (requires { bond.second; }) return bond.second;
-            else if constexpr (requires { bond.second(); }) return bond.second();
-            else if constexpr (requires { bond.getSecondAtom(); }) return bond.getSecondAtom();
+        constexpr /**
+         * Accesses the second atom identifier from a bond-like object.
+         *
+         * @param bond Bond-like object providing a `second` member.
+         * @returns The bond's second atom identifier (an integral atom identifier).
+         */
+        auto getAtom2(const T& bond) {
+            if constexpr (requires { bond.second; }) return bond.second;
         }
     }
     template<typename T>

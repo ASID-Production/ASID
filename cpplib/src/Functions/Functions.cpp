@@ -65,27 +65,45 @@ static cpplib::DATTuple& ConvertDATTuple(cpplib::DATTuple& dat, const cpplib::FA
 
 const Distances* p_distances = nullptr;
 
+/**
+ * @brief Compares two molecule inputs by constructing search graphs and running a full graph search.
+ *
+ * Builds a query graph from `search1` and a data graph from `search2`, prepares them for searching,
+ * and executes a full graph search using the specified matching strictness.
+ *
+ * @param search1 C-style string identifying the input used to build the query graph.
+ * @param search2 C-style string identifying the input used to build the data graph.
+ * @param exact When `true`, requires an exact match; when `false`, allows inexact matching.
+ * @return true if the full search reports a successful match, `false` otherwise (also `false` if parsing `search2` fails).
+ */
 bool CompareGraph(const char* search1, const char* search2, const bool exact) {
-	deb_write("CompareGraph start");
 	SearchGraph graph;
 
-	deb_write("CompareGraph CurrentSearchGraph start ReadInput");
-	auto&& inputpair = cpplib::MoleculeParser<AtomTypeRequest>::Read(search1);
+	auto&& inputpair = WITH_LOG(cpplib::MoleculeParser<AtomTypeRequest>::Read<AtomTypeRequest>, search1);
 	auto map = inputpair.first.getTypeMap();
 	graph.setupInput(std::move(inputpair.first));
-	deb_write("CompareGraph CurrentSearchGraph start ReadData");
-	auto&& d_pair = cpplib::MoleculeParser<AtomTypeData>::Read(search2, inputpair.second, map);
+	auto&& d_pair = WITH_LOG(cpplib::MoleculeParser<AtomTypeData>::Read<AtomTypeData>, search2, inputpair.second, map);
 
 	if (!d_pair.second) return false;
 	graph.setupData(std::move(d_pair.first));
-	deb_write("CompareGraph CurrentSearchGraph start prepareSearch");
 	graph.prepareToSearch();
-	deb_write("CompareGraph CurrentSearchGraph start FullSearch");
 	return graph.startFullSearch(exact);
 }
+/**
+ * @brief Execute a graph-based search over multiple input molecules, possibly in parallel.
+ *
+ * Parses the provided search specification, processes the input molecule data with a SearchDataInterface,
+ * dispatches worker threads that run ChildThreadFunc to perform the search, and collects matching result ids.
+ *
+ * @param search Null-terminated string containing the search specification to parse.
+ * @param data Vector of C-style string pointers representing input molecule entries; ownership of the container is moved.
+ * @param np Requested maximum number of threads to use (clamped to hardware concurrency and input size).
+ * @param exact If `true`, require exact matches during the search; otherwise allow inexact matches.
+ * @return std::vector<int> Vector of result identifiers produced by the search (order as provided by SearchDataInterface).
+ */
 std::vector<int> SearchMain(const char* search, std::vector<const char*>&& data, const int np, const bool exact) {
 
-	auto&& inputpair = cpplib::MoleculeParser<AtomTypeRequest>::Read(search);
+	auto&& inputpair = WITH_LOG(cpplib::MoleculeParser<AtomTypeRequest>::Read<AtomTypeRequest>, search);
 	SearchDataInterface databuf(std::move(data), std::move(inputpair.second));
 	std::vector<std::thread> threads;
 	const size_t nThreads = std::min(std::min(static_cast<unsigned int>(np), std::thread::hardware_concurrency()),
@@ -337,7 +355,19 @@ cpplib::DATTuple FindDAT_WC(cpplib::FAM_Struct::AtomContainerType& types,
 	return ConvertDATTuple(Moldat, fs);
 }
 
-// Single thread function
+/**
+ * @brief Worker loop that processes molecule requests and runs graph searches.
+ *
+ * Continuously obtains the next input item from dataInterface, parses it into a molecule,
+ * configures a SearchGraph from the provided input template and parsed molecule data,
+ * runs a full search constrained by MaxAtom and the exact flag, and pushes the molecule ID
+ * to dataInterface when the search succeeds. The loop exits when dataInterface has no more items.
+ *
+ * @param input Request graph template used to configure each SearchGraph instance.
+ * @param MaxAtom Maximum atom index/count used to constrain the search.
+ * @param dataInterface Source of work items and sink for successful result IDs.
+ * @param exact When true, perform an exact search match; otherwise allow inexact matching.
+ */
 static void ChildThreadFunc(const SearchGraph::RequestGraphType& input, const SearchGraph::AtomIndex MaxAtom, SearchDataInterface& dataInterface, const bool exact) {
 	SearchGraph graph;
 	while (true) {
@@ -349,7 +379,7 @@ static void ChildThreadFunc(const SearchGraph::RequestGraphType& input, const Se
 		auto map = input.getTypeMap();
 		auto tempinput = input;
 		graph.setupInput(std::move(tempinput));
-		auto&& molData = cpplib::MoleculeParser<AtomTypeData>::Read(next, multi, map);
+		auto&& molData = WITH_LOG(cpplib::MoleculeParser<AtomTypeData>::Read<AtomTypeData>, next, multi, map);
 		if (!molData.second) continue;
 		auto id = molData.first.getID();
 		graph.setupData(std::move(molData.first));
@@ -405,6 +435,18 @@ static void eraseDoubles(std::vector<T>& vec,
 		}
 	}
 }
+/**
+ * @brief Reorders index tuples in a DATTuple to parsed indices and removes duplicate entries.
+ *
+ * Rewrites distance, angle, and torsion tuples in-place so their atom indices match the
+ * parsed indexing defined by fs, and then eliminates duplicate tuples. For numeric
+ * components (distance/angle/torsion values) duplicates are determined with a small
+ * tolerance (1e-4).
+ *
+ * @param dat The DATTuple to normalize; its distance, angle, and torsion containers are modified.
+ * @param fs  FAM_Struct providing the mapping from internal to parsed indices used for reordering.
+ * @return cpplib::DATTuple& Reference to the modified input `dat`.
+ */
 static cpplib::DATTuple& ConvertDATTuple(cpplib::DATTuple& dat, const cpplib::FAM_Struct& fs) {
 	auto& dists = std::get<0>(dat);
 	auto s_dists = dists.size();
@@ -414,28 +456,24 @@ static cpplib::DATTuple& ConvertDATTuple(cpplib::DATTuple& dat, const cpplib::FA
 	auto s_tors = tors.size();
 
 	for (size_t i = 0; i < s_dists; i++) {
-		deb_write("ConvertDATTuple: reorder dist: ", i);
 		reorder(dists[i], fs);
 	}
 	for (size_t i = 0; i < s_angles; i++) {
-		deb_write("ConvertDATTuple: reorder angl: ", i);
 		reorder(angles[i], fs);
 	}
 	for (size_t i = 0; i < s_tors; i++) {
-		deb_write("ConvertDATTuple: reorder tors: ", i);
 		reorder(tors[i], fs);
 	}
 	// erase dublicates
 
-	deb_write("ConvertDATTuple: erase dist");
 	eraseDoubles(dists, std::function<bool(std::remove_reference<decltype(dists)>::type::iterator, std::remove_reference< decltype(dists)>::type::iterator)>(
 		[](std::remove_reference< decltype(dists)>::type::iterator it, std::remove_reference< decltype(dists)>::type::iterator it2)
 		{return (std::get<0>(*it) == std::get<0>(*it2)) && (std::get<1>(*it) == std::get<1>(*it2)) && (::std::abs(std::get<2>(*it) - std::get<2>(*it2)) < 0.0001); }));
-	deb_write("ConvertDATTuple: erase angl");
+
 	eraseDoubles(angles, std::function<bool(std::remove_reference< decltype(angles)>::type::iterator, std::remove_reference< decltype(angles)>::type::iterator)>(
 		[](std::remove_reference< decltype(angles)>::type::iterator it, std::remove_reference< decltype(angles)>::type::iterator it2)
 		{return (std::get<0>(*it) == std::get<0>(*it2)) && (std::get<1>(*it) == std::get<1>(*it2)) && (std::get<2>(*it) == std::get<2>(*it2)) && (::std::abs(std::get<3>(*it) - std::get<3>(*it2)) < 0.0001); }));
-	deb_write("ConvertDATTuple: erase tors");
+
 	eraseDoubles(tors, std::function<bool(std::remove_reference< decltype(tors)>::type::iterator, std::remove_reference< decltype(tors)>::type::iterator)>(
 		[](std::remove_reference< decltype(tors)>::type::iterator it, std::remove_reference< decltype(tors)>::type::iterator it2)
 		{return (std::get<0>(*it) == std::get<0>(*it2)) && (std::get<1>(*it) == std::get<1>(*it2)) &&
@@ -443,58 +481,78 @@ static cpplib::DATTuple& ConvertDATTuple(cpplib::DATTuple& dat, const cpplib::FA
 	return dat;
 }
 
+/**
+ * @brief Compacts atom coordinates into molecule fragments and reports processing errors.
+ *
+ * Builds a FAM structure from the provided unit cell, symmetry operations, atom types, and fractional points;
+ * finds bonds using global distance data; groups atoms into compacted molecular fragments; and returns their
+ * Cartesian coordinates along with any error messages produced during processing.
+ *
+ * @param unit_cell Six-element array describing the unit cell (a, b, c, alpha, beta, gamma).
+ * @param symm Vector of symmetry operator strings defining the space-group symmetry.
+ * @param types Container of atom type descriptors; ownership is taken by this function (moved).
+ * @param points Container of fractional atomic positions; ownership is taken by this function (moved).
+ *
+ * @return std::tuple<std::vector<cpplib::geometry::Point<FloatingPointType>>, std::list<std::string>>
+ *   - First element: vector of compacted atom coordinates in Cartesian space (one entry per atom in the compacted output).
+ *   - Second element: list of error messages produced during processing. If the global BondLength.ini is unavailable,
+ *     the first element is an empty vector and the list contains a single message "Error!Could not open BondLength.ini".
+ */
 std::tuple<std::vector<cpplib::geometry::Point<FloatingPointType>>, std::list<std::string>> Compaq(const std::array<cpplib::basic_types::FloatingPointType, 6>& unit_cell,
 												const std::vector<const char*>& symm,
 												cpplib::FAM_Struct::AtomContainerType& types,
 												cpplib::FAM_Struct::PointConteinerType& points) {
-	deb_write("Compaq invoked");
 	auto& distances = *p_distances;
 	if (p_distances->isReady() == false) {
 		return std::make_tuple(std::vector<cpplib::geometry::Point<FloatingPointType>>(), std::list<std::string>(1, "Error!Could not open BondLength.ini"));
 	}
-	deb_write("Compaq p_distances prepared");
 	FAM_Struct fs;
-	deb_write("Compaq FAM_Cell creation start");
 	FAM_Cell fc(FAM_Cell::base(unit_cell, true));
-	deb_write("Compaq call constructor ParseData");
 	ParseData(fs, fc, symm, std::move(types), std::move(points), false);
 
 	const auto su = fs.sizeUnique;
 	std::string errorMsg;
 	std::list<std::string> res_errors;
-	deb_write("Compaq call fs.findBonds");
 	auto res = fs.findBonds(distances, errorMsg, [fc](const PointType& p1, const PointType& p2) {return fc.distanceInCell(p1, p2); });
 	if (!errorMsg.empty()) res_errors.emplace_back(std::move(errorMsg));
 
-	deb_write("Compaq create fm");
 	FindMolecules fm(std::move(fs));
-	deb_write("Compaq call fm.compaq");
 	auto& compaqed = fm.compaq(res.first);
 	compaqed.resize(su);
-	deb_write("Compaq return");
 	return std::make_tuple(std::move(compaqed), res_errors);
 }
 
-std::vector<Cluster::ClusterAtom>
-ClusterCreate(std::array<cpplib::basic_types::FloatingPointType, 6> unit_cell,
-			  const std::vector<const char*>& symm,
-			  cpplib::FAM_Struct::AtomContainerType& types,
-			  cpplib::FAM_Struct::PointConteinerType& points,
-			  std::vector<cpplib::Cluster::AnchorType>& anchors,
-			  cpplib::basic_types::FloatingPointType polymer_cutoff,
-			  bool& hasPolymer) {
-	deb_write("ClusterCreate invoked");
+/**
+ * @brief Build and execute a cluster search for the given cell, symmetry, atoms, and points.
+ *
+ * Validates that global distance data is available, constructs a Cluster from the provided
+ * unit cell, symmetry definitions, anchors, points, and atom types, and returns the cluster
+ * execution result while updating polymer presence information.
+ *
+ * @param unit_cell Six-component unit cell array (a, b, c, alpha, beta, gamma).
+ * @param symm Vector of symmetry specification strings to apply to the cell.
+ * @param types Atom-type container describing species for each site.
+ * @param points Point container with atomic positions (fractional coordinates for the cell).
+ * @param anchors Cluster anchor definitions used to seed the cluster construction.
+ * @param polymer_cutoff Distance threshold used to detect polymeric connectivity.
+ * @param[out] hasPolymer Set to `true` if the executed cluster contains polymeric chains, `false` otherwise.
+ * @return Cluster::ClusterData Resulting cluster data produced by the cluster execution; returns an empty ClusterData if global distance data is not ready.
+ */
+Cluster::ClusterData ClusterCreate(std::array<cpplib::basic_types::FloatingPointType, 6> unit_cell,
+			                       const std::vector<const char*>& symm,
+			                       cpplib::FAM_Struct::AtomContainerType& types,
+			                       cpplib::FAM_Struct::PointConteinerType& points,
+			                       std::vector<cpplib::Cluster::AnchorType>& anchors,
+			                       cpplib::basic_types::FloatingPointType polymer_cutoff,
+			                       bool& hasPolymer) {
 
 	using ShiftType = Cluster::ShiftType;
-	deb_write("Compaq invoked");
 	auto& distances = *p_distances;
 	if (p_distances->isReady() == false) {
 		{
 			return {};
 		}
 	}
-
-
 
 	cpplib::geometry::Cell cell(unit_cell);
 	std::vector<geometry::Symm<FloatingPointType>> symms;
@@ -505,12 +563,7 @@ ClusterCreate(std::array<cpplib::basic_types::FloatingPointType, 6> unit_cell,
 
 	Cluster cluster(cell, symms, std::move(anchors), std::move(points), std::move(types), polymer_cutoff);
 
-	auto ret = cluster.execute(distances);
+	auto ret = cluster.execute(distances, hasPolymer);
 
-	//for (auto& i : ret) {
-	//	i.point = cell.fracToCart() * i.point;
-	//}
-
-	deb_write("ClusterCreate return");
 	return ret;
 }

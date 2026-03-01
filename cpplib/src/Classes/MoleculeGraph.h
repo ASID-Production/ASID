@@ -40,9 +40,21 @@
 #include "../BaseHeaders/BaseTypes.h" // for constants::mend_size
 #include "../BaseHeaders/Concepts.h"
 #include "../BaseHeaders/Currents.h"
-#include "../Classes/Engine.h" // for Node and Bond
+#include "../Classes/Bond.h" // for Bond
+#include "../Classes/Engine.h" // for Node
 
-namespace cpplib {		
+/**
+		 * Lightweight mapping from element indices (1..mend_size-1) to AtomIndex values used during parsing and construction.
+		 *
+		 * The map stores a fixed-size array of AtomIndex initialized to -1. Index 0 is reserved for hydrogen counts aggregation;
+		 * indices 1..mend_size-1 correspond to element/type slots. Typical usage:
+		 * - initialize(bits): mark entries present in a TypeBitset by setting them to 0.
+		 * - operator[]: read or set the AtomIndex stored for a given element index.
+		 * - isFinished(): returns true when all tracked entries (indices >= 1) are <= 0.
+		 *
+		 * @note The class asserts on out-of-range access and requires constants::mend_size <= INT8_MAX.
+		 */
+		namespace cpplib {		
 	enum class ReserveStrategy :char {
 		None,
 		Exact,

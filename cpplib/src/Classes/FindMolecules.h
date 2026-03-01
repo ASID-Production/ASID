@@ -392,6 +392,104 @@ namespace cpplib {
 	};
 
 
+	/**
+	 * Construct FindMolecules by taking ownership of a FAM_Struct.
+	 * @param fs basic FAM_Struct to relocate into this instance.
+	 */
+	
+	/**
+	 * Identify distinct molecule types and their occurrences from atom bonds and marks.
+	 *
+	 * Builds an internal atom graph from fs_ and the provided bonds, excludes atoms listed in
+	 * invalids or those determined to have an impossible number of bonds (recording a single
+	 * error message in errorMsg), then finds connected components representing molecules.
+	 * Identical molecule graphs are deduplicated and counted. Returns a parser-ready string
+	 * representation, the (possibly set) error message, and a structured description of each
+	 * unique molecule containing atom coordinates with original atom indices, occurrence count,
+	 * and the molecule's bond list.
+	 * @param bonds vector of bond pairs over atom indices.
+	 * @param invalids indices of atoms that must be treated as invalid and excluded.
+	 * @param errorMsg string that will be set to a descriptive error message if an invalid atom is detected.
+	 * @returns tuple of (molecule string representation, errorMsg, vector of molecules with coordinates, count, and bonds).
+	 */
+	
+	/**
+	 * Partition the atom set into separate connected graphs (components) based on bonds.
+	 *
+	 * Creates a simple graph of all atoms using the provided bonds, finds connected components,
+	 * and returns a map from unique-atom index to component index along with the list of components
+	 * where each component is represented by its atom indices and internal bonds.
+	 * @param bonds vector of bond pairs over atom indices.
+	 * @returns pair of (refs, molecules) where refs maps each unique atom index to its component index,
+	 * and molecules is a vector of (atom index list, bond list) for each component.
+	 */
+	
+	/**
+	 * Compact and align atomic coordinates of unique molecular parts within the unit cell.
+	 *
+	 * For each unique atom type, selects a representative (closest to cell center), builds the
+	 * full graph using bonds, then for each connected unique part recenters it to the unit cell
+	 * center by shifting coordinates (if needed) and swaps coordinates so that representative
+	 * indices align with parseIndex mappings. Returns a reference to the (possibly modified)
+	 * internal points container.
+	 * @param bonds vector of bond pairs over atom indices.
+	 * @returns reference to the internal points container after compaction and alignment.
+	 */
+	
+	/**
+	 * Produce a textual representation of the provided molecules suitable for downstream parsing.
+	 *
+	 * The returned string encodes counts and per-atom lines (type and implicit hydrogens)
+	 * followed by bond pairs using 1-based indices for atoms included in the representation.
+	 * @param molecules vector of tuples (atom index list, occurrence count, bond list) representing molecules.
+	 * @param net the graph nodes used to determine atom types and neighbors.
+	 * @returns serialized string representing the set of molecules.
+	 */
+	
+	/**
+	 * Count implicit hydrogen atoms attached to the given node.
+	 *
+	 * Only neighbors that are hydrogen atoms with degree 1 are counted.
+	 * @param node node whose attached implicit hydrogens are to be counted.
+	 * @returns number of implicit hydrogen neighbors for node.
+	 */
+	
+	/**
+	 * Collect a connected molecule starting from a given atom using breadth-first traversal.
+	 *
+	 * Traverses the graph net beginning at start, recording the sequence of atom indices
+	 * belonging to the same connected component and the bonds between them. Marks corresponding
+	 * unique atoms in seen as visited.
+	 * @param start index of the starting atom in net.
+	 * @param net graph nodes representing atoms and their neighbors.
+	 * @param seen boolean vector marking which unique atoms have been visited (updated in-place).
+	 * @returns pair of (ordered list of atom indices in the molecule, list of bonds between those indices).
+	 */
+	
+	/**
+	 * Collect a connected unique part starting from the given representative atom, aligning coordinates.
+	 *
+	 * Performs breadth-first traversal on net starting from start, adding unvisited atoms whose
+	 * unique representative has not been seen. For newly added atoms, applies a rounded shift to
+	 * their coordinates to keep them contiguous with the traversal seed. Marks unique representatives
+	 * in seen as visited.
+	 * @param start index of the starting atom in net (representative/closest atom).
+	 * @param net graph nodes representing atoms and their neighbors.
+	 * @param seen boolean vector marking which unique atoms have been visited (updated in-place).
+	 * @returns ordered list of atom indices that form the unique part.
+	 */
+	
+	/**
+	 * Search for element u within vector v up to max elements.
+	 *
+	 * If max is zero, the entire vector is searched. Returns the index of the first match or
+	 * size_type(-1) when not found. This function is noexcept.
+	 * @tparam T2 element type of the vector.
+	 * @param u value to search for.
+	 * @param v vector in which to search.
+	 * @param max maximum number of elements from v to inspect (0 means v.size()).
+	 * @returns index of u in v if found, otherwise size_type(-1).
+	 */
 	class FindMolecules {
 	public:
 		using FAMSType = FAM_Struct;
@@ -545,7 +643,6 @@ namespace cpplib {
 		PointConteinerType& compaq(std::vector<BondType>& bonds) {
 
 			// 1. Find closest atoms
-			deb_write("FM::compaq Phase 1. Find closest atoms");
 			std::vector<AtomIndex> closest(fs_.sizeUnique, 0);
 			std::iota(closest.begin(), closest.end(), 0);
 			for (AtomIndex i = 0; i < fs_.sizePoints; i++)
@@ -558,7 +655,6 @@ namespace cpplib {
 			}
 
 			// 2. Create Nodes in net
-			deb_write("FM::compaq Phase 2. Create Nodes in net");
 			std::vector<NodeType> net;
 			net.reserve(fs_.sizePoints);
 			for (size_type i = 0; i < fs_.sizePoints; i++) {
@@ -566,14 +662,12 @@ namespace cpplib {
 			}
 
 			// 3. Add bonds to net
-			deb_write("FM::compaq Phase 3. Add bonds to net");
 			auto bond_size = bonds.size();
 			for (decltype(bond_size) i = 0; i < bond_size; i++) {
 				net[bonds[i].first].addBondSimple(net[bonds[i].second]);
 			}
 
 			// 4. Find molecules
-			deb_write("FM::compaq Phase 4. Find molecules");
 			std::vector<bool> seen(fs_.sizeUnique, false); // seen unique atoms
 
 			for (AtomIndex i = 0; i < fs_.sizeUnique; i++) {
@@ -581,15 +675,11 @@ namespace cpplib {
 					continue;
 				seen[i] = true;
 
-				deb_write("FM::compaq Phase 4.0. invoke FM::findNextUniquePart");
 				std::vector<AtomIndex> singleTable = findNextUniquePart(closest[i], net, seen);
-				deb_write("FM::compaq Phase 4.0. FM::findNextUniquePart successful");
 
 				auto singleTableSize = static_cast<size_type>(singleTable.size());
 
 				// 4.1. Shift Center of Mass
-				deb_write("FM::compaq Phase 4.1. Shift Center of Mass");
-				deb_write("Center of Mass");
 				PointType center(0., 0., 0.);
 				for (size_type j = 0; j < singleTableSize; j++)
 				{
@@ -606,8 +696,6 @@ namespace cpplib {
 				}
 
 				// 4.2. Swap coordinates
-
-				deb_write("FM::compaq Phase 4.2. Swap coordinates");
 				for (size_type j = 0; j < singleTableSize; j++) {
 					if(singleTable[j] != std::get<0>(fs_.parseIndex[singleTable[j]]))
 						std::swap(fs_.points[singleTable[j]], fs_.points[std::get<0>(fs_.parseIndex[singleTable[j]])]);

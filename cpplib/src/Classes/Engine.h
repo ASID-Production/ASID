@@ -36,27 +36,36 @@
 #include "../BaseHeaders/Concepts.h"
 #include "../BaseHeaders/DebugMes.h"
 
-namespace cpplib {
+/**
+	 * Represents a simple atom type that stores a single AtomTypeBase identifier.
+	 *
+	 * Stores one AtomTypeBase value and provides queries and conversions for that
+	 * identifier: `get_bitset()` yields a TypeBitset with the atom's bit set when the
+	 * identifier is greater than zero, `contains(t)` reports whether the stored
+	 * identifier equals `t`, `intersect`/`operator==` test equality with another
+	 * SimpleAtom, and an explicit conversion returns the underlying AtomTypeBase.
+	 */
+	namespace cpplib {
 
 	class SimpleAtom {
 	private:
 		using ConstRef = SimpleAtom;
 	public:
 		using AtomTypeBase = basic_types::AtomTypeBase;
-        using TypeBitset = basic_types::TypeBitset;
+		using TypeBitset = basic_types::TypeBitset;
 
 		// Constructors
 		SimpleAtom() = default;
 		constexpr explicit SimpleAtom(AtomTypeBase input) : type_(input) {
 			assert(input < TypeBitset().size());
 		}
-		
-		constexpr TypeBitset get_bitset() const noexcept{
+
+		constexpr TypeBitset get_bitset() const noexcept {
 			TypeBitset bits;
 			if (type_ > 0) bits.set(type_);
 			return bits;
 		}
-		constexpr bool contains(const AtomTypeBase t) const noexcept{
+		constexpr bool contains(const AtomTypeBase t) const noexcept {
 			assert(t > 0 && TypeBitset().size());
 			return type_ == t;
 		}
@@ -74,16 +83,51 @@ namespace cpplib {
 		}
 
 		// Converts to AtomTypeBase
-		constexpr explicit operator AtomTypeBase() const { return type_; }
+		constexpr explicit operator AtomTypeBase() const {
+			return type_;
+		}
 	private:
 		AtomTypeBase type_ = 0;
 	};
 
 	static_assert(AtomTypeConcept<SimpleAtom>, "SimpleAtom must satisfy AtomTypeConcept");
 
-	class CompositeAtom {
+	/**
+		 * Add an atom type to this composite atom's type set.
+		 * @param t Atom type index to add; must be greater than 0 and less than mend_size.
+		 */
+		
+		/**
+		 * Checks whether this composite atom includes the specified atom type.
+		 * @param t Atom type index to check; must be greater than 0 and less than the bitset size.
+		 * @returns `true` if the bit for `t` is set in the internal type bitset, `false` otherwise.
+		 */
+		
+		/**
+		 * Obtain the bitset representing all atom types contained by this composite atom.
+		 * @returns The `TypeBitset` with bits set for each included atom type.
+		 */
+		
+		/**
+		 * Determine whether this composite atom and another share at least one atom type.
+		 * @param other CompositeAtom to test against.
+		 * @returns `true` if the internal bitsets have any common set bit, `false` otherwise.
+		 */
+		
+		/**
+		 * Compare two CompositeAtom instances for equality based on their basetype value.
+		 * @param other CompositeAtom to compare with.
+		 * @returns `true` if both instances have the same `basetype`, `false` otherwise.
+		 */
+		
+		/**
+		 * Perform a three-way comparison of `basetype` values between two CompositeAtom instances.
+		 * @param other CompositeAtom to compare with.
+		 * @returns A `std::strong_ordering` value reflecting the ordering of the two `basetype` values.
+		 */
+		class CompositeAtom {
 	private:
-        using ConstRef = const CompositeAtom&;
+		using ConstRef = const CompositeAtom&;
 	public:
 		using AtomTypeBase = basic_types::AtomTypeBase;
 		using TypeBitset = basic_types::TypeBitset;
@@ -105,7 +149,7 @@ namespace cpplib {
 			assert(t > 0 && t < types.size());
 			return types[t];
 		}
-		constexpr TypeBitset get_bitset() const noexcept{
+		constexpr TypeBitset get_bitset() const noexcept {
 			return types;
 		}
 		inline bool intersect(ConstRef other) const noexcept {
@@ -119,8 +163,14 @@ namespace cpplib {
 			return basetype <=> other.basetype;
 		}
 
-		// Converts to AtomTypeBase
-		constexpr explicit operator AtomTypeBase() const noexcept { return basetype; }
+		/**
+		 * Yield the stored base atom type identifier for this CompositeAtom.
+		 *
+		 * @returns `AtomTypeBase` value representing the CompositeAtom's base type.
+		 */
+		constexpr explicit operator AtomTypeBase() const noexcept {
+			return basetype;
+		}
 
 	private:
 		AtomTypeBase basetype = 0;
@@ -138,8 +188,14 @@ namespace cpplib {
 		innerType high = 0;
 	public:
 		constexpr Coord() noexcept = default;
-		constexpr explicit Coord(argumentType mono) noexcept : low(mono), high(mono) {}
-		constexpr Coord(argumentType first, argumentType second) noexcept : low(first), high(second) {}
+		/**
+		 * Construct a Coord representing a degenerate interval whose low and high bounds are the same.
+		 * @param mono Value used to initialize both `low` and `high`.
+		 */
+		constexpr explicit Coord(argumentType mono) noexcept : low(mono), high(mono) {
+		}
+		constexpr Coord(argumentType first, argumentType second) noexcept : low(first), high(second) {
+		}
 		inline bool intersect(const Coord other) const noexcept {
 			return first() <= other.second() && other.first() <= second();
 		}
@@ -158,15 +214,37 @@ namespace cpplib {
 		}
 	};
 
+	/**
+	 * Container of neighbour index shifts with a fixed maximum capacity.
+	 *
+	 * Stores a compact, index-shift based list of neighbour references and provides
+	 * insertion, removal, replacement, simple sort, and iterator access for the
+	 * active range.
+	 *
+	 * @note Indices and sizes are bounds-checked with assertions in debug builds.
+	 */
+	
+	/**
+	 * Represents an atom/node in the graph parameterized by an atom type.
+	 *
+	 * Provides node identity, atom-type, hydrogen-like count, coordinate interval,
+	 * and a neighbour list (as index shifts). Supports neighbour queries, adding
+	 * and removing mutual bonds, sorting neighbours, coordinate calculation, and a
+	 * swap that updates neighbour references to keep internal shift values correct.
+	 *
+	 * @tparam A Atom type satisfying the AtomTypeConcept (e.g., SimpleAtom or CompositeAtom).
+	 */
 	class NeighboursType {
 	public:
 		static constexpr size_t maxNeighbours = constants::maxNeighbours;
 		using ShiftType = basic_types::AtomIndex;
 	private:
-		::std::array<ShiftType, maxNeighbours> data_{ 0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
+		::std::array<ShiftType, maxNeighbours> data_{0,0,0,0,0,0,0,0,0,0,0,0,0,0};
 		size_t size_ = 0;
 	public:
-		NeighboursType() noexcept : data_{0} { data_.fill(0); }
+		NeighboursType() noexcept : data_{0} {
+			data_.fill(0);
+		}
 		inline void push_back(const ShiftType obj) {
 			assert(size_ < maxNeighbours);
 			data_[size_] = obj;
@@ -210,11 +288,11 @@ namespace cpplib {
 			}
 		}
 
-		auto begin() const { 
-			return data_.begin(); 
+		auto begin() const {
+			return data_.begin();
 		}
-		auto end() const { 
-			return data_.begin() + size_; 
+		auto end() const {
+			return data_.begin() + size_;
 		}
 	};
 
@@ -245,11 +323,12 @@ namespace cpplib {
 		// Constructors
 		constexpr Node() = default;
 		constexpr Node(const AtomType& t1, const HType& h1, const AtomIndex& id)
-			: type_(t1), hAtoms_(h1), id_(id), coord_(h1) {}
+			: type_(t1), hAtoms_(h1), id_(id), coord_(h1) {
+		}
 
 		// Operators
 		inline bool operator==(const Node& other) const noexcept {
-			return (type_ == other.type_) && 
+			return (type_ == other.type_) &&
 				(hAtoms_ == other.hAtoms_) &&
 				(neighbours_.size() == other.neighbours_.size()) &&
 				(coord_.intersect(other.coord_));
@@ -407,7 +486,7 @@ namespace cpplib {
 
 			// Aditional shift if bond exists
 			bool bondExists = neighbours_.exchange(0, shift);
-			if(bondExists == true) other.neighbours_.exchange(0, -shift);
+			if (bondExists == true) other.neighbours_.exchange(0, -shift);
 		}
 	private:
 		void changeNeigboursOfNeighbours(Node* other) noexcept {
@@ -440,6 +519,14 @@ namespace cpplib {
 			a.neighbours_.size() == b.neighbours_.size() &&
 			a.coord_.intersect(b.coord_);
 	}
+	/**
+	 * Determines whether a composite-node pattern `a` can match a simple-node candidate `b`
+	 * under relaxed (non-exact) constraints.
+	 * @param a Composite-node pattern to test.
+	 * @param b Simple-node candidate to test against the pattern.
+	 * @returns `true` if `a`'s type contains `b`'s type, `a`'s hydrogen count is less than or equal to `b`'s,
+	 * `a`'s neighbour count is less than or equal to `b`'s, and their coordinate intervals intersect; `false` otherwise.
+	 */
 	constexpr bool NotExactCompare(const Node<CompositeAtom>& a, const Node<SimpleAtom>& b) {
 		static_assert(std::is_same_v<SimpleAtom::AtomTypeBase, CompositeAtom::AtomTypeBase>);
 		return a.type_.contains(static_cast<typename CompositeAtom::AtomTypeBase>(b.type_)) &&
@@ -447,95 +534,13 @@ namespace cpplib {
 			a.neighbours_.size() <= b.neighbours_.size() &&
 			a.coord_.intersect(b.coord_);
 	}
-
-	struct Bond {
-	public:
-		// Declarations
-		using AtomIndex = basic_types::AtomIndex;
-
-		// Data
-		AtomIndex first = 0;
-		AtomIndex second = 0;
-
-		// Constructors
-		constexpr Bond() noexcept = default;
-		constexpr Bond(const AtomIndex a1, const AtomIndex a2) noexcept : first(a1), second(a2) {};
-
-		// Operators
-		constexpr auto operator<=>(const Bond& other) const noexcept = default;
-
-		// Functions
-		constexpr void validate() noexcept {
-			if (first > second) ::std::swap(first, second);
-		}
-		::std::string ToStr() const {
-			::std::string res("(");
-			res += ::std::to_string(this->first);
-			res += ", ";
-			res += ::std::to_string(this->second);
-			res += ")";
-			// (1, 2)
-			return res;
-		}
-	};
-	struct BondEx : public Bond {
-	public:
-		// Declarations
-		using LengthType = basic_types::FloatingPointType; // Float or Double
-		using base = Bond; // Bond
-
-		// Data
-		LengthType length = 0.0; // Bond Length 
-
-		// Constructors
-		constexpr BondEx() = default;
-
-		// Always uses Bond::validate function
-		constexpr BondEx(const base& bond, float len) noexcept : base(bond), length(len) {
-			base::validate();
-		}
-		constexpr BondEx(AtomIndex a1, AtomIndex a2, LengthType l) noexcept
-			: length(l) {
-			if (a1 < a2) {
-				base::first = a1;
-				base::second = a2;
-			}
-			else {
-				base::first = a2;
-				base::second = a1;
-			}
-		}
-
-		constexpr BondEx(AtomIndex a1, AtomIndex a2) noexcept : Bond(a1, a2) {}
-
-		// Compares only "base". Ignores length.
-		constexpr bool operator==(const BondEx& other) const noexcept {
-			return base::operator==(other);
-		}
-
-		// Compares in next order:
-		// 1. "base" 
-		// 2. length
-		constexpr auto operator<=>(const BondEx& other) const noexcept = default;
-
-		// to_string constant function
-		::std::string ToStr() const {
-			::std::string res("(");
-			res += ::std::to_string(first);
-			res += ", ";
-			res += ::std::to_string(second);
-			res += ", {\"distance\": ";
-			res += ::std::to_string(length);
-			res += "})";
-			return res;
-			// (1, 2, {"distance": 1.0})
-		}
-	};
-
-	static_assert(BondConcept<Bond>, "Bond must satisfy BondConcept");
-	static_assert(BondConcept<BondEx>, "BondEx must satisfy BondConcept");
 }
-
+/**
+ * Swap the complete state of two cpplib::Node instances.
+ *
+ * @param n1 First node whose contents will be exchanged.
+ * @param n2 Second node whose contents will be exchanged.
+ */
 namespace std {
 	// std::swap extention for Node class
 	template<cpplib::AtomTypeConcept A>

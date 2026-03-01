@@ -34,11 +34,56 @@
 #include <utility>
 
 #include "../BaseHeaders/BaseTypes.h"
+#include "../BaseHeaders/DebugMes.h"
 #include "../BaseHeaders/Currents.h"
 #include "../Classes/Engine.h"
 #include "../Classes/MoleculeGraph.h"
 
-namespace cpplib {
+/**
+		 * Initialize internal search state and preprocess hydrogen atoms.
+		 *
+		 * Prepares internal structures for a search: unpacks hydrogens where relevant,
+		 * sorts graphs, resets the partial-match mapping, clears the bond match log,
+		 * and marks all data atoms as unused.
+		 */
+		 
+		/**
+		 * Store an input molecule graph for subsequent searches.
+		 *
+		 * @param molGraph Molecule graph to use as the request/input; ownership is moved into the SearchGraph.
+		 */
+		 
+		/**
+		 * Store a database molecule graph for subsequent searches.
+		 *
+		 * @param molGraph Molecule graph to use as the database; ownership is moved into the SearchGraph.
+		 */
+		 
+		/**
+		 * Attempt to extend the current partial mapping by pairing a specific input atom with a data atom.
+		 *
+		 * Tries to add the mapping from startI to startD and then continues the search
+		 * along the appropriate recursive path depending on whether the input atom has neighbours.
+		 *
+		 * @param startI Index of the input atom to map.
+		 * @param startD Index of the data atom to map to the input atom.
+		 * @param exact If `true`, require exact atom-type matches; otherwise allow non-exact matching rules.
+		 * @returns `true` if a complete valid mapping is found after extending with this pair, `false` otherwise.
+		 */
+		
+		/**
+		 * Find a complete mapping of the stored input graph within the stored database graph.
+		 *
+		 * Iterates over candidate database atoms (starting from index 1) and attempts to match
+		 * the given input startAtom against each candidate using the configured compare mode.
+		 * This operation will mutate internal search state (destroying temporary search data),
+		 * so the SearchGraph must be reinitialized before reuse.
+		 *
+		 * @param exact If `true`, require exact atom-type matches; otherwise allow non-exact matching rules.
+		 * @param startAtom Index of the input atom that must be matched (default is 1).
+		 * @returns `true` if a full match for the input graph is found in the database, `false` otherwise.
+		 */
+		namespace cpplib {
 	class SearchGraph {
 	public:
 		// Declarations
@@ -108,6 +153,7 @@ namespace cpplib {
 		}
 		// destroys all data, need reinitialization!
 		bool startFullSearch(const bool exact, AtomIndex startAtom = 1) {
+			LOG_INTERFACE_GUARD("startFullSearch");
 			for (AtomIndex i = 1; i < dataSize_; i++) {
 				if (compare(input_[startAtom], data_[i], exact) == false) {
 					continue;

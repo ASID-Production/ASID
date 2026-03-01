@@ -1,29 +1,32 @@
 from typing import List, Dict, Tuple
 
 
-def GenBonds(atoms: List[Tuple[int, float, float, float]]) -> Dict["bonds" : List[(int,int)]]:
+def GenBonds(atoms: List[Tuple[int, float, float, float]]) -> Dict[str, List[Tuple[int, int]]]:
     """
-        Finds all bonds in a cluster (real space).
-        Variables:
-          atoms: tuple of [list of atomic type and three real-space coordinate].
-            AtomType is integer, coordinates are cartesian floating point numbers.
-            example [ [ 1, 0.0, 0.0, 0.0 ], [9, 0.5, 0.5, 0.5], ... ]
-        Returns: List of tuples ( AtomIndex1, AtomIndex2 ), where
-          AtomIndex1 and AtomIndex2: indexes in parameter List 'atoms' of atoms,
-            which form a bond.
+    Identify all bonded atom index pairs in a cluster given Cartesian atom coordinates.
+    
+    Parameters:
+        atoms (List[Tuple[int, float, float, float]]): List of atoms where each entry is
+            (AtomType, x, y, z). AtomType is an integer; x, y, z are Cartesian coordinates.
+    
+    Returns:
+        Dict[str, List[Tuple[int, int]]]: Dictionary mapping a string key to a list of
+        bonded atom index pairs (AtomIndex1, AtomIndex2). Indices refer to positions in
+        the input `atoms` list.
     """
     ...
-def GenBondsEx(atoms: List[Tuple[int, float, float, float]]) -> Dict["bonds" : List[(int,int,float)]]:
+def GenBondsEx(atoms: List[Tuple[int, float, float, float]]) -> Dict[str, List[(int,int,float)]]:
     """
-        Finds all bonds and it's length in a cluster (real space).
-        Variables:
-          atoms: tuple of [list of atomic type and three real-space coordinate].
-            AtomType is integer, coordinates are cartesian floating point numbers.
-            example [ [ 1, 0.0, 0.0, 0.0 ], [9, 0.5, 0.5, 0.5], ... ]
-        Returns: List of Tuples ( AtomIndex1, AtomIndex2, Length ), where
-          AtomIndex1 and AtomIndex2: indexes in parameter List 'atoms' of atoms,
-            which form a bond.
-          Length: distance between atoms with indexes AtomIndex1 and AtomIndex2.
+    Find all bonds in a cluster and report their lengths.
+    
+    Parameters:
+        atoms (List[Tuple[int, float, float, float]]): List of atoms where each atom is a tuple
+            (AtomType, x, y, z). AtomType is an integer; x, y, z are Cartesian coordinates as floats.
+    
+    Returns:
+        Dict[str, List[Tuple[int, int, float]]]: A dictionary mapping a string key to a list of
+            tuples (AtomIndex1, AtomIndex2, Length). AtomIndex1 and AtomIndex2 are indices into the
+            input `atoms` list identifying bonded atom pairs; Length is the distance between them.
     """
     ...
 def SearchMain(graph: str, data: List[str], nprocs: int, exact: bool) -> List[int]:
@@ -332,66 +335,75 @@ def Cluster(cell_params: List[float],
             anchors: List[Tuple[float,float,float,float]]) -> Dict[
     "points":  List[Dict[
         "index":      int,
-        "point_cart": Tuple[float,float,float],
         "point_frac": Tuple[float,float,float],
         "shift":      Tuple[int,int,int],
         "symmref":    int,
         "type":       int],
     "hasPolymer": bool]]:
     """
-        Create cluster around anchors.
-        Variables:
-          cell_params: List of exactly 6 cell parameters in strict order: [a, b, c, alpha, beta, gamma].
-            (a, b, c - are translation vectors (in Angstroms) and alpha, beta, gamma - are angles (in degrees)
-          symms:  SYMM-codes of structure. Should contain 'x,y,z' (equivalent) as first ([0]) symmetry - it is ignored.
-          atoms: List of Tuples of atomic type and three internal coordinates.
-            AtomType is integer, coordinates are floating point numbers.
-            example [ [1, 0.0, 0.0, 0.0], [9, 0.5, 0.5, 0.5], ... ]
-          anchors: List of Tuples of anchors' three internal coordinates and generation radius (in ang.).
-            Coordinates and generation radius are floating point numbers.
-            example [ [0.0, 0.0, 0.0, 4.0], [0.5, 0.5, 0.5, 2.3], ... ]
-        Returns:
-          Dictionary with keys ["points","hasPolymer"], where
-            "points": List of Dictionaries, where eqch dictionary represents atom, and contains:
-             | "index":      Index of atom in the initial set
-             | "point_cart": Tuple of Cartesian coordinates  (cx, cy, cz)
-             | "point_frac": Tuple of Fractional coordinates (fx, fy, fz)
-             | "shift":      Tuple of translation shift (dx, dy, dz) from initial position of SYMM-code (NOT FROM [0,0,0] !!!)
-             | "symmref":    Reference to initial SYMM-code
-             | "type":       Atomic type
-            "hasPolymer": Boolian flag, equals True if cell contains polymer (MOF) structure
-    """
+            Build a cluster of symmetry-generated atoms around the given anchor positions.
+            
+            Parameters:
+                cell_params (List[float]): Six cell parameters [a, b, c, alpha, beta, gamma] where a,b,c are cell lengths (Å)
+                    and alpha,beta,gamma are angles (degrees).
+                symms (List[str]): SYMM-codes for symmetry generation; the first entry (equivalent to "x,y,z") is ignored.
+                atoms (List[Tuple[int, float, float, float]]): List of atoms as (AtomType, x, y, z) where AtomType is an int
+                    and x,y,z are internal (fractional) coordinates.
+                anchors (List[Tuple[float, float, float, float]]): List of anchors as (x, y, z, radius) where x,y,z are internal
+                    coordinates and radius is generation radius in angstroms.
+            
+            Returns:
+                dict: A dictionary with two keys:
+                    "points": List[dict] — each dict describes a generated atom with keys:
+                        "index" (int): index of the atom in the original atoms list,
+                        "point_frac" (Tuple[float, float, float]): fractional coordinates (fx, fy, fz),
+                        "shift" (Tuple[int, int, int]): integer translation shift (dx, dy, dz) relative to the symmetry reference,
+                        "symmref" (int): index of the SYMM-code used as reference,
+                        "type" (int): atomic type.
+                    "hasPolymer" (bool): True if the cell contains a polymer (MOF) structure, False otherwise.
+            """
     ...
 def VoronoiCalculation(cell_params: List[float], 
                        symms: List[str], 
                        atoms: List[Tuple[int, float, float, float]], 
                        bools: List[bool], 
                        cutoff: float) -> Dict[
-    "centers":   List[Tuple[float,float,float]],
-    "vertexes":  List[Tuple[float,float,float]],
-    "polygons":  List[List[int]],
-    "polyhedra": List[List[int]]]:
+    "vertices":  List[Tuple[float,float,float]],
+    "edges":  List[List[int,int]],
+    "polygons":  List[Dict[
+        "vertexes": List[int],
+        "edges":  List[int],
+        "atoms":  List[int]]],
+    "polyhedra": List[Dict[
+        "vertexes": List[int],
+        "edges":  List[int],
+        "polygons":  List[int]]]]:
     """
-        Calculate Voronoi cells.
-        Variables:
-          cell_params: List of exactly 6 cell parameters in strict order: [a, b, c, alpha, beta, gamma].
-            (a, b, c - are translation vectors (in Angstroms) and alpha, beta, gamma - are angles (in degrees)
-          symms:  SYMM-codes of structure. Should contain 'x,y,z' (equivalent) as first ([0]) symmetry - it is ignored.
-          atoms: List of Tuples of atomic type and three internal coordinates.
-            AtomType is integer, coordinates are floating point numbers.
-            example [ [1, 0.0, 0.0, 0.0], [9, 0.5, 0.5, 0.5], ... ]
-          bools: List of boolean values. Each value is True if corresponded atom should be covered with Voronoi cell.
-          cutoff: equals 6 by default 
-        Returns:
-          Dictionary with keys ["centers","vertexes", "polygons", "polyhedra"], where
-            "centers": List of Tuples (Px, Py, Pz), where
-               Px, Py, Pz: coordinates of Voronoi cell center (atom)
-            "vertexes": List of Tuples (Px, Py, Pz), where
-               Px, Py, Pz: coordinates of Voronoi cell vetrexes
-            "polygons": List of Lists, which represent polygons
-               Polygon lists consist of vertexes indexes. Lists are sorted to round order.
-            "polyhedra": List of Lists, which represent Voronoi polyhedra
-               Each polihedra list consists of polygon list indexes. Lists are unsorted.
-            Note: polyhedra and centers lists have same order.
-    """
+                       Compute the Voronoi tessellation for a set of atoms given a unit cell and symmetry information.
+                       
+                       Parameters:
+                           cell_params (List[float]): Six unit-cell parameters in order [a, b, c, alpha, beta, gamma]
+                               where a, b, c are lengths in angstroms and alpha, beta, gamma are angles in degrees.
+                           symms (List[str]): List of SYMM-codes for the structure; the first entry (equivalent to "x,y,z") is ignored.
+                           atoms (List[Tuple[int, float, float, float]]): List of atoms as (AtomType, x, y, z) using internal (fractional) coordinates.
+                           bools (List[bool]): Flags indicating which atoms should be covered by Voronoi cells; order corresponds to `atoms`.
+                           cutoff (float): Distance cutoff (in angstroms) used when building the tessellation.
+                       
+                       Returns:
+                           dict: A dictionary with the following keys:
+                               "vertices": List[Tuple[float, float, float]] — coordinates of all Voronoi vertices and cell centers (as 3-tuples).
+                               "edges": List[List[int, int]] — list of edges given as pairs of vertex indices.
+                               "polygons": List[Dict] — each polygon is a dict with:
+                                   "vertexes" (List[int]) — indices of vertices forming the polygon (ordered around the polygon),
+                                   "edges" (List[int]) — indices of edges that bound the polygon,
+                                   "atoms" (List[int]) — indices of atoms adjacent to the polygon.
+                               "polyhedra": List[Dict] — each polyhedron is a dict with:
+                                   "vertexes" (List[int]) — indices of vertices belonging to the polyhedron,
+                                   "edges" (List[int]) — indices of edges belonging to the polyhedron,
+                                   "polygons" (List[int]) — indices of polygons that form the polyhedron.
+                       
+                       Notes:
+                           - The sequence of polyhedra corresponds to the atoms flagged `True` in `bools`, in the same order.
+                           - All indices in "edges", "polygons", and "polyhedra" refer to positions in the returned lists.
+                       """
     ...

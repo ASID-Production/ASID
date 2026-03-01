@@ -27,29 +27,66 @@
 // ******************************************************************************************
 #pragma once
 #include <array>
-#include <algorithm>
 #include <cassert>
 #include <cmath>
 #include <cstdint>
 #include <functional>
+#include <limits>
 #include <numeric>
+#include <stdexcept>
 #include <unordered_set>
 #include <utility>
 #include <vector>
 
 #include "../BaseHeaders/BaseTypes.h"
-#include "../Classes/DSU.h"
-#include "../Classes/Distances.h"
-#include "../Classes/Engine.h"
 #include "../Classes/Geometry.h"
+#include "../Classes/Distances.h"
 
-#include <iostream>
-
+/**
+ * Assembles a bounded atomic cluster from a crystallographic unit cell, symmetry
+ * operations, and anchor regions.
+ *
+ * The Cluster class builds a collection of atoms and their metadata (indices,
+ * types, fractional positions, symmetry indices and lattice shifts) by:
+ * - expanding an asymmetric unit with provided symmetry operations into a full
+ *   unit cell (with optional duplicate removal),
+ * - constructing molecular entities from interatomic distances and bond
+ *   connectivity (including detection and handling of polymeric molecules),
+ * - growing polymer fragments and placing nonpolymeric molecules into unit-cell
+ *   translations that intersect provided anchor regions,
+ * - returning the final result as ClusterData suitable for downstream use.
+ *
+ * Publicly exposes types used by the clustering pipeline (e.g., AnchorType,
+ * ClusterData, Molecule, TranslatedAtom/Molecule) and provides an execute()
+ * entry point that produces the assembled ClusterData given distance/bond
+ * information.
+ */
 namespace cpplib {
 	class Cluster;
 }
 
-namespace cpplib::cluster_detail {
+/**
+	 * @brief Container holding per-atom data for a cluster.
+	 *
+	 * Stores parallel vectors for atom indices, types, fractional positions, symmetry indices,
+	 * and integer cell shifts. All vectors are intended to have equal length; use
+	 * consistency_check() to verify internal consistency. Provides lightweight view types
+	 * (AtomView / ConstAtomView) for element access via operator[].
+	 */
+	
+	/**
+	 * @brief Represents a geometric anchor defined by a fractional point and a radius.
+	 *
+	 * The anchor's point is stored in fractional coordinates and the radius is a positive
+	 * floating-point value. The constructor validates that the radius is greater than zero
+	 * and that each coordinate of the point fits within the signed 8-bit bounds used for
+	 * ShiftType components.
+	 *
+	 * @throws std::runtime_error if radius is not positive.
+	 * @throws std::runtime_error if any coordinate of `point` is outside the representable
+	 *         range of ShiftType::value_type.
+	 */
+	namespace cpplib::cluster_detail {
 
 	using FloatingPointType = cpplib::basic_types::FloatingPointType;
 	using PointType = cpplib::geometry::Point<FloatingPointType>;
@@ -61,23 +98,109 @@ namespace cpplib::cluster_detail {
 	using AtomIndex = cpplib::basic_types::AtomIndex;
 	using SymmType = cpplib::geometry::Symm<FloatingPointType>;
 	using AtomTypeBase = cpplib::basic_types::AtomTypeBase;
-
-	struct BondWithShift : public Bond {
-		ShiftType shift{0, 0, 0};
-		BondWithShift(AtomIndex a, AtomIndex b) : Bond(a, b) {}
-		BondWithShift(Bond a, ShiftType b) : Bond(a), shift(b) {}
-	};
+	using BondWithShift = typename geometry::SpatialGrid<FloatingPointType>::BondWithShift;
 	using BondList = ::std::vector<BondWithShift>;
-	struct AnchorType {
-		PointType point;
-		FloatingPointType radius;
+
+
+	class ClusterData {
+	public:
+		using PointType = geometry::Point<FloatingPointType>;
+
+		std::vector<AtomIndex> indices;
+		std::vector<AtomTypeBase> types;
+		std::vector<PointType> points;
+		std::vector<SymmIndex> symm_indices;
+		std::vector<ShiftType> shifts;
+
+		size_t size() const {
+			//assert(consistency_check());
+			return indices.size();
+		}
+
+		bool empty() const {
+			return indices.empty();
+		}
+
+		bool consistency_check() const {
+			const size_t s = indices.size();
+			return s == types.size() &&
+				s == points.size() &&
+				s == symm_indices.size() &&
+				s == shifts.size();
+		}
+
+		void reserve(size_t capacity) {
+			indices.reserve(capacity);
+			types.reserve(capacity);
+			points.reserve(capacity);
+			symm_indices.reserve(capacity);
+			shifts.reserve(capacity);
+		}
+
+		void push_back(AtomIndex idx, AtomTypeBase type, const PointType& point,
+					   SymmIndex symm, const ShiftType& shift) {
+			indices.push_back(idx);
+			types.push_back(type);
+			points.push_back(point);
+			symm_indices.push_back(symm);
+			shifts.push_back(shift);
+		}
+
+		void clear() {
+			indices.clear();
+			types.clear();
+			points.clear();
+			symm_indices.clear();
+			shifts.clear();
+		}
+
+		struct AtomView {
+			AtomIndex index;
+			AtomTypeBase& type;
+			PointType& point;
+			SymmIndex& symm;
+			ShiftType& shift;
+		};
+
+		AtomView operator[](size_t i) {
+			return {indices[i], types[i], points[i], symm_indices[i], shifts[i]};
+		}
+
+		struct ConstAtomView {
+			AtomIndex index;
+			const AtomTypeBase& type;
+			const PointType& point;
+			SymmIndex symm;
+			const ShiftType& shift;
+		};
+
+		ConstAtomView operator[](size_t i) const {
+			return {indices[i], types[i], points[i], symm_indices[i], shifts[i]};
+		}
 	};
-	struct ClusterAtom {
-		AtomIndex index;
-		AtomTypeBase type;
-		PointType point;
-		SymmIndex symm;
-		ShiftType shift;
+
+	struct AnchorType {
+		PointType point{};
+		FloatingPointType radius = 0.0;
+		AnchorType(const PointType& point, FloatingPointType radius) : point(point), radius(radius) {
+			constexpr auto smin = std::numeric_limits<ShiftType::value_type>::min();
+			constexpr auto smax = std::numeric_limits<ShiftType::value_type>::max();
+
+			if (radius <= 0.0) {
+				throw std::runtime_error("Anchor radius must be positive");
+			}
+
+
+			if (point[0] < smin ||
+				point[1] < smin ||
+				point[2] < smin ||
+				point[0] > smax ||
+				point[1] > smax ||
+				point[2] > smax)
+			{
+				throw std::runtime_error("Anchor point is out of bounds");
+			}
+		}
 	};
 	struct TranslatedItem {
 		AtomIndex id = 0;
@@ -108,7 +231,20 @@ namespace cpplib::cluster_detail {
 
 	static constexpr ShiftType zeroShift(0, 0, 0);
 
-	class UnitCellBuilder {
+	/**
+		 * Generate a full unit cell by expanding an asymmetric unit using the builder's symmetries.
+		 *
+		 * Each entry in `points` corresponds to the same-index entry in `types`; their sizes must match.
+		 *
+		 * @param points Fractional coordinates of atoms in the asymmetric unit.
+		 * @param types Atom types corresponding to `points`.
+		 * @returns A BuildResult containing:
+		 *   - `atoms`: generated unit cell atoms (ClusterData),
+		 *   - `original_asymmetric_count`: number of input asymmetric atoms,
+		 *   - `generated_count`: number of atoms produced after symmetry expansion,
+		 *   - `duplicate_count`: number of duplicate atoms skipped when duplicate removal is enabled.
+		 */
+		class UnitCellBuilder {
 	public:
 
 		// Input configuration
@@ -119,7 +255,7 @@ namespace cpplib::cluster_detail {
 
 		// Extended result
 		struct BuildResult {
-			std::vector<ClusterAtom> atoms;
+			ClusterData atoms;
 			size_t original_asymmetric_count = 0;
 			size_t generated_count = 0;
 			size_t duplicate_count = 0;
@@ -130,10 +266,9 @@ namespace cpplib::cluster_detail {
 		};
 
 		explicit UnitCellBuilder(const ::std::vector<SymmType>& symmetries,
-								 Config config = Config{true, 
-								                        cpplib::geometry::crystallography_eq_position_eps_fractalspace})
-			: symmetries_(symmetries), config_(config) {
-		}
+								 Config config = Config{true,
+														cpplib::geometry::crystallography_eq_position_eps_fractalspace})
+			: symmetries_(symmetries), config_(config) {}
 
 		BuildResult build(const std::vector<PointType>& points,
 						 const std::vector<AtomTypeBase>& types) const {
@@ -142,15 +277,15 @@ namespace cpplib::cluster_detail {
 			result.original_asymmetric_count = points.size();
 
 			// 1. Create assymetric unit
-			auto asymmetric_unit = create_asymmetric_unit(points, types);
+			const ClusterData asymmetric_unit = create_asymmetric_unit(points, types);
 
-			// 2. Apply symmetry\ies
-			std::vector< ClusterAtom> all_atoms;
+			// 2. Apply symmetry
+			ClusterData all_atoms;
 			all_atoms.reserve(asymmetric_unit.size() * symmetries_.size());
 
-			for (int symm_idx = 0; symm_idx < symmetries_.size(); ++symm_idx) {
-				for (const auto& atom : asymmetric_unit) {
-					auto transformed = apply_symmetry(atom, symmetries_[symm_idx], symm_idx);
+			for (int symm_idx = 0; symm_idx < (int)symmetries_.size(); ++symm_idx) {
+				for (size_t i = 0; i < asymmetric_unit.size(); ++i) {
+					auto transformed = apply_symmetry(asymmetric_unit[i], symmetries_[symm_idx], symm_idx);
 
 					if (config_.remove_duplicates &&
 						is_duplicate(transformed, all_atoms, config_.duplicate_tolerance)) {
@@ -158,7 +293,13 @@ namespace cpplib::cluster_detail {
 						continue;
 					}
 
-					all_atoms.push_back(std::move(transformed));
+					all_atoms.push_back(
+						transformed.index,
+						transformed.type,
+						transformed.point,
+						transformed.symm,
+						-transformed.shift
+					);
 					result.generated_count++;
 				}
 			}
@@ -167,65 +308,132 @@ namespace cpplib::cluster_detail {
 			return result;
 		}
 
-		// ==== TEST METHODS ====
-
-		static std::vector<ClusterAtom> create_asymmetric_unit(
+		/**
+		 * Construct a ClusterData representing the asymmetric unit from given atomic positions and types.
+		 *
+		 * @param points Fractional coordinates of atoms in the asymmetric unit; length must equal `types.size()`.
+		 * @param types Atom types corresponding to each position; length must equal `points.size()`.
+		 * @returns A ClusterData where:
+		 *  - `points` and `types` are copies of the inputs,
+		 *  - `indices` is filled with 0..n-1,
+		 *  - `symm_indices` is filled with zeros,
+		 *  - `shifts` is filled with `zeroShift`.
+		 */
+		static ClusterData create_asymmetric_unit(
 			const std::vector<geometry::Point<FloatingPointType>>& points,
 			const std::vector<basic_types::AtomTypeBase>& types) {
 
-			std::vector< ClusterAtom> atoms;
-			atoms.reserve(points.size());
+			assert(points.size() == types.size());
 
-			for (size_t i = 0; i < points.size(); ++i) {
-				atoms.emplace_back(
-					basic_types::AtomIndex(i),
-					types[i],
-					points[i],
-					0,  // symm_index
-					ShiftType(0, 0, 0)
-				);
-			}
+			ClusterData atoms;
+			atoms.indices.resize(points.size(), 0);
+			atoms.points = points;
+			atoms.types = types;
+			atoms.symm_indices.assign(points.size(), 0);
+			atoms.shifts.assign(points.size(), zeroShift);
+
+			std::iota(atoms.indices.begin(), atoms.indices.end(), 0);
+
 			return atoms;
 		}
+	private:
 
-		ClusterAtom apply_symmetry(
-			const ClusterAtom& atom,
+		struct TempAtom {
+			AtomIndex index;
+			AtomTypeBase type;
+			PointType point;
+			SymmIndex symm;
+			ShiftType shift;
+		};
+
+		/**
+		 * Produce a temporary atom by applying a symmetry operation to an atom and normalizing its coordinates into fractional [0,1) with an integer lattice shift.
+		 *
+		 * @param atom Const view of the source atom (provides index, type and coordinates in fractional space).
+		 * @param symmetry Symmetry operation to apply to the atom's coordinates.
+		 * @param symm_index Index of the symmetry operation (stored in the resulting TempAtom).
+		 * @returns A TempAtom containing:
+		 *   - the original atom index and type,
+		 *   - the transformed point normalized into fractional coordinates in the range [0,1),
+		 *   - the provided symmetry index,
+		 *   - an integer shift vector equal to the floor of the transformed coordinates (the lattice translation).
+		 */
+		TempAtom apply_symmetry(
+			const ClusterData::ConstAtomView& atom,
 			const geometry::Symm<FloatingPointType>& symmetry,
 			int symm_index) const {
 
 			auto temp_point = symmetry.GenSymm(atom.point);
-			auto floating_shift = -temp_point.floor();
-			temp_point.MoveToCell();
 
-			 ShiftType shift(
-				static_cast< ShiftType::value_type>(floating_shift[0]),
-				static_cast< ShiftType::value_type>(floating_shift[1]),
-				static_cast< ShiftType::value_type>(floating_shift[2])
-			);
+			PointType shifted_point;
+			ShiftType shift;
+			for (int i = 0; i < 3; ++i) {
+				FloatingPointType coord = temp_point[i];
+				auto s = static_cast<int8_t>(std::floor(coord));
+				shifted_point[i] = coord - s;
+				shift[i] = s;
+			}
 
-			return {
-				atom.index,
-				atom.type,
-				temp_point,
-				symm_index,
-				shift
-			};
+			return {atom.index, atom.type, shifted_point, symm_index, shift};
 		}
 
-	private:
-		bool is_duplicate(const ClusterAtom& atom,
-						 const std::vector<ClusterAtom>& existing_atoms,
-						 FloatingPointType tolerance) const {
-			return std::any_of(existing_atoms.begin(), existing_atoms.end(),
-				[&](const  ClusterAtom& existing) {
-						return geometry::Point<FloatingPointType>::distance(
-							atom.point, existing.point) < tolerance;
-				});
+		/**
+		 * Determine if a candidate atom's position duplicates any atom in an existing set within a distance threshold.
+		 *
+		 * @param candidate Atom (with position) to test for duplication.
+		 * @param existing Set of atoms whose positions are compared against the candidate.
+		 * @param tolerance Maximum distance between positions to consider them duplicates.
+		 * @returns `true` if the candidate's position is within `tolerance` of any atom in `existing`, `false` otherwise.
+		 */
+		bool is_duplicate(const TempAtom& candidate, const ClusterData& existing, FloatingPointType tolerance) const {
+			for (size_t i = 0; i < existing.size(); ++i) {
+				if (geometry::Point<FloatingPointType>::distance(candidate.point, existing[i].point) < tolerance) {
+					return true;
+				}
+			}
+			return false;
 		}
 
 		const std::vector<geometry::Symm<FloatingPointType>>& symmetries_;
 		Config config_;
-	}; // class UnitCellBuilder
+	}; /**
+		 * Build connected molecular entities from the provided unit-cell atoms using distance-based bonds.
+		 *
+		 * Constructs molecules by finding bonds between atoms in `atoms_01`, merging connected components,
+		 * generating translated-molecule identifiers that include inter-unit-cell shifts, and returning
+		 * the collection of molecules, translated molecule entries, per-atom translated-molecule mapping,
+		 * and the count of molecules per unit cell.
+		 *
+		 * @param atoms_01 ClusterData containing atom indices, types, fractional points, symmetry indices, and shifts for the unit cell.
+		 * @returns ResultType containing:
+		 *   - `molecules`: vector of assembled Molecule objects (each with translated atom nodes and polymer flag),
+		 *   - `translated_molecules`: vector of TranslatedMolecule entries (molecule id + shift),
+		 *   - `atom_to_trmol_id`: mapping from each atom index to its translated-molecule id,
+		 *   - `molecules_per_unit_cell`: number of molecules present within a single unit cell.
+		 */
+		 
+		/**
+		 * Merge two molecules connected by `bond` into a single molecule and update mappings.
+		 *
+		 * If the bond connects atoms already belonging to the same molecule, marks that molecule as a polymer
+		 * when the total translation around the bond is nonzero. If the bond connects different molecules,
+		 * appends the second molecule's nodes into the first, clears the second, propagates polymer status,
+		 * updates `a_to_m` entries for moved atoms, and applies the necessary shift to the merged nodes
+		 * to maintain consistent translated coordinates.
+		 *
+		 * @param bond BondWithShift describing the connection between two atom indices and its decompressed shift.
+		 * @param m Mutable vector of Molecule objects indexed by molecule id; modified in-place to reflect merges.
+		 * @param a_to_m Mutable per-atom mapping from atom index to its current MoleculeIndex; updated for moved atoms.
+		 */
+		 
+		/**
+		 * Locate a translated atom within a molecule by atom id.
+		 *
+		 * @param id Atom index to find within `m`.
+		 * @param m Molecule to search.
+		 * @returns Reference to the matching TranslatedAtom within `m`.
+		 * @throws Molecule by value if no node with `id` is present in `m`.
+		 */
 
 	class ConstructMolecules {
 	public:
@@ -243,22 +451,36 @@ namespace cpplib::cluster_detail {
 
 		ConstructMolecules(const CellType& unit_cell,
 						   const Distances& distances) noexcept
-			: cell(unit_cell), dist(distances) {
-		}
+			: cell(unit_cell), dist(distances) {}
 
-		ResultType execute(const ::std::vector<ClusterAtom>& atoms_01) const {
+		/**
+		 * Build connected molecular entities from the provided unit-cell atom set using spatial neighbor search and distance-based bonding.
+		 *
+		 * Processes input atoms to form molecules by (1) constructing a spatial grid and extracting candidate bonds, (2) filtering bonds using the provided distance rules, (3) merging atoms into connected molecules via union-find semantics, and (4) producing translated molecule records and a mapping from each input atom to its translated-molecule id.
+		 *
+		 * @param atoms_01 Atom data for the unit cell (positions, types, indices, etc.).
+		 * @returns A ResultType containing:
+		 *   - `molecules`: vector of constructed Molecule objects (each with member `nodes` of translated atoms),
+		 *   - `translated_molecules`: vector of unique translated molecule entries,
+		 *   - `atom_to_trmol_id`: mapping from each input atom index to the translated-molecule id it belongs to,
+		 *   - `molecules_per_unit_cell`: count of molecules present in the unit cell.
+		 */
+		ResultType execute(const ClusterData& atoms_01) const {
 			ResultType result;
-			
+
 			auto atom_s = atoms_01.size();
 
 
-			std::function< const PointType& (const ClusterAtom&)> point_iterator_lambda = 
-				[](const ClusterAtom& a)->const PointType& { return a.point; };
-
-			geometry::HashedSpace<FloatingPointType, AtomIndex> hashed_space(cell, 4.0);
-			auto bonds = hashed_space.create_hash_bonds<BondWithShift>(atoms_01, 
-																	   point_iterator_lambda);
-			dist.filter_bond_list(bonds, atoms_01, [this](const PointType& a, const PointType& b) {return cell.distance_in_01(a, b); });
+			geometry::SpatialGrid<FloatingPointType> sg;
+			sg.build(atoms_01.points, cell, 4.0);
+			auto bonds = sg.get_bonds(false);
+			dist.filter_bond_list(bonds,
+								  atoms_01.types,
+								  atoms_01.points,
+								  [this](const PointType& a, const PointType& b)
+								  {
+									  return (cell.fracToCart() * (a - b)).r();
+								  });
 
 			// Based on union-find separation
 			result.molecules.resize(atom_s);
@@ -273,14 +495,10 @@ namespace cpplib::cluster_detail {
 				if (bond.first == bond.second)
 					continue;
 
-				// Add shift to bonds
-				PointType floatshift = (atoms_01[bond.first].point - atoms_01[bond.second].point).round();
-				bond.shift = ShiftType(floatshift[0], floatshift[1], floatshift[2]);
-				
 				unite(bond, result.molecules, result.atom_to_trmol_id);
 
 			}
-            // Remove empty molecules
+			// Remove empty molecules
 			decltype(result.molecules) tempmol;
 			tempmol.reserve(atom_s);
 			::std::vector<MoleculeIndex> mol_update_id(atom_s, 0);
@@ -295,7 +513,7 @@ namespace cpplib::cluster_detail {
 				mol_update_id[i] = new_index;
 			}
 			result.molecules = std::move(tempmol);
-			
+
 			for (size_t j = 0; j < atom_s; j++)
 			{
 				result.atom_to_trmol_id[j] = mol_update_id[result.atom_to_trmol_id[j]];
@@ -304,22 +522,38 @@ namespace cpplib::cluster_detail {
 			for (size_t i = 0; i < atom_s; i++)
 			{
 				auto shift = find(i, result.molecules[result.atom_to_trmol_id[i]]).shift;
-				
+
 				result.atom_to_trmol_id[i] = find_or_push_mol({result.atom_to_trmol_id[i],-shift}, result.translated_molecules);
 			}
 
 			return result;
 		}
 
+		/**
+		 * Merge two molecules connected by a bond, updating molecule membership, shifts, and polymer state.
+		 *
+		 * If the bond connects atoms in the same molecule, marks that molecule as polymer when the
+		 * implied translational closure is nonzero and does nothing else. If the bond connects
+		 * distinct molecules, appends the second molecule's nodes into the first, updates each moved
+		 * atom's associated molecule id in `a_to_m`, applies the translational shift implied by the
+		 * bond to the moved nodes' shifts, propagates the polymer flag, clears the second molecule's
+		 * nodes, and leaves capacity adjusted for future insertions.
+		 *
+		 * @param bond BondWithShift describing the bonded atom indices and the bond's shift code.
+		 * @param m Vector of Molecule objects; the function mutates entries for the merged molecules.
+		 * @param a_to_m Mapping from atom index to molecule index; entries for atoms moved into the
+		 *               target molecule are updated to the target molecule's id.
+		 */
 		void unite(const BondWithShift& bond, std::vector<Molecule>& m, std::vector<AtomIndex>& a_to_m) const {
 
 			Molecule& mol_a = m[a_to_m[bond.first]];
 			Molecule& mol_b = m[a_to_m[bond.second]];
+			const auto bondshift = bond.shiftcode.get_shift();
 
 			// Check mol_a and mol_b are the same molecules
 			if (&mol_a == &mol_b) {
 				// Is it polymer?
-				auto totalshift = find(bond.second, mol_a).shift - find(bond.first, mol_a).shift - bond.shift;
+				auto totalshift = find(bond.second, mol_a).shift - find(bond.first, mol_a).shift - bondshift;
 				if (totalshift != zeroShift) {
 					// Yes! It is polymer!
 					mol_a.is_polymer = true;
@@ -346,7 +580,7 @@ namespace cpplib::cluster_detail {
 
 			// If bond has shift: move atoms
 			const auto fshift = find(bond.first, mol_a).shift - find(bond.second, mol_a).shift;
-			const auto dshift = fshift + bond.shift;
+			const auto dshift = fshift + bondshift;
 			for (size_t i = mol_a_s; i < sum_of_sizes; i++)
 			{
 				mol_a.nodes[i].shift += dshift;
@@ -383,14 +617,35 @@ namespace cpplib::cluster_detail {
 
 
 
-} // namespace cpplib::cluster_detail
+} /**
+ * Assemble a cluster of atoms around the configured anchors using the unit cell, symmetry operations, and bonding information.
+ *
+ * Builds the unit cell from the asymmetric input, constructs molecular entities, grows polymeric fragments if present, and places non-polymer molecules into translated positions that intersect anchor regions. The final set of placed atoms is returned as a ClusterData container.
+ *
+ * @param distances Distances object providing bonding criteria used to construct molecules.
+ * @param[out] hasPolymer Set to `true` if any polymeric molecule was included in the returned cluster, `false` otherwise.
+ * @returns ClusterData containing the atoms included in the assembled cluster. Each entry holds the original atom index, atom type, fractional position (possibly offset by integer lattice shifts), symmetry index, and accumulated shift.
+ */
 
 
 
 
 namespace cpplib {
 
-	class Cluster {
+	/**
+		 * Initialize a Cluster with unit cell geometry, symmetry operations, anchors, asymmetric-unit atoms, and a polymer cutoff radius.
+		 *
+		 * The constructor stores references and moves provided vectors into the Cluster instance, verifies that the asymmetric atom
+		 * types and positions have matching lengths, and converts the provided anchors from fractional to cartesian coordinates.
+		 *
+		 * @param unit_cell Reference to the crystallographic unit cell used for coordinate transforms.
+		 * @param symms Reference to the list of symmetry operations used for unit-cell expansion.
+		 * @param anchors_fractal Anchors given in fractional coordinates (moved into the Cluster); each anchor contains a point and radius.
+		 * @param points Fractional coordinates of atoms in the asymmetric unit (moved into the Cluster).
+		 * @param types Atom type descriptors corresponding one-to-one with `points` (moved into the Cluster).
+		 * @param polymer_cutoff Radius used to determine polymer growth/containment behavior.
+		 */
+		class Cluster {
 	public:
 		using FloatingPointType = cluster_detail::FloatingPointType;
 		using PointType = cluster_detail::PointType;
@@ -405,14 +660,13 @@ namespace cpplib {
 		using AtomTypeBase = cluster_detail::AtomTypeBase;
 
 		using AnchorType = cluster_detail::AnchorType;
-		using ClusterAtom = cluster_detail::ClusterAtom;
-		using BondWithShift = cluster_detail::BondWithShift;
+		using ClusterData = cluster_detail::ClusterData;
 		using BondList = cluster_detail::BondList;
 		using TranslatedAtom = cluster_detail::TranslatedAtom;
 		using TranslatedMolecule = cluster_detail::TranslatedMolecule;
 		using Molecule = cluster_detail::Molecule;
 
-	public:    
+	public:
 		Cluster(CellType& unit_cell,
 				::std::vector<SymmType>& symms,
 				::std::vector<AnchorType>&& anchors_fractal,
@@ -425,21 +679,33 @@ namespace cpplib {
 			asymmetric_types(std::move(types)),
 			asymmetric_points(std::move(points)),
 			polymer_cutoff_radius(polymer_cutoff)
-		
+
 		{
 			assert(asymmetric_types.size() == asymmetric_points.size());
+
+			const size_t s = anchors_frac.size();
+			anchors_cart.reserve(s);
+			for (size_t i = 0; i < s; i++)
+			{
+				anchors_cart.emplace_back(cell.fracToCart() * anchors_frac[i].point, anchors_frac[i].radius);
+			}
 		}
-		
+
 
 	private:
 		CellType& cell;
 		std::vector<SymmType>& symm;
 		std::vector<AnchorType> anchors_frac;
+		std::vector<AnchorType> anchors_cart;
 		std::vector<AtomTypeBase> asymmetric_types;
 		std::vector<PointType> asymmetric_points;
 		FloatingPointType polymer_cutoff_radius;
 	public:
-		::std::vector<ClusterAtom> execute(const Distances& distances) const
+		/// @brief Create cluster around anchors
+		/// @param[in] distances Special object with possible bonds
+		/// @param[out] hasPolymer True if cluster contains polymer, false elsewhere
+		/// @return All data about cluster
+		ClusterData execute(const Distances& distances, bool& hasPolymer) const
 		{
 			constexpr PointType zeroPoint(0, 0, 0);
 			::std::array<PointType, 3> e = {
@@ -447,12 +713,12 @@ namespace cpplib {
 				cell.fracToCart() * ShiftType(0,1,0),
 				cell.fracToCart() * ShiftType(0,0,1)
 			};
-			const std::array<Plane, 3> plane = {Plane(zeroPoint, e[1], e[2]), Plane(zeroPoint, e[0], e[2]), Plane(zeroPoint, e[0], e[1])};
+			const std::array<Plane, 3> plane = {Plane(zeroPoint, e[1], e[2]), Plane(e[0], zeroPoint, e[2]), Plane(zeroPoint, e[0], e[1])};
 
 			// 1. Fill Utit cell [0,1) with atoms
 			cluster_detail::UnitCellBuilder ucb(symm);
 			auto unit_cell = ucb.build(asymmetric_points, asymmetric_types);
-			if(unit_cell.success() == false)
+			if (unit_cell.success() == false)
 				return {}; // unsuccessful generation of unit cell.
 			const auto atom_size = unit_cell.atoms.size();
 
@@ -462,16 +728,18 @@ namespace cpplib {
 			auto mols = cm.execute(unit_cell.atoms);
 
 			// 3. Grow polymers
+			hasPolymer = false;
 			::std::unordered_set<TranslatedAtom, TranslatedAtom::Hash> atoms;
 			for (auto& molecule : mols.molecules) {
 				if (molecule.is_polymer == true) {
 					atoms.merge(grow_polymer(molecule, unit_cell.atoms, plane));
+					hasPolymer = true;
 				}
 			}
 
 			// 4. Find boxes for molecules
 			BoxSet boxes = create_boxes(plane);
-			
+
 
 			// 5. Add nonpolymer molecules
 			::std::unordered_set<TranslatedMolecule, TranslatedMolecule::Hash> moleculeset;
@@ -505,11 +773,11 @@ namespace cpplib {
 			}
 
 			// 6. Create output vector
-			::std::vector<ClusterAtom> ret;
+			ClusterData ret;
 			ret.reserve(atoms.size());
 
 			for (const auto& atom : atoms) {
-				ret.emplace_back(unit_cell.atoms[atom.id].index,
+				ret.push_back(unit_cell.atoms[atom.id].index,
 								 unit_cell.atoms[atom.id].type,
 								 unit_cell.atoms[atom.id].point + atom.shift,
 								 unit_cell.atoms[atom.id].symm,
@@ -525,9 +793,9 @@ namespace cpplib {
 
 
 
-			std::array<FloatingPointType, 3> dp = { plane[0].distance(rp111),
+			std::array<FloatingPointType, 3> dp = {plane[0].distance(rp111),
 													plane[1].distance(rp111),
-													plane[2].distance(rp111) };
+													plane[2].distance(rp111)};
 
 			for (const auto& anchor : anchors_frac) {
 
@@ -538,33 +806,28 @@ namespace cpplib {
 		}
 
 
-
+		inline FloatingPointType dist0(const Plane& plane, const PointType& p) const {
+			return plane.side(p) / sqrt(fma(plane.a[0], plane.a[0], 
+											fma(plane.a[1], plane.a[1], 
+												plane.a[2]* plane.a[2])));
+		}
 
 		void constructBox(const AnchorType& anchor,
 						  FloatingPointType cutoff,
 						  const std::array<FloatingPointType, 3>& dp,
-						  BoxSet& box, 
+						  BoxSet& box,
 						  const std::array<Plane, 3>& plane) const {
 
-			ShiftType b(anchor.point.floor());
-			std::array < FloatingPointType, 3> low{
-				plane[0].distance(cell.fracToCart() * anchor.point) - b[0] * dp[0],
-				plane[1].distance(cell.fracToCart() * anchor.point) - b[1] * dp[1],
-				plane[2].distance(cell.fracToCart() * anchor.point) - b[2] * dp[2] };
-
-			std::array < FloatingPointType, 3> high{
-				dp[0] - low[0],
-				dp[1] - low[1],
-				dp[2] - low[2] };
+			auto real_anchor = cell.fracToCart() * anchor.point;
 
 			// [ -x, +x, -y, +y, -z, +z ]
 			const std::array<ShiftType::value_type, 6> maxr{
-				b[0] - std::ceil((cutoff - low[0]) / dp[0]),
-				b[0] + std::ceil((cutoff - high[0]) / dp[0]),
-				b[1] - std::ceil((cutoff - low[1]) / dp[1]),
-				b[1] + std::ceil((cutoff - high[1]) / dp[1]),
-				b[2] - std::ceil((cutoff - low[2]) / dp[2]),
-				b[2] + std::ceil((cutoff - high[2]) / dp[2]), };
+				static_cast<ShiftType::value_type>(std::floor((dist0(plane[0], real_anchor) - cutoff) / dp[0])),
+				static_cast<ShiftType::value_type>(std::floor((dist0(plane[0], real_anchor) + cutoff) / dp[0])),
+				static_cast<ShiftType::value_type>(std::floor((dist0(plane[1], real_anchor) - cutoff) / dp[1])),
+				static_cast<ShiftType::value_type>(std::floor((dist0(plane[1], real_anchor) + cutoff) / dp[1])),
+				static_cast<ShiftType::value_type>(std::floor((dist0(plane[2], real_anchor) - cutoff) / dp[2])),
+				static_cast<ShiftType::value_type>(std::floor((dist0(plane[2], real_anchor) + cutoff) / dp[2]))};
 
 
 			for (ShiftType::value_type i = maxr[0]; i <= maxr[1]; i++) {
@@ -578,15 +841,26 @@ namespace cpplib {
 
 
 
-		bool check_molecule(const ShiftType& shift, 
-							const Molecule& mol, 
-							const ::std::vector<ClusterAtom>& unit01) const {
-			for (const auto& anchor : anchors_frac) {
-				for (const auto& node : mol.nodes) {
-					// Calculate distance to anchor
-					PointType vec = cell.fracToCart()*(unit01[node.id].point + node.shift + shift - anchor.point);
+		/**
+				 * Determine whether a translated copy of a molecule intersects any anchor region.
+				 *
+				 * @param shift Integer unit-cell translation applied to every atom in `mol`.
+				 * @param mol Molecule whose nodes (atom id and per-node shift) will be tested.
+				 * @param unit01 Unit cell atomic data used to obtain each node's fractional position.
+				 * @returns `true` if any atom of `mol`, after applying its node shift and the supplied `shift`
+				 *          and converting to Cartesian coordinates, lies strictly within the radius of any anchor;
+				 *          `false` otherwise.
+				 */
+				bool check_molecule(const ShiftType& shift,
+							const Molecule& mol,
+							const ClusterData& unit01) const {
+			for (const auto& node : mol.nodes) {
+				auto point = cell.fracToCart() * (unit01.points[node.id] + node.shift + shift);
 
-					if (vec.r() < anchor.radius) {
+				for (const auto& anchor : anchors_cart) {
+					// Calculate distance to anchor
+
+					if(PointType::distanceSq(point, anchor.point) < anchor.radius* anchor.radius) {
 						return true;
 					}
 				}
@@ -597,7 +871,7 @@ namespace cpplib {
 
 		std::unordered_set<TranslatedAtom, TranslatedAtom::Hash>
 			grow_polymer(const Molecule& molecule,
-						 const ::std::vector<ClusterAtom>& unit01, 
+						 const ClusterData& unit01,
 						 const std::array<Plane, 3>& plane) const
 		{
 			std::unordered_set<TranslatedAtom, TranslatedAtom::Hash> ret;
@@ -605,9 +879,9 @@ namespace cpplib {
 			BoxSet boxes;
 			auto rp111 = cell.fracToCart() * ShiftType(1, 1, 1);
 
-			std::array<FloatingPointType, 3> dp = { plane[0].distance(rp111),
+			std::array<FloatingPointType, 3> dp = {plane[0].distance(rp111),
 													plane[1].distance(rp111),
-													plane[2].distance(rp111) };
+													plane[2].distance(rp111)};
 
 			for (const auto& anchor : anchors_frac) {
 				constructBox(anchor, polymer_cutoff_radius, dp, boxes, plane);
@@ -616,7 +890,7 @@ namespace cpplib {
 			for (const auto& shift : boxes) {
 				for (const auto& node : molecule.nodes) {
 					for (const auto& anchor : anchors_frac) {
-						PointType vec = unit01[node.id].point + shift - anchor.point;
+						PointType vec = cell.fracToCart() * (unit01.points[node.id] + shift - anchor.point);
 
 						if (vec.r() < polymer_cutoff_radius) {
 							ret.emplace(node.id, shift);
