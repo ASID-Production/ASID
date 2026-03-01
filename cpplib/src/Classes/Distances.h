@@ -129,8 +129,8 @@ namespace cpplib {
 				const auto shiftcode = iter->shiftcode;
 
 				PointType moved_point2 = points[l2];
-				if (shiftcode != 13) {
-					moved_point2 += geometry::SpatialGrid<FloatingPointType>::decompress_shift(shiftcode);
+				if (shiftcode.get_code() != 13) {
+					moved_point2 += shiftcode.get_shift();
 				}
 
 				char is_real_bond = isBond(types[l1], types[l2], dist(points[l1], moved_point2));

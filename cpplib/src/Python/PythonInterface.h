@@ -233,6 +233,7 @@ namespace py_util {
 
 		if (!add_to_dict("area",        convert(p.area), dict) ||
 			!add_to_dict("vertices",    convert(p.vert_ids), dict) ||
+			!add_to_dict("shift",       convert(p.second_shift), dict) ||
 			!add_to_dict("edges",       convert(p.edge_ids), dict) ||
 			!add_to_dict("solid_angle", convert(p.solidangle), dict) ||
 			!add_to_dict("atoms",       convert(p.atom_ids), dict)) [[unlikely]] {

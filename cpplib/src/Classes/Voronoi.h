@@ -297,7 +297,7 @@ namespace cpplib::voronoi {
 		/// @brief Shift code for periodic boundary conditions
 		///
 		/// Indicates which periodic image the "other" cell is in.
-		char other_shiftcode;
+		geometry::ShiftCode other_shiftcode;
 
 		/// @brief Vertices forming this face (non-owning pointers)
 		Container<Vertex*> vertices;
@@ -410,7 +410,7 @@ namespace cpplib::voronoi {
 		/// @brief Shift codes for each face of the base cube
 		///
 		/// Indicates which periodic image each cube face points toward.
-		static constexpr std::array<char, 6> face_shiftcodes = {{
+		static constexpr std::array<int8_t, 6> face_shiftcodes = {{
 			22, // front face
 			 4, // back face
 			12, // left face
@@ -528,7 +528,7 @@ namespace cpplib::voronoi {
 		/// 2. Updates edge and face states accordingly
 		/// 3. Creates new vertices at edge-plane intersections
 		/// 4. Adds new edges and a new face where the plane cuts the cell
-		void clipByPlaneAndAddNewFace(const PlaneType& clipping_plane, uint32_t id_of_another_cell, char another_shiftcode) {
+		void clipByPlaneAndAddNewFace(const PlaneType& clipping_plane, uint32_t id_of_another_cell, geometry::ShiftCode another_shiftcode) {
 			using enum State;
 
 			// Check if the side is correct (center must be on positive side)
@@ -685,7 +685,7 @@ namespace cpplib::voronoi {
 
 			raw_face_ptr->owner_id = id;
 			raw_face_ptr->other_id = id_of_another_cell;
-			raw_face_ptr->other_shiftcode = another_shiftcode;
+			raw_face_ptr->other_shiftcode = another_shiftcode.get_code();
 			raw_face_ptr->set_state(VALID);
 			assert(raw_face_ptr->calculateState() == VALID);
 
@@ -751,7 +751,7 @@ namespace cpplib::voronoi {
 		/// @brief Transformation matrix type
 		using Matrix = geometry::Matrix<FloatingPointType>;
 		/// @brief Sorted list of neighbor interactions (index, shiftcode, distance?)
-		using PointsSorted = std::vector<std::tuple<int, char, FloatingPointType>>;
+		using PointsSorted = std::vector<std::tuple<int, geometry::ShiftCode, FloatingPointType>>;
 		/// @brief Plane type
 		using PlaneType = geometry::Plane<FloatingPointType>;
 
@@ -839,7 +839,7 @@ namespace cpplib::voronoi {
 				}
 				// Add neighbor to second atom's list (with inverse shift)
 				if (flags_[bond.second] == true) {
-					ret[bond.second].emplace_back(bond.first, SpatialGrid::inverse_code(bond.shiftcode), FloatingPointType(0.0));
+					ret[bond.second].emplace_back(bond.first, geometry::ShiftCode::inverse(bond.shiftcode), FloatingPointType(0.0));
 				}
 			}
 			return ret;
@@ -863,7 +863,7 @@ namespace cpplib::voronoi {
 				{
 					lengthsq = (FtoC * (points_in_unit01[i] -
 										points_in_unit01[second] -
-										SpatialGrid::decompress_shift(code))).rSq();
+										code.get_shift())).rSq();
 				}
 
 				// 2. Sort by distance
@@ -901,7 +901,7 @@ namespace cpplib::voronoi {
 				}
 
 				// Calculate clipping plane
-				auto sumsecond = points_in_unit01[second] + SpatialGrid::decompress_shift(code);
+				auto sumsecond = points_in_unit01[second] + code.get_shift();
 
 				auto cartA = unitcell.fracToCart() * cell.center;
 				auto cartB = unitcell.fracToCart() * sumsecond;
@@ -968,11 +968,12 @@ namespace cpplib::voronoi {
 
 		/// @brief Polygon (face) in the fused structure
 		struct PolygonIn {
-			FloatingPointType area;               ///< Area of Polygon
-			FloatingPointType solidangle;         ///< Solid angle of Polygon
-			::std::vector<uint32_t>   vert_ids;   ///< Vertex indices forming the polygon
-			::std::vector<uint32_t>   edge_ids;   ///< Edge indices forming the polygon
-			::std::array<uint32_t, 2> atom_ids;   ///< IDs of the two atoms separated by this face
+			geometry::ShiftCode::ShiftPoint second_shift; ///< Shift code of the second atom
+			FloatingPointType area;                       ///< Area of Polygon
+			FloatingPointType solidangle;                 ///< Solid angle of Polygon
+			::std::vector<uint32_t>   vert_ids;           ///< Vertex indices forming the polygon
+			::std::vector<uint32_t>   edge_ids;           ///< Edge indices forming the polygon
+			::std::array<uint32_t, 2> atom_ids;           ///< IDs of the two atoms separated by this face
 		};
 
 		/// @brief Edge in the fused structure
@@ -1126,7 +1127,7 @@ namespace cpplib::voronoi {
 						continue;
 					// Skip duplicate internal faces (keep only one copy)
 					if (cells[face->other_id].vertices.empty() == false &&
-					   face->other_shiftcode == 13 &&
+					   face->other_shiftcode.get_code() == 13 &&
 					   face->owner_id > face->other_id) {
 						continue;
 					}
@@ -1134,7 +1135,7 @@ namespace cpplib::voronoi {
 					// Create polygon entry
 					polyhedra[face->owner_id].poly_ids.push_back(polygons.size());
 					if (cells[face->other_id].vertices.empty() == false &&
-					    face->other_shiftcode == 13) {
+					    face->other_shiftcode.get_code() == 13) {
 						polyhedra[face->other_id].poly_ids.push_back(polygons.size());
 					}
 					polygons.emplace_back();
@@ -1146,8 +1147,9 @@ namespace cpplib::voronoi {
 						cur_poly.edge_ids.push_back(edge->get_id());
 					}
 					reorder_vertices_and_edges_in_polygon(cur_poly);
+					cur_poly.second_shift = face->other_shiftcode.get_shift();
 
-					// Calculate area
+					// Calculate area and solid angle
 					cur_poly.area = calculate_area(cur_poly, FtoC);
 					cur_poly.solidangle = calculate_solid_angle(cur_poly, FtoC);
 				}

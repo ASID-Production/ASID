@@ -793,7 +793,7 @@ TEST(VoronoiTest, CellClippingParallelPlane) {
 		Point<FloatingPointType>(-1.0, 0.0, 0.0)
 	);
 
-	cell.clipByPlaneAndAddNewFace(parallelPlane, 1, 14);
+	cell.clipByPlaneAndAddNewFace(parallelPlane, 1, ShiftCode(14));
 
 	// Should not change the cell
 	EXPECT_EQ(cell.vertices.size(), initialVertexCount);
@@ -814,7 +814,7 @@ TEST(VoronoiTest, CellClippingTangent) {
 
 	size_t initialVertexCount = cell.vertices.size();
 
-	cell.clipByPlaneAndAddNewFace(tangentPlane, 1, 14);
+	cell.clipByPlaneAndAddNewFace(tangentPlane, 1, ShiftCode(14));
 
 	// Should add some vertices at the tangent points
 	EXPECT_GE(cell.vertices.size(), initialVertexCount);
@@ -833,13 +833,13 @@ TEST(VoronoiTest, VoronoiFusedVertexMerging) {
 		Point<FloatingPointType>(0.5, 0.5, 0.5),
 		Point<FloatingPointType>(-1.0, 0.0, 0.0)
 	);
-	cells[0].clipByPlaneAndAddNewFace(plane1, 1, 13);
+	cells[0].clipByPlaneAndAddNewFace(plane1, 1, ShiftCode());
 
 	geometry::Plane<FloatingPointType> plane2(
 		Point<FloatingPointType>(0.5, 0.5, 0.5),
 		Point<FloatingPointType>(1.0, 0.0, 0.0)
 	);
-	cells[1].clipByPlaneAndAddNewFace(plane2, 0, 13);
+	cells[1].clipByPlaneAndAddNewFace(plane2, 0, ShiftCode());
 
 	geometry::Cell<FloatingPointType> cell(10.0, 10.0, 10.0, 90.0, 90.0, 90.0);
 	VoronoiFused fused(cells, cell.fracToCart());
@@ -869,13 +869,13 @@ TEST(VoronoiTest, VoronoiFusedEdgePolygonPopulation) {
 		Point<FloatingPointType>(0.5, 0.5, 0.5),
 		Point<FloatingPointType>(-1.0, 0.0, 0.0)
 	);
-	cells[0].clipByPlaneAndAddNewFace(plane1, 1, 13);
+	cells[0].clipByPlaneAndAddNewFace(plane1, 1, ShiftCode());
 
 	geometry::Plane<FloatingPointType> plane2(
 		Point<FloatingPointType>(0.5, 0.5, 0.5),
 		Point<FloatingPointType>(1.0, 0.0, 0.0)
 	);
-	cells[1].clipByPlaneAndAddNewFace(plane2, 0, 13);
+	cells[1].clipByPlaneAndAddNewFace(plane2, 0, ShiftCode());
 
 	geometry::Cell<FloatingPointType> cell(10.0, 10.0, 10.0, 90.0, 90.0, 90.0);
 	VoronoiFused fused(cells, cell.fracToCart());

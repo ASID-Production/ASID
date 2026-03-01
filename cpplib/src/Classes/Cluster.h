@@ -400,7 +400,7 @@ namespace cpplib::cluster_detail {
 
 			Molecule& mol_a = m[a_to_m[bond.first]];
 			Molecule& mol_b = m[a_to_m[bond.second]];
-			const auto bondshift = geometry::SpatialGrid<FloatingPointType>::decompress_shift(bond.shiftcode);
+			const auto bondshift = bond.shiftcode.get_shift();
 
 			// Check mol_a and mol_b are the same molecules
 			if (&mol_a == &mol_b) {

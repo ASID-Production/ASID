@@ -850,6 +850,83 @@ namespace cpplib::geometry {
 		}
 	};
 
+	struct ShiftCode {
+		using ShiftPoint = Point<int8_t>;
+
+		constexpr ShiftCode() noexcept = default;
+		constexpr explicit ShiftCode(uint8_t c) noexcept : code(c) {
+			assert(c <= 26);
+		}
+		constexpr explicit ShiftCode(ShiftPoint sp) noexcept {
+			assert(sp[0] >= -1 && sp[0] <= 1);
+			assert(sp[1] >= -1 && sp[1] <= 1);
+			assert(sp[2] >= -1 && sp[2] <= 1);
+			code = compress_shift(sp);
+		}
+
+		ShiftCode& operator=(uint8_t c) noexcept {
+			assert(c <= 26);
+			code = c;
+			return *this;
+		}
+
+		ShiftCode& operator=(ShiftPoint sp) noexcept {
+			assert(sp[0] >= -1 && sp[0] <= 1);
+			assert(sp[1] >= -1 && sp[1] <= 1);
+			assert(sp[2] >= -1 && sp[2] <= 1);
+			code = compress_shift(sp);
+			return *this;
+		}
+
+		constexpr ShiftPoint get_shift() const noexcept {
+			return shiftTable[code];
+		}
+		constexpr uint8_t get_code() const noexcept {
+			return code;
+		}
+		static constexpr ShiftPoint get_shift(uint8_t c) noexcept {
+			assert( c <= 26);
+			return shiftTable[c];
+		}
+		constexpr void inverse() noexcept {
+			code = 26 - code;
+		}
+		static constexpr uint8_t inverse(uint8_t c) noexcept {
+			assert(c <= 26);
+			return 26 - c;
+		}
+		static constexpr ShiftCode inverse(ShiftCode sc) noexcept {
+			assert(sc.code <= 26);
+			return ShiftCode(26 - sc.code);
+		}
+				
+		static constexpr std::array<ShiftPoint, 27> shiftTable = {{
+			{-1, -1, -1}, { 0, -1, -1}, { 1, -1, -1}, // code 0, 1, 2
+			{-1,  0, -1}, { 0,  0, -1}, { 1,  0, -1}, // code 3, 4, 5
+			{-1,  1, -1}, { 0,  1, -1}, { 1,  1, -1}, // code 6, 7, 8
+
+			{-1, -1,  0}, { 0, -1,  0}, { 1, -1,  0}, // code 9, 10, 11
+			{-1,  0,  0}, { 0,  0,  0}, { 1,  0,  0}, // code 12, 13 (Center), 14
+			{-1,  1,  0}, { 0,  1,  0}, { 1,  1,  0}, // code 15, 16, 17
+
+			{-1, -1,  1}, { 0, -1,  1}, { 1, -1,  1}, // code 18, 19, 20
+			{-1,  0,  1}, { 0,  0,  1}, { 1,  0,  1}, // code 21, 22, 23
+			{-1,  1,  1}, { 0,  1,  1}, { 1,  1,  1}  // code 24, 25, 26
+		}};
+	private:
+		uint8_t code = 13;
+
+		/// @brief Compress ShiftType[-1,+1] (usually Point<int8_t>) to char
+		/// @param s The shift
+		/// @return Compressed shift
+		static constexpr uint8_t compress_shift(ShiftPoint s) {
+			return (s[0] + uint8_t(1)) +
+				(s[1] + uint8_t(1)) * uint8_t(3) +
+				(s[2] + uint8_t(1)) * uint8_t(9);
+		}
+	};
+
+
 	/// @brief Class for using spartial hashing algorithm to find all bonds in 3D periodic space.
 	/// @tparam T Floating point type
 	template <class T>
@@ -860,18 +937,18 @@ namespace cpplib::geometry {
 		struct BondWithShift {
 			int first = 0;
 			int second = 0;
-			char shiftcode = 13;
+			ShiftCode shiftcode = 13;
 			BondWithShift() = default;
 			BondWithShift(int a, int b)
 				: first(a), second(b) {}
-			BondWithShift(int a, int b, char scode)
+			BondWithShift(int a, int b, ShiftCode scode)
 				: first(a), second(b), shiftcode(scode) {}
 
 		};
 
 		struct VirtualNeighbour {
 			int realBoxIndex;
-			char shiftcode;
+			ShiftCode shiftcode;
 		};
 
 		std::vector<int> pointIndices;          // [N] All point indices in box order
@@ -952,9 +1029,9 @@ namespace cpplib::geometry {
 			// Calculate shifts for 13 left boxes
 			auto baseshift = get_box_by_index(1, 1, 1, gridDimVirt);
 			for (int i = 0; i < 13; i++) {
-				auto temp = get_box_by_index(shiftTable[i][0] + 1,
-											 shiftTable[i][1] + 1,
-											 shiftTable[i][2] + 1,
+				auto temp = get_box_by_index(ShiftCode::shiftTable[i][0] + 1,
+											 ShiftCode::shiftTable[i][1] + 1,
+											 ShiftCode::shiftTable[i][2] + 1,
 											 gridDimVirt);
 				left_boxes_shifts[i] = temp - baseshift;
 			}
@@ -978,36 +1055,6 @@ namespace cpplib::geometry {
 			return bonds;
 		}
 
-		/// @brief Compress ShiftType[-1,+1] (usually Point<int8_t>) to char
-		/// @param s The shift
-		/// @return Compressed shift
-		static constexpr char compress_shift(ShiftType s) {
-			return (s[0] + 1) +
-				(s[1] + 1) * 3 +
-				(s[2] + 1) * 9;
-		}
-
-		static constexpr char inverse_code(char code) {
-			return 26 - code;
-		}
-
-		static constexpr std::array<ShiftType, 27> shiftTable = {{
-			{-1, -1, -1}, { 0, -1, -1}, { 1, -1, -1}, // code 0, 1, 2
-			{-1,  0, -1}, { 0,  0, -1}, { 1,  0, -1}, // code 3, 4, 5
-			{-1,  1, -1}, { 0,  1, -1}, { 1,  1, -1}, // code 6, 7, 8
-
-			{-1, -1,  0}, { 0, -1,  0}, { 1, -1,  0}, // code 9, 10, 11
-			{-1,  0,  0}, { 0,  0,  0}, { 1,  0,  0}, // code 12, 13 (Center), 14
-			{-1,  1,  0}, { 0,  1,  0}, { 1,  1,  0}, // code 15, 16, 17
-
-			{-1, -1,  1}, { 0, -1,  1}, { 1, -1,  1}, // code 18, 19, 20
-			{-1,  0,  1}, { 0,  0,  1}, { 1,  0,  1}, // code 21, 22, 23
-			{-1,  1,  1}, { 0,  1,  1}, { 1,  1,  1}  // code 24, 25, 26
-		}};
-
-		static constexpr const ShiftType& decompress_shift(char code) {
-			return shiftTable[code];
-		}
 
 
 	private:
@@ -1047,7 +1094,7 @@ namespace cpplib::geometry {
 
 				virtMap[virtIdx] = {
 					.realBoxIndex = realIdx,
-					.shiftcode = compress_shift(s)
+					.shiftcode = geometry::ShiftCode(s)
 				};
 			}
 		}
@@ -1063,7 +1110,7 @@ namespace cpplib::geometry {
 			// 1. Internal bonds: Shift code is always 13 (0,0,0)
 			for (int i = start_a; i < end_a; ++i) {
 				for (int j = i + 1; j < end_a; ++j) {
-					add_bond_pair(pointIndices[i], pointIndices[j], 13, bonds, double_sided);
+					add_bond_pair(pointIndices[i], pointIndices[j], ShiftCode(), bonds, double_sided);
 				}
 			}
 
@@ -1073,7 +1120,7 @@ namespace cpplib::geometry {
 				int neighborRIdx = virtMap[neighborVIdx].realBoxIndex;
 
 				// The shiftcode is stored in virtMap for each virtual cell
-				char sCode = virtMap[neighborVIdx].shiftcode;
+				ShiftCode sCode = virtMap[neighborVIdx].shiftcode;
 
 
 				int start_b = realBoxOffsets[neighborRIdx];
@@ -1087,14 +1134,16 @@ namespace cpplib::geometry {
 			}
 		}
 
-		inline void add_bond_pair(int idxA, int idxB, char shiftCode, std::vector<BondWithShift>& bonds, bool double_sided) const {
+		inline void add_bond_pair(int idxA, int idxB, ShiftCode shiftCode, std::vector<BondWithShift>& bonds, bool double_sided) const {
 			// Basic bond a -> b
 			bonds.push_back(BondWithShift{idxA, idxB, shiftCode});
 
 			if (double_sided) {
 				// Inverse bond b -> a
 				// The shift for the opposite direction must be inverted
-				bonds.push_back(BondWithShift{idxB, idxA, inverse_code(shiftCode)});
+				ShiftCode sc = shiftCode;
+				sc.inverse();
+				bonds.push_back(BondWithShift{idxB, idxA, sc});
 			}
 		}
 
