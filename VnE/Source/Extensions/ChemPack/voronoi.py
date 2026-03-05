@@ -29,8 +29,8 @@
 import numpy as np
 
 
-class Polyhedra:
-    def __init__(self, polygons, edges, points, center, atom, symop, volume):
+class Polyhedron:
+    def __init__(self, polygons, edges, points, center, atom, symop, volume, area):
         for p in points:
             p.polyhedra.append(self)
         self.polygons = polygons
@@ -40,6 +40,7 @@ class Polyhedra:
         self.atom = atom
         self.symop = symop
         self.volume = volume
+        self.area = area
         self.llist = None
 
     @classmethod
@@ -52,6 +53,7 @@ class Polyhedra:
         atom = None
         symop = (0,0,0)
         volume = 0
+        area = 0
 
         poly = []
         poly_dict = {}
@@ -62,12 +64,13 @@ class Polyhedra:
             atom = p1.atom
             volume += p1.volume
             for p in p1.polygons:
+                area += p.area
                 symops = [tuple([tuple([round(v, 5) for v in x]) for x in s]) for s in p.symops]
                 poly1 = frozenset([(p.atoms[0], symops[0]), (p.atoms[1], symops[1])])
                 for poly2 in poly:
                     if poly1 == poly2:
+                        area -= 2*p.area
                         polygons.remove(poly_dict[poly1])
-                        #print(f'{p.atoms[0].name}, {symops[0]}, {p.symmref[0]} -- {p.atoms[1].name}, {symops[1]}, {p.symmref[1]}')
                         break
                 else:
                     polygons.append(p)
@@ -78,7 +81,7 @@ class Polyhedra:
             for rp in col:
                 points.remove(rp)'''
         center = sum(center)/len(center)
-        return cls(polygons, edges, points, center, atom, symop, volume)
+        return cls(polygons, edges, points, center, atom, symop, volume, area)
 
     @classmethod
     def fromCppLib(cls, d, atoms, cell):
@@ -87,14 +90,16 @@ class Polyhedra:
                 return False
             return True
         ret = []
-        polyhedra = {i: x for i, x in enumerate(d['Voronoi cells']['polyhedra']) if validate(x)}
-        vert_list = d['Voronoi cells']['vertices']
+        polyhedra = {i: x for i, x in enumerate(d['voronoi_cells']['polyhedra']) if validate(x)}
+        vert_list = d['voronoi_cells']['vertices']
         points = {}
         edges = {}
         polygons = {}
         for polyh in polyhedra:
+            parea = 0
             polyhi = polyh
             polyh = polyhedra[polyh]
+            polyh_atom = d['voronoi_cells']['polygons'][polyh['polygons'][0]]['atoms'][0] if d['voronoi_cells']['polygons'][polyh['polygons'][0]]['atoms'][0] in d['voronoi_cells']['polygons'][polyh['polygons'][1]]['atoms'] else d['voronoi_cells']['polygons'][polyh['polygons'][0]]['atoms'][1]
             p_list = []
             e_list = []
             pol_list = []
@@ -107,31 +112,36 @@ class Polyhedra:
             for ei in polyh['edges']:
                 e = edges.get(ei, None)
                 if not e:
-                    pl = d['Voronoi cells']['edges'][ei]
+                    pl = d['voronoi_cells']['edges'][ei]
                     e = Edge([points[pl[0]], points[pl[1]]])
                     edges[ei] = e
                 e_list.append(e)
             for pi in polyh['polygons']:
                 p = polygons.get(pi, None)
                 if not p:
-                    area = d['Voronoi cells']['polygons'][pi]['area']
-                    vert = [points[pi] for pi in d['Voronoi cells']['polygons'][pi]['vertices']]
-                    edg = [edges[ei] for ei in d['Voronoi cells']['polygons'][pi]['edges']]
-                    at = d['Voronoi cells']['polygons'][pi]['atoms']
-                    tr = [np.array(d['Unit cell'][at[0]]['shift']), np.array(d['Unit cell'][at[1]]['shift'])]
-                    symmref = [d['Unit cell'][at[0]]['symmref'], d['Unit cell'][at[1]]['symmref']]
-                    at = [atoms[d['Unit cell'][at[0]]['index']], atoms[d['Unit cell'][at[1]]['index']]]
+                    area = d['voronoi_cells']['polygons'][pi]['area']
+                    vert = [points[pi] for pi in d['voronoi_cells']['polygons'][pi]['vertices']]
+                    edg = [edges[ei] for ei in d['voronoi_cells']['polygons'][pi]['edges']]
+                    at = d['voronoi_cells']['polygons'][pi]['atoms']
+                    pa = at.index(polyh_atom) - 1
+                    tr = [np.array(d['unit_cell'][at[0]]['shift']), np.array(d['unit_cell'][at[1]]['shift'])]
+                    tr_a = np.array(d['voronoi_cells']['polygons'][pi]['shift'])
+                    symmref = [d['unit_cell'][at[0]]['symmref'], d['unit_cell'][at[1]]['symmref']]
+                    at = [atoms[d['unit_cell'][at[0]]['index']], atoms[d['unit_cell'][at[1]]['index']]]
                     symops = [at[0].symCodeMat(symmref[0]), at[0].symCodeMat(symmref[1])]
                     symops[0][:-1, 3] += tr[0]
                     symops[1][:-1, 3] += tr[1]
-                    p = Polygon(edg, at, symops, vert, area)
+                    symops[pa][:-1, 3] += tr_a
+                    solid_angle = d['voronoi_cells']['polygons'][pi]['solid_angle']
+                    p = Polygon(edg, at, symops, vert, area, solid_angle)
+                    parea += area
                     polygons[pi] = p
                 pol_list.append(p)
-            tr = np.array(polyh['center']) - atoms[d['Unit cell'][polyhi]['index']].cif_frac_coords
-            symmref = d['Unit cell'][polyhi]['symmref']
-            symop = atoms[d['Unit cell'][polyhi]['index']].symCodeMat(symmref)
+            tr = np.array(polyh['center']) - atoms[d['unit_cell'][polyhi]['index']].cif_frac_coords
+            symmref = d['unit_cell'][polyhi]['symmref']
+            symop = atoms[d['unit_cell'][polyhi]['index']].symCodeMat(symmref)
             symop[:-1,3] += tr
-            p = cls(pol_list, e_list, p_list, np.array(polyh['center']), atoms[d['Unit cell'][polyhi]['index']], symop, polyh['volume'])
+            p = cls(pol_list, e_list, p_list, np.array(polyh['center']), atoms[d['unit_cell'][polyhi]['index']], symop, polyh['volume'], parea)
             ret.append(p)
         return ret
 
@@ -141,7 +151,9 @@ class Polyhedra:
             v_color = colors[0] if colors[0] else [1,0,0,1]
             e_color = colors[1] if colors[1] else [0,0,0,1]
             p_color = colors[2] if colors[2] else [0,1,0,0.5]
-            self.llist = point_class.PointsList(parent, name=f'{self.atom.name}', volume=self.volume)
+            self.llist = point_class.PointsList(parent, name=f'{self.atom.name}')
+            self.llist.addProperty('volume', self.volume)
+            self.llist.addProperty('area', self.area)
             vl = point_class.PointsList(self.llist, rad=0.1  , color=v_color, name='Vertices')
             for i, v in enumerate(self.points):
                 v.createPoint(str(i), vl, new=new)
@@ -161,15 +173,15 @@ class Polyhedra:
     def copyTo(self, symop):
         points = {p: p.copyTo(symop) for p in self.points}
         edges = {e: Edge([points[e.points[0]], points[e.points[1]]]) for e in self.edges}
-        polygons = [Polygon([edges[e] for e in p.edges], p.atoms, [symop @ p.symops[0], symop @ p.symops[1]], [points[point] for point in p.points], p.area) for p in self.polygons]
+        polygons = [Polygon([edges[e] for e in p.edges], p.atoms, [symop @ p.symops[0], symop @ p.symops[1]], [points[point] for point in p.points], p.area, p.solid_angle) for p in self.polygons]
         new_center = np.array((np.append(self.center, 1.0) @ symop.T)[:-1])
         new_symop = symop @ self.symop
 
-        copy = Polyhedra(polygons, list(edges.values()), list(points.values()), new_center, self.atom, new_symop, self.volume)
+        copy = Polyhedron(polygons, list(edges.values()), list(points.values()), new_center, self.atom, new_symop, self.volume, self.area)
         return copy
 
 class Polygon:
-    def __init__(self, edges, atoms, symops, points, area):
+    def __init__(self, edges, atoms, symops, points, area=0, solid_angle=0):
         for p in points:
             p.polygons.append(self)
         self.edges = edges
@@ -177,6 +189,7 @@ class Polygon:
         self.symops = symops
         self.points = points
         self.area = area
+        self.solid_angle = solid_angle
         self.llist = None
 
     def createList(self, parent=None, new=False):
@@ -186,7 +199,9 @@ class Polygon:
             if parent:
                 self.llist = point_class.PointsList(parent, rad=parent, color=parent, name=f'{self.atoms[0].name}-{self.atoms[1].name}', area=self.area)
             else:
-                self.llist = point_class.PointsList(parent, rad=0.01, color=[0, 1, 0, 0.5], name=f'{self.atoms[0].name}-{self.atoms[1].name}', area=self.area)
+                self.llist = point_class.PointsList(parent, rad=0.01, color=[0, 1, 0, 0.5], name=f'{self.atoms[0].name}-{self.atoms[1].name}', area=self.area, solid_angle=self.solid_angle)
+            self.llist.addProperty('area', self.area)
+            self.llist.addProperty('solid_angle', self.solid_angle)
             a = point_class.Point(self.llist, coord=points[0].coord, rad=self.llist, color=self.llist, name=f'{points[0].name}')
             point_class.Point(self.llist, coord=points[1].coord, rad=self.llist, color=self.llist, name=f'{points[1].name}')
             b = point_class.Point(self.llist, coord=points[2].coord, rad=self.llist, color=self.llist, name=f'{points[2].name}')
@@ -270,7 +285,6 @@ class Point:
         new_coord = np.array((np.append(self.coord, 1.0) @ symop.T)[:-1])
         return Point(new_coord, self.cell)
 
-
 def execute():
     from . import MAIN_WIDGET, MOLECULE_SYSTEMS, TREE_MODEL
     from ... import point_class
@@ -329,12 +343,12 @@ def execute():
 
         res = cpplib.VoronoiCalculation(cell, symms, data, bools, 6.0)
 
-        polyh = Polyhedra.fromCppLib(res, atoms, cell)
+        polyh = Polyhedron.fromCppLib(res, atoms, cell)
 
         points_list = point_class.PointsList(TREE_MODEL.getRoot(), name=f'Voronoi polyhedron')
         colors_list = point_class.PointsList(points_list, name='Colors')
         atoms_poly_list = point_class.PointsList(points_list, name='Atoms')
-        sum_poly_list = point_class.PointsList(points_list, name='Polyhedron')
+        sum_poly_list = point_class.PointsList(points_list, name='Polyhedra')
         v_color = point_class.Point(colors_list, name='Vertex color', color=[1, 0, 0, 1])
         e_color = point_class.Point(colors_list, name='Edge color', color=[0, 0, 0, 1])
         p_color = point_class.Point(colors_list, name='Polygon color', color=[0, 1, 0, 0.5])
@@ -345,7 +359,7 @@ def execute():
                 p = p.copyTo(np.linalg.inv(p.symop))
                 polyh[i] = p
             lists.append(p.createList(atoms_poly_list, colors))
-        sum_poly = Polyhedra.mergePolyhedra(polyh)
+        sum_poly = Polyhedron.mergePolyhedra(polyh)
         ls = sum_poly.createList(sum_poly_list, colors, new=True)
 
         TREE_MODEL.insertRow(TREE_MODEL.rowCount())
@@ -410,7 +424,7 @@ def setup(menu, model, *args, **kwargs):
     global TREE_MODEL
     TREE_MODEL = model
 
-    action = QAction('Voronoi')
+    action = QAction('PVD')
     action.triggered.connect(execute)
     menu.addAction(action)
 
