@@ -289,28 +289,42 @@ def execute():
     from . import MAIN_WIDGET, MOLECULE_SYSTEMS, TREE_MODEL
     from ... import point_class
     from PySide6.QtOpenGLWidgets import QOpenGLWidget
+    from PySide6.QtWidgets import QCheckBox, QFileDialog
     from ..ChemPack.ui.select_mol_dialog import SelectMolDialog
     import numpy as np
     import cpplib
 
-    def fracToDec(a, b, c, al, be, ga, coords):
-        al = (al / 180) * np.pi
-        be = (be / 180) * np.pi
-        ga = (ga / 180) * np.pi
+    def saveCsv(sum_p, p_list):
 
-        sin = np.sin
-        cos = np.cos
-        n = (cos(al)-(cos(ga) * cos(be)))/sin(ga)
-        p = (1-cos(al)**2-cos(be)**2-cos(ga)**2+2*cos(al)*cos(be)*cos(ga))**0.5
-        mat = np.array([[a, b*cos(ga), c*cos(be)],
-                        [0, b*sin(ga), c*(cos(al)-cos(be)*cos(ga))/sin(ga)],
-                        [0, 0, c*p/sin(ga)]])
-        for i in range(len(coords)):
-            coord = np.array(coords[i])[...,np.newaxis]
-            coord = mat @ coord
-            coord = coord.transpose().squeeze()
-            coords[i] = coord
-        return coords
+        def symFromMat(mat):
+            end = ['x', 'y', 'z', '']
+            line = []
+            for i in range(3):
+                l = ''
+                for j in range(4):
+                    if mat[i][j] != 0:
+                        if j == 3:
+                            l += f'{mat[i][j]:+.15g}' if l else f'{mat[i][j]:.15g}'
+                        else:
+                            if mat[i][j] == 1:
+                                l += '+' + end[j] if l else end[j]
+                            elif mat[i][j] == -1:
+                                l += '-' + end[j]
+                            else:
+                                l += f'{mat[i][j]:+.15g}' + end[j] if l else f'{mat[i][j]:.15g}' + end[j]
+                line.append(l)
+            return ','.join(line)
+
+        out, _ = QFileDialog.getSaveFileName(caption='Table', filter='*.csv')
+        out = open(out, 'w')
+        out.write(f'Sum polyhedra\nArea;{sum_p.area}\nVolume;{sum_p.volume}\n')
+        for p in p_list:
+            out.write(f'{p.atom.name};{symFromMat(p.symop)}\nArea;{p.area}\nVolume;{p.volume}\nAtom 1;Atom 2;Area;Solid angle\n')
+            for pol in p.polygons:
+                out.write(f'{pol.atoms[0].name}({symFromMat(pol.symops[0])});{pol.atoms[1].name}({symFromMat(pol.symops[1])});{pol.area};{pol.solid_angle}\n')
+        out.close()
+
+
 
     def process(mol_sys):
         opengl_widget = MAIN_WIDGET.findChild(QOpenGLWidget, "OpenGLWidget")
@@ -360,6 +374,8 @@ def execute():
                 polyh[i] = p
             lists.append(p.createList(atoms_poly_list, colors))
         sum_poly = Polyhedron.mergePolyhedra(polyh)
+        if CHECKBOX.isChecked():
+            saveCsv(sum_poly, polyh)
         ls = sum_poly.createList(sum_poly_list, colors, new=True)
 
         TREE_MODEL.insertRow(TREE_MODEL.rowCount())
@@ -415,7 +431,10 @@ def execute():
                 a, b, c = a, c, poly[i]'''
 
     global DIALOG
+    global CHECKBOX
+    CHECKBOX = QCheckBox('Save .csv')
     DIALOG = SelectMolDialog(MOLECULE_SYSTEMS, process)
+    DIALOG.layout().insertWidget(1, CHECKBOX)
     DIALOG.show()
 
 def setup(menu, model, *args, **kwargs):
