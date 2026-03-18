@@ -130,7 +130,6 @@ class DefaultData:
                     coef = parseNumber(coef_str) if coef_str else 1.0
                     C += sign * coef
                 else:
-                    # ��������� ����
                     val = parseNumber(rest)
                     D += sign * val
             return np.array([A, B, C, D])

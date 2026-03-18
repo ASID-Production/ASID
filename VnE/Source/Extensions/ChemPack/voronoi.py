@@ -134,8 +134,8 @@ class Polyhedron:
                     symops[pa][:-1, 3] += tr_a
                     solid_angle = d['voronoi_cells']['polygons'][pi]['solid_angle']
                     p = Polygon(edg, at, symops, vert, area, solid_angle)
-                    parea += area
                     polygons[pi] = p
+                parea += p.area
                 pol_list.append(p)
             tr = np.array(polyh['center']) - atoms[d['unit_cell'][polyhi]['index']].cif_frac_coords
             symmref = d['unit_cell'][polyhi]['symmref']
@@ -180,6 +180,7 @@ class Polyhedron:
         copy = Polyhedron(polygons, list(edges.values()), list(points.values()), new_center, self.atom, new_symop, self.volume, self.area)
         return copy
 
+
 class Polygon:
     def __init__(self, edges, atoms, symops, points, area=0, solid_angle=0):
         for p in points:
@@ -218,12 +219,14 @@ class Polygon:
             self.points.remove(old)
             self.points.append(new)
 
+
 class Edge:
     def __init__(self, points):
         for p in points:
             p.edges.append(self)
         self.points = points
         self.llist = None
+
 
     def createList(self, parent=None, new=False):
         if not self.llist or new:
@@ -243,6 +246,7 @@ class Edge:
         if old in self.points:
             self.points.remove(old)
             self.points.append(new)
+
 
 class Point:
     def __init__(self, coord, cell):
@@ -285,12 +289,14 @@ class Point:
         new_coord = np.array((np.append(self.coord, 1.0) @ symop.T)[:-1])
         return Point(new_coord, self.cell)
 
+
 def execute():
     from . import MAIN_WIDGET, MOLECULE_SYSTEMS, TREE_MODEL
     from ... import point_class
     from PySide6.QtOpenGLWidgets import QOpenGLWidget
     from PySide6.QtWidgets import QCheckBox, QFileDialog
     from ..ChemPack.ui.select_mol_dialog import SelectMolDialog
+    from ..ChemPack.MoleculeClass import Atom
     import numpy as np
     import cpplib
 
@@ -316,12 +322,17 @@ def execute():
             return ','.join(line)
 
         out, _ = QFileDialog.getSaveFileName(caption='Table', filter='*.csv')
+        if not out:
+            return
         out = open(out, 'w')
         out.write(f'Sum polyhedra\nArea;{sum_p.area}\nVolume;{sum_p.volume}\n')
         for p in p_list:
-            out.write(f'{p.atom.name};{symFromMat(p.symop)}\nArea;{p.area}\nVolume;{p.volume}\nAtom 1;Atom 2;Area;Solid angle\n')
+            out.write(f'{p.atom.name};{symFromMat(p.symop)}\nArea;{p.area}\nVolume;{p.volume}\nAtom 1;Atom 2;Area;Solid angle;Solid angle fraction\n')
+            s = 0
             for pol in p.polygons:
-                out.write(f'{pol.atoms[0].name}({symFromMat(pol.symops[0])});{pol.atoms[1].name}({symFromMat(pol.symops[1])});{pol.area};{pol.solid_angle}\n')
+                s += pol.solid_angle
+            for pol in p.polygons:
+                out.write(f'{pol.atoms[0].name}({symFromMat(pol.symops[0])});{pol.atoms[1].name}({symFromMat(pol.symops[1])});{pol.area};{pol.solid_angle};{pol.solid_angle/s}\n')
         out.close()
 
 
@@ -329,37 +340,44 @@ def execute():
     def process(mol_sys):
         opengl_widget = MAIN_WIDGET.findChild(QOpenGLWidget, "OpenGLWidget")
         sel = opengl_widget.selection_model.selection()
-        sel = [x.indexes()[0].internalPointer() for x in sel]
-        sel = [x._atom for x in sel if x._atom]
-        args = {'cell_params': None,
-                'symms': None,
-                'atoms': None,
-                'bools': None,
-                'cutoff': None}
-
+        sel_ind = []
+        [sel_ind := sel_ind + [y.internalPointer() for y in x.indexes()] for x in sel]
         atoms = mol_sys[1].children[0].children
         sym_codes = atoms[0].cif_sym_codes
+        sel = [x._atom for x in sel_ind if x._atom in atoms]
+        if not sel:
+            return
 
 
-        if sym_codes:
-            cell = [atoms[0].cif_cell_a,
-                    atoms[0].cif_cell_b,
-                    atoms[0].cif_cell_c,
-                    atoms[0].cif_cell_al,
-                    atoms[0].cif_cell_be,
-                    atoms[0].cif_cell_ga]
-        else:
-            ...
+
+        if atoms[0].cif_cell_a == 1 and atoms[0].cif_cell_b == 1 and atoms[0].cif_cell_c == 1:
+            coords = np.array([x.coord for x in atoms])
+            a, b, c = abs(max(coords[:,0]) - min(coords[:,0])), abs(max(coords[:,1]) - min(coords[:,1])), abs(max(coords[:,2]) - min(coords[:,2]))
+            a, b, c = a + 0.25, b + 0.25, c + 0.25,
+            coords[:,0] /= a
+            coords[:,1] /= b
+            coords[:,2] /= c
+            for i, at in enumerate(atoms):
+                at.cif_cell_a = a
+                at.cif_cell_b = b
+                at.cif_cell_c = c
+                at.cif_frac_coords = coords[i]
+        cell = [atoms[0].cif_cell_a,
+                atoms[0].cif_cell_b,
+                atoms[0].cif_cell_c,
+                atoms[0].cif_cell_al,
+                atoms[0].cif_cell_be,
+                atoms[0].cif_cell_ga]
 
         symms = [x[1] for x in sym_codes]
         data = [tuple([x.atom_type, *list(x.cif_frac_coords)]) for x in atoms]
         bools = [True if x in sel else False for x in atoms]
 
-        res = cpplib.VoronoiCalculation(cell, symms, data, bools, 6.0)
+        res = cpplib.VoronoiCalculation(cell, symms, data, bools, 15.0)
 
         polyh = Polyhedron.fromCppLib(res, atoms, cell)
 
-        points_list = point_class.PointsList(TREE_MODEL.getRoot(), name=f'Voronoi polyhedron')
+        points_list = point_class.PointsList(TREE_MODEL.getRoot(), name='Voronoi polyhedron')
         colors_list = point_class.PointsList(points_list, name='Colors')
         atoms_poly_list = point_class.PointsList(points_list, name='Atoms')
         sum_poly_list = point_class.PointsList(points_list, name='Polyhedra')
@@ -384,51 +402,6 @@ def execute():
             TREE_MODEL.attachObserver(index, 'Line')
             index = TREE_MODEL.index(0, 0, by_point=ls.children[2])
             TREE_MODEL.attachObserver(index, 'Plane')
-        '''edges_l = point_class.PointsList(points_list, rad=0.01  , color=[0,0,0,1], name='Edges')
-        vert_l = point_class.PointsList(points_list, rad=0.1  , color=[1,0,0,1], name='Vertex')
-        poly_l = point_class.PointsList(points_list, color=[0.0,1.0,0.0,0.5], name='Polygons')
-
-        atoms_list = point_class.PointsList(TREE_MODEL.getRoot(), name=f'Atoms voronoi polyhedrons')
-        a_lists = {atoms[i]: {'ind': i} for i, b in enumerate(bools) if b}
-        for a in [x for x in atoms if x in sel]:
-            a_lists[a]['edges'] = point_class.PointsList(atoms_list, rad=0.01, color=[0, 0, 0, 1], name='Edges')
-            a_lists[a]['vertex'] = point_class.PointsList(atoms_list, rad=0.1, color=[1, 0, 0, 1], name='Vertex')
-            a_lists[a]['polygon'] = point_class.PointsList(atoms_list, color=[0.0, 1.0, 0.0, 0.5], name='Polygons')
-
-        vert_tr = [False for x in res['vertices']]
-        for i, p in enumerate(res['polyhedra']):
-            a = atoms[i]
-            cent = np.array(p['center'])
-            tr = np.round(a.cif_frac_coords - cent)
-            for vi in p['vertices']:
-                if not vert_tr[vi]:
-                    vert_tr[vi] = True
-                    #res['vertices'][vi] = tuple(tr + np.array(res['vertices'][vi]))
-
-        res['vertexes_dec'] = fracToDec(*cell, [list(x) for x in res['vertices']])
-
-        sum_area = 0
-
-        for i, v in enumerate(res['vertexes_dec']):
-            point_class.Point(vert_l, coord=v, color=vert_l, rad=vert_l, name=str(i))
-        for poly in res['polygons']:
-            #sum_area += poly['area']
-            #poly_list = point_class.PointsList(poly_l, color=poly_l, rad=poly_l, name=f"{atoms[poly['atoms'][0]].name}-{atoms[poly['atoms'][1]].name}")
-            poly_list = point_class.PointsList(poly_l, color=poly_l, rad=poly_l)
-            poly = poly['vertices']
-            for i, vert in enumerate(poly):
-                edge_list = point_class.PointsList(edges_l, color=edges_l, rad=edges_l)
-                point_class.Point(edge_list, coord=vert_l.children[vert], color=edge_list, rad=edge_list)
-                point_class.Point(edge_list, coord=vert_l.children[poly[i-1]], color=edge_list, rad=edge_list)
-            point_class.Point(poly_list, coord=vert_l.children[poly[0]], color=poly_list, rad=poly_list, name=poly[0])
-            point_class.Point(poly_list, coord=vert_l.children[poly[1]], color=poly_list, rad=poly_list, name=poly[1])
-            point_class.Point(poly_list, coord=vert_l.children[poly[2]], color=poly_list, rad=poly_list, name=poly[2])
-            a, b, c = poly[0], poly[1], poly[2]
-            for i in range(3, len(poly)):
-                point_class.Point(poly_list, coord=vert_l.children[a], color=poly_list, rad=poly_list, name=str(a))
-                point_class.Point(poly_list, coord=vert_l.children[c], color=poly_list, rad=poly_list, name=str(c))
-                point_class.Point(poly_list, coord=vert_l.children[poly[i]], color=poly_list, rad=poly_list, name=str(poly[i]))
-                a, b, c = a, c, poly[i]'''
 
     global DIALOG
     global CHECKBOX
@@ -436,6 +409,7 @@ def execute():
     DIALOG = SelectMolDialog(MOLECULE_SYSTEMS, process)
     DIALOG.layout().insertWidget(1, CHECKBOX)
     DIALOG.show()
+
 
 def setup(menu, model, *args, **kwargs):
     from PySide6.QtGui import QAction

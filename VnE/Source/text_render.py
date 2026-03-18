@@ -56,8 +56,8 @@ class Font:
         face = freetype.Face(f'./Source/fonts/arial.ttf')
         size = int(size)
         for chr in self.line:
-            face.load_char(chr)
             face.set_char_size(width=size << 6, height=0, hres=576, vres=0)
+            face.load_char(chr)
             #face.set_char_size(width=0, height=0, hres=72, vres=72)
             bitmap = face.glyph.bitmap
             char = CharTex(
@@ -117,60 +117,57 @@ class Letter:
 
 class Word:
 
-    def __init__(self, xyz, wh, font, word=None, size=6):
+    def __init__(self, xyz, font, word=None, size=6):
         self._xyz = xyz
         self._word = word
         self._font = font
         self._buffer_data = np.array([], dtype=np.float32)
-        self._wh = wh
         self.size = size
         if word is not None:
-            self.gen_letters(self._word, self._xyz, self._wh, self._font)
+            self.gen_letters(self._word, self._xyz, self._font)
 
-    def gen_letters(self, word, xyz, wh, font):
+    def gen_letters(self, word, xyz, font):
         if self.size != font.size:
             font.change_size(self.size)
         self._letters = []
         x,y,z = xyz
         x_shift = 0
-        vpx, vpy = glGetIntegerv(GL_VIEWPORT)[2:]
         for chr in word:
             xpos = x
             ypos = y
-            y_shift = -(font.char_map[chr].height - font.char_map[chr].bearingY)/vpy
+            y_shift = -(font.char_map[chr].height - font.char_map[chr].bearingY)
 
-            w = font.char_map[chr].width/vpx
-            h = font.char_map[chr].height/vpy
-            x_shift_p_bearing = x_shift + font.char_map[chr].bearingX/vpx
+            w = font.char_map[chr].width
+            h = font.char_map[chr].height
+            x_shift_p_bearing = x_shift + font.char_map[chr].bearingX
             text_vert = np.array([[xpos, ypos, z, 0.0, 1.0, 0.0, 0.0, x_shift_p_bearing, y_shift],
                                   [xpos, ypos, z, 0.0, 0.0, 0.0, h, x_shift_p_bearing, y_shift],
                                   [xpos, ypos, z, 1.0, 1.0, w, 0.0, x_shift_p_bearing, y_shift],
                                   [xpos, ypos, z, 0.0, 0.0, 0.0, h, x_shift_p_bearing, y_shift],
                                   [xpos, ypos, z, 1.0, 0.0, w, h, x_shift_p_bearing, y_shift],
                                   [xpos, ypos, z, 1.0, 1.0, w, 0.0, x_shift_p_bearing, y_shift]], dtype=np.float32)
-            x_shift += int(bin(font.char_map[chr].advance)[:-6], 2)/vpx
+            x_shift += int(bin(font.char_map[chr].advance)[:-6], 2)
             self._letters.append(Letter(chr, text_vert, font))
         self.gen_buffer()
 
     def delete_letter(self, pos_lett):
         if type(pos_lett) == int:
             for lett in self._letters[pos_lett+1:]:
-                lett.vert[:,0] -= self._font.char_map[self._letters[pos_lett].chr].advance/self._wh[0]
+                lett.vert[:,0] -= self._font.char_map[self._letters[pos_lett].chr].advance
         elif type(pos_lett) == Letter:
             for lett in self._letters[self._letters.index(pos_lett)+1:]:
-                lett.vert[:,0] -= self._font.char_map[pos_lett.chr].advance/self._wh[0]
+                lett.vert[:,0] -= self._font.char_map[pos_lett.chr].advance
             self._letters.remove(pos_lett)
 
     def add_letter(self, chr, pos):
-        w_s,h_s = self._wh
         font = self._font
         try:
-            x,y,z = self._letters[pos].vert[0,0] - font.char_map[self._letters[pos].chr].bearingX/w_s,\
+            x,y,z = self._letters[pos].vert[0,0] - font.char_map[self._letters[pos].chr].bearingX,\
                     self._xyz[1],\
                     self._xyz[2]
         except IndexError:
-            x,y,z = self._letters[pos - 1].vert[0, 0] - font.char_map[self._letters[pos].chr].bearingX/w_s +\
-                                                       font.char_map[self._letters[pos-1].chr].advance/w_s, \
+            x,y,z = self._letters[pos - 1].vert[0, 0] - font.char_map[self._letters[pos].chr].bearingX +\
+                                                       font.char_map[self._letters[pos-1].chr].advance, \
                     self._xyz[1], \
                     self._xyz[2]
 
@@ -178,9 +175,9 @@ class Word:
         ypos = y
         y_shift = -(font.char_map[chr].height - font.char_map[chr].bearingY)
 
-        w = font.char_map[chr].width/w_s
+        w = font.char_map[chr].width
         h = font.char_map[chr].heighth_s
-        x_shift_p_bearing = font.char_map[chr].bearingX / w_s
+        x_shift_p_bearing = font.char_map[chr].bearingX
         text_vert = np.array([[xpos, ypos, z, 0.0, 1.0, 0.0, 0.0, x_shift_p_bearing, y_shift],
                               [xpos, ypos, z, 0.0, 0.0, 0.0, h, x_shift_p_bearing, y_shift],
                               [xpos, ypos, z, 1.0, 1.0, w, 0.0, x_shift_p_bearing, y_shift],
@@ -188,7 +185,7 @@ class Word:
                               [xpos, ypos, z, 1.0, 0.0, w, h, x_shift_p_bearing, y_shift],
                               [xpos, ypos, z, 1.0, 1.0, w, 0.0, x_shift_p_bearing, y_shift]], dtype=np.float32)
         for lett in self._letters[pos:]:
-            lett.vert[:,0] += font.char_map[chr].advance/w_s
+            lett.vert[:,0] += font.char_map[chr].advance
         letter = Letter(chr, text_vert, font)
         self._letters.insert(pos, letter)
 
@@ -222,7 +219,7 @@ class Word:
     @word.setter
     def word(self, word):
         self._word = word
-        self._letters = self.gen_letters(self._word, self._xyz, self._wh, self._font)
+        self._letters = self.gen_letters(self._word, self._xyz, self._font)
 
     @property
     def xyz(self):
@@ -251,10 +248,10 @@ class TextBuffer:
                 else:
                     self.char_vert[letter.chr] = np.array([letter.vert])
 
-    def add_word(self, word, xyz, wh, font=None, index=None):
+    def add_word(self, word, xyz, font=None, index=None):
         if font is None:
             font = self.font
-        word = Word(word, xyz, wh, font, self)
+        word = Word(word, xyz, font, self)
         if index is None:
             self.words.append(word)
         else:

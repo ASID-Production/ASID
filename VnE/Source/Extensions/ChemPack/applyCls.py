@@ -5,7 +5,7 @@ def execute():
     from ..ChemPack import TREE_MODEL
     from .ui import select_mol_dialog
     from PySide6.QtWidgets import QFileDialog
-    from .MoleculeClass import Atom, MoleculeSystem, Molecule
+    from .MoleculeClass import Atom, MoleculeSystem, Molecule, fracToDec
     import os
     import numpy as np
     import cpplib
@@ -15,25 +15,6 @@ def execute():
     mol_sys = None
 
     def payload(mol_tuple):
-
-        def fracToDec(a, b, c, al, be, ga, coords):
-            al = (al / 180) * np.pi
-            be = (be / 180) * np.pi
-            ga = (ga / 180) * np.pi
-
-            sin = np.sin
-            cos = np.cos
-            n = (cos(al) - (cos(ga) * cos(be))) / sin(ga)
-            p = (1 - cos(al) ** 2 - cos(be) ** 2 - cos(ga) ** 2 + 2 * cos(al) * cos(be) * cos(ga)) ** 0.5
-            mat = np.array([[a, b * cos(ga), c * cos(be)],
-                            [0, b * sin(ga), c * (cos(al) - cos(be) * cos(ga)) / sin(ga)],
-                            [0, 0, c * p / sin(ga)]])
-            for i in range(len(coords)):
-                coord = np.array(coords[i])[..., np.newaxis]
-                coord = mat @ coord
-                coord = coord.transpose().squeeze()
-                coords[i] = coord
-            return coords
 
         point_list, mol_sys = mol_tuple
         mol = mol_sys.children[0]

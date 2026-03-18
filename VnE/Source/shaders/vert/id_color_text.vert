@@ -59,8 +59,8 @@ void main()
         id_frag = point_id;
 
         vec4 pos = translation * perspective * aspect_ratio * scale * rotation * scene_shift * vec4(vertex + pos_shift, 1.0);
-        pos.x = pos.x + (size.x + shifts.x) * pos.w;
-        pos.y = pos.y + (shifts.y + size.y) * pos.w;
+        pos.x = pos.x + (size.x + shifts.x) * pos.w / 926;
+        pos.y = pos.y + (shifts.y + size.y) * pos.w / wh.y * wh.x / 926;
         pos.z = -pos.w;
         gl_Position = pos;
         count = 1;

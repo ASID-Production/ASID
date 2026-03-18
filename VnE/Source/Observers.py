@@ -369,7 +369,7 @@ class LabelObserver(aObserver):
                 size = object.label_size
                 if size is None:
                     size = int(self._properties['label_size'][0])
-                word_obj = text_render.Word(coord, self._wh, self._font, word, size)
+                word_obj = text_render.Word(coord, self._font, word, size)
                 data = word_obj.gen_buffer()
                 textures = word_obj.get_textures()
                 self._textures += textures

@@ -36,7 +36,7 @@ def execute():
             if nat['shift'] == (0,0,0) and nat['symmref'] == 0:
                 at = molsys.children[0].children[nat['index']]
                 cif['cif_frac_coords'] = at.cif_frac_coords.copy()
-                new_mol.addChild(Atom(at.coord, at.atom_type, name=at.name, creation_code=(0, 0, 0, 0), **cif))
+                new_mol.addChild(Atom(at.coord.copy(), at.atom_type, name=at.name, creation_code=(0, 0, 0, 0), **cif))
             else:
                 cif['cif_frac_coords'] = np.array(nat['point_frac'])
                 new_mol.addChild(Atom(dec[i], molsys.children[0].children[nat['index']].atom_type, name=f'{molsys.children[0].children[nat["index"]].name}_{nat["symmref"]},{nat["shift"][0]},{nat["shift"][1]},{nat["shift"][2]}', creation_code=(*[nat['symmref'], *nat["shift"]],), **cif, cif_uniq=False))

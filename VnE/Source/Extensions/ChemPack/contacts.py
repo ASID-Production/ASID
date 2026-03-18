@@ -549,7 +549,6 @@ def findSubGraph(pack: Pack, sub_pack: Pack):
             return True, sub_node_copy_init, result
         else:
             sub_node_copy_init.assignNode(node)
-        line = ' '.join([f'{x}-{x.assigned_node}' for x in sub_node_copy_init.pack.nodes])
         if sub_node_copy_init.pack.checkMapping():
             result.append(sub_node_copy_init)
             return True, sub_node_copy_init, result
