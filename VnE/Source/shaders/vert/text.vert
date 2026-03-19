@@ -35,6 +35,7 @@ layout (location = 0) in vec3 vertex; // <vec3 pos>
 layout (location = 1) in vec2 tex_cords; // <vec2 tex_coord>
 layout (location = 2) in vec2 size;
 layout (location = 3) in vec2 shifts;
+layout (location = 4) in vec3 pos_shift;
 
 out vec2 TexCoords;
 
@@ -54,9 +55,10 @@ uniform float const_scale;
 
 void main()
     {
-        vec4 pos = translation * perspective * aspect_ratio * scale * rotation * scene_shift * vec4(vertex, 1.0);
-        pos.x = pos.x + (size.x + shifts.x) * pos.w;
-        pos.y = pos.y + (shifts.y + size.y) * pos.w;
+
+        vec4 pos = translation * perspective * aspect_ratio * scale * rotation * scene_shift * vec4(vertex + pos_shift, 1.0);
+        pos.x = pos.x + (size.x + shifts.x) * pos.w / 926;
+        pos.y = pos.y + (shifts.y + size.y) * pos.w / wh.y * wh.x / 926;
         pos.z = -pos.w;
         gl_Position = pos;
         TexCoords = tex_cords;

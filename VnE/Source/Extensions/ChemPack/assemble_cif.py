@@ -32,30 +32,13 @@ from .ui.select_mol_dialog import SelectMolDialog
 def execute():
     from . import MOLECULE_SYSTEMS
     from . import parsers
+    from .MoleculeClass import fracToDec
     from ... import point_class
     from . import TREE_MODEL
     import numpy as np
 
     def process(molsys):
 
-        def fracToDec(a, b, c, al, be, ga, coords):
-            al = (al/180)*np.pi
-            be = (be/180)*np.pi
-            ga = (ga/180)*np.pi
-
-            coords = coords.copy()
-            sin = np.sin
-            cos = np.cos
-            cot = lambda x: np.tan(x)**-1
-            csc = lambda x: np.sin(x)**-1
-
-            mat = np.array([[a*sin(be)*np.sqrt(1-(cot(al)*cot(be) - csc(al)*csc(be)*cos(ga))**2), 0, 0],
-                            [a*csc(al)*cos(ga) - a*cot(al)*cos(be), b*sin(al), 0],
-                            [a*cos(be), b*cos(al), c]])
-            mat = mat.transpose()
-            for i in range(len(coords)):
-                coords[i] = (coords[i] @ mat).astype(dtype=np.float32)
-            return coords
 
         list_obj, molsys = molsys
         import cpplib

@@ -45,7 +45,6 @@ from ...UniformBuffers import SceneUniformBuffer
 from ... import Observers
 import logging
 
-import debug
 
 SINGLE_OBSERVER = None
 DRAW_WIDGET = None
@@ -2048,6 +2047,8 @@ class DrawWidget(Drawer_model_ui.Ui_Dialog, QtWidgets.QDialog):
         self.changeCN(cn)
 
     def findSub(self, draw: Drawing):
+        #TODO: Something cause state saving, resulting in imaginary atoms
+
         from ..ChemPack import MOLECULE_SYSTEMS, TREE_MODEL
         from .contacts import Pack, Node, findSubGraph, Condition
         from .MoleculeClass import Atom
@@ -2141,8 +2142,8 @@ class DrawWidget(Drawer_model_ui.Ui_Dialog, QtWidgets.QDialog):
                 if TREE_MODEL is None:
                     return
                 if condition_type == 'contacts':
-                    contacts_list = point_class.PointsList(parent=root, name='Contacts', color=np.array([0, 0, 0, 1], dtype=np.float32), freq=10)
-                    cond_l = point_class.PointsList(parent=contacts_list, color=contacts_list, name='Pairs', freq=contacts_list)
+                    contacts_list = point_class.PointsList(parent=root, name='Contacts', color=np.array([0, 0, 0, 1], dtype=np.float32), freq=10, rad=0.5)
+                    cond_l = point_class.PointsList(parent=contacts_list, color=contacts_list, name='Pairs', freq=contacts_list, rad=contacts_list)
                     labels_l = point_class.PointsList(parent=contacts_list, color=contacts_list, name='Labels')
                     for i in range(len(conditions)):
                         cond = conditions[i]
@@ -2157,11 +2158,11 @@ class DrawWidget(Drawer_model_ui.Ui_Dialog, QtWidgets.QDialog):
                             point1 = cond.nodes[0].real_atoms[sol1].point()
                             point2 = cond.nodes[1].real_atoms[sol2].point()
 
-                            cl = point_class.PointsList(parent=cond_l, color=cond_l,
+                            cl = point_class.PointsList(parent=cond_l, color=cond_l, rad=cond_l, freq=cond_l,
                                                         name=f'{point1.name}_{point2.name}')
                             lp = point_class.Point(parent=labels_l, coord=(point1.coord+point2.coord)/2, color=contacts_list, name=cl, label=str(value))
-                            pc1 = point_class.Point(parent=cl, coord=point1, color=cl, name=point1, label=point1)
-                            pc2 = point_class.Point(parent=cl, coord=point2, color=cl, name=point2, label=point2)
+                            pc1 = point_class.Point(parent=cl, coord=point1, color=cl, name=point1, label=point1, rad=cl, freq=cl)
+                            pc2 = point_class.Point(parent=cl, coord=point2, color=cl, name=point2, label=point2, rad=cl, freq=cl)
                     mol_ind = TREE_MODEL.index(-1, 0, by_point=root)
                     TREE_MODEL.insertRow(TREE_MODEL.rowCount(parent=mol_ind), parent=mol_ind)
                     cont_ind = TREE_MODEL.index(TREE_MODEL.rowCount(parent=mol_ind)-1, 0, parent=mol_ind)

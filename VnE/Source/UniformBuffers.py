@@ -32,7 +32,6 @@ import numpy as np
 from typing import List
 from OpenGL.GL import *
 
-import debug
 
 
 class aUniformBuffer(ABC):

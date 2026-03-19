@@ -46,8 +46,8 @@ from PySide6.QtCore import *
 
 from . import QtModels
 from .QtModels import ListView, UniformListModel, TreeView, QtPointsTreeModel, SelectionModel, QtPointsPropertyModel
+from PIL import Image
 
-import debug
 
 class OpenGlWidget(QOpenGLWidget):
 
@@ -57,7 +57,7 @@ class OpenGlWidget(QOpenGLWidget):
         self.surface_format.setSamples(4)
         self.surface_format.setOption(QtGui.QSurfaceFormat.DebugContext)
         self.surface_format.setRenderableType(QtGui.QSurfaceFormat.OpenGL)
-        self.surface_format.setProfile(QtGui.QSurfaceFormat.CompatibilityProfile)
+        self.surface_format.setProfile(QtGui.QSurfaceFormat.CoreProfile)
         self.surface_format.setMajorVersion(4)
         self.surface_format.setMinorVersion(6)
         self.setFormat(self.surface_format)
@@ -79,6 +79,8 @@ class OpenGlWidget(QOpenGLWidget):
         self.pos = [0, 0]
         self.select_fbo = None
         self.select_crbo, self.select_dsrbo = None, None
+        self.screen_fbo = None
+        self.screen_crbo, self.screen_dsrbo = None, None
 
     def log(self, msg):
         logging.debug(f'{msg.severity()} {msg.type()} {msg.id()} {msg.source()}\n{msg.message()}')
@@ -102,6 +104,14 @@ class OpenGlWidget(QOpenGLWidget):
         glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, self.select_crbo)
         glBindRenderbuffer(GL_RENDERBUFFER, self.select_dsrbo)
         glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, self.select_dsrbo)
+
+        self.screen_fbo = glGenFramebuffers(1)
+        self.screen_crbo, self.screen_dsrbo = glGenRenderbuffers(2)
+        glBindFramebuffer(GL_FRAMEBUFFER, self.screen_fbo)
+        glBindRenderbuffer(GL_RENDERBUFFER, self.screen_crbo)
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, self.screen_crbo)
+        glBindRenderbuffer(GL_RENDERBUFFER, self.screen_dsrbo)
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, self.screen_dsrbo)
         glBindRenderbuffer(GL_RENDERBUFFER, def_rbo)
         glBindFramebuffer(GL_FRAMEBUFFER, self.context().defaultFramebufferObject())
 
@@ -235,8 +245,38 @@ class OpenGlWidget(QOpenGLWidget):
                 else:
                     self.selection_model.select(index, QItemSelectionModel.Select)
             self.update()
-
         return points
+
+    def screenshot(self, filename, res=None):
+        if not res:
+            res = glGetIntegerv(GL_VIEWPORT)[2:]
+        self.makeCurrent()
+        old_view = glGetIntegerv(GL_VIEWPORT)
+        glViewport(0,0,*res)
+        self.facade.changeUniformBufferProperty(self.uniforms_id, 'wh', res)
+        glBindFramebuffer(GL_FRAMEBUFFER, self.screen_fbo)
+        glBindRenderbuffer(GL_RENDERBUFFER, self.screen_crbo)
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_RGBA32F, *res)
+        glBindRenderbuffer(GL_RENDERBUFFER, self.screen_dsrbo)
+        glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_STENCIL, *res)
+
+        glBindFramebuffer(GL_FRAMEBUFFER, self.screen_fbo)
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, self.screen_dsrbo)
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, self.screen_crbo)
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        glDrawBuffers(1, GL_COLOR_ATTACHMENT0)
+        self.facade.drawScene(self.scene)
+        glFlush()
+        glBindFramebuffer(GL_FRAMEBUFFER, self.screen_fbo)
+        glReadBuffer(GL_COLOR_ATTACHMENT0)
+
+        c = np.zeros((res[1], res[0], 1), dtype=np.uint32)
+        glReadPixels(0, 0, *res, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, c)
+        c = c[::-1]
+        im = Image.fromarray(c, 'RGBA')
+        im.save(filename)
+        glViewport(*old_view)
+        self.facade.changeUniformBufferProperty(self.uniforms_id, 'wh', old_view[2:])
 
     def eventFilter(self, obj: 'QObject', event: 'QEvent') -> bool:
         self.eventFilterf(self, obj, event)
@@ -298,6 +338,7 @@ class UniformWid(QtWidgets.QWidget):
         super().__init__(parent=parent)
         self.setWindowIcon(QtGui.QIcon('Source/ico.svg'))
         self.setWindowTitle('Uniforms')
+        self.setWindowFlag(QtCore.Qt.WindowStaysOnTopHint, True)
         self.listView = ListView(parent=self)
         self.hlayout = QtWidgets.QHBoxLayout()
         self.hlayout.addWidget(self.listView)
@@ -310,6 +351,86 @@ class UniformWid(QtWidgets.QWidget):
     def setModel(self, model):
         self.model = model
         self.listView.setModel(model)
+
+
+class SaveScreenDialog(QtWidgets.QDialog):
+
+    def __init__(self, function, parent=None):
+        super().__init__(parent)
+        self.function = function
+        self.setWindowTitle("Save screen")
+        self.setMinimumWidth(400)
+
+        self.file_path = ""
+        self.width = 800
+        self.height = 600
+
+        self._create_file_selection()
+        self._create_resolution_inputs()
+        self._create_buttons()
+
+        self._setup_layout()
+
+    def _create_file_selection(self):
+        self.file_path_edit = QtWidgets.QLineEdit()
+        self.file_path_edit.setPlaceholderText("screen.png")
+
+        self.browse_button = QtWidgets.QPushButton("...")
+        self.browse_button.clicked.connect(self._browse_file)
+
+    def _create_resolution_inputs(self):
+        self.width_spin = QtWidgets.QSpinBox()
+        self.width_spin.setRange(1, 10000)
+        self.width_spin.setValue(self.width)
+
+        self.height_spin = QtWidgets.QSpinBox()
+        self.height_spin.setRange(1, 10000)
+        self.height_spin.setValue(self.height)
+
+    def _create_buttons(self):
+        self.button_box = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Cancel)
+        self.button_box.accepted.connect(self._on_accept)
+        self.button_box.rejected.connect(self.reject)
+
+    def _setup_layout(self):
+        main_layout = QtWidgets.QVBoxLayout(self)
+
+        file_layout = QtWidgets.QHBoxLayout()
+        file_layout.addWidget(self.file_path_edit)
+        file_layout.addWidget(self.browse_button)
+        main_layout.addLayout(file_layout)
+
+        res_layout = QtWidgets.QHBoxLayout()
+        res_layout.addWidget(QtWidgets.QLabel("Width:"))
+        res_layout.addWidget(self.width_spin)
+        res_layout.addWidget(QtWidgets.QLabel("Height:"))
+        res_layout.addWidget(self.height_spin)
+        res_layout.addStretch()
+        main_layout.addLayout(res_layout)
+
+        main_layout.addWidget(self.button_box)
+
+    def _browse_file(self):
+        """Открывает диалог сохранения файла и обновляет поле пути."""
+        file_path, _ = QtWidgets.QFileDialog.getSaveFileName(
+            self,
+            "Save image",
+            "",
+            "Image (*.png *.tiff)"
+        )
+        if file_path:
+            self.file_path_edit.setText(file_path)
+
+    def _on_accept(self):
+        if not self.file_path_edit.text():
+            return
+
+        self.file_path = self.file_path_edit.text()
+        self.width = self.width_spin.value()
+        self.height = self.height_spin.value()
+        if self.file_path:
+            self.function(self.file_path, [self.width, self.height])
+        self.accept()
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -377,8 +498,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.menu.setObjectName('MenuBar')
         self.extension_menu = Extensions.getMenu(self.model, self.uniformModel, main_widget=widget, main_menu=self.menu)
         self.uniformAction = self.menu.addAction('Uniforms')
+        self.screenshotAction = self.menu.addAction('Screenshot')
         self.menu.addMenu(self.extension_menu)
         self.uniformAction.triggered.connect(self.uniformWid.show)
+        self.screenshotAction.triggered.connect(self.screenshot)
 
         self.about = self.menu.addAction('About')
 
@@ -392,6 +515,10 @@ class MainWindow(QtWidgets.QMainWindow):
     def closeEvent(self, event, *args, **kwargs):
         ret = QtWidgets.QMainWindow.closeEvent(self, event)
         sys.exit()
+
+    def screenshot(self):
+        self.screen_dialog = SaveScreenDialog(self.opengl_widget.screenshot)
+        self.screen_dialog.show()
 
 
 def show():

@@ -31,7 +31,6 @@ from copy import copy
 import numpy as np
 from .MoleculeClass import Atom, Bond, Molecule, MoleculeSystem
 
-import debug
 
 
 class Pack:
@@ -542,20 +541,14 @@ def findSubGraph(pack: Pack, sub_pack: Pack):
         pos_pos = rec_find(mat, mapped, [])
         return pos_pos
 
-    def recurse(node: Node, sub_node: Node, memory=None, result=None):
+    def recurse(node: Node, sub_node: Node, result=None):
         sub_node_copy_init: Node = sub_node.__deepcopy__()
         if result is None:
             result = []
-        if memory is None:
-            memory = {'Pack_p': [node], 'SubPack_p': [sub_node]}
-        else:
-            memory = {'Pack_p': copy(memory['Pack_p']), 'SubPack_p': copy(memory['SubPack_p'])}
         if sub_node_copy_init.assigned_node is not None:
             return True, sub_node_copy_init, result
         else:
             sub_node_copy_init.assignNode(node)
-            memory['Pack_p'].append(node)
-            memory['SubPack_p'].append(sub_node_copy_init.struct_atom)
         if sub_node_copy_init.pack.checkMapping():
             result.append(sub_node_copy_init)
             return True, sub_node_copy_init, result
@@ -563,7 +556,7 @@ def findSubGraph(pack: Pack, sub_pack: Pack):
         sub_node_copy: Node
         if probs == []:
             sub_node_copy = sub_node_copy_init
-
+        probs_nodes = []
         for prob in probs:
             sub_node_copy = sub_node_copy_init.__deepcopy__()
             for i in range(len(prob)):
@@ -578,7 +571,7 @@ def findSubGraph(pack: Pack, sub_pack: Pack):
                         continue
                     else:
                         b = np.where(prob[i] == True)[0][0]
-                        z, node_r, mem_r = recurse(node.connect[b], sub_node_copy.connect[i], memory=memory, result=result)
+                        z, node_r, mem_r = recurse(node.connect[b], sub_node_copy.connect[i], result=result)
                         if z:
                             for n in node_r.pack.nodes:
                                 n: Node
@@ -590,10 +583,12 @@ def findSubGraph(pack: Pack, sub_pack: Pack):
                         else:
                             sub_node_copy = sub_node_copy_init.__deepcopy__()
                             break
-        if all([x.assigned_node for x in sub_node_copy.connect]):
-            return True, sub_node_copy, result
-        else:
-            return False, sub_node_copy, result
+                probs_nodes.append(sub_node_copy)
+        for prob_node in probs_nodes:
+            if all([x.assigned_node for x in prob_node.connect]):
+                return True, prob_node, result
+
+        return False, sub_node_copy_init, result
 
     comp_mat = [[Node.typeSubseteq(node, sub_node) for node in pack.nodes] for sub_node in sub_pack.nodes]
     comp_mat = np.array(comp_mat)

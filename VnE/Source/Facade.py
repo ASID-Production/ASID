@@ -29,7 +29,7 @@
 
 from . import ShaderPipelines
 from . import ShaderDataObjects
-import debug
+
 
 
 class RenderFacade:

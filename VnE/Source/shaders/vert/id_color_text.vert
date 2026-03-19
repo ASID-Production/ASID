@@ -26,12 +26,16 @@
 //
 // ******************************************************************************************
 
+
 #version 460
 
-layout(location = 0) out uvec4 out_id;
+out gl_PerVertex { vec4 gl_Position;};
 
-flat in uint id_frag;
-flat in uint count;
+layout (location = 0) in vec3 vertex;
+layout (location = 2) in vec2 size;
+layout (location = 3) in vec2 shifts;
+layout (location = 4) in vec3 pos_shift;
+layout (location = 5) in uint point_id;
 
 layout(std140, binding = 0) uniform Matrices
 {
@@ -42,12 +46,23 @@ layout(std140, binding = 0) uniform Matrices
     mat4 clip_distance;
     mat4 perspective;
     mat4 scene_shift;
+    vec2 wh;
 };
 
-uniform uvec2 pipeline_id = uvec2(0,0);
+uniform float const_scale;
+
+out uint id_frag;
+out uint count;
 
 void main()
-{
-    out_id = uvec4(id_frag, count, pipeline_id);
-    //out_id = vec4(1,0,0,1);
-}
+    {
+        id_frag = point_id;
+
+        vec4 pos = translation * perspective * aspect_ratio * scale * rotation * scene_shift * vec4(vertex + pos_shift, 1.0);
+        pos.x = pos.x + (size.x + shifts.x) * pos.w / 926;
+        pos.y = pos.y + (shifts.y + size.y) * pos.w / wh.y * wh.x / 926;
+        pos.z = -pos.w;
+        gl_Position = pos;
+        count = 1;
+
+    }

@@ -83,10 +83,15 @@ class Dialog(QDialog):
         super().__init__(parent)
         self.ui = Ui_Dialog()
         self.ui.setupUi(self)
+        self.setWindowFlag(QtCore.Qt.WindowStaysOnTopHint, True)
         self.opengl_widget = MAIN_WIDGET.findChild(QOpenGLWidget, "OpenGLWidget")
         self.old_filter = self.opengl_widget.eventFilterf
-        self.mode = self.translate
-        self.ui.pushButton_2.clicked.connect(self.deleteSel)
+        self.tr_mode = self.translate
+        self.sl_mode = None
+        self.ui.pushButton.clicked.connect(lambda: setattr(self, 'tr_mode', self.translate))
+        self.ui.pushButton_2.clicked.connect(lambda: setattr(self, 'tr_mode', self.label_translate))
+        self.ui.pushButton_3.clicked.connect(self.deleteSel)
+        self.ui.pushButton_4.clicked.connect(lambda: setattr(self, 'sl_mode', self.select_mol) if self.ui.pushButton_4.isChecked() else setattr(self, 'sl_mode', None))
 
     def show(self):
         self.old_filter = self.opengl_widget.eventFilterf
@@ -95,26 +100,84 @@ class Dialog(QDialog):
 
     def translate(self, dir):
         sel = self.opengl_widget.selection_model.selection()
-        sel = [x.indexes()[0].internalPointer() for x in sel]
+        sel = [x.internalPointer() for s in sel for x in s.indexes()]
         x = dir.x()
         y = dir.y()
         x = x * 2 / (self.opengl_widget.width())
         y = -y * 2 / (self.opengl_widget.height())
-        aspect_ratio = np.linalg.inv(self.opengl_widget.uniforms.aspect_ratio)
-        scale = np.linalg.inv(self.opengl_widget.uniforms.scale)
-        rotation = np.linalg.inv(self.opengl_widget.uniforms.rotation)
-        pers = np.linalg.inv(self.opengl_widget.uniforms.perspective)
-        coords = np.array([x,y,0.0,1.0])[np.newaxis].T
-        coords = rotation @ scale @ aspect_ratio @ coords
-        coords = np.squeeze(coords.T[0,:-1]).astype(np.float32)
+        aspect_ratio = self.opengl_widget.uniforms.aspect_ratio.copy()
+        scale = self.opengl_widget.uniforms.scale.copy()
+        rotation = self.opengl_widget.uniforms.rotation.copy()
+        r_mat = self.opengl_widget.uniforms._rotation_point_matr.copy()
+        rr_mat = self.opengl_widget.uniforms._r_rotation_point_matr.copy()
+        pers = self.opengl_widget.uniforms.perspective.copy()
+        scene_shift = self.opengl_widget.uniforms._scene_shift.copy()
+        m = pers @ aspect_ratio @ r_mat @ scale @ rotation @ rr_mat @ scene_shift
+        m_inv = np.linalg.inv(m)
         for p in sel:
+            if p.coord is not None:
+                c = p.coord.copy()
+                if p.label_shift is not None:
+                    c += p.label_shift
+                c_old = c.copy()
+                c = m @ np.array([*c, 1.0])[np.newaxis].T
+                w = c[3,0]
+                c = c/w
+                c[0,0] += x
+                c[1,0] += y
+                c = c*w
+                c = m_inv @ c
+                d = c[:-1,0] - c_old
+                coords = np.squeeze(d).astype(np.float32)
+            else:
+                continue
             if p._atom:
                 p.coord += coords
                 p._atom.coord += coords
             elif p.coord is not None:
                 p.coord += coords
         self.opengl_widget.update()
-        ...
+
+    def label_translate(self, dir):
+        sel = self.opengl_widget.selection_model.selection()
+        sel = [x.internalPointer() for s in sel for x in s.indexes()]
+        x = dir.x()
+        y = dir.y()
+        x = x * 2 / (self.opengl_widget.width())
+        y = -y * 2 / (self.opengl_widget.height())
+
+        aspect_ratio = self.opengl_widget.uniforms.aspect_ratio.copy()
+        scale = self.opengl_widget.uniforms.scale.copy()
+        rotation = self.opengl_widget.uniforms.rotation.copy()
+        r_mat = self.opengl_widget.uniforms._rotation_point_matr.copy()
+        rr_mat = self.opengl_widget.uniforms._r_rotation_point_matr.copy()
+        pers = self.opengl_widget.uniforms.perspective.copy()
+        scene_shift = self.opengl_widget.uniforms._scene_shift.copy()
+        m = pers @ aspect_ratio @ r_mat @ scale @ rotation @ rr_mat @ scene_shift
+        m_inv = np.linalg.inv(m)
+
+        for p in sel:
+            if p.coord is not None:
+                c = p.coord.copy()
+                if p.label_shift is not None:
+                    c += p.label_shift
+                c_old = c.copy()
+                c = m @ np.array([*c, 1.0])[np.newaxis].T
+                w = c[3,0]
+                c = c/w
+                c[0,0] += x
+                c[1,0] += y
+                c = c*w
+                c = m_inv @ c
+                d = c[:-1,0] - c_old
+                coords = np.squeeze(d).astype(np.float32)
+            else:
+                continue
+            if p.label_shift is not None:
+                p.label_shift += coords
+            else:
+                p.addProperty('label_shift', coords)
+        self.opengl_widget.update()
 
     def select_mol(self, pos):
         from .MoleculeClass import Bond
@@ -162,7 +225,7 @@ class Dialog(QDialog):
 
     def deleteSel(self):
         sel = self.opengl_widget.selection_model.selection()
-        sel = [x.indexes()[0].internalPointer() for x in sel]
+        sel = [x.internalPointer() for s in sel for x in s.indexes()]
         for p in sel:
             if p._atom:
                 p._atom.remove()
@@ -177,9 +240,12 @@ class Dialog(QDialog):
         if event.type() == QtCore.QEvent.MouseMove and event.buttons() == QtCore.Qt.LeftButton:
             dir = event.localPos() - self.pos
             self.pos = event.localPos()
+            if event.modifiers() == QtCore.Qt.ControlModifier:
+                self.translate(dir)
+            if event.modifiers() == QtCore.Qt.ShiftModifier:
+                sl.tr_mode(dir)
             if event.modifiers() == QtCore.Qt.NoModifier:
                 self.rotate(dir)
-                #sl.translate(dir)
 
         if event.type() == QtCore.QEvent.MouseMove and event.buttons() == QtCore.Qt.RightButton:
             dir = event.localPos() - self.pos
@@ -194,7 +260,10 @@ class Dialog(QDialog):
             self.timer_pressed -= time.perf_counter()
             if self.timer_pressed >= -0.25:
                 if self.button == QtCore.Qt.LeftButton and self.selection_model is not None:
-                    sl.select_mol(event.localPos())
+                    if sl.sl_mode is None:
+                        self.select(event.localPos())
+                    else:
+                        sl.sl_mode(event.localPos())
                 elif self.button == QtCore.Qt.RightButton and self.selection_model is not None:
                     for index in self.selection_model.selectedIndexes():
                         if index.internalPointer().pick is None:

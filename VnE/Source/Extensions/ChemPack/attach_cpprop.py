@@ -26,7 +26,6 @@
 #
 # ******************************************************************************************
 
-import debug
 
 DIALOG = None
 
@@ -45,8 +44,8 @@ def execute(mol=None):
 def attachCPprop(molsys):
     from PySide6.QtWidgets import QFileDialog
     from .parsers import PARSER
-    file_path = QFileDialog.getOpenFileName(filter='CPprop.txt')
-    if file_path:
+    file_path = QFileDialog.getOpenFileName(filter='*.txt')
+    if file_path[0]:
         cp_props = PARSER.parsCpProp(file_path[0])[0]
         cp_props = cp_props.children[0].children
         vis_cps = molsys.children[0].children.copy()

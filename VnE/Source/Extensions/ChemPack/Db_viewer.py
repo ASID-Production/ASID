@@ -40,7 +40,6 @@ import json
 
 DB_VIEWER = None
 
-import debug
 
 
 class StructuresListModel(QAbstractListModel):
@@ -605,6 +604,12 @@ class DbWindow(base_search_window.Ui_Dialog, QtWidgets.QDialog):
             data = [x for x in file.read().split('\n') if x]
             self.list_model.iterPopulate(((x, 'refcode', 'cryst', 'refcode', {}) for x in data))
 
+    def downloadRefs(self):
+        filename, _ = QtWidgets.QFileDialog.getOpenFileName(filter='*.txt')
+        if filename:
+            file = open(filename, 'r')
+            data = [x for x in file.read().split('\n') if x]
+            self.list_model.iterPopulate(((x, 'refcode', 'cryst', 'refcode', {}) for x in data))
 
 DIALOG = None
 

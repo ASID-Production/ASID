@@ -29,7 +29,6 @@
 from PySide6 import QtWidgets
 import numpy as np
 
-import debug
 
 DIALOG = None
 
@@ -138,24 +137,6 @@ class SymOpDialog(QtWidgets.QDialog):
         from ..ChemPack import PALETTE, TREE_MODEL, PARSER, loadMolSys
         import numpy as np
 
-        def fracToDec(a, b, c, al, be, ga, coords):
-            al = (al/180)*np.pi
-            be = (be/180)*np.pi
-            ga = (ga/180)*np.pi
-
-            sin = np.sin
-            cos = np.cos
-            cot = lambda x: np.tan(x)**-1
-            csc = lambda x: np.sin(x)**-1
-
-            mat = np.array([[a*sin(be)*np.sqrt(1-(cot(al)*cot(be) - csc(al)*csc(be)*cos(ga))**2), 0, 0],
-                            [a*csc(al)*cos(ga) - a*cot(al)*cos(be), b*sin(al), 0],
-                            [a*cos(be), b*cos(al), c]])
-            mat = mat.transpose()
-            for i in range(len(coords)):
-                coords[i] = (coords[i] @ mat).astype(dtype=np.float32)
-            return coords
-
         def applySymOps():
             import cpplib
 
@@ -180,7 +161,7 @@ class SymOpDialog(QtWidgets.QDialog):
             args = []
             args += cell
             args.append(new_coords)
-            new_dec_coords = fracToDec(*args)
+            new_dec_coords = MoleculeClass.fracToDec(*args)
             new_mol_sys = MoleculeClass.MoleculeSystem()
             new_mol_sys.name = self.curr_sys[1].name
             new_mol_sys.file_name = self.curr_sys[1].file_name
