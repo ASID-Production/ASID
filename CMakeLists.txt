@@ -134,8 +134,40 @@ project(cpplib)
                     $<TARGET_FILE:cpplib>
                     ${CMAKE_SOURCE_DIR}/module/cpplib.pyd)
         endif (WIN32)
-    endif(CMAKE_BUILD_TYPE MATCHES Release)
 
+        if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+            # На Linux компилируем под конкретную машину пользователя — максимальная производительность
+            target_compile_options(cpplib PRIVATE
+                -O3
+                -march=native
+                -mtune=native
+                -ffast-math
+                -flto
+            )
+            message(STATUS "Linux build: using -march=native for maximum performance on this CPU")
+        
+        elseif(MSVC)
+            # Windows: переносимая сборка с гарантированной поддержкой AVX2/FMA (x86-64-v3 уровень)
+            target_compile_options(cpplib PRIVATE
+                $<$<CONFIG:Release>:/O2>
+                $<$<CONFIG:Release>:/arch:AVX2>
+                $<$<CONFIG:Release>:/fp:fast>
+                $<$<CONFIG:Release>:/GL>
+            )
+            message(STATUS "Windows build: using /arch:AVX2 for portable performance (x86-64-v3)")
+        
+        elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+            # Fallback для других Unix-подобных систем (macOS и т.п.) — можно тоже оптимизировать под native
+            target_compile_options(cpplib PRIVATE
+                -O3
+                -march=native
+                -mtune=native
+                -ffast-math
+            )
+            message(STATUS "Non-Linux Unix build: using -march=native")
+        endif()
+    
+    endif(CMAKE_BUILD_TYPE MATCHES Release)
 if((IS_DIRECTORY ${CMAKE_SOURCE_DIR}/cpplib/Tests) AND COMPILE_TESTS)
     add_subdirectory ("cpplib/Tests")
 endif((IS_DIRECTORY ${CMAKE_SOURCE_DIR}/cpplib/Tests) AND COMPILE_TESTS)

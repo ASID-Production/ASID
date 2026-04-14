@@ -651,7 +651,7 @@ namespace cpplib::voronoi {
 					assert(iter_vertex != f->vertices.cend());
 
 				// Create edge connecting the two new vertices
-				const auto& new_edge = edges.emplace_back(std::make_unique<Edge>(edges.size(), v1, v2));
+				const auto& new_edge = edges.emplace_back(std::make_unique<Edge>(static_cast<uint32_t>(edges.size()), v1, v2));
 				new_edge->faces.emplace(f.get());
 				f->edges.emplace(new_edge.get());
 				new_edge->set_state(MODIFICATION);
