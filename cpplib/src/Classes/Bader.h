@@ -30,6 +30,7 @@
 #include <array>
 #include <cassert>
 #include <cmath>
+#include <cstdint>
 #include <iterator>
 #include <vector>
 
@@ -227,8 +228,22 @@ namespace cpplib {
 
             if (r > voronoi::EPSILON) {
                 value_type inv_r = 1.0 / r;
-                // ... logic for grad and hess ...
+                value_type inv_r2 = inv_r * inv_r;
+                value_type dphi_over_r = dphi * inv_r;
+                value_type coeff_hess = ddphi - dphi_over_r;
+                value_type coeff_hess_over_r2 = coeff_hess * inv_r2;
+
+                for (uint8_t i = 0; i < 3; ++i) {
+                    result.grad[i] = dphi_over_r * x_minus_c[i];
+                    value_type coeff_i = coeff_hess_over_r2 * x_minus_c[i];
+                    for (uint8_t j = 0; j < 3; ++j) {
+                        result.hess[i * 3 + j] = coeff_i * x_minus_c[j];
+                    }
+                    result.hess[i * 3 + i] += dphi_over_r;
+                }
             }
+
+
             return result;
         }
 
