@@ -61,6 +61,7 @@ if (WIN32)
                            "cpplib/src/BaseHeaders/DebugMes.h"
                            "cpplib/src/BaseHeaders/Support.h"
 
+                           "cpplib/src/Classes/Bader.h"
                            "cpplib/src/Classes/Bond.h"
                            "cpplib/src/Classes/Cluster.h" 
                            "cpplib/src/Classes/Distances.h"
