@@ -61,7 +61,6 @@ namespace cpplib::cluster_detail {
 	using BondWithShift = typename geometry::SpatialGrid<FloatingPointType>::BondWithShift;
 	using BondList = ::std::vector<BondWithShift>;
 
-
 	class ClusterData {
 	public:
 		using PointType = geometry::Point<FloatingPointType>;
@@ -73,7 +72,6 @@ namespace cpplib::cluster_detail {
 		std::vector<ShiftType> shifts;
 
 		size_t size() const {
-			//assert(consistency_check());
 			return indices.size();
 		}
 
@@ -162,6 +160,7 @@ namespace cpplib::cluster_detail {
 			}
 		}
 	};
+
 	struct TranslatedItem {
 		AtomIndex id = 0;
 		ShiftType shift;
@@ -178,6 +177,7 @@ namespace cpplib::cluster_detail {
 			}
 		};
 	};
+
 	using TranslatedAtom = TranslatedItem;
 	using TranslatedMolecule = TranslatedItem;
 
@@ -466,12 +466,7 @@ namespace cpplib::cluster_detail {
 		const Distances& dist;
 	};
 
-
-
-
 } // namespace cpplib::cluster_detail
-
-
 
 
 namespace cpplib {
@@ -510,7 +505,6 @@ namespace cpplib {
 			asymmetric_types(std::move(types)),
 			asymmetric_points(std::move(points)),
 			polymer_cutoff_radius(polymer_cutoff)
-
 		{
 			assert(asymmetric_types.size() == asymmetric_points.size());
 
@@ -521,7 +515,6 @@ namespace cpplib {
 				anchors_cart.emplace_back(cell.fracToCart() * anchors_frac[i].point, anchors_frac[i].radius);
 			}
 		}
-
 
 	private:
 		CellType& cell;
