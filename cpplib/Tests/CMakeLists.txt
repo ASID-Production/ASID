@@ -25,47 +25,49 @@
 #  ORCID:       0009-0003-5298-6836
 #
 # ******************************************************************************************
-
-
-project(MyTests)
+project(MyTests LANGUAGES CXX)
 
 cmake_minimum_required(VERSION 3.14)
-
-# GoogleTest requires at least C++14
-
 
 if (POLICY CMP0135)
     cmake_policy(SET CMP0135 NEW) 
 endif()
+
 include(FetchContent)
+
 FetchContent_Declare(
-  gest
+  googletest  
   URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
 )
 # For Windows: Prevent overriding the parent project's compiler/linker settings
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(gest)
+FetchContent_MakeAvailable(googletest)
 
 enable_testing()
 
-add_executable(
-    ${PROJECT_NAME}
-    "EngineTest.cpp"
-    "MainTest.cpp"
-     "GeometryTest.cpp")
-target_link_libraries(
-    ${PROJECT_NAME} 
-    GTest::gtest_main
-    cpplibLib
+file(GLOB_RECURSE TEST_SRC
+    "*.cpp"
+)
+
+add_executable(${PROJECT_NAME} ${TEST_SRC})
+
+target_link_libraries( ${PROJECT_NAME} 
+    PRIVATE  
+        GTest::gtest_main
+        cpplib_objects
+        optimizations
+)
+
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    CXX_STANDARD 20
+    CXX_STANDARD_REQUIRED ON
 )
 
 add_custom_command(
         TARGET MyTests POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy
-                ${CMAKE_SOURCE_DIR}/module/BondLength.ini
-                ${CMAKE_CURRENT_BINARY_DIR}/BondLength.ini)
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${CMAKE_SOURCE_DIR}/module/BondLength.ini
+            $<TARGET_FILE_DIR:${PROJECT_NAME}>/BondLength.ini)
 
 include(GoogleTest)
 gtest_discover_tests(${PROJECT_NAME})
-
-

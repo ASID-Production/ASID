@@ -26,149 +26,208 @@
 #
 # ******************************************************************************************
 
-cmake_minimum_required (VERSION 3.19)
+cmake_minimum_required(VERSION 3.12)
+
+# ============================================================================
+# Project and basic options
+# ============================================================================
+project(cpplib LANGUAGES CXX C)
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
-# add_compile_definitions(DEBUG_MESS_ON)
-
-if (POLICY CMP0141)
-    cmake_policy(SET CMP0141 NEW)
-    set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<IF:$<AND:$<C_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:MSVC>>,$<$<CONFIG:Debug,RelWithDebInfo>:EditAndContinue>,$<$<CONFIG:Debug,RelWithDebInfo>:ProgramDatabase>>")
-endif()
-
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(COMPILE_TESTS FALSE)
-if (WIN32)
-    set(COMPILE_TESTS TRUE)
-    project(cpplibLib)
-    if (UNIX OR APPLE)
-        find_package(Python COMPONENTS Interpreter Development)
-    endif (UNIX OR APPLE)
+# ============================================================================
+# Politics
+# ============================================================================
+if(CMAKE_VERSION VERSION_LESS 3.15)
+    message(STATUS "CMake version 3.15+ recomended")
+endif()
+if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.24)
+    cmake_policy(SET CMP0141 NEW)
+    set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT 
+        "$<$<CONFIG:Debug,RelWithDebInfo>:ProgramDatabase>")
+endif()
 
-    if (WIN32)
-        find_package(Python COMPONENTS Interpreter Development EXACT 3.10)
-    endif (WIN32)
-    include_directories(SYSTEM ${Python3_INCLUDE_DIRS})
-    
-    add_library(cpplibLib  "cpplib/src/Functions/Functions.cpp"
-                           "cpplib/src/Python/PythonInterface.cpp"  
+# ============================================================================
+# Optimizations (interface)
+# ============================================================================
+add_library(optimizations INTERFACE)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        target_compile_options(optimizations INTERFACE 
+            $<$<CONFIG:Release>:
+                -Ofast
+                -DNDEBUG
+                -march=native
+                -mtune=native
+                -mfma
+                -flto
+                -funroll-loops
+                -fprefetch-loop-arrays
+            >
+        )
+        message(STATUS "Linux: max performance with safe math optimizations")
+        
+    elseif(MSVC)
+        target_compile_options(optimizations INTERFACE 
+            $<$<CONFIG:Release>:
+                /O2
+                /Ot
+                /Oi
+                /Gy
+                /GL
+                /DNDEBUG
+                /arch:AVX2
+                /fp:fast
+            >
+        )
+        target_link_options(optimizations INTERFACE 
+            $<$<CONFIG:Release>:
+                /LTCG
+                /OPT:REF
+                /OPT:ICF
+            >
+        )
+        message(STATUS "Windows: AVX2 + LTCG with fast FP model")
+        
+    elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang")
+        target_compile_options(optimizations INTERFACE 
+            $<$<CONFIG:Release>:
+                -O3
+                -DNDEBUG
+                -march=native
+                -mtune=native
+                -flto
+                -fno-math-errno
+                -fno-signed-zeros
+                -fno-trapping-math
+            >
+        )
+        message(STATUS "Clang/Unix: safe optimizations enabled")
+    endif()
 
-                           "cpplib/src/BaseHeaders/BaseTypes.h" 
-                           "cpplib/src/BaseHeaders/Concepts.h" 
-                           "cpplib/src/BaseHeaders/Currents.h" 
-                           "cpplib/src/BaseHeaders/DebugMes.h"
-                           "cpplib/src/BaseHeaders/Support.h"
+# ============================================================================
+# Python options
+# ============================================================================
+if(WIN32)
+    find_package(Python COMPONENTS Interpreter Development EXACT 3.10 REQUIRED)
+else()
+    find_package(Python COMPONENTS Interpreter Development REQUIRED)
+endif()
 
-                           "cpplib/src/Classes/Bader.h"
-                           "cpplib/src/Classes/Bond.h"
-                           "cpplib/src/Classes/Cluster.h" 
-                           "cpplib/src/Classes/Distances.h"
-                           "cpplib/src/Classes/DSU.h" 
-                           "cpplib/src/Classes/Engine.h"
-                           "cpplib/src/Classes/FindGeometry.h" 
-                           "cpplib/src/Classes/FindMolecules.h"
-                           "cpplib/src/Classes/Geometry.h"
-                           "cpplib/src/Classes/Hash.h"
-                           "cpplib/src/Classes/Interfaces.h"
-                           "cpplib/src/Classes/MoleculeGraph.h"
-                           "cpplib/src/Classes/SearchGraph.h"
-                           "cpplib/src/Classes/Voronoi.h"
-                            
-                           "cpplib/src/Functions/Functions.h"
+message(STATUS "Python version: ${Python_VERSION}")
+message(STATUS "Python EXECUTABLE: ${Python_EXECUTABLE}")
 
-                           "cpplib/src/Python/PythonInterface.h")
-    target_link_libraries(cpplibLib)
+# ============================================================================
+# Files
+# ============================================================================
+file(GLOB_RECURSE CPPLIB_HEADERS
+    "cpplib/src/*.h"
+)
 
-    target_include_directories(cpplibLib PUBLIC 
+set(CPPLIB_SOURCES
+    cpplib/src/Functions/Functions.cpp
+)
+set(CPPLIB_PY_SOURCES
+    cpplib/src/Python/PythonInterface.cpp
+)
+
+# ============================================================================
+# OBJECT library
+# ============================================================================
+add_library(cpplib_objects OBJECT ${CPPLIB_SOURCES})
+
+target_include_directories(cpplib_objects 
+    PUBLIC 
         ${PROJECT_SOURCE_DIR}/cpplib/src/BaseHeaders
         ${PROJECT_SOURCE_DIR}/cpplib/src/Classes
         ${PROJECT_SOURCE_DIR}/cpplib/src/Platform
+)
+set_target_properties(cpplib_objects PROPERTIES
+    PREFIX ""
+    OUTPUT_NAME "cpplib_objects"
+    LINKER_LANGUAGE C
+    POSITION_INDEPENDENT_CODE ON
+)
+target_link_libraries(cpplib_objects PRIVATE optimizations)
+
+
+
+# ============================================================================
+# CPPLIB creates only in Release
+# ============================================================================
+if(CMAKE_BUILD_TYPE MATCHES Release OR CMAKE_CONFIGURATION_TYPES)
+    add_library(cpplib SHARED ${CPPLIB_PY_SOURCES})
+    
+    # Include dirs
+    target_include_directories(cpplib 
+        PUBLIC 
+            ${PROJECT_SOURCE_DIR}/cpplib/src/BaseHeaders
+            ${PROJECT_SOURCE_DIR}/cpplib/src/Classes
+            ${PROJECT_SOURCE_DIR}/cpplib/src/Platform
+        PRIVATE
+            ${Python_INCLUDE_DIRS}
     )
     
-endif(WIN32)
-
-############################################################
-# Create a library cpplib
-############################################################
-
-project(cpplib)
-
-    if (UNIX OR APPLE)
-        find_package(Python3 COMPONENTS Interpreter Development)
-    endif (UNIX OR APPLE)
-
-    if (WIN32)
-        find_package(Python3 COMPONENTS Interpreter Development EXACT 3.10)
-    endif (WIN32)
-
-    include_directories(cpplib PRIVATE SYSTEM ${Python3_INCLUDE_DIRS})
-
-    #Generate the shared library from the library sources
-    if(CMAKE_BUILD_TYPE MATCHES Release)
-        add_library(cpplib SHARED "cpplib/src/Functions/Functions.cpp" 
-                                  "cpplib/src/Python/PythonInterface.cpp")
-        if(WIN32)
-            target_link_libraries(cpplib PRIVATE ${Python_LIBRARY_DIRS}/python3.lib)
-        else()
-            target_link_libraries(cpplib PRIVATE ${Python_LIBRARY_DIRS})
-        endif()
-        set_target_properties(cpplib PROPERTIES
-            PREFIX ""
-            OUTPUT_NAME "cpplib"
-            LINKER_LANGUAGE C
-            POSITION_INDEPENDENT_CODE ON
-        )
-
-        if (UNIX OR APPLE)
-            add_custom_command(
-                TARGET cpplib POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy
-                    $<TARGET_FILE:cpplib>
-                    ${CMAKE_SOURCE_DIR}/module/cpplib.so)
-        endif (UNIX OR APPLE)
-        if (WIN32)
-            add_custom_command(
-                TARGET cpplib POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy
-                    $<TARGET_FILE:cpplib>
-                    ${CMAKE_SOURCE_DIR}/module/cpplib.pyd)
-        endif (WIN32)
-
-        if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-            # На Linux компилируем под конкретную машину пользователя — максимальная производительность
-            target_compile_options(cpplib PRIVATE
-                -O3
-                -march=native
-                -mtune=native
-                -ffast-math
-                -flto
-            )
-            message(STATUS "Linux build: using -march=native for maximum performance on this CPU")
-        
-        elseif(MSVC)
-            # Windows: переносимая сборка с гарантированной поддержкой AVX2/FMA (x86-64-v3 уровень)
-            target_compile_options(cpplib PRIVATE
-                $<$<CONFIG:Release>:/O2>
-                $<$<CONFIG:Release>:/arch:AVX2>
-                $<$<CONFIG:Release>:/fp:fast>
-                $<$<CONFIG:Release>:/GL>
-            )
-            message(STATUS "Windows build: using /arch:AVX2 for portable performance (x86-64-v3)")
-        
-        elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
-            # Fallback для других Unix-подобных систем (macOS и т.п.) — можно тоже оптимизировать под native
-            target_compile_options(cpplib PRIVATE
-                -O3
-                -march=native
-                -mtune=native
-                -ffast-math
-            )
-            message(STATUS "Non-Linux Unix build: using -march=native")
-        endif()
+    set_target_properties(cpplib PROPERTIES
+        PREFIX ""
+        OUTPUT_NAME "cpplib"
+        LINKER_LANGUAGE C
+        POSITION_INDEPENDENT_CODE ON
+    )
     
-    endif(CMAKE_BUILD_TYPE MATCHES Release)
-if((IS_DIRECTORY ${CMAKE_SOURCE_DIR}/cpplib/Tests) AND COMPILE_TESTS)
-    add_subdirectory ("cpplib/Tests")
-endif((IS_DIRECTORY ${CMAKE_SOURCE_DIR}/cpplib/Tests) AND COMPILE_TESTS)
+    target_link_libraries(cpplib PRIVATE cpplib_objects optimizations)
+    # ============================================================================
+    # Link with Python (Stable ABI / Limited API)
+    # ============================================================================
+    
+    if(WIN32)
+        find_library(PYTHON_SABI_LIBRARY_RELEASE
+            NAMES python3
+            PATHS ${Python_LIBRARY_DIRS}
+            REQUIRED
+        )
+        
+        find_library(PYTHON_SABI_LIBRARY_DEBUG
+            NAMES python3_d
+            PATHS ${Python_LIBRARY_DIRS}
+            REQUIRED
+        )
+        
+        target_link_libraries(cpplib PRIVATE
+            optimized ${PYTHON_SABI_LIBRARY_RELEASE}
+            debug ${PYTHON_SABI_LIBRARY_DEBUG}
+        )
+    else()
+        target_link_libraries(cpplib PRIVATE ${Python_LIBRARIES})
+    endif()
+    
+    # ============================================================================
+    # Copy target to module dir
+    # ============================================================================
+    if(WIN32)
+        set(MODULE_EXTENSION "pyd")
+    else()
+        set(MODULE_EXTENSION "so")
+    endif()
+    
+    add_custom_command(
+        TARGET cpplib POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+            $<TARGET_FILE:cpplib>
+            ${CMAKE_SOURCE_DIR}/module/cpplib.${MODULE_EXTENSION}
+        COMMENT "Copying module to ${CMAKE_SOURCE_DIR}/module/"
+    )    
+endif()
+
+# ============================================================================
+# Tests
+# ============================================================================
+if(EXISTS ${CMAKE_SOURCE_DIR}/cpplib/Tests AND WIN32)
+    add_subdirectory(cpplib/Tests)
+    message(STATUS "Tests enabled for Windows build")
+elseif(EXISTS ${CMAKE_SOURCE_DIR}/cpplib/Tests)
+    message(STATUS "Tests directory exists but not configured (requires Windows)")
+endif()
+
+# add_compile_definitions(DEBUG_MESS_ON)

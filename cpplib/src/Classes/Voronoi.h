@@ -659,7 +659,7 @@ namespace cpplib::voronoi {
 			}
 
 			// 5. Create new Face (the clipping plane becomes a face)
-			const auto& new_face = faces.emplace_back(std::make_unique<Face>(faces.size()));
+			const auto& new_face = faces.emplace_back(std::make_unique<Face>(static_cast<uint32_t>(faces.size())));
 			auto raw_face_ptr = new_face.get();
 
 			// Add all MODIFICATION edges to the new face

@@ -35,14 +35,15 @@
 #include <utility>
 #include <vector>
 
-#include <BaseTypes.h>
-#include <Currents.h>
-#include <DebugMes.h>
-#include <Cluster.h>
-#include <Distances.h>
-#include <FindMolecules.h>
-#include <MoleculeGraph.h>
-#include <SearchGraph.h>
+#include "../src/BaseHeaders/BaseTypes.h"
+#include "../src/BaseHeaders/Currents.h"
+#include "../src/BaseHeaders/DebugMes.h"
+
+#include "../src/Classes/Cluster.h"
+#include "../src/Classes/Distances.h"
+#include "../src/Classes/FindMolecules.h"
+#include "../src/Classes/MoleculeGraph.h"
+#include "../src/Classes/SearchGraph.h"
 
 #include "../src/Functions/Functions.h"
 
