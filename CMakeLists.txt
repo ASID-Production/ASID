@@ -52,6 +52,7 @@ endif()
 # ============================================================================
 # Optimizations (interface)
 # ============================================================================
+set(CMAKE_SHOW_INCLUDES OFF)
 add_library(optimizations INTERFACE)
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         target_compile_options(optimizations INTERFACE 
@@ -64,11 +65,22 @@ add_library(optimizations INTERFACE)
                 -flto
                 -funroll-loops
                 -fprefetch-loop-arrays
+                -fno-exceptions
+                -D_HAS_EXCEPTIONS=0
+                -fno-rtti
             >
         )
         message(STATUS "Linux: max performance with safe math optimizations")
         
     elseif(MSVC)
+        foreach(flag_var 
+                CMAKE_CXX_FLAGS CMAKE_CXX_FLAGS_RELEASE CMAKE_CXX_FLAGS_RELWITHDEBINFO)
+            string(REPLACE "/GR" "" ${flag_var} "${${flag_var}}")
+            string(REPLACE "/EHс" "" ${flag_var} "${${flag_var}}")
+            string(REPLACE "/EHsс" "" ${flag_var} "${${flag_var}}")
+        endforeach()
+
+
         target_compile_options(optimizations INTERFACE 
             $<$<CONFIG:Release>:
                 /O2
@@ -79,6 +91,11 @@ add_library(optimizations INTERFACE)
                 /DNDEBUG
                 /arch:AVX2
                 /fp:fast
+                /D_HAS_EXCEPTIONS=0
+                /EHс-
+                /EHsс-
+                /EHs-
+                /GR-
             >
         )
         target_link_options(optimizations INTERFACE 

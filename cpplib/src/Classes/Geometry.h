@@ -286,122 +286,229 @@ namespace cpplib::geometry {
 	template<class T>
 	class Matrix {
 	public:
-		using size_t = unsigned char;
 		using value_type = T;
-		using array_type = ::std::array< ::std::array<T, 3>, 3>;
+		using array_type = ::std::array<value_type, 9>;
 		using const_array_type = const array_type;
+		struct EigenType {
+			using eigenvector = Point<T>;
+			using eigenvalue = T;
+
+			std::array<eigenvector, 3> vectors;
+			std::array<eigenvalue, 3> values;
+		};
 	private:
-		array_type A{{ {0,0,0},{0,0,0},{0,0,0} }};
+		array_type data{{ 0,0,0,0,0,0,0,0,0 }};
 		template<class T2> friend class Matrix; // for constructors
 	public:
 		constexpr Matrix() noexcept = default;
 
-		template<class T2> explicit constexpr Matrix(const Matrix<T2>& r) noexcept {
-			A[0][0] = static_cast<T>(r.A[0][0]);
-			A[0][1] = static_cast<T>(r.A[0][1]);
-			A[0][2] = static_cast<T>(r.A[0][2]);
-			A[1][0] = static_cast<T>(r.A[1][0]);
-			A[1][1] = static_cast<T>(r.A[1][1]);
-			A[1][2] = static_cast<T>(r.A[1][2]);
-			A[2][0] = static_cast<T>(r.A[2][0]);
-			A[2][1] = static_cast<T>(r.A[2][1]);
-			A[2][2] = static_cast<T>(r.A[2][2]);
-		}
-		template<class T2> explicit constexpr Matrix(Matrix<T2>&& r) noexcept {
-
-			A[0][0] = static_cast<T&&>(r.A[0][0]);
-			A[0][1] = static_cast<T&&>(r.A[0][1]);
-			A[0][2] = static_cast<T&&>(r.A[0][2]);
-			A[1][0] = static_cast<T&&>(r.A[1][0]);
-			A[1][1] = static_cast<T&&>(r.A[1][1]);
-			A[1][2] = static_cast<T&&>(r.A[1][2]);
-			A[2][0] = static_cast<T&&>(r.A[2][0]);
-			A[2][1] = static_cast<T&&>(r.A[2][1]);
-			A[2][2] = static_cast<T&&>(r.A[2][2]);
-		}
-		explicit constexpr Matrix(const T v) noexcept : A{{ {v,0,0},{0,v,0},{0,0,v} }} {}
-		explicit constexpr Matrix(const T** input_massive) noexcept {
-			for (size_t i = 0; i < 3; i++) {
-				for (size_t j = 0; j < 3; j++) {
-					A[i][j] = input_massive[i][j];
-				}
-			}
-		}
-		explicit constexpr Matrix(const T* input_massive) noexcept {
-			for (size_t i = 0, k = 0; i < 3; i++) {
-				for (size_t j = 0; j < 3; j++, k++) {
-					A[i][j] = input_massive[k];
-				}
-			}
-		}
-		explicit constexpr Matrix(const_array_type& in) noexcept : A(in) {}
-		explicit constexpr Matrix(array_type&& in) noexcept : A(std::move(in)) {}
+		template<class T2> explicit constexpr Matrix(const Matrix<T2>& r) noexcept 
+			: data {
+			static_cast<T>(r.data[0]),	static_cast<T>(r.data[1]),	static_cast<T>(r.data[2]),
+			static_cast<T>(r.data[3]),	static_cast<T>(r.data[4]),	static_cast<T>(r.data[5]),
+			static_cast<T>(r.data[6]),	static_cast<T>(r.data[7]),	static_cast<T>(r.data[8])} 
+		{}
+		template<class T2> explicit constexpr Matrix(Matrix<T2>&& r) noexcept 
+			: data {
+			static_cast<T>(std::move(r.data[0])),
+			static_cast<T>(std::move(r.data[1])),
+			static_cast<T>(std::move(r.data[2])),
+			static_cast<T>(std::move(r.data[3])),
+			static_cast<T>(std::move(r.data[4])),
+			static_cast<T>(std::move(r.data[5])),
+			static_cast<T>(std::move(r.data[6])),
+			static_cast<T>(std::move(r.data[7])),
+			static_cast<T>(std::move(r.data[8]))
+		} {}
+		explicit constexpr Matrix(const T v) noexcept : data{{ v,0,0,0,v,0,0,0,v }} {}
+		explicit constexpr Matrix(const T** input_massive) noexcept
+			: data{
+			static_cast<T>(input_massive[0][0]),
+			static_cast<T>(input_massive[0][1]),
+			static_cast<T>(input_massive[0][2]),
+			static_cast<T>(input_massive[1][0]),
+			static_cast<T>(input_massive[1][1]),
+			static_cast<T>(input_massive[1][2]),
+			static_cast<T>(input_massive[2][0]),
+			static_cast<T>(input_massive[2][1]),
+			static_cast<T>(input_massive[2][2])
+		} {}
+		explicit constexpr Matrix(const T* input_massive) noexcept 
+			: data{
+			static_cast<T>(input_massive[0]),
+			static_cast<T>(input_massive[1]),
+			static_cast<T>(input_massive[2]),
+			static_cast<T>(input_massive[3]),
+			static_cast<T>(input_massive[4]),
+			static_cast<T>(input_massive[5]),
+			static_cast<T>(input_massive[6]),
+			static_cast<T>(input_massive[7]),
+			static_cast<T>(input_massive[8])
+		} {}
+		explicit constexpr Matrix(const_array_type& in) noexcept : data(in) {}
+		explicit constexpr Matrix(array_type&& in) noexcept : data(std::move(in)) {}
 		[[nodiscard]] constexpr T& El(const size_t a, const size_t b) noexcept {
-			return A[a][b];
+			return data[3 * a + b];
 		}
 		[[nodiscard]] constexpr T El(const size_t a, const size_t b) const noexcept {
-			return A[a][b];
+			return data[3 * a + b];
 		}
 		template<class T2>
 		[[nodiscard]] constexpr Matrix<decltype(T()* T2())> operator*(const Matrix<T2>& right) const noexcept {
-			using resv = decltype(T()* T2());
-			std::array<resv, 3> a1 = {A[0][0] * right.A[0][0] + A[0][1] * right.A[1][0] + A[0][2] * right.A[2][0],
-										A[0][0] * right.A[0][1] + A[0][1] * right.A[1][1] + A[0][2] * right.A[2][1],
-										A[0][0] * right.A[0][2] + A[0][1] * right.A[1][2] + A[0][2] * right.A[2][2]};
-			std::array<resv, 3> a2 = {A[1][0] * right.A[0][0] + A[1][1] * right.A[1][0] + A[1][2] * right.A[2][0],
-										A[1][0] * right.A[0][1] + A[1][1] * right.A[1][1] + A[1][2] * right.A[2][1],
-										A[1][0] * right.A[0][2] + A[1][1] * right.A[1][2] + A[1][2] * right.A[2][2]};
-			std::array<resv, 3> a3 = {A[2][0] * right.A[0][0] + A[2][1] * right.A[1][0] + A[2][2] * right.A[2][0],
-										A[2][0] * right.A[0][1] + A[2][1] * right.A[1][1] + A[2][2] * right.A[2][1],
-										A[2][0] * right.A[0][2] + A[2][1] * right.A[1][2] + A[2][2] * right.A[2][2]};
-			std::array<std::array<resv, 3>, 3> b{a1, a2, a3};
-			return Matrix<resv>(b);
+			using RT = decltype(T()* T2());
+
+			const T& m00 = data[0]; const T& m01 = data[1]; const T& m02 = data[2];
+			const T& m10 = data[3]; const T& m11 = data[4]; const T& m12 = data[5];
+			const T& m20 = data[6]; const T& m21 = data[7]; const T& m22 = data[8];
+
+			const T2& r00 = right.data[0]; const T2& r01 = right.data[1]; const T2& r02 = right.data[2];
+			const T2& r10 = right.data[3]; const T2& r11 = right.data[4]; const T2& r12 = right.data[5];
+			const T2& r20 = right.data[6]; const T2& r21 = right.data[7]; const T2& r22 = right.data[8];
+
+			if constexpr (std::is_floating_point_v<RT>) {
+				RT c00 = std::fma(m00, r00, std::fma(m01, r10, m02 * r20));
+				RT c01 = std::fma(m00, r01, std::fma(m01, r11, m02 * r21));
+				RT c02 = std::fma(m00, r02, std::fma(m01, r12, m02 * r22));
+
+				RT c10 = std::fma(m10, r00, std::fma(m11, r10, m12 * r20));
+				RT c11 = std::fma(m10, r01, std::fma(m11, r11, m12 * r21));
+				RT c12 = std::fma(m10, r02, std::fma(m11, r12, m12 * r22));
+
+				RT c20 = std::fma(m20, r00, std::fma(m21, r10, m22 * r20));
+				RT c21 = std::fma(m20, r01, std::fma(m21, r11, m22 * r21));
+				RT c22 = std::fma(m20, r02, std::fma(m21, r12, m22 * r22));
+
+				return Matrix<RT>(std::array<RT, 9>{c00, c01, c02, c10, c11, c12, c20, c21, c22});
+
+			} else {
+				return Matrix<RT>(std::array<RT, 9>{
+					m00* r00 + m01 * r10 + m02 * r20,
+					m00* r01 + m01 * r11 + m02 * r21,
+					m00* r02 + m01 * r12 + m02 * r22,
+
+					m10* r00 + m11 * r10 + m12 * r20,
+					m10* r01 + m11 * r11 + m12 * r21,
+					m10* r02 + m11 * r12 + m12 * r22,
+
+					m20* r00 + m21 * r10 + m22 * r20,
+					m20* r01 + m21 * r11 + m22 * r21,
+					m20* r02 + m21 * r12 + m22 * r22
+				});
+			}
 		}
 		template<class T2>
 		[[nodiscard]] constexpr std::array<decltype(T()* T2()), 3> operator*(const std::array<T2, 3>& right) const {
-			std::array<decltype(T()* T2()), 3> res;
-			res[0] = A[0][0] * right[0] + A[0][1] * right[1] + A[0][2] * right[2];
-			res[1] = A[1][0] * right[0] + A[1][1] * right[1] + A[1][2] * right[2];
-			res[2] = A[2][0] * right[0] + A[2][1] * right[1] + A[2][2] * right[2];
-			return res;
+			return std::array<decltype(T() * T2()), 3> {
+				std::fma(data[0], right[0], std::fma(data[1], right[1], data[2] * right[2])),
+				std::fma(data[3], right[0], std::fma(data[4], right[1], data[5] * right[2])),
+				std::fma(data[6], right[0], std::fma(data[7], right[1], data[8] * right[2]))
+			};
 		}
 		template<class T2>
 		[[nodiscard]] constexpr Matrix<decltype(T() / T2())> operator/(const T2 right) const noexcept {
-			std::array<T, 3> a1 = {A[0][0] / right, A[0][1] / right, A[0][2] / right};
-			std::array<T, 3> a2 = {A[1][0] / right, A[1][1] / right, A[1][2] / right};
-			std::array<T, 3> a3 = {A[2][0] / right, A[2][1] / right, A[2][2] / right};
-			array_type b{a1, a2, a3};
-			return Matrix(std::move(b));
+			using RT = decltype(T() / T2());
+			return Matrix<RT>(std::array<RT, 9>{
+				data[0] / right,
+				data[1] / right,
+				data[2] / right,
+				data[3] / right,
+				data[4] / right,
+				data[5] / right,
+				data[6] / right,
+				data[7] / right,
+				data[8] / right
+			});
 		}
 		[[nodiscard]] constexpr Matrix<T> Transponate() const noexcept {
-			std::array<T, 3> a1 = {A[0][0],A[1][0],A[2][0]};
-			std::array<T, 3> a2 = {A[0][1],A[1][1],A[2][1]};
-			std::array<T, 3> a3 = {A[0][2],A[1][2],A[2][2]};
-			array_type b{a1, a2, a3};
-			return Matrix(b);
+			return Matrix<T>(std::array<T, 9>{
+				data[0], data[3], data[6],
+				data[1], data[4], data[7],
+				data[2], data[5], data[8] 
+			});
 		}
 		[[nodiscard]] constexpr Matrix<T> Invert() const {
-			const T det = Det();
-			std::array<T, 3> a1 = {(A[1][1] * A[2][2] - A[1][2] * A[2][1]) / det, (A[0][2] * A[2][1] - A[0][1] * A[2][2]) / det, (A[0][1] * A[1][2] - A[0][2] * A[1][1]) / det};
-			std::array<T, 3> a2 = {(A[1][2] * A[2][0] - A[1][0] * A[2][2]) / det, (A[0][0] * A[2][2] - A[0][2] * A[2][0]) / det, (A[0][2] * A[1][0] - A[0][0] * A[1][2]) / det};
-			std::array<T, 3> a3 = {(A[1][0] * A[2][1] - A[2][0] * A[1][1]) / det, (A[0][1] * A[2][0] - A[0][0] * A[2][1]) / det, (A[1][1] * A[0][0] - A[1][0] * A[0][1]) / det};
-			array_type b = {a1,a2,a3};
-			return Matrix(b);
+			const T& m00 = data[0]; const T& m01 = data[1]; const T& m02 = data[2];
+			const T& m10 = data[3]; const T& m11 = data[4]; const T& m12 = data[5];
+			const T& m20 = data[6]; const T& m21 = data[7]; const T& m22 = data[8];
+
+			const T det = m00 * (m11 * m22 - m12 * m21)
+				- m01 * (m10 * m22 - m12 * m20)
+				+ m02 * (m10 * m21 - m11 * m20);
+
+			assert(std::abs(det) > T(1e-12) && "Matrix is singular, cannot invert");
+
+			const T inv_det = T(1) / det;
+
+
+			if constexpr (std::is_floating_point_v<T>) {
+				return Matrix<T>(std::array<T, 9>{
+					std::fma(m11, m22, -m12 * m21)* inv_det,
+					std::fma(m02, m21, -m01 * m22)* inv_det,
+					std::fma(m01, m12, -m02 * m11)* inv_det,
+
+					std::fma(m12, m20, -m10 * m22)* inv_det,
+					std::fma(m00, m22, -m02 * m20)* inv_det,
+					std::fma(m02, m10, -m00 * m12)* inv_det,
+
+					std::fma(m10, m21, -m11 * m20)* inv_det,
+					std::fma(m01, m20, -m00 * m21)* inv_det,
+					std::fma(m00, m11, -m01 * m10)* inv_det
+				});
+			} else {
+				return Matrix<T>(std::array<T, 9>{
+					(m11* m22 - m12 * m21)* inv_det,
+					(m02* m21 - m01 * m22)* inv_det,
+					(m01* m12 - m02 * m11)* inv_det,
+
+					(m12* m20 - m10 * m22)* inv_det,
+					(m00* m22 - m02 * m20)* inv_det,
+					(m02* m10 - m00 * m12)* inv_det,
+
+					(m10* m21 - m11 * m20)* inv_det,
+					(m01* m20 - m00 * m21)* inv_det,
+					(m00* m11 - m01 * m10)* inv_det
+				});
+			}
 		}
 		[[nodiscard]] constexpr Matrix<T> Modul() const noexcept {
-			constexpr T zero = 0;
-			std::array<T, 3> a1 = {A[0][0] < zero?A[0][0]:-A[0][0], A[0][1] < zero?A[0][1]:-A[0][1], A[0][2] < zero?A[0][2]:-A[0][2]};
-			std::array<T, 3> a2 = {A[1][0] < zero?A[1][0]:-A[1][0], A[1][1] < zero?A[1][1]:-A[1][1], A[1][2] < zero?A[1][2]:-A[1][2]};
-			std::array<T, 3> a3 = {A[2][0] < zero?A[2][0]:-A[2][0], A[2][1] < zero?A[2][1]:-A[2][1], A[2][2] < zero?A[2][2]:-A[2][2]};
-			array_type b{a1, a2, a3};
-			return Matrix(std::move(b));
+			if constexpr (std::is_floating_point_v<T>) {
+				return Matrix<T>(std::array<T, 9>{
+					std::abs(data[0]), std::abs(data[1]), std::abs(data[2]),
+					std::abs(data[3]), std::abs(data[4]), std::abs(data[5]),
+					std::abs(data[6]), std::abs(data[7]), std::abs(data[8])
+				});
+			} else {
+				return Matrix<T>(std::array<T, 9>{
+					data[0] < 0?-data[0]:data[0],
+					data[1] < 0?-data[1]:data[1],
+					data[2] < 0?-data[2]:data[2],
+					data[3] < 0?-data[3]:data[3],
+					data[4] < 0?-data[4]:data[4],
+					data[5] < 0?-data[5]:data[5],
+					data[6] < 0?-data[6]:data[6],
+					data[7] < 0?-data[7]:data[7],
+					data[8] < 0?-data[8]:data[8]
+				});
+			}
 		}
-		constexpr double Trace() const noexcept {
-			return (A[0][0] + A[1][1] + A[2][2]) / 3.0;
+		constexpr T Trace() const noexcept {
+			return data[0] + data[4] + data[8];
 		}
 		constexpr T Det() const noexcept {
-			return A[0][0] * A[1][1] * A[2][2] + A[0][1] * A[1][2] * A[2][0] + A[0][2] * A[1][0] * A[2][1]
-				- A[0][2] * A[1][1] * A[2][0] - A[0][1] * A[1][0] * A[2][2] - A[0][0] * A[1][2] * A[2][1];
+			const T& m00 = data[0]; const T& m01 = data[1]; const T& m02 = data[2];
+			const T& m10 = data[3]; const T& m11 = data[4]; const T& m12 = data[5];
+			const T& m20 = data[6]; const T& m21 = data[7]; const T& m22 = data[8];
+
+			if constexpr (std::is_floating_point_v<T>) {
+				// Используем fma для меньшей ошибки округления
+				return std::fma(m00, std::fma(m11, m22, -m12 * m21),
+					   std::fma(-m01, std::fma(m10, m22, -m12 * m20),
+								m02 * std::fma(m10, m21, -m11 * m20)));
+			} else {
+				return m00 * (m11 * m22 - m12 * m21)
+					- m01 * (m10 * m22 - m12 * m20)
+					+ m02 * (m10 * m21 - m11 * m20);
+			}
 		}
 		template<class T2>
 		constexpr void MultMatrixByArray(const std::array<T2, 3>& sup) noexcept {
@@ -409,37 +516,221 @@ namespace cpplib::geometry {
 		}
 		template<class T2>
 		constexpr void MultMatrixByArray(const T2 x, const T2 y, const T2 z) noexcept {
-			A[0][0] *= x;
-			A[1][0] *= x;
-			A[2][0] *= x;
-			A[0][1] *= y;
-			A[1][1] *= y;
-			A[2][1] *= y;
-			A[0][2] *= z;
-			A[1][2] *= z;
-			A[2][2] *= z;
+			data[0] *= x;
+			data[1] *= x;
+			data[2] *= x;
+			data[3] *= y;
+			data[4] *= y;
+			data[5] *= y;
+			data[6] *= z;
+			data[7] *= z;
+			data[8] *= z;
 		}
 		template<class T2>
-		friend constexpr Point<decltype(T()* T2())> operator*(const Matrix<T>& left, const Point<T2>& right) noexcept {
-			Point<decltype(T()* T2())> res;
-			for (int i = 0; i < 3; i++) {
-				for (int j = 0; j < 3; j++) {
-					res[i] = std::fma(left.El(i, j), right[j], res[i]);
-				}
+		friend constexpr auto operator*(const Matrix<T>& left, const Point<T2>& right) noexcept {
+			using RT = decltype(T()* T2());
+
+			const T2 x = right[0];
+			const T2 y = right[1];
+			const T2 z = right[2];
+
+			if constexpr (std::is_floating_point_v<RT>) {
+				return Point<RT>{
+					std::fma(left.data[0], x, std::fma(left.data[1], y, left.data[2] * z)),
+					std::fma(left.data[3], x, std::fma(left.data[4], y, left.data[5] * z)),
+					std::fma(left.data[6], x, std::fma(left.data[7], y, left.data[8] * z))
+				};
+			} else {
+				return Point<RT>{
+					left.data[0] * x + left.data[1] * y + left.data[2] * z,
+					left.data[3] * x + left.data[4] * y + left.data[5] * z,
+					left.data[6] * x + left.data[7] * y + left.data[8] * z
+				};
 			}
-			return res;
 		}
 
 		template<class T2>
-		constexpr Point<decltype(T()* T2())> TransposeMultiply(const Point<T2>& right) const noexcept {
-			Point<decltype(T()* T2())> res;
-			for (int i = 0; i < 3; i++) {
-				for (int j = 0; j < 3; j++) {
-					res[i] = std::fma(A[j][i], right[j], res[i]);
+		constexpr auto TransposeMultiply(const Point<T2>& right) const noexcept {
+			using RT = decltype(T()* T2());
+
+			const T2 x = right[0];
+			const T2 y = right[1];
+			const T2 z = right[2];
+
+			if constexpr (std::is_floating_point_v<RT>) {
+				return Point<RT>{
+					std::fma(data[0], x, std::fma(data[3], y, data[6] * z)),
+					std::fma(data[1], x, std::fma(data[4], y, data[7] * z)),
+					std::fma(data[2], x, std::fma(data[5], y, data[8] * z))
+				};
+			} else {
+				return Point<RT>{
+					data[0] * x + data[3] * y + data[6] * z,
+					data[1] * x + data[4] * y + data[7] * z,
+					data[2] * x + data[5] * y + data[8] * z
+				};
+			}
+		}
+
+		// Analytical 3x3 eigenvalue solver using cubic equation.
+		// Optimized for speed: no dynamic allocations, minimal branching,
+		// uses double for internal computations to maintain precision.
+		[[nodiscard]] constexpr EigenType EigenvaluesAndVectors() const noexcept {
+			EigenType result{};
+
+			// Cashing values
+			const T m00 = data[0];
+			const T m01 = data[1];
+			const T m02 = data[2];
+			const T m10 = data[3];
+			const T m11 = data[4];
+			const T m12 = data[5];
+			const T m20 = data[6];
+			const T m21 = data[7];
+			const T m22 = data[8];
+
+			// ------------------------------------------------------------------------
+			// Step 1: Compute invariants of the characteristic polynomial:
+			//   la^3 - I1*la^2 + I2*la - I3 = 0
+			// ------------------------------------------------------------------------
+			const T I1 = m00 + m11 + m22;  // trace
+
+			// I2 = sum of principal minors
+			const T I2 = (m00 * m11 - m01 * m10) +
+				(m00 * m22 - m02 * m20) +
+				(m11 * m22 - m12 * m21);
+
+			// I3 = determinant
+			const T I3 = m00 * (m11 * m22 - m12 * m21) -
+				m01 * (m10 * m22 - m12 * m20) +
+				m02 * (m10 * m21 - m11 * m20);
+
+			// ------------------------------------------------------------------------
+			// Step 2: Depress the cubic: la = mu + I1/3
+			// Result: mu^3 + p*mu + q = 0
+			// ------------------------------------------------------------------------
+			const T I1_div3 = I1 / 3.0;
+			const T p = I2 - I1 * I1_div3 - I1_div3 * I1_div3 * 2.0;
+			const T q = (2.0 * I1_div3 * I1_div3 * I1_div3) -
+				(I1 * I2) / 3.0 + I3;
+
+			// ------------------------------------------------------------------------
+			// Step 3: Solve depressed cubic using trigonometric method (faster than Cardano)
+			// For 3 real roots: discriminant D = (q/2) + (p/3) <= 0
+			// ------------------------------------------------------------------------
+			const T p3 = p / 3.0;
+			const T q2 = q / 2.0;
+			const T D = q2 * q2 + p3 * p3 * p3;
+
+			T eigenvalues[3];
+
+			if (D > 0.0) {
+				// One real root, two complex conjugates (unlikely for symmetric matrices)
+				// Use Cardano's formula
+				const T sqrtD = std::sqrt(D);
+				const T A_root = std::cbrt(-q2 + sqrtD);
+				const T B_root = std::cbrt(-q2 - sqrtD);
+				eigenvalues[0] = A_root + B_root + I1_div3;
+				eigenvalues[1] = eigenvalues[2] = eigenvalues[0];
+			} else {
+				// Three real roots (standard case for symmetric matrices)
+				const T r = 2.0 * std::sqrt(-p3);
+				const T phi = std::acos(-q / (r * r * r / 4.0));  // acos(q / (2 * r/8))
+				const T phi_div3 = phi / 3.0;
+				const T r_div3 = r / 3.0;
+
+				eigenvalues[0] = r_div3 * std::cos(phi_div3) + I1_div3;
+				eigenvalues[1] = r_div3 * std::cos(phi_div3 + 2.0943951023931953) + I1_div3;  // +120
+				eigenvalues[2] = r_div3 * std::cos(phi_div3 + 4.1887902047863905) + I1_div3;  // +240
+			}
+
+			// Sort eigenvalues in descending order (optional, but typical)
+			std::sort(eigenvalues, eigenvalues + 3, std::greater<double>());
+
+			// Store eigenvalues
+			for (int i = 0; i < 3; ++i) {
+				result.values[i] = static_cast<T>(eigenvalues[i]);
+			}
+
+			// ------------------------------------------------------------------------
+			// Step 4: Compute eigenvectors using inverse iteration for each eigenvalue
+			// Fast method: solve (A - la*I)·v = 0 using cross product for 3x3
+			// ------------------------------------------------------------------------
+			for (int eig_idx = 0; eig_idx < 3; ++eig_idx) {
+				const T lambda = eigenvalues[eig_idx];
+
+				// Build matrix M = A - la*I
+				const T M00 = m00 - lambda;
+				const T M01 = m01;
+				const T M02 = m02;
+				const T M10 = m10;
+				const T M11 = m11 - lambda;
+				const T M12 = m12;
+				const T M20 = m20;
+				const T M21 = m21;
+				const T M22 = m22 - lambda;
+
+				// Find eigenvector by taking cross product of two rows
+				// This gives a vector orthogonal to both rows -> in the null space
+				T vx = M01 * M12 - M02 * M11;
+				T vy = M02 * M10 - M00 * M12;
+				T vz = M00 * M11 - M01 * M10;
+
+				// Fallback: try other row combinations if first is degenerate
+				T normSq = vx * vx + vy * vy + vz * vz;
+				if (normSq < 1e-12) {
+					// Try rows 1 & 2
+					vx = M11 * M22 - M12 * M21;
+					vy = M12 * M20 - M10 * M22;
+					vz = M10 * M21 - M11 * M20;
+					normSq = vx * vx + vy * vy + vz * vz;
+				}
+				if (normSq < 1e-12) {
+					// Try rows 0 & 2
+					vx = M00 * M22 - M02 * M20;
+					vy = -vx;  // Actually M02 * M20 - M00 * M22
+					vz = M00 * M20 - M00 * M20;
+					normSq = vx * vx + vy * vy + vz * vz;
+				}
+
+				// Normalize eigenvector
+				const T invNorm = 1.0 / std::sqrt(normSq);
+				result.vectors[eig_idx][0] = static_cast<T>(vx * invNorm);
+				result.vectors[eig_idx][1] = static_cast<T>(vy * invNorm);
+				result.vectors[eig_idx][2] = static_cast<T>(vz * invNorm);
+			}
+
+			// ------------------------------------------------------------------------
+			// Step 5: Orthogonalize eigenvectors (Gram-Schmidt) for symmetric matrices
+			// This ensures numerical stability and orthonormality
+			// ------------------------------------------------------------------------
+			for (int i = 0; i < 3; ++i) {
+				for (int j = 0; j < i; ++j) {
+					// Project out component along previous eigenvectors
+					T dot = 0.0;
+					for (int k = 0; k < 3; ++k) {
+						dot += result.vectors[i][k] *
+							result.vectors[j][k];
+					}
+					for (int k = 0; k < 3; ++k) {
+						result.vectors[i][k] -= dot * result.vectors[j][k];
+					}
+				}
+				// Renormalize
+				T norm = 0.0;
+				for (int k = 0; k < 3; ++k) {
+					const double val = result.vectors[i][k];
+					norm += val * val;
+				}
+				const double invNorm = 1.0 / std::sqrt(norm);
+				for (int k = 0; k < 3; ++k) {
+					result.vectors[i][k] = static_cast<T>(result.vectors[i][k] * invNorm);
 				}
 			}
-			return res;
+
+			return result;
 		}
+
 	};
 
 

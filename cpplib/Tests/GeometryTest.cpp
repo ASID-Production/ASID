@@ -181,7 +181,7 @@ TEST(MatrixTest, BasicOperations) {
 
 	// Test trace
 	FloatingPointType trace2 = m2.Trace();
-	EXPECT_NEAR(trace2, 5.0f, EPSILON); // (1+5+9)/3 = 5
+	EXPECT_NEAR(trace2, 15.0f, EPSILON); // (1+5+9) = 15
 }
 
 TEST(MatrixTest, MatrixOperations) {
