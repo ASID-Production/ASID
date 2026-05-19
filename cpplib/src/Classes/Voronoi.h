@@ -1014,9 +1014,13 @@ namespace cpplib::voronoi {
 		/// @param cells Vector of Voronoi cells to merge
 		///
 		/// Performs the following operations:
+		/// 
 		/// 1. Merges coincident vertices across cells
+		/// 
 		/// 2. Merges duplicate edges
+		/// 
 		/// 3. Merges duplicate faces (polygons)
+		/// 
 		/// 4. Builds unified polyhedra (cells) referencing the merged geometry
 		explicit VoronoiFused(::std::vector<voronoi::Cell>& cells, const geometry::Matrix<FloatingPointType>& FtoC) {
 			uint32_t count_vertices = 0;
