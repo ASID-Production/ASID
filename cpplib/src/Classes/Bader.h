@@ -86,12 +86,13 @@ namespace cpplib {
             value_type d; // constant term
         };
 
-        CubicSpline(const std::vector<value_type>& knots, const std::vector<value_type>& values) {
-            assert(knots.size() == values.size());
-            assert(knots.size() >= 2);
-            assert(values.back() == 0.0);   // Required by the problem statement
+        CubicSpline(std::vector<value_type>&& knots, const std::vector<value_type>& values) : knots_(knots) {
+            assert(knots_.size() == values.size());
+            assert(knots_.size() >= 2);
+            assert(values_.back() == 0.0);   // Required by the problem statement
 
-            knots_ = knots;
+            ln_r0_ = std::log(knots_[0]);
+
             const size_t n = knots_.size();          // Number of nodes
             const size_t m = n - 1;                  // Number of intervals
 
@@ -103,12 +104,10 @@ namespace cpplib {
             }
 
             // Build tri-diagonal system for second derivatives S''(x_i)
-            // Notation:
-            //   sub[i]  - sub-diagonal (a_i)
-            //   diag[i] - main diagonal (b_i)
-            //   sup[i]  - super-diagonal (c_i)
-            //   rhs[i]  - right-hand side (d_i)
-            std::vector<value_type> sub(n, 0.0), diag(n, 0.0), sup(n, 0.0), rhs(n, 0.0);
+            std::vector<value_type> sub(n, 0.0);  // sub-diagonal (a_i)
+            std::vector<value_type> diag(n, 0.0); // main diagonal (b_i)
+            std::vector<value_type> sup(n, 0.0);  // super-diagonal (c_i)
+            std::vector<value_type> rhs(n, 0.0);  // right-hand side (d_i)
 
             // Left boundary condition: S''(x0) = 0 (Natural spline)
             diag[0] = 1.0;
@@ -173,7 +172,7 @@ namespace cpplib {
         /// @param dphi returns value of 1-st derivative of spline at r
         /// @param ddphi returns value of 2-nd derivative of spline at r
         void eval(value_type r, value_type& phi, value_type& dphi, value_type& ddphi) const {
-            if (r >= radius()) {
+            if (r < knots_[0] || r >= radius()) {
                 phi = dphi = ddphi = 0.0;
                 return;
             }
@@ -195,12 +194,15 @@ namespace cpplib {
         }
 
     private:
+        // O(1)-optimized finder of active spline
         size_t find_active_spline(value_type r) const {
-            auto it = std::upper_bound(knots_.begin(), knots_.end(), r);
-            return std::distance(knots_.begin(), it) - 1;
+            constexpr double INV_ALPHA = 40.98379665578782;
+            return static_cast<size_t>((std::log(r) - ln_r0_) * INV_ALPHA);
         }
+
         std::vector<value_type> knots_;
         std::vector<IntervalCoeffs> coeffs_;
+        value_type ln_r0_;
     };
 
     class RadialSpline {
@@ -243,11 +245,64 @@ namespace cpplib {
                 }
             }
 
-
             return result;
         }
 
     private:
         CubicSpline spline_;
     };
+
+    class CriticalPoint {
+    public:
+        using PointType = typename RadialSpline::PointType;
+        enum class TYPE {
+            N = 0,
+            B = 1,
+            R = 2,
+            C = 3
+        };
+        CriticalPoint() = default;
+        CriticalPoint(TYPE type, const PointType& pos) : type_(type), pos_(pos) {}
+        PointType FindNextPosition() const {
+            switch (type_):
+            {
+            case TYPE::N:
+                assert(false);
+                return pos_;
+                break;
+            case TYPE::B:
+                return EigenVectorFollowing();
+                break;
+            case TYPE::R:
+                return EigenVectorFollowing();
+                break;
+            case TYPE::C:
+                return NewtonRaphsonPredict();
+                break;
+            }
+        }
+        void UpdatePoint(const PointType& pos, const TripleDouble& value) {
+            pos_ = pos;
+            value_ = value;
+        }
+    private:
+        PointType EigenVectorFollowing() const {
+            // TODO
+            return pos_;
+        }
+
+        PointType NewtonRaphsonPredict() const {
+            // TODO
+            return pos_;
+        }
+
+    private:
+        TYPE type_ = TYPE::N;
+        PointType pos_{};
+        TripleDouble value_{};
+    };
+    class CriticNet {
+        VoronoiNet
+    };
+
 }
