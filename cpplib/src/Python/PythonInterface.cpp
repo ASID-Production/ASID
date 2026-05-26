@@ -849,6 +849,56 @@ extern "C" {
 							 "unit_cell", py_util::convert(buildresult.atoms));
 	}
 
+	static PyObject* cpplib_FindCP(PyObject* self, PyObject* args) {
+		// TODO: Placeholder function
+		using Diagram = cpplib::voronoi::VoronoiDiagram;
+
+		PyObject* ocell = NULL;
+		PyObject* osymm = NULL;
+		PyObject* otuples = NULL;
+		float cutoff = 6.0;
+		if (!PyArg_ParseTuple(args, "OOOOf", &ocell, &osymm, &otuples, &cutoff)) {
+			Py_RETURN_NONE;
+		}
+
+		LOG_INTERFACE_GUARD("cpplib_FindCP");
+		// Parsing
+		Prepare_IC all(ocell, osymm, otuples);
+		auto ps = all.points.size();
+
+		geometry::Cell cell(all.cell);
+		std::vector<bool> bools (ps, true);
+
+		std::vector<geometry::Symm<FloatingPointType>> symmvec;
+		symmvec.reserve(all.symm.size());
+		for (int i = 0; i < all.symm.size(); i++)
+		{
+			symmvec.emplace_back(all.symm[i]);
+		}
+
+		cluster_detail::UnitCellBuilder ucb(symmvec);
+		auto buildresult = ucb.build(all.points, all.types);
+
+
+		geometry::SpatialGrid<FloatingPointType> space;
+		space.build(buildresult.atoms.points, cell, cutoff);
+		auto bonds = WITH_LOG_M(space, get_bonds, false);
+
+		// Flags intentionally correspond only to the asymmetric-unit inputs; 
+		// VoronoiDiagram resizes the flag vector and treats symmetry-expanded sites as false.
+		Diagram diag(buildresult.atoms.points, bonds, cell, bools);
+
+		auto ce = diag.extractCells();
+
+		cpplib::voronoi::VoronoiFused vf(ce, cell.fracToCart());
+		vf.polyhedra.resize(all.points.size());
+
+		// Build return value
+		return Py_BuildValue("{s:N,s:N}",
+							 "voronoi_cells", py_util::convert(vf),
+							 "unit_cell", py_util::convert(buildresult.atoms));
+	}
+
 	static struct PyMethodDef methods[] = {
 		{ "GenBonds", cpplib_GenBonds, METH_O, "Generate bond list"},
 		{ "GenBondsEx", cpplib_GenBondsEx, METH_O, "Generate bond list with length"},
@@ -871,6 +921,7 @@ extern "C" {
 		{ "SortDatabase", cpplib_SortDatabase, METH_O, "Sort graph"},
 		{ "Cluster", cpplib_ClusterCreate, METH_VARARGS, "Create cluster"},
 		{ "VoronoiCalculation", cpplib_Voronoi, METH_VARARGS, "Calculate Voronoi cells"},
+		{ "FindCP", cpplib_FindCP, METH_VARARGS, "Find CP in crystal"},
 
 
 		{ NULL, NULL, 0, NULL }
