@@ -524,9 +524,13 @@ namespace cpplib::voronoi {
 		///
 		/// Progressively clips the Voronoi cell by a plane perpendicular to a neighboring atom.
 		/// This algorithm:
+		/// 
 		/// 1. Classifies vertices as deleted, modified, or valid based on their side of the plane
+		/// 
 		/// 2. Updates edge and face states accordingly
+		/// 
 		/// 3. Creates new vertices at edge-plane intersections
+		/// 
 		/// 4. Adds new edges and a new face where the plane cuts the cell
 		void clipByPlaneAndAddNewFace(const PlaneType& clipping_plane, uint32_t id_of_another_cell, geometry::ShiftCode another_shiftcode) {
 			using enum State;
@@ -726,9 +730,13 @@ namespace cpplib::voronoi {
 	/// @brief Main class for constructing Voronoi diagrams from atomic positions
 	///
 	/// VoronoiDiagram constructs Voronoi cells for a set of input points (atoms) by:
+	/// 
 	/// 1. Initializing each cell as a cube centered at the point
+	/// 
 	/// 2. Finding neighboring points via a spatial grid and bonds
+	/// 
 	/// 3. Iteratively clipping each cell by planes perpendicular to its neighbors
+	/// 
 	/// 4. Extracting the final cell geometry
 	///
 	/// Note: Only cells marked with flags=true are fully computed. Others are left empty.
@@ -1381,4 +1389,49 @@ namespace cpplib::voronoi {
 			return volume;
 		}
 	};
+	class Net {
+    public:
+		using ShiftType = geometry::Point<uint8_t>;
+		using PointType = VoronoiFused::PointType;
+		using PolyhedronPointer = typename VoronoiFused::Polyhedron*;
+
+	private:
+		std::vector<VoronoiFused::Polyhedron*> root_polyhedron;
+		std::vector<ShiftType> shift;
+		std::vector<PointType> real_point;
+		std::vector<size_t> all_neighbours;
+		std::vector<size_t> offsets;
+
+	public:
+		Net(size_t size) {
+			root_polyhedron.reserve(size);
+			shift.reserve(size);
+			real_point.reserve(size);
+			all_neighbours.reserve(size << 4);
+			offsets.reserve(size);
+		}
+		void add_polyhedron(PolyhedronPointer p, ShiftType s, const PointType& r) {
+			root_polyhedron.push_back(p);
+			shift.push_back(s);
+			real_point.push_back(r);
+		}
+
+	private:
+		size_t pack_key(ShiftType shift, uint32_t atom_id) const noexcept {
+			return (static_cast<size_t>(shift[0]))       |
+				   (static_cast<size_t>(shift[1]) << 8)  |
+				   (static_cast<size_t>(shift[2]) << 16) |
+				   (static_cast<size_t>(atom_id) << 24);
+		}
+		std::pair<ShiftType, uint32_t> unpack_key(size_t key) const noexcept {
+			return std::make_pair(ShiftType(static_cast<uint8_t>(key & 0xFF),
+											static_cast<uint8_t>((key >> 8) & 0xFF),
+											static_cast<uint8_t>((key >> 16) & 0xFF)),
+								  static_cast<uint32_t>((key >> 24) & 0xFFFFFFFF));
+		}
+
+
+
+	};
+
 }
