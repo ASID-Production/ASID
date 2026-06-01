@@ -90,7 +90,7 @@ namespace cpplib {
 		CubicSpline(std::vector<value_type>&& knots, const std::vector<value_type>& values) : knots_(std::move(knots)) {
 			assert(knots_.size() == values.size());
 			assert(knots_.size() >= 2);
-			assert(values_.back() == 0.0);   // Required by the problem statement
+			assert(values.back() == 0.0);   // Required by the problem statement
 
 			ln_r0_ = std::log(knots_[0]);
 
@@ -223,7 +223,9 @@ namespace cpplib {
 			if (r >= spline_.radius()) {
 				return TripleDouble{}; // Return zero-initialized struct
 			}
-			value_type phi, dphi, ddphi;
+			value_type phi;
+			value_type dphi;
+			value_type ddphi;
 			spline_.eval(r, phi, dphi, ddphi);
 
 			TripleDouble result;
@@ -253,6 +255,97 @@ namespace cpplib {
 		CubicSpline spline_;
 	};
 
+	template <typename T>
+	struct PointsSoA {
+		std::vector<T> x;
+		std::vector<T> y;
+		std::vector<T> z;
+		std::vector<uint32_t> ix;
+		std::vector<uint32_t> iy;
+		std::vector<uint32_t> iz;
+
+		std::vector<uint32_t> ids;
+		std::vector<uint32_t> spine_ids;
+
+		size_t min_ix = 0;
+		size_t max_ix = 0;
+
+		size_t min_iy = 0;
+		size_t max_iy = 0;
+
+		size_t min_iz = 0;
+		size_t max_iz = 0;
+
+		using PointType = geometry::Point<T>;
+		
+		static constexpr size_t NEAR = 2;
+
+		template<typename I, size_t N>
+		static consteval auto unrollPositions() {
+			constexpr size_t dim = 2 * N + 1;
+			constexpr size_t size = dim * dim * dim;
+			using LocalPointType = typename geometry::Point<I>;
+			std::array<LocalPointType, size> result;
+
+			for (int i = -static_cast<int>(N); i <= N; i++) {
+				for (int j = -static_cast<int>(N); j <= N; j++) {
+					for (int k = -static_cast<int>(N); k <= N; k++) {
+						result[i * dim * dim + j * dim + k] = LocalPointType(i, j, k);
+					}
+				}
+			}
+
+			return result;
+		}
+
+		static constexpr auto p_near = unrollPositions<char, NEAR>();
+
+		PointsSoA() = default;
+		void reserve(size_t capacity) {
+			x.reserve(capacity);
+			y.reserve(capacity);
+			z.reserve(capacity);
+			ix.reserve(capacity);
+			iy.reserve(capacity);
+			iz.reserve(capacity);
+
+			ids.reserve(capacity);
+			spine_ids.reserve(capacity);
+		}
+		void addPoint(PointType point, uint32_t id, uint32_t spine_id) {
+			x.push_back(point[0]);
+			y.push_back(point[1]);
+			z.push_back(point[2]);
+
+			ids.push_back(id);
+			spine_ids.push_back(spine_id);
+		}
+		void calculateSpartialIndexes(T one_over_period) {
+			const size_t size = x.size();
+			for (size_t i = 0; i < size; ++i) {
+				ix.push_back(static_cast<uint32_t>(std::floor(x[i] * one_over_period)));
+				iy.push_back(static_cast<uint32_t>(std::floor(y[i] * one_over_period)));
+				iz.push_back(static_cast<uint32_t>(std::floor(z[i] * one_over_period)));
+			}
+		}
+		static std::array<uint32_t, 6> calculateMinMaxIndexes(geometry::Matrix<T>& mat, T cutoff) {
+			constexpr std::array<PointType, 8> p01 = {{
+				{0, 0, 0}, {0, 0, 1}, {0, 1, 0}, {0, 1, 1},
+				{1, 0, 0}, {1, 0, 1}, {1, 1, 0}, {1, 1, 1}
+			}};
+
+			std::array<PointType, 8> real;
+			for (int i = 0; i < 8; ++i) {
+				real[i] = mat * p01[i];
+			}
+
+			std::array<T, 6> result = {0, 1, 0, 1, 0, 1};
+
+			// TODO: finish
+		}
+	};
+
+
 	class CriticalPoint {
 	public:
 		using PointType = typename RadialSpline::PointType;
@@ -266,22 +359,23 @@ namespace cpplib {
 		CriticalPoint(TYPE type, const PointType& pos) : type_(type), pos_(pos) {
 		}
 		PointType FindNextPosition() const {
-			switch (type_):
-			{
-				case TYPE::N:
+			switch (type_) {
+				using enum TYPE;
+				case N:
 					assert(false);
 					return pos_;
 					break;
-				case TYPE::B:
+				case B:
 					return EigenVectorFollowing();
 					break;
-				case TYPE::R:
+				case R:
 					return EigenVectorFollowing();
 					break;
-				case TYPE::C:
+				case C:
 					return NewtonRaphsonPredict();
 					break;
 			}
+			return pos_;
 		}
 		void UpdatePoint(const PointType& pos, const TripleDouble& value) {
 			pos_ = pos;
@@ -303,5 +397,11 @@ namespace cpplib {
 		PointType pos_{};
 		TripleDouble value_{};
 	};
+
+	class BaderOperator {
+		// TODO
+	};
+
+
 
 }

@@ -397,8 +397,8 @@ namespace cpplib::voronoi {
 			PointType{-0.5,  0.5,  0.5}  // 7
 		}};
 
-		/// @brief Vertex indices for each face of the cube (counter-clockwise from outside)
-		static constexpr std::array<std::array<int, 4>, 6> face_indices = {{
+		/// @brief Vertex indexes for each face of the cube (counter-clockwise from outside)
+		static constexpr std::array<std::array<int, 4>, 6> face_indexes = {{
 			{4, 7, 6, 5}, // front face  (+Z)
 			{0, 1, 2, 3}, // back face   (-Z)
 			{0, 3, 7, 4}, // left face   (-X)
@@ -419,8 +419,8 @@ namespace cpplib::voronoi {
 			16  // top face
 		}};
 
-		/// @brief Vertex indices for each edge of the cube
-		static constexpr std::array<std::array<int, 2>, 12> edge_indices = {{
+		/// @brief Vertex indexes for each edge of the cube
+		static constexpr std::array<std::array<int, 2>, 12> edge_indexes = {{
 			{4, 7}, // edge 0: front-left
 			{7, 6}, // edge 1: front-top
 			{6, 5}, // edge 2: front-right
@@ -435,8 +435,8 @@ namespace cpplib::voronoi {
 			{2, 6}  // edge 11: right-top
 		}};
 
-		/// @brief Edge indices for each face of the cube
-		static constexpr std::array<std::array<int, 4>, 6> face_edge_indices = {{
+		/// @brief Edge indexes for each face of the cube
+		static constexpr std::array<std::array<int, 4>, 6> face_edge_indexes = {{
 			{ 0,  1,  2,  3},  // front face
 			{ 4,  5,  6,  7},  // back face
 			{ 7,  9,  0,  8},  // left face
@@ -466,8 +466,8 @@ namespace cpplib::voronoi {
 
 			// Create edges connecting vertices
 			for (uint32_t edge_id = 0; edge_id < 12; edge_id++) {
-				auto vertex1_ptr = vertices[edge_indices[edge_id][0]].get();
-				auto vertex2_ptr = vertices[edge_indices[edge_id][1]].get();
+				auto vertex1_ptr = vertices[edge_indexes[edge_id][0]].get();
+				auto vertex2_ptr = vertices[edge_indexes[edge_id][1]].get();
 				auto owner_ptr = std::make_unique<Edge>(edge_id, vertex1_ptr, vertex2_ptr);
 				auto edge_ptr = owner_ptr.get();
 				edges.emplace_back(std::move(owner_ptr));
@@ -483,14 +483,14 @@ namespace cpplib::voronoi {
 
 				// Fill vertices for this face
 				for (int j = 0; j < 4; j++) {
-					auto vertex_ptr = vertices[face_indices[face_id][j]].get();
+					auto vertex_ptr = vertices[face_indexes[face_id][j]].get();
 					face->vertices.emplace(vertex_ptr);
 					vertex_ptr->faces.emplace(face.get());
 				}
 
 				// Fill edges for this face
 				for (int j = 0; j < 4; j++) {
-					auto edge_ptr = edges[face_edge_indices[face_id][j]].get();
+					auto edge_ptr = edges[face_edge_indexes[face_id][j]].get();
 					face->edges.emplace(edge_ptr);
 					edge_ptr->faces.emplace(face.get());
 				}
@@ -979,29 +979,29 @@ namespace cpplib::voronoi {
 			geometry::ShiftCode::ShiftPoint second_shift; ///< Shift code of the second atom
 			FloatingPointType area;                       ///< Area of Polygon
 			FloatingPointType solidangle;                 ///< Solid angle of Polygon
-			::std::vector<uint32_t>   vert_ids;           ///< Vertex indices forming the polygon
-			::std::vector<uint32_t>   edge_ids;           ///< Edge indices forming the polygon
+			::std::vector<uint32_t>   vert_ids;           ///< Vertex indexes forming the polygon
+			::std::vector<uint32_t>   edge_ids;           ///< Edge indexes forming the polygon
 			::std::array<uint32_t, 2> atom_ids;           ///< IDs of the two atoms separated by this face
 		};
 
 		/// @brief Edge in the fused structure
 		struct EdgeIn {
-			::std::array<uint32_t, 2> vert_ids;   ///< Vertex indices at endpoints
+			::std::array<uint32_t, 2> vert_ids;   ///< Vertex indexes at endpoints
 		};
 
 		/// @brief Polyhedron (cell) in the fused structure
 		struct Polyhedron {
 			FloatingPointType volume;
-			::std::vector<uint32_t>   vert_ids;   ///< Vertex indices in this polyhedron
-			::std::vector<uint32_t>   edge_ids;   ///< Edge indices in this polyhedron
-			::std::vector<uint32_t>   poly_ids;   ///< Polygon indices in this polyhedron
+			::std::vector<uint32_t>   vert_ids;   ///< Vertex indexes in this polyhedron
+			::std::vector<uint32_t>   edge_ids;   ///< Edge indexes in this polyhedron
+			::std::vector<uint32_t>   poly_ids;   ///< Polygon indexes in this polyhedron
 			PointType center;
 		};
 
 		/// @brief Helper structure for sorting and merging vertices
 		struct SortEntry {
 			bool is_merged;                  ///< Whether this vertex was merged with others
-			std::vector<uint32_t> cIdx;      ///< Cell indices this vertex belongs to
+			std::vector<uint32_t> cIdx;      ///< Cell indexes this vertex belongs to
 			FloatingPointType key;           ///< Sort key (sum of coordinates)
 			Vertex* ptr;                     ///< Pointer to original vertex
 		};

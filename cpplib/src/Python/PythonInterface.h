@@ -33,6 +33,7 @@
 
 #include <array>
 #include <concepts>
+#include <list>
 #include <utility>
 #include <vector>
 
@@ -63,8 +64,6 @@ namespace py_util {
 	inline PyObject* convert(const cpplib::voronoi::VoronoiFused::PolygonIn& p);
 	inline PyObject* convert(const cpplib::voronoi::VoronoiFused::Polyhedron& p);
 	inline PyObject* convert(const cpplib::voronoi::VoronoiFused& vf);
-
-	inline PyObject* convert(const std::tuple<std::vector<cpplib::geometry::Point<cpplib::basic_types::FloatingPointType>>, std::list<std::string>>& compaq_ret);
 
 	inline bool add_to_dict(const char* key, PyObject* val, PyObject* dict) {
 		if (!val) return false;
@@ -190,7 +189,7 @@ namespace py_util {
 
 	// (cluster_detail::ClusterData -> Dict)
 	inline PyObject* convert(const cpplib::cluster_detail::ClusterData& cd) {
-		auto N = static_cast<Py_ssize_t>(cd.indices.size());
+		auto N = static_cast<Py_ssize_t>(cd.indexes.size());
 		PyObject* list = PyList_New(N);
 		if (!list) return nullptr;
 
@@ -201,10 +200,10 @@ namespace py_util {
 				return nullptr;
 			}
 
-			if (!add_to_dict("index", convert(cd.indices[i]), dict) ||
+			if (!add_to_dict("index", convert(cd.indexes[i]), dict) ||
 				!add_to_dict("type", convert(cd.types[i]), dict) ||
 				!add_to_dict("point_frac", convert(cd.points[i]), dict) ||
-				!add_to_dict("symmref", convert(cd.symm_indices[i]), dict) ||
+				!add_to_dict("symmref", convert(cd.symm_indexes[i]), dict) ||
 				!add_to_dict("shift", convert(cd.shifts[i]), dict)) [[unlikely]] {
 				Py_DECREF(list);
 				Py_DECREF(dict);

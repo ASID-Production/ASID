@@ -27,7 +27,7 @@
 // ******************************************************************************************
 #include <array>
 #include <cmath>
-#include <list>
+#include <cstddef>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -35,10 +35,15 @@
 
 #include "../Functions/Functions.h"
 #include "../BaseHeaders/BaseTypes.h"
+#include "../BaseHeaders/Currents.h"
 #include "../BaseHeaders/DebugMes.h"
+#include "../Classes/Bader.h"
+#include "../Classes/Cluster.h"
 #include "../Classes/Distances.h"
 #include "../Classes/FindMolecules.h"
 #include "../Classes/Geometry.h"
+#include "../Classes/MoleculeGraph.h"
+#include "../Classes/SearchGraph.h"
 #include "../Classes/Voronoi.h"
 #include "../Python/PythonInterface.h"
 
