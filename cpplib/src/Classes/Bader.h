@@ -257,27 +257,29 @@ namespace cpplib {
 
 	template <typename T>
 	struct PointsSoA {
+
+		// Format: [min_x, min_y, min_z, max_x, max_y, max_z]
+		template <typename T2>
+		using BoundsArray = std::array<T2, 6>;
+
 		std::vector<T> x;
 		std::vector<T> y;
 		std::vector<T> z;
+		std::vector<uint32_t> voron_ids;
+		std::vector<uint32_t> spline_ids;
+
 		std::vector<uint32_t> ix;
 		std::vector<uint32_t> iy;
 		std::vector<uint32_t> iz;
+		std::vector<uint32_t> ids_sh;
+		std::vector<uint32_t> offset_sh;
 
-		std::vector<uint32_t> ids;
-		std::vector<uint32_t> spine_ids;
+		BoundsArray<T> cartesians;
+		std::array<uint32_t, 3> grid_dim;
 
-		size_t min_ix = 0;
-		size_t max_ix = 0;
-
-		size_t min_iy = 0;
-		size_t max_iy = 0;
-
-		size_t min_iz = 0;
-		size_t max_iz = 0;
 
 		using PointType = geometry::Point<T>;
-		
+
 		static constexpr size_t NEAR = 2;
 
 		template<typename I, size_t N>
@@ -287,14 +289,16 @@ namespace cpplib {
 			using LocalPointType = typename geometry::Point<I>;
 			std::array<LocalPointType, size> result;
 
-			for (int i = -static_cast<int>(N); i <= N; i++) {
-				for (int j = -static_cast<int>(N); j <= N; j++) {
-					for (int k = -static_cast<int>(N); k <= N; k++) {
-						result[i * dim * dim + j * dim + k] = LocalPointType(i, j, k);
+			for (int i = 0; i < dim; i++) {
+				for (int j = 0; j < dim; j++) {
+					for (int k = 0; k < dim; k++) {
+						result[i * dim * dim + j * dim + k] =
+							LocalPointType(i - static_cast<int>(N),
+										   j - static_cast<int>(N),
+										   k - static_cast<int>(N));
 					}
 				}
 			}
-
 			return result;
 		}
 
@@ -305,46 +309,127 @@ namespace cpplib {
 			x.reserve(capacity);
 			y.reserve(capacity);
 			z.reserve(capacity);
+			voron_ids.reserve(capacity);
+			spline_ids.reserve(capacity);
+
 			ix.reserve(capacity);
 			iy.reserve(capacity);
 			iz.reserve(capacity);
-
-			ids.reserve(capacity);
-			spine_ids.reserve(capacity);
+			ids_sh.reserve(capacity);
 		}
-		void addPoint(PointType point, uint32_t id, uint32_t spine_id) {
+		void addPoint(PointType point, uint32_t voron_id, uint32_t spine_id) {
 			x.push_back(point[0]);
 			y.push_back(point[1]);
 			z.push_back(point[2]);
 
-			ids.push_back(id);
-			spine_ids.push_back(spine_id);
+			voron_ids.push_back(voron_id);
+			spline_ids.push_back(spine_id);
 		}
-		void calculateSpartialIndexes(T one_over_period) {
-			const size_t size = x.size();
-			for (size_t i = 0; i < size; ++i) {
-				ix.push_back(static_cast<uint32_t>(std::floor(x[i] * one_over_period)));
-				iy.push_back(static_cast<uint32_t>(std::floor(y[i] * one_over_period)));
-				iz.push_back(static_cast<uint32_t>(std::floor(z[i] * one_over_period)));
+		void calculateSpatialIndexes(T one_over_period) {
+			const uint32_t size = static_cast<uint32_t>(x.size());
+
+			// 1. Cleanup and reservation
+			ix.clear(); ix.reserve(size);
+			iy.clear(); iy.reserve(size);
+			iz.clear(); iz.reserve(size);
+
+			const int32_t min_fx = static_cast<int32_t>(std::floor(cartesians[0] * one_over_period));
+			const int32_t min_fy = static_cast<int32_t>(std::floor(cartesians[1] * one_over_period));
+			const int32_t min_fz = static_cast<int32_t>(std::floor(cartesians[2] * one_over_period));
+
+			// Fill dim sizes
+			grid_dim[0] = static_cast<uint32_t>(static_cast<int32_t>(std::ceil(cartesians[3] * one_over_period)) - min_fx + 1);
+			grid_dim[1] = static_cast<uint32_t>(static_cast<int32_t>(std::ceil(cartesians[4] * one_over_period)) - min_fy + 1);
+			grid_dim[2] = static_cast<uint32_t>(static_cast<int32_t>(std::ceil(cartesians[5] * one_over_period)) - min_fz + 1);
+
+			const uint32_t grid_x = grid_dim[0];
+			const uint32_t grid_xy = grid_x * grid_dim[1];
+
+			uint32_t total_cells = grid_dim[0] * grid_dim[1] * grid_dim[2];
+
+			// Fill offset_sh[] with zeros. Size = total_cells + 1
+			offset_sh.assign(total_cells + 1, 0);
+
+			std::vector<uint32_t> particle_cell_ids;
+			particle_cell_ids.reserve(size);
+
+
+			// 2. Counting particles in boxes
+			for (uint32_t i = 0; i < size; ++i) {
+				int32_t fx = static_cast<int32_t>(std::floor(x[i] * one_over_period));
+				int32_t fy = static_cast<int32_t>(std::floor(y[i] * one_over_period));
+				int32_t fz = static_cast<int32_t>(std::floor(z[i] * one_over_period));
+
+				uint32_t local_ix = static_cast<uint32_t>(std::clamp(fx - min_fx, 0, static_cast<int32_t>(grid_dim[0]) - 1));
+				uint32_t local_iy = static_cast<uint32_t>(std::clamp(fy - min_fy, 0, static_cast<int32_t>(grid_dim[1]) - 1));
+				uint32_t local_iz = static_cast<uint32_t>(std::clamp(fz - min_fz, 0, static_cast<int32_t>(grid_dim[2]) - 1));
+
+				ix.push_back(local_ix);
+				iy.push_back(local_iy);
+				iz.push_back(local_iz);
+
+				// Calculate flat index (3D -> 1D)
+				uint32_t cell_id = local_iz * grid_xy + local_iy * grid_x + local_ix;
+				particle_cell_ids.push_back(cell_id);
+
+				offset_sh[cell_id + 1]++;
+			}
+
+			// 3. Finalising offset array and creating a copy
+			for (uint32_t c = 1; c <= total_cells; ++c) {
+				offset_sh[c] += offset_sh[c - 1];
+			}
+			std::vector<uint32_t> current_offsets = offset_sh;
+
+			// 4. Filling ids_sh
+			ids_sh.resize(size);
+			for (uint32_t i = 0; i < size; ++i) {
+				uint32_t cell_id = particle_cell_ids[i];
+				uint32_t dest_idx = current_offsets[cell_id];
+				ids_sh[dest_idx] = i;
+				current_offsets[cell_id]++;
 			}
 		}
-		static std::array<uint32_t, 6> calculateMinMaxIndexes(geometry::Matrix<T>& mat, T cutoff) {
-			constexpr std::array<PointType, 8> p01 = {{
-				{0, 0, 0}, {0, 0, 1}, {0, 1, 0}, {0, 1, 1},
-				{1, 0, 0}, {1, 0, 1}, {1, 1, 0}, {1, 1, 1}
-			}};
 
-			std::array<PointType, 8> real;
-			for (int i = 0; i < 8; ++i) {
-				real[i] = mat * p01[i];
+
+
+		constexpr BoundsArray<int32_t> getBoundsFrac(const geometry::Matrix<T> mat_CartToFrac, T cutoff) {
+			BoundsArray<int32_t> indexes;
+			for (int i = 0; i < 3; ++i) {
+				auto comp_x = mat_CartToFrac.El(i, 0);
+				auto comp_y = mat_CartToFrac.El(i, 1);
+				auto comp_z = mat_CartToFrac.El(i, 2);
+
+				auto row_length = std::sqrt(comp_x * comp_x + comp_y * comp_y + comp_z * comp_z);
+				T delta = cutoff * row_length;
+
+				indexes[i] = static_cast<int32_t>(std::floor(-delta));
+				indexes[i + 3] = static_cast<int32_t>(std::ceil(static_cast<T>(1.0) + delta));
 			}
-
-			std::array<T, 6> result = {0, 1, 0, 1, 0, 1};
-
-			// TODO: finish
+			return indexes;
 		}
+
+		constexpr void getBoundsCart(const geometry::Matrix<T> mat_FracToCart, const BoundsArray<int32_t> indexes) {
+			for (int i = 0; i < 3; ++i) {
+				T cart_min = 0;
+				T cart_max = 0;
+
+				for (int j = 0; j < 3; ++j) {
+					T elem = mat_FracToCart.El(i, j);
+
+					T v1 = elem * indexes[j];
+					T v2 = elem * indexes[j + 3];
+
+					cart_min += std::min(v1, v2);
+					cart_max += std::max(v1, v2);
+				}
+
+				cartesians[i] = cart_min;
+				cartesians[i + 3] = cart_max;
+			}
+		}
+
 	};
-
 
 	class CriticalPoint {
 	public:
