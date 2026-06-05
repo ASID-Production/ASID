@@ -730,7 +730,14 @@ namespace cpplib::geometry {
 
 			return result;
 		}
-
+		template<std::integral I>
+		constexpr value_type operator[](I i) const noexcept {
+			return data[i];
+		}
+		template<std::integral I>
+		constexpr value_type& operator[](I i) noexcept {
+			return data[i];
+		}
 	};
 
 

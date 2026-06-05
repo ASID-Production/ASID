@@ -43,7 +43,7 @@ namespace cpplib {
 	struct TripleDouble {
 		using value_type = double;
 		using grad_type = std::array<value_type, 3>;
-		using hess_type = std::array<value_type, 9>;
+		using hess_type = geometry::Matrix<value_type>;
 
 		value_type val = 0.0;
 		grad_type grad = {};
@@ -391,8 +391,6 @@ namespace cpplib {
 			}
 		}
 
-
-
 		constexpr BoundsArray<int32_t> getBoundsFrac(const geometry::Matrix<T> mat_CartToFrac, T cutoff) {
 			BoundsArray<int32_t> indexes;
 			for (int i = 0; i < 3; ++i) {
@@ -434,6 +432,7 @@ namespace cpplib {
 	class CriticalPoint {
 	public:
 		using PointType = typename RadialSpline::PointType;
+		static constexpr PointType::value_type MAX_STEP = 1.0;
 		enum class TYPE {
 			N = 0,
 			B = 1,
@@ -449,16 +448,12 @@ namespace cpplib {
 				case N:
 					assert(false);
 					return pos_;
-					break;
 				case B:
 					return EigenVectorFollowing();
-					break;
 				case R:
 					return EigenVectorFollowing();
-					break;
 				case C:
 					return NewtonRaphsonPredict();
-					break;
 			}
 			return pos_;
 		}
@@ -468,13 +463,77 @@ namespace cpplib {
 		}
 	private:
 		PointType EigenVectorFollowing() const {
-			// TODO
-			return pos_;
+			const auto& g = value_.grad;
+			const auto& h = value_.hess;
+
+			auto eig = h.EigenvaluesAndVectors();
+
+			
+			int idx = 0;
+			if (type_ == TYPE::B) {
+				double max_val = eig.values[0];
+				if (eig.values[1] > max_val) {
+					max_val = eig.values[1]; 
+					idx = 1;
+				}
+				if (eig.values[2] > max_val) {
+					idx = 2;
+				}
+			} else {
+				double min_val = eig.values[0];
+				if (eig.values[1] < min_val) {
+					min_val = eig.values[1]; 
+					idx = 1;
+				}
+				if (eig.values[2] < min_val) {
+					idx = 2;
+				}
+			}
+
+			const auto& v = eig.vectors[idx];
+			double lambda = eig.values[idx];
+
+			double grad_dot_v = g[0] * v[0] + g[1] * v[1] + g[2] * v[2];
+
+			double alpha = 0.0;
+			constexpr double eps = 1e-12;
+
+			if (std::abs(lambda) > eps) {
+				alpha = -grad_dot_v / lambda;
+			} else {
+				alpha = -grad_dot_v * 0.01;
+			}
+
+			alpha = std::clamp(alpha, -MAX_STEP, MAX_STEP);
+
+			return pos_ + PointType(v[0] * alpha, v[1] * alpha, v[2] * alpha);
 		}
 
 		PointType NewtonRaphsonPredict() const {
-			// TODO
-			return pos_;
+			const auto& g = value_.grad;
+			const auto& h = value_.hess;
+
+			double det = h.Det();
+			const double eps = 1e-12;
+			if (std::abs(det) < eps) {
+				double step = 0.01;
+				return pos_ + PointType(-g[0] * step, -g[1] * step, -g[2] * step);
+			}
+
+			auto H_inv = h.Invert();
+			double delta_x = -(H_inv.El(0, 0) * g[0] + H_inv.El(0, 1) * g[1] + H_inv.El(0, 2) * g[2]);
+			double delta_y = -(H_inv.El(1, 0) * g[0] + H_inv.El(1, 1) * g[1] + H_inv.El(1, 2) * g[2]);
+			double delta_z = -(H_inv.El(2, 0) * g[0] + H_inv.El(2, 1) * g[1] + H_inv.El(2, 2) * g[2]);
+
+			const double alpha = std::sqrt(delta_x * delta_x + delta_y * delta_y + delta_z * delta_z);
+			if (alpha > MAX_STEP) {
+				auto one_over_alpha = MAX_STEP / alpha;
+				delta_x *= one_over_alpha;
+				delta_y *= one_over_alpha;
+				delta_z *= one_over_alpha;
+			}
+
+			return pos_ + PointType(delta_x, delta_y, delta_z);
 		}
 
 	private:
