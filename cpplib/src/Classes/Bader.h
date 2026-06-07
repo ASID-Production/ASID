@@ -255,7 +255,7 @@ namespace cpplib {
 		CubicSpline spline_;
 	};
 
-	template <typename T>
+	template <typename T, size_t NEAR = 2>
 	struct PointsSoA {
 
 		// Format: [min_x, min_y, min_z, max_x, max_y, max_z]
@@ -280,7 +280,7 @@ namespace cpplib {
 
 		using PointType = geometry::Point<T>;
 
-		static constexpr size_t NEAR = 2;
+		static constexpr size_t TOTAL_SHIFTS = (NEAR * 2 + 1) * (NEAR * 2 + 1) * (NEAR * 2 + 1);
 
 		template<typename I, size_t N>
 		static consteval auto unrollPositions() {
@@ -391,7 +391,7 @@ namespace cpplib {
 			}
 		}
 
-		constexpr BoundsArray<int32_t> getBoundsFrac(const geometry::Matrix<T> mat_CartToFrac, T cutoff) {
+		constexpr BoundsArray<int32_t> getBoundsFrac(const geometry::Matrix<T> mat_CartToFrac, T cutoff) const {
 			BoundsArray<int32_t> indexes;
 			for (int i = 0; i < 3; ++i) {
 				auto comp_x = mat_CartToFrac.El(i, 0);
@@ -425,6 +425,34 @@ namespace cpplib {
 				cartesians[i] = cart_min;
 				cartesians[i + 3] = cart_max;
 			}
+		}
+		std::array<int32_t, TOTAL_SHIFTS> generateFlatOffsets() const {
+
+			std::array<int32_t, TOTAL_SHIFTS>  flatOffsets;
+
+			const int32_t s_y = static_cast<int32_t>(grid_dim[0]);
+			const int32_t s_z = s_y * static_cast<int32_t>(grid_dim[1]);
+
+			size_t i = 0;
+
+			constexpr int32_t pos_n = static_cast<int32_t>(NEAR);
+			constexpr int32_t neg_n = -static_cast<int32_t>(NEAR);
+
+			for (int32_t dz = neg_n; dz <= pos_n; ++dz) {
+				int32_t offset_z = dz * s_z;
+
+				for (int32_t dy = neg_n; dy <= pos_n; ++dy) {
+					int32_t offset_zy = offset_z + (dy * s_y);
+
+					for (int32_t dx = neg_n; dx <= pos_n; ++dx) {
+						int32_t final_offset = offset_zy + dx;
+						flatOffsets[i] = final_offset;
+						i++;
+					}
+				}
+			}
+
+			return flatOffsets;
 		}
 
 	};
