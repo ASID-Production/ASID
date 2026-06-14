@@ -77,46 +77,62 @@ namespace cpplib {
 		}
 	};
 
-	struct CubicSpline {
+	template <size_t SIZE = 576>
+	struct alignas(64) CubicSpline {
 	public:
+		static_assert(SIZE % 64 == 0, "SIZE must be a multiple of 64 bytes");
+
 		using value_type = TripleDouble::value_type;
-		struct IntervalCoeffs {
-			value_type a; // x^3 coefficient
-			value_type b; // x^2 coefficient
-			value_type c; // x^1 coefficient
-			value_type d; // constant term
-		};
 
-		CubicSpline(std::vector<value_type>&& knots, const std::vector<value_type>& values) : knots_(std::move(knots)) {
-			assert(knots_.size() == values.size());
-			assert(knots_.size() >= 2);
-			assert(values.back() == 0.0);   // Required by the problem statement
+		CubicSpline(value_type r_min, value_type r_max, size_t n_knots, const std::vector<value_type>& values) {
+			// Validate that the incoming active nodes match the provided intervals count
+			assert(values.size() == n_knots + 1);
+			assert(n_knots <= SIZE); // Ensure it fits into our maximum fixed capacity
+			assert(values.back() == 0.0);
+			assert(r_min > 0.0 && r_max > r_min);
 
-			ln_r0_ = std::log(knots_[0]);
+			// Initialize grid transformation parameters based on the ACTIVE file data boundaries
+			ln_r0_ = std::log(r_min);
+			r_max_ = r_max;
+			m_ = n_knots; // Store active intervals count to eliminate runtime log-calculations
 
-			const size_t n = knots_.size();          // Number of nodes
-			const size_t m = n - 1;                  // Number of intervals
+			// inv_delta_ is the scaling factor
+			inv_delta_ = static_cast<double>(n_knots) / (std::log(r_max) - ln_r0_);
+			const value_type step_delta = 1.0 / inv_delta_;
 
-			// Grid steps (intervals)
-			std::vector<value_type> h(m);
+			// Fixed compile-time dimensions for stack allocations
+			constexpr size_t n_max = SIZE + 1;
+			constexpr size_t m_max = SIZE;
+
+			// Runtime boundaries for the active dataset region
+			const size_t n = n_knots + 1; // Active matrix size
+			const size_t m = n_knots;     // Active intervals count
+
+			// 1. Generate active nodes directly into the class array
 			for (size_t i = 0; i < m; ++i) {
+				knots_[i] = std::exp(std::fma(static_cast<double>(i), step_delta, ln_r0_));
+			}
+			// Zero-out the unused capacity tail of the knots array
+			std::fill(knots_.begin() + m, knots_.end(), 0.0);
+
+			// 2. Calculate active grid steps (intervals) using fixed-size stack memory
+			std::array<value_type, m_max> h; h.fill(0.0);
+			for (size_t i = 0; i < m - 1; ++i) {
 				h[i] = knots_[i + 1] - knots_[i];
 				assert(h[i] > 0);
 			}
+			h[m - 1] = r_max_ - knots_[m - 1];
+			assert(h[m - 1] > 0);
 
-			// Build tri-diagonal system for second derivatives S''(x_i)
-			std::vector<value_type> sub(n, 0.0);  // sub-diagonal (a_i)
-			std::vector<value_type> diag(n, 0.0); // main diagonal (b_i)
-			std::vector<value_type> sup(n, 0.0);  // super-diagonal (c_i)
-			std::vector<value_type> rhs(n, 0.0);  // right-hand side (d_i)
+			// Build the tridiagonal system for the active second derivatives on the stack
+			std::array<value_type, n_max> sub;  sub.fill(0.0);
+			std::array<value_type, n_max> diag; diag.fill(0.0);
+			std::array<value_type, n_max> sup;  sup.fill(0.0);
+			std::array<value_type, n_max> rhs;  rhs.fill(0.0);
 
-			// Left boundary condition: S''(x0) = 0 (Natural spline)
-			diag[0] = 1.0;
-			sup[0] = 0.0;
-			rhs[0] = 0.0;
+			diag[0] = 1.0; // Natural spline boundary condition (S''(x0) = 0)
 
-			// Internal nodes i = 1 .. n-2
-			for (size_t i = 1; i < n - 1; ++i) {
+			for (size_t i = 1; i < m; ++i) {
 				sub[i] = h[i - 1];
 				diag[i] = 2.0 * (h[i - 1] + h[i]);
 				sup[i] = h[i];
@@ -124,16 +140,17 @@ namespace cpplib {
 								(values[i] - values[i - 1]) / h[i - 1]);
 			}
 
-			// Right boundary condition: S'(x_{n-1}) = 0
-			// Derived from: h_{m-1}/6 * M_{n-2} + h_{m-1}/3 * M_{n-1} = -(y_{n-1}-y_{n-2})/h_{m-1}
+			// Right boundary condition: First derivative is zero (S'(x_{n-1}) = 0)
 			const size_t last = n - 1;
-			sub[last] = h[m - 1];                 // Coefficient for M_{n-2}
-			diag[last] = 2.0 * h[m - 1];          // Coefficient for M_{n-1}
+			sub[last] = h[m - 1];
+			diag[last] = 2.0 * h[m - 1];
 			sup[last] = 0.0;
-			rhs[last] = 6.0 * values[last - 1] / h[m - 1]; // Equivalent to -6*(0 - y)/h since values.back() == 0
+			rhs[last] = 6.0 * values[last - 1] / h[m - 1];
 
-			// Solve the system using Thomas algorithm (TDMA)
-			std::vector<value_type> gamma(n, 0.0), beta(n, 0.0);
+			// Solve the system using Thomas algorithm (TDMA) strictly on stack arrays
+			std::array<value_type, n_max> gamma; gamma.fill(0.0);
+			std::array<value_type, n_max> beta;  beta.fill(0.0);
+
 			gamma[0] = sup[0] / diag[0];
 			beta[0] = rhs[0] / diag[0];
 
@@ -143,15 +160,14 @@ namespace cpplib {
 				beta[i] = (rhs[i] - sub[i] * beta[i - 1]) / denom;
 			}
 
-			// Back-substitution
-			std::vector<value_type> second_deriv(n, 0.0);
+			// Back-substitution to find second derivatives
+			std::array<value_type, n_max> second_deriv; second_deriv.fill(0.0);
 			second_deriv[last] = beta[last];
 			for (size_t i = last; i-- > 0; ) {
 				second_deriv[i] = beta[i] - gamma[i] * second_deriv[i + 1];
 			}
 
-			// Calculate cubic polynomial coefficients for each interval
-			coeffs_.resize(m);
+			// Calculate and store polynomial coefficients into the active part of class arrays
 			for (size_t i = 0; i < m; ++i) {
 				value_type hi = h[i];
 				value_type yi = values[i];
@@ -159,13 +175,19 @@ namespace cpplib {
 				value_type mi = second_deriv[i];
 				value_type mip1 = second_deriv[i + 1];
 
-				// Polynomial S_i(dr) = a*dr^3 + b*dr^2 + c*dr + d, where dr = x - x_i
-				coeffs_[i].a = (mip1 - mi) / (6.0 * hi);
-				coeffs_[i].b = mi / 2.0;
-				coeffs_[i].c = (yip1 - yi) / hi - hi * (2.0 * mi + mip1) / 6.0;
-				coeffs_[i].d = yi;
+				a_[i] = (mip1 - mi) / (6.0 * hi);
+				b_[i] = mi / 2.0;
+				c_[i] = (yip1 - yi) / hi - hi * (2.0 * mi + mip1) / 6.0;
+				d_[i] = yi;
 			}
+
+			// 3. Safely zero-out the remaining unused capacity of the member arrays
+			std::fill(a_.begin() + m, a_.end(), value_type(0.0));
+			std::fill(b_.begin() + m, b_.end(), value_type(0.0));
+			std::fill(c_.begin() + m, c_.end(), value_type(0.0));
+			std::fill(d_.begin() + m, d_.end(), value_type(0.0));
 		}
+
 
 		/// @brief Evaluate spline value and its first two derivatives at point r
 		/// @param r Point to evaluate
@@ -178,40 +200,178 @@ namespace cpplib {
 				return;
 			}
 			auto idx = find_active_spline(r);
-			// Safety clamp to ensure idx is within coeffs_ range
-			if (idx >= coeffs_.size()) idx = coeffs_.size() - 1;
 
+			// Safety clamp to ensure idx is within coeffs_ range
+			if (idx >= SIZE) [[unlikely]] {
+				phi = dphi = ddphi = 0.0;
+				return;
+			}
+
+			const auto a = a_[idx];
+			const auto b = b_[idx];
+			const auto c = c_[idx];
+			const auto d = d_[idx];
 			value_type dr = r - knots_[idx];
-			const auto& c = coeffs_[idx];
 
 			// Horner's method for stable evaluation
-			phi = std::fma(std::fma(std::fma(dr, c.a, c.b), dr, c.c), dr, c.d);
-			dphi = std::fma(std::fma(3.0 * dr, c.a, 2.0 * c.b), dr, c.c);
-			ddphi = std::fma(6.0 * dr, c.a, 2.0 * c.b);
+			phi = std::fma(std::fma(std::fma(dr, a, b), dr, c), dr, d);
+			dphi = std::fma(std::fma(3.0 * dr, a, 2.0 * b), dr, c);
+			ddphi = std::fma(6.0 * dr, a, 2.0 * b);
 		}
 
-		value_type radius() const {
-			return knots_.back();
+		/// @brief Find the point r where the spline value matches target_val
+		/// @param start Initial guess (guaranteed to be closer to 0 than the true root, meaning f(start) > target_val)
+		/// @param target_val The function value to search for
+		/// @return The point r, or radius() if the value is out of bounds or decayed
+		value_type find_value(value_type start, value_type target_val) const {
+			// 1. Fast boundary checks
+			if (target_val >= d_[0]) return knots_[0];
+			if (target_val <= 0.0)   return radius(); // Since values.back() == 0.0
+
+			// 2. Hybrid O(1) jump followed by local correction
+			size_t idx = find_active_spline_hybrid(start, target_val);
+
+			// Safety clamp
+			if (idx >= SIZE) [[unlikely]] return radius();
+
+			// 3. Compute an extremely accurate initial guess inside the interval.
+			value_type f_left = d_[idx];
+			value_type f_right = (idx + 1 < SIZE)?d_[idx + 1]:0.0;
+
+			// If the right node is zero (edge of the grid), protect against log(0)
+			if (f_right <= 0.0) f_right = 1e-300;
+
+			value_type t = (std::log(target_val) - std::log(f_left)) / (std::log(f_right) - std::log(f_left));
+
+			// Starting r value
+			value_type r_left = knots_[idx];
+			value_type r_right = (idx + 1 < SIZE)?knots_[idx + 1]:r_max_;
+
+			// Linear interpolation in log-space for the initial r guess
+			value_type r = std::exp(std::log(r_left) + t * (std::log(r_right) - std::log(r_left)));
+
+			// 4. Halley's method (Cubic convergence rate)
+			const auto a = a_[idx];
+			const auto b = b_[idx];
+			const auto c = c_[idx];
+			const auto d = d_[idx];
+
+			for (int iter = 0; iter < 2; ++iter) {
+				value_type f_val, df, d2f;
+				eval(r, f_val, df, d2f); 
+				
+				value_type df_log = r * df;
+				value_type d2f_log = std::fma(r * r, d2f, df_log);
+
+				value_type numerator = 2.0 * f * df_log;
+				value_type denominator = std::fma(2.0 * df_log, df_log, -(f * d2f_log));
+
+				value_type du = numerator / denominator;
+				r *= std::exp(-du);
+			}
+
+			return r;
+		}
+
+		constexpr value_type radius() const {
+			return r_max_;
 		}
 
 	private:
 		// O(1)-optimized finder of active spline
 		size_t find_active_spline(value_type r) const {
-			constexpr double INV_ALPHA = 40.98379665578782;
-			return static_cast<size_t>((std::log(r) - ln_r0_) * INV_ALPHA);
+			return static_cast<size_t>((std::log(r) - ln_r0_) * inv_delta_);
 		}
 
-		std::vector<value_type> knots_;
-		std::vector<IntervalCoeffs> coeffs_;
-		value_type ln_r0_;
+		/// @brief Bounded O(1) parabolic log-jump to the target neighborhood with branchless-friendly correction
+		size_t find_active_spline_hybrid(value_type start, value_type target_val) const {
+			// Minimum index dictated by the 'start' guarantee (O(1) grid transformation)
+			size_t idx_start = find_active_spline(start);
+			if (idx_start >= m_ - 1) return m_ - 1;
+
+			// Values at the boundaries of the REMAINDER of the grid
+			value_type val_first = d_[idx_start];
+			value_type val_last = d_[m_ - 1];
+
+			// Strict monotonicity defense against numerical artifacts
+			if (target_val >= val_first) return idx_start;
+
+			// 1. Three-point logarithmic mapping to capture the changing decay rate.
+			// We sample the start, the end, and the exact middle node of the remaining grid.
+			size_t idx_mid = idx_start + ((m_ - 1) - idx_start) / 2;
+			value_type val_mid = d_[idx_mid];
+
+			// SAFETY: clamp values to avoid NaN / -inf
+			value_type safe_target = (target_val > 1e-300)?target_val:1e-300;
+			value_type safe_first = (val_first > 1e-300)?val_first:1e-300;
+			value_type safe_mid = (val_mid > 1e-300)?val_mid:1e-300;
+			value_type safe_last = (val_last > 1e-300)?val_last:1e-300;
+
+			value_type ln_y = std::log(safe_target);
+			value_type ln_y0 = std::log(safe_first);
+			value_type ln_ym = std::log(safe_mid);
+			value_type ln_yN = std::log(safe_last);
+
+			// Map log-values to a normalized [0, 1] range relative to the midpoint
+			value_type d1 = ln_ym - ln_y0;
+			value_type d2 = ln_yN - ln_y0;
+			value_type dy = ln_y - ln_y0;
+
+			// Avoid division by zero if the remaining grid is too small
+			value_type norm_pos = 0.0;
+			if (std::abs(d2 * (d1 - 0.5 * d2)) > 1e-15) {
+				// Quadratic fit (Parabolic inverse interpolation): x = a*y^2 + b*y
+				// Calculates how far to jump through the transition region
+				value_type cA = (d1 - 0.5 * d2) / (d1 * d2 * (0.5 * d1 - 0.5 * d2 + 1e-300)); // Quadratic coefficient
+				value_type cB = (1.0 - cA * d2 * d2) / d2;                                    // Linear coefficient
+				norm_pos = (cA * dy + cB) * dy;
+			} else {
+				// Fallback to linear log-interpolation if the segment is nearly linear
+				norm_pos = dy / d2;
+			}
+
+			norm_pos = std::max(0.0, std::min(norm_pos, 1.0));
+
+			// Convert normalized position back to grid index units
+			size_t remaining_intervals = (m_ - 1) - idx_start;
+			value_type guessed_offset = norm_pos * static_cast<value_type>(remaining_intervals);
+
+			auto guessed_idx = static_cast<size_t>(idx_start + static_cast<size_t>(guessed_offset));
+			guessed_idx = std::max(idx_start, std::min(guessed_idx, m_ - 1));
+
+			// 2. Micro-tuning correction loops.
+			// Since the quadratic fit maps the smooth transition curve with high fidelity,
+			// these loops will evaluate instantly, often performing 0 iterations.
+			while (guessed_idx < (m_ - 1) && d_[guessed_idx + 1] > target_val) {
+				guessed_idx++;
+			}
+			while (guessed_idx > idx_start && d_[guessed_idx] < target_val) {
+				guessed_idx--;
+			}
+
+			return guessed_idx;
+		}
+
+		std::array<value_type, SIZE> a_;
+		std::array<value_type, SIZE> b_;
+		std::array<value_type, SIZE> c_;
+		std::array<value_type, SIZE> d_;
+		std::array<value_type, SIZE> knots_; // knot_[SIZE] is r_max_
+
+		value_type r_max_; // x = knot[last]
+		value_type ln_r0_; // ln(x_0)
+		value_type inv_delta_; // 1.0 / ln (x_1 / x_0)
+		size_t m_; // Precalculated active intervals count to optimize hot path
 	};
 
 	class RadialSpline {
 	public:
-		using value_type = CubicSpline::value_type;
+		using value_type = CubicSpline<>::value_type;
 		using PointType = geometry::Point<value_type>;
 
-		explicit RadialSpline(CubicSpline&& spline) : spline_(std::move(spline)) {
+		// Constructs the underlying CubicSpline directly in-place without any copying/moving
+		RadialSpline(value_type r_min, value_type r_max, size_t n_knots, const std::vector<value_type>& values)
+			: spline(r_min, r_max, n_knots, values) {
 		}
 
 		/// @brief Evaluates value, gradient, and Hessian for a radially symmetric spline
@@ -220,13 +380,13 @@ namespace cpplib {
 		TripleDouble evaluate(const PointType& x_minus_c) const {
 			value_type r2 = x_minus_c.rSq();
 			value_type r = std::sqrt(r2);
-			if (r >= spline_.radius()) {
+			if (r >= spline.radius()) {
 				return TripleDouble{}; // Return zero-initialized struct
 			}
 			value_type phi;
 			value_type dphi;
 			value_type ddphi;
-			spline_.eval(r, phi, dphi, ddphi);
+			spline.eval(r, phi, dphi, ddphi);
 
 			TripleDouble result;
 			result.val = phi;
@@ -251,8 +411,8 @@ namespace cpplib {
 			return result;
 		}
 
-	private:
-		CubicSpline spline_;
+	public:
+		CubicSpline<> spline;
 	};
 
 	template <typename T, size_t NEAR = 2>
@@ -460,7 +620,10 @@ namespace cpplib {
 	class CriticalPoint {
 	public:
 		using PointType = typename RadialSpline::PointType;
-		static constexpr PointType::value_type MAX_STEP = 1.0;
+		static constexpr PointType::value_type MAX_STEP = 0.2;
+		static constexpr PointType::value_type MAX_STEP_SQ = MAX_STEP * MAX_STEP;
+		static constexpr double EPS = 1e-12;
+
 		enum class TYPE {
 			N = 0,
 			B = 1,
@@ -470,7 +633,7 @@ namespace cpplib {
 		CriticalPoint() = default;
 		CriticalPoint(TYPE type, const PointType& pos) : type_(type), pos_(pos) {
 		}
-		PointType FindNextPosition() const {
+		inline PointType FindNextPosition() const {
 			switch (type_) {
 				using enum TYPE;
 				case N:
@@ -524,9 +687,8 @@ namespace cpplib {
 			double grad_dot_v = g[0] * v[0] + g[1] * v[1] + g[2] * v[2];
 
 			double alpha = 0.0;
-			constexpr double eps = 1e-12;
 
-			if (std::abs(lambda) > eps) {
+			if (std::abs(lambda) > EPS) {
 				alpha = -grad_dot_v / lambda;
 			} else {
 				alpha = -grad_dot_v * 0.01;
@@ -542,23 +704,23 @@ namespace cpplib {
 			const auto& h = value_.hess;
 
 			double det = h.Det();
-			const double eps = 1e-12;
-			if (std::abs(det) < eps) {
+			if (std::abs(det) < EPS) {
 				double step = 0.01;
 				return pos_ + PointType(-g[0] * step, -g[1] * step, -g[2] * step);
 			}
 
-			auto H_inv = h.Invert();
+			const auto H_inv = h.Invert();
 			double delta_x = -(H_inv.El(0, 0) * g[0] + H_inv.El(0, 1) * g[1] + H_inv.El(0, 2) * g[2]);
 			double delta_y = -(H_inv.El(1, 0) * g[0] + H_inv.El(1, 1) * g[1] + H_inv.El(1, 2) * g[2]);
 			double delta_z = -(H_inv.El(2, 0) * g[0] + H_inv.El(2, 1) * g[1] + H_inv.El(2, 2) * g[2]);
 
-			const double alpha = std::sqrt(delta_x * delta_x + delta_y * delta_y + delta_z * delta_z);
-			if (alpha > MAX_STEP) {
-				auto one_over_alpha = MAX_STEP / alpha;
-				delta_x *= one_over_alpha;
-				delta_y *= one_over_alpha;
-				delta_z *= one_over_alpha;
+			const double alpha_sq = delta_x * delta_x + delta_y * delta_y + delta_z * delta_z;
+			if (alpha_sq > MAX_STEP_SQ) { // TODO: Maybe add [[unlikely]]
+				const double step_over_alpha = std::sqrt(MAX_STEP_SQ / alpha_sq);
+
+				delta_x *= step_over_alpha;
+				delta_y *= step_over_alpha;
+				delta_z *= step_over_alpha;
 			}
 
 			return pos_ + PointType(delta_x, delta_y, delta_z);
@@ -571,6 +733,35 @@ namespace cpplib {
 	};
 
 	class BaderOperator {
+	public:
+		using value_type = CubicSpline<>::value_type;
+		static PointsSoA<value_type> CreatePointGrid(const voronoi::VoronoiFused& vf, value_type radius) {
+			PointsSoA<value_type> grid;
+			// TODO
+			
+
+			return grid;
+		}
+
+		static value_type GetOptimalRadius(value_type radius, value_type vertical_eps, const std::vector<RadialSpline>& splines, const std::vector<uint8_t>& active_elems) {
+			value_type max_x = 0;
+			const size_t active_elems_size = active_elems.size();
+			for (size_t i = 0; i < active_elems_size; i++)
+			{
+				value_type phi;
+				value_type dphi;
+				value_type ddphi;
+				uint8_t active_index = active_elems[i];
+				auto& active_spline = splines[active_index].spline;
+				active_spline.eval(radius, phi, dphi, ddphi);
+				value_type x = active_spline.find_value(radius, phi * vertical_eps);
+				max_x = std::max(x, max_x);
+			}
+			return max_x;
+		}
+
+
+
 		// TODO
 	};
 
