@@ -224,53 +224,40 @@ namespace cpplib {
 		/// @param target_val The function value to search for
 		/// @return The point r, or radius() if the value is out of bounds or decayed
 		value_type find_value(value_type start, value_type target_val) const {
-			// 1. Fast boundary checks
 			if (target_val >= d_[0]) return knots_[0];
-			if (target_val <= 0.0)   return radius(); // Since values.back() == 0.0
+			if (target_val <= 0.0)   return radius();
 
-			// 2. Hybrid O(1) jump followed by local correction
 			size_t idx = find_active_spline_hybrid(start, target_val);
 
-			// Safety clamp
-			if (idx >= SIZE) [[unlikely]] return radius();
+			const value_type r_left = knots_[idx];
+			const value_type r_right = knots_[idx + 1];
+			const value_type h_node = r_right - r_left;
 
-			// 3. Compute an extremely accurate initial guess inside the interval.
-			value_type f_left = d_[idx];
-			value_type f_right = (idx + 1 < SIZE)?d_[idx + 1]:0.0;
+			const value_type f_left = d_[idx];
+			const value_type f_right = d_[idx + 1];
 
-			// If the right node is zero (edge of the grid), protect against log(0)
-			if (f_right <= 0.0) f_right = 1e-300;
+			value_type t = (target_val - f_left) / (f_right - f_left + 1e-300);
+			t = std::clamp(t, 0.0, 1.0);
 
-			value_type t = (std::log(target_val) - std::log(f_left)) / (std::log(f_right) - std::log(f_left));
+			value_type dr = t * h_node;
 
-			// Starting r value
-			value_type r_left = knots_[idx];
-			value_type r_right = (idx + 1 < SIZE)?knots_[idx + 1]:r_max_;
-
-			// Linear interpolation in log-space for the initial r guess
-			value_type r = std::exp(std::log(r_left) + t * (std::log(r_right) - std::log(r_left)));
-
-			// 4. Halley's method (Cubic convergence rate)
 			const auto a = a_[idx];
 			const auto b = b_[idx];
 			const auto c = c_[idx];
 			const auto d = d_[idx];
 
 			for (int iter = 0; iter < 2; ++iter) {
-				value_type f_val, df, d2f;
-				eval(r, f_val, df, d2f); 
-				
-				value_type df_log = r * df;
-				value_type d2f_log = std::fma(r * r, d2f, df_log);
+				value_type f_val = std::fma(std::fma(std::fma(dr, a, b), dr, c), dr, d) - target_val;
+				value_type df = std::fma(std::fma(3.0 * dr, a, 2.0 * b), dr, c);
+				if (std::abs(df) < 1e-15) [[unlikely]] {
+					break;
+				}
 
-				value_type numerator = 2.0 * f * df_log;
-				value_type denominator = std::fma(2.0 * df_log, df_log, -(f * d2f_log));
-
-				value_type du = numerator / denominator;
-				r *= std::exp(-du);
+				dr -= f_val / df;
+				dr = std::clamp(dr, 0.0, h_node);
 			}
 
-			return r;
+			return r_left + dr;
 		}
 
 		constexpr value_type radius() const {
@@ -283,74 +270,26 @@ namespace cpplib {
 			return static_cast<size_t>((std::log(r) - ln_r0_) * inv_delta_);
 		}
 
-		/// @brief Bounded O(1) parabolic log-jump to the target neighborhood with branchless-friendly correction
 		size_t find_active_spline_hybrid(value_type start, value_type target_val) const {
-			// Minimum index dictated by the 'start' guarantee (O(1) grid transformation)
 			size_t idx_start = find_active_spline(start);
 			if (idx_start >= m_ - 1) return m_ - 1;
 
-			// Values at the boundaries of the REMAINDER of the grid
-			value_type val_first = d_[idx_start];
-			value_type val_last = d_[m_ - 1];
+			if (target_val >= d_[idx_start]) return idx_start;
 
-			// Strict monotonicity defense against numerical artifacts
-			if (target_val >= val_first) return idx_start;
+			auto first = d_.begin() + idx_start;
+			auto last = d_.begin() + m_; 
 
-			// 1. Three-point logarithmic mapping to capture the changing decay rate.
-			// We sample the start, the end, and the exact middle node of the remaining grid.
-			size_t idx_mid = idx_start + ((m_ - 1) - idx_start) / 2;
-			value_type val_mid = d_[idx_mid];
+			auto it = std::upper_bound(first, last, target_val, std::greater<value_type>());
 
-			// SAFETY: clamp values to avoid NaN / -inf
-			value_type safe_target = (target_val > 1e-300)?target_val:1e-300;
-			value_type safe_first = (val_first > 1e-300)?val_first:1e-300;
-			value_type safe_mid = (val_mid > 1e-300)?val_mid:1e-300;
-			value_type safe_last = (val_last > 1e-300)?val_last:1e-300;
+			size_t idx = std::distance(d_.begin(), it);
 
-			value_type ln_y = std::log(safe_target);
-			value_type ln_y0 = std::log(safe_first);
-			value_type ln_ym = std::log(safe_mid);
-			value_type ln_yN = std::log(safe_last);
-
-			// Map log-values to a normalized [0, 1] range relative to the midpoint
-			value_type d1 = ln_ym - ln_y0;
-			value_type d2 = ln_yN - ln_y0;
-			value_type dy = ln_y - ln_y0;
-
-			// Avoid division by zero if the remaining grid is too small
-			value_type norm_pos = 0.0;
-			if (std::abs(d2 * (d1 - 0.5 * d2)) > 1e-15) {
-				// Quadratic fit (Parabolic inverse interpolation): x = a*y^2 + b*y
-				// Calculates how far to jump through the transition region
-				value_type cA = (d1 - 0.5 * d2) / (d1 * d2 * (0.5 * d1 - 0.5 * d2 + 1e-300)); // Quadratic coefficient
-				value_type cB = (1.0 - cA * d2 * d2) / d2;                                    // Linear coefficient
-				norm_pos = (cA * dy + cB) * dy;
-			} else {
-				// Fallback to linear log-interpolation if the segment is nearly linear
-				norm_pos = dy / d2;
+			if (idx > idx_start) {
+				idx--;
 			}
 
-			norm_pos = std::max(0.0, std::min(norm_pos, 1.0));
-
-			// Convert normalized position back to grid index units
-			size_t remaining_intervals = (m_ - 1) - idx_start;
-			value_type guessed_offset = norm_pos * static_cast<value_type>(remaining_intervals);
-
-			auto guessed_idx = static_cast<size_t>(idx_start + static_cast<size_t>(guessed_offset));
-			guessed_idx = std::max(idx_start, std::min(guessed_idx, m_ - 1));
-
-			// 2. Micro-tuning correction loops.
-			// Since the quadratic fit maps the smooth transition curve with high fidelity,
-			// these loops will evaluate instantly, often performing 0 iterations.
-			while (guessed_idx < (m_ - 1) && d_[guessed_idx + 1] > target_val) {
-				guessed_idx++;
-			}
-			while (guessed_idx > idx_start && d_[guessed_idx] < target_val) {
-				guessed_idx--;
-			}
-
-			return guessed_idx;
+			return std::clamp(idx, idx_start, m_ - 2);
 		}
+
 
 		std::array<value_type, SIZE> a_;
 		std::array<value_type, SIZE> b_;
@@ -415,7 +354,7 @@ namespace cpplib {
 		CubicSpline<> spline;
 	};
 
-	template <typename T, size_t NEAR = 2>
+	template <typename T, size_t N = 2>
 	struct PointsSoA {
 
 		// Format: [min_x, min_y, min_z, max_x, max_y, max_z]
@@ -440,6 +379,7 @@ namespace cpplib {
 
 		using PointType = geometry::Point<T>;
 
+        static constexpr size_t NEAR = N;
 		static constexpr size_t TOTAL_SHIFTS = (NEAR * 2 + 1) * (NEAR * 2 + 1) * (NEAR * 2 + 1);
 
 		template<typename I, size_t N>
@@ -735,8 +675,20 @@ namespace cpplib {
 	class BaderOperator {
 	public:
 		using value_type = CubicSpline<>::value_type;
-		static PointsSoA<value_type> CreatePointGrid(const voronoi::VoronoiFused& vf, value_type radius) {
-			PointsSoA<value_type> grid;
+		static constexpr value_type EPS = voronoi::EPSILON;
+		static PointsSoA<value_type> CreatePointGrid(const voronoi::VoronoiFused& vf, const std::vector<char>& types, value_type radius) {
+			using return_type = PointsSoA<value_type>;
+			return_type grid;
+
+			const auto v_size = vf.polyhedra.size();
+
+			for (size_t i = 0; i < v_size; i++)
+			{
+				grid.addPoint(vf.polyhedra[i].center, i, types[i]);
+			}
+
+			grid.calculateSpatialIndexes(return_type::NEAR / radius);
+			
 			// TODO
 			
 
@@ -759,8 +711,52 @@ namespace cpplib {
 			}
 			return max_x;
 		}
+		
+
+		static std::vector<CriticalPoint> GenerateInitialCriticalPoints(const voronoi::VoronoiFused& vf) {
+
+			std::vector<CriticalPoint> result;
+			result.reserve(vf.vertices.size() + vf.edges.size() + vf.polygons.size());
+
+			auto add_candidate = [&](const PointType& p, CriticalPoint::TYPE t) {
+				value_type x = p[0] - std::floor(p[0]);
+				value_type y = p[1] - std::floor(p[1]);
+				value_type z = p[2] - std::floor(p[2]);
+
+				if (x >= 1.0 - EPS) x = 0.0;
+				if (y >= 1.0 - EPS) y = 0.0;
+				if (z >= 1.0 - EPS) z = 0.0;
+			};
+
+			// 1. Type C (Cage)
+			for (const auto& p : vf.vertices) {
+				add_candidate(p, CriticalPoint::TYPE::C);
+			}
+
+			// 2. Type R (Ring)
+			for (const auto& edge : vf.edges) {
+				const auto& v1 = vf.vertices[edge.vert_ids[0]];
+				const auto& v2 = vf.vertices[edge.vert_ids[1]];
+				PointType mid((v1[0] + v2[0]) * 0.5,
+							  (v1[1] + v2[1]) * 0.5,
+							  (v1[2] + v2[2]) * 0.5);
+				add_candidate(mid, CriticalPoint::TYPE::R);
+			}
+
+			// 3. Type B (Bond)
+			for (const auto& poly : vf.polygons) {
+				PointType center(0.0, 0.0, 0.0);
+				for (uint32_t vid:poly.vert_ids) {
+					center += vf.vertices[vid];
+				}
+				center /= static_cast<value_type>(poly.vert_ids.size());
+				add_candidate(center, CriticalPoint::TYPE::B);
+			}
 
 
+
+			return result;
+		}
 
 		// TODO
 	};

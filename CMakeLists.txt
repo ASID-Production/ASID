@@ -152,7 +152,7 @@ set(CPPLIB_PY_SOURCES
 # ============================================================================
 # OBJECT library
 # ============================================================================
-add_library(cpplib_objects OBJECT ${CPPLIB_SOURCES})
+add_library(cpplib_objects OBJECT ${CPPLIB_SOURCES} "cpplib/src/Classes/Reader.h")
 
 target_include_directories(cpplib_objects 
     PUBLIC 
