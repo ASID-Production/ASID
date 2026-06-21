@@ -77,18 +77,23 @@ namespace cpplib {
 		}
 	};
 
-	template <size_t SIZE = 576>
+	template <size_t N = 576>
 	struct alignas(64) CubicSpline {
 	public:
-		static_assert(SIZE % 64 == 0, "SIZE must be a multiple of 64 bytes");
+		static constexpr size_t SIZE = N;
+		static_assert(SIZE % 64 == 0, "Template Argument must be a multiple of 64 bytes");
 
 		using value_type = TripleDouble::value_type;
 
+		constexpr CubicSpline() = default;
 		CubicSpline(value_type r_min, value_type r_max, size_t n_knots, const std::vector<value_type>& values) {
+			create(r_min, r_max, n_knots, values);
+		}
+
+		void create(value_type r_min, value_type r_max, size_t n_knots, const std::vector<value_type>& values) {
 			// Validate that the incoming active nodes match the provided intervals count
-			assert(values.size() == n_knots + 1);
+			assert(values.size() == n_knots);
 			assert(n_knots <= SIZE); // Ensure it fits into our maximum fixed capacity
-			assert(values.back() == 0.0);
 			assert(r_min > 0.0 && r_max > r_min);
 
 			// Initialize grid transformation parameters based on the ACTIVE file data boundaries
@@ -187,7 +192,6 @@ namespace cpplib {
 			std::fill(c_.begin() + m, c_.end(), value_type(0.0));
 			std::fill(d_.begin() + m, d_.end(), value_type(0.0));
 		}
-
 
 		/// @brief Evaluate spline value and its first two derivatives at point r
 		/// @param r Point to evaluate
@@ -291,28 +295,27 @@ namespace cpplib {
 		}
 
 
-		std::array<value_type, SIZE> a_;
-		std::array<value_type, SIZE> b_;
-		std::array<value_type, SIZE> c_;
-		std::array<value_type, SIZE> d_;
-		std::array<value_type, SIZE> knots_; // knot_[SIZE] is r_max_
+		std::array<value_type, SIZE> a_{};
+		std::array<value_type, SIZE> b_{};
+		std::array<value_type, SIZE> c_{};
+		std::array<value_type, SIZE> d_{};
+		std::array<value_type, SIZE> knots_{}; // knot_[SIZE] is r_max_
 
-		value_type r_max_; // x = knot[last]
-		value_type ln_r0_; // ln(x_0)
-		value_type inv_delta_; // 1.0 / ln (x_1 / x_0)
-		size_t m_; // Precalculated active intervals count to optimize hot path
+		value_type r_max_ = 0; // x = knot[last]
+		value_type ln_r0_ = 1; // ln(x_0)
+		value_type inv_delta_ = 1; // 1.0 / ln (x_1 / x_0)
+		size_t m_ = 0; // Precalculated active intervals count to optimize hot path
 	};
 
 	class RadialSpline {
 	public:
 		using value_type = CubicSpline<>::value_type;
 		using PointType = geometry::Point<value_type>;
-
+		static constexpr size_t SIZE = CubicSpline<>::SIZE;
 		// Constructs the underlying CubicSpline directly in-place without any copying/moving
 		RadialSpline(value_type r_min, value_type r_max, size_t n_knots, const std::vector<value_type>& values)
-			: spline(r_min, r_max, n_knots, values) {
-		}
-
+			: spline(r_min, r_max, n_knots, values) {}
+		constexpr RadialSpline() = default;
 		/// @brief Evaluates value, gradient, and Hessian for a radially symmetric spline
 		/// @param x_minus_c is the relative vector from the center (r = x - c)
 		/// @return TripleDouble value at point x_minus_c

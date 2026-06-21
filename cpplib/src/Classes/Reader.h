@@ -36,107 +36,107 @@
 #include <fstream>
 #include <system_error>
 
-struct AtomData {
-    int atom_id;
-    double r_min;
-    double r_max;
-    uint32_t n_knots;
-    std::array<double, 577> values;
-};
+#include "../Classes/Bader.h"
 
-class DensityParser {
-private:
-    [[nodiscard]] static constexpr const char* skip_spaces(const char* ptr, const char* end) noexcept {
-        while (ptr < end && (*ptr == ' ' || *ptr == '\t' || *ptr == '\n' || *ptr == '\r')) {
-            ++ptr;
-        }
-        return ptr;
-    }
-
-    // Universal numeric parsing template. Optimized perfectly by the compiler.
-    template <typename T>
-    [[nodiscard]] static const char* parse_value(const char* ptr, const char* end, T& value) {
-        ptr = skip_spaces(ptr, end);
-        if (ptr == end) {
-            throw std::runtime_error("Parser error: Unexpected End of File (EOF).");
+namespace cpplib {
+    class DensityParser {
+    public:
+        struct AtomData {
+            std::vector<double> values;
+            double r_min;
+            double r_max;
+            int atom_id;
+            uint32_t n_knots;
+        };
+    private:
+        [[nodiscard]] static constexpr const char* skip_spaces(const char* ptr, const char* end) noexcept {
+            while (ptr < end && (*ptr == ' ' || *ptr == '\t' || *ptr == '\n' || *ptr == '\r')) {
+                ++ptr;
+            }
+            return ptr;
         }
 
-        // std::from_chars is locale-independent, working directly with ASCII characters in memory
-        auto [next_ptr, ec] = std::from_chars(ptr, end, value);
-        if (ec != std::errc{}) {
-            throw std::runtime_error("Parser error: Failed to convert numerical value.");
-        }
-        return next_ptr;
-    }
-
-public:
-    [[nodiscard]] static std::vector<AtomData> parse_file(const std::filesystem::path& filepath) {
-        if (!std::filesystem::exists(filepath)) {
-            throw std::runtime_error("File not found: " + filepath.string());
-        }
-
-        // 1. Block Binary IO: Determine file size
-        const std::uintmax_t file_size = std::filesystem::file_size(filepath);
-
-        // Allocate a contiguous buffer (2-3 MB size fits perfectly into CPU L3 cache)
-        std::vector<char> buffer(file_size);
-
-        // Open strictly in binary mode to prevent cross-platform issues with \r\n on Windows
-        std::ifstream file(filepath, std::ios::binary);
-        if (!file.is_open()) {
-            throw std::runtime_error("Failed to open file: " + filepath.string());
-        }
-
-        // Single system call to read the entire file into memory
-        file.read(buffer.data(), file_size);
-
-        // Setup Zero-Copy Sliding Pointers
-        const char* ptr = buffer.data();
-        const char* end = ptr + buffer.size();
-
-        // 2. Parse global header
-        int max_element = 0;
-        ptr = parse_value(ptr, end, max_element);
-
-        // Pre-allocate the top-level vector (eliminates redundant heap reallocations)
-        std::vector<AtomData> g_splines;
-        g_splines.reserve(static_cast<size_t>(max_element));
-
-        // 3. Atom block parsing pipeline
-        while (true) {
+        // Universal numeric parsing template. Optimized perfectly by the compiler.
+        template <typename T>
+        [[nodiscard]] static const char* parse_value(const char* ptr, const char* end, T& value) {
             ptr = skip_spaces(ptr, end);
-            if (ptr == end) break; // Parsing successfully completed
-
-            // Construct the object directly within the vector's allocated memory (In-place)
-            AtomData& atom = g_splines.emplace_back();
-
-            // Read block metadata
-            ptr = parse_value(ptr, end, atom.atom_id);
-            ptr = parse_value(ptr, end, atom.r_min);
-            ptr = parse_value(ptr, end, atom.r_max);
-            ptr = parse_value(ptr, end, atom.n_knots);
-
-            // Validation against specification boundaries
-            if (atom.n_knots > 576) {
-                throw std::runtime_error("Specification violated: N_KNOTS > 576 for atom ID " + std::to_string(atom.atom_id));
+            if (ptr == end) {
+                throw std::runtime_error("Parser error: Unexpected End of File (EOF).");
             }
 
-            // Skip the unimplemented RO field (as specified in documentation)
-            double dummy_ro = 0.0;
-            ptr = parse_value(ptr, end, dummy_ro);
-
-            // Read the values array (N_KNOTS + 1 elements)
-            const size_t total_values = atom.n_knots + 1;
-            for (size_t i = 0; i < total_values; ++i) {
-                ptr = parse_value(ptr, end, atom.values[i]);
+            // std::from_chars is locale-independent, working directly with ASCII characters in memory
+            auto [next_ptr, ec] = std::from_chars(ptr, end, value);
+            if (ec != std::errc{}) {
+                throw std::runtime_error("Parser error: Failed to convert numerical value.");
             }
-
-            // Critical specification requirement: verify physical decay of the function
-            if (atom.values[atom.n_knots] != 0.0) {
-                throw std::runtime_error("Critical error: the last function value must be exactly 0.0 for atom ID " + std::to_string(atom.atom_id));
-            }
+            return next_ptr;
         }
 
-        return g_splines;
-    }
-};
+    public:
+        [[nodiscard]] static std::vector<RadialSpline> parse_file(const std::filesystem::path& filepath) {
+            if (!std::filesystem::exists(filepath)) {
+                throw std::runtime_error("File not found: " + filepath.string());
+            }
+
+            // 1. Block Binary IO: Determine file size
+            const std::uintmax_t file_size = std::filesystem::file_size(filepath);
+
+            // Allocate a contiguous buffer (2-3 MB size fits perfectly into CPU L3 cache)
+            std::vector<char> buffer(file_size);
+
+            // Open strictly in binary mode to prevent cross-platform issues with \r\n on Windows
+            std::ifstream file(filepath, std::ios::binary);
+            if (!file.is_open()) {
+                throw std::runtime_error("Failed to open file: " + filepath.string());
+            }
+
+            // Single system call to read the entire file into memory
+            file.read(buffer.data(), file_size);
+
+            // Setup Zero-Copy Sliding Pointers
+            const char* ptr = buffer.data();
+            const char* end = ptr + buffer.size();
+
+            // 2. Parse global header
+            int max_element = 0;
+            ptr = parse_value(ptr, end, max_element);
+
+            // Pre-allocate the top-level vector (eliminates redundant heap reallocations)
+            std::vector<RadialSpline> rs_ret;
+            rs_ret.resize(max_element + 1);
+
+
+            // 3. Atom block parsing pipeline
+            while (true) {
+                ptr = skip_spaces(ptr, end);
+                if (ptr == end) break; // Parsing successfully completed
+
+                // Construct the object directly within the vector's allocated memory (In-place)
+                AtomData atom;
+
+                // Read block metadata
+                ptr = parse_value(ptr, end, atom.atom_id);
+                ptr = parse_value(ptr, end, atom.r_min);
+                ptr = parse_value(ptr, end, atom.r_max);
+                ptr = parse_value(ptr, end, atom.n_knots);
+
+                // Validation against specification boundaries
+                if (atom.n_knots > RadialSpline::SIZE) {
+                    throw std::runtime_error("Specification violated: N_KNOTS > 576 for atom ID " + std::to_string(atom.atom_id));
+                }
+
+                // Read the values array (N_KNOTS elements)
+                const size_t total_values = atom.n_knots;
+                for (size_t i = 0; i < total_values; ++i) {
+                    ptr = parse_value(ptr, end, atom.values[i]);
+                }
+
+
+                rs_ret[atom.atom_id] = RadialSpline(atom.r_min, atom.r_max, atom.n_knots, atom.values);
+
+            }
+
+            return rs_ret;
+        }
+    };
+}
