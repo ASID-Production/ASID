@@ -51,10 +51,10 @@
 /// proximity to a set of input points (typically atom positions).
 namespace cpplib::voronoi {
 	// Forward declarations
-	class Vertex;
-	class Edge;
-	class Face;
-	class Cell;
+	struct Vertex;
+	struct Edge;
+	struct Face;
+	struct Cell;
 
 	/// @brief Container type for non-owning pointers in Voronoi structures
 	/// @tparam T Pointer type to store
@@ -64,9 +64,13 @@ namespace cpplib::voronoi {
 	/// @brief State of a Voronoi geometric object during construction
 	///
 	/// Objects transition through states during plane clipping operations:
+	/// 
 	/// - DELETE: Object is outside the valid region
+	/// 
 	/// - VALID: Object is fully valid and unchanged
+	/// 
 	/// - INVALID: Object is in an inconsistent state (error condition)
+	/// 
 	/// - MODIFICATION: Object is being modified by a clipping operation
 	enum class State : char {
 		DELETE = 0,       ///< Object should be deleted
@@ -1338,7 +1342,7 @@ namespace cpplib::voronoi {
 				cart_verts.emplace_back(FtoC * (vertices[v] - center));
 			}
 
-			FloatingPointType area = PointType::Vector(cart_verts.front(), cart_verts.back()).r() ;
+			FloatingPointType area = PointType::Vector(cart_verts.front(), cart_verts.back()).r();
 			for (uint32_t i = 1; i < p.vert_ids.size(); i++) {
 				area += PointType::Vector(cart_verts[i], cart_verts[i - 1]).r();
 			}
@@ -1389,49 +1393,4 @@ namespace cpplib::voronoi {
 			return volume;
 		}
 	};
-	class Net {
-    public:
-		using ShiftType = geometry::Point<uint8_t>;
-		using PointType = VoronoiFused::PointType;
-		using PolyhedronPointer = typename VoronoiFused::Polyhedron*;
-
-	private:
-		std::vector<VoronoiFused::Polyhedron*> root_polyhedron;
-		std::vector<ShiftType> shift;
-		std::vector<PointType> real_point;
-		std::vector<size_t> all_neighbours;
-		std::vector<size_t> offsets;
-
-	public:
-		Net(size_t size) {
-			root_polyhedron.reserve(size);
-			shift.reserve(size);
-			real_point.reserve(size);
-			all_neighbours.reserve(size << 4);
-			offsets.reserve(size);
-		}
-		void add_polyhedron(PolyhedronPointer p, ShiftType s, const PointType& r) {
-			root_polyhedron.push_back(p);
-			shift.push_back(s);
-			real_point.push_back(r);
-		}
-
-	private:
-		size_t pack_key(ShiftType shift, uint32_t atom_id) const noexcept {
-			return (static_cast<size_t>(shift[0]))       |
-				   (static_cast<size_t>(shift[1]) << 8)  |
-				   (static_cast<size_t>(shift[2]) << 16) |
-				   (static_cast<size_t>(atom_id) << 24);
-		}
-		std::pair<ShiftType, uint32_t> unpack_key(size_t key) const noexcept {
-			return std::make_pair(ShiftType(static_cast<uint8_t>(key & 0xFF),
-											static_cast<uint8_t>((key >> 8) & 0xFF),
-											static_cast<uint8_t>((key >> 16) & 0xFF)),
-								  static_cast<uint32_t>((key >> 24) & 0xFFFFFFFF));
-		}
-
-
-
-	};
-
 }

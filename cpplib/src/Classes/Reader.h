@@ -29,23 +29,23 @@
 
 #include <iostream>
 #include <vector>
-#include <array>
 #include <charconv>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <system_error>
 
-#include "../Classes/Bader.h"
+#include "../Classes/Splines.h"
 
 namespace cpplib {
+
     class DensityParser {
     public:
         struct AtomData {
             std::vector<double> values;
             double r_min;
             double r_max;
-            int atom_id;
+            int element;
             uint32_t n_knots;
         };
     private:
@@ -74,7 +74,7 @@ namespace cpplib {
 
     public:
         [[nodiscard]] static std::vector<RadialSpline> parse_file(const std::filesystem::path& filepath) {
-            if (!std::filesystem::exists(filepath)) {
+            if (!std::filesystem::is_regular_file(filepath)) {
                 throw std::runtime_error("File not found: " + filepath.string());
             }
 
@@ -105,6 +105,8 @@ namespace cpplib {
             std::vector<RadialSpline> rs_ret;
             rs_ret.resize(max_element + 1);
 
+            AtomData atom;
+            atom.values.reserve(RadialSpline::SIZE);
 
             // 3. Atom block parsing pipeline
             while (true) {
@@ -112,28 +114,28 @@ namespace cpplib {
                 if (ptr == end) break; // Parsing successfully completed
 
                 // Construct the object directly within the vector's allocated memory (In-place)
-                AtomData atom;
 
                 // Read block metadata
-                ptr = parse_value(ptr, end, atom.atom_id);
+                ptr = parse_value(ptr, end, atom.element);
                 ptr = parse_value(ptr, end, atom.r_min);
                 ptr = parse_value(ptr, end, atom.r_max);
                 ptr = parse_value(ptr, end, atom.n_knots);
 
                 // Validation against specification boundaries
                 if (atom.n_knots > RadialSpline::SIZE) {
-                    throw std::runtime_error("Specification violated: N_KNOTS > 576 for atom ID " + std::to_string(atom.atom_id));
+                    throw std::runtime_error("Specification violated: N_KNOTS > 576 for atom ID " + std::to_string(atom.element));
+                }
+                if (atom.element < 1 || atom.element > max_element) {
+                    throw std::runtime_error("Invalid element_no: " + std::to_string(atom.element) + " (expected 1-" + std::to_string(max_element) + ")");
                 }
 
                 // Read the values array (N_KNOTS elements)
                 const size_t total_values = atom.n_knots;
+                atom.values.resize(atom.n_knots);
                 for (size_t i = 0; i < total_values; ++i) {
                     ptr = parse_value(ptr, end, atom.values[i]);
                 }
-
-
-                rs_ret[atom.atom_id] = RadialSpline(atom.r_min, atom.r_max, atom.n_knots, atom.values);
-
+                rs_ret[atom.element] = RadialSpline(atom.r_min, atom.r_max, atom.n_knots, atom.values);
             }
 
             return rs_ret;

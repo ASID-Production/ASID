@@ -37,7 +37,7 @@
 #include "../BaseHeaders/BaseTypes.h"
 #include "../BaseHeaders/Currents.h"
 #include "../BaseHeaders/DebugMes.h"
-#include "../Classes/Bader.h"
+#include "../Classes/BaderOperator.h"
 #include "../Classes/Cluster.h"
 #include "../Classes/Distances.h"
 #include "../Classes/FindMolecules.h"
@@ -855,8 +855,8 @@ extern "C" {
 	}
 
 	static PyObject* cpplib_FindCP(PyObject* self, PyObject* args) {
-		// TODO: Placeholder function
 		using Diagram = cpplib::voronoi::VoronoiDiagram;
+		using BaderOperator = cpplib::BaderOperator;
 
 		PyObject* ocell = NULL;
 		PyObject* osymm = NULL;
@@ -867,41 +867,84 @@ extern "C" {
 		}
 
 		LOG_INTERFACE_GUARD("cpplib_FindCP");
-		// Parsing
-		Prepare_IC all(ocell, osymm, otuples);
-		auto ps = all.points.size();
 
+		Prepare_IC all(ocell, osymm, otuples);
 		geometry::Cell cell(all.cell);
-		std::vector<bool> bools (ps, true);
+		std::vector<bool> bools(all.points.size(), true);
 
 		std::vector<geometry::Symm<FloatingPointType>> symmvec;
 		symmvec.reserve(all.symm.size());
-		for (int i = 0; i < all.symm.size(); i++)
-		{
-			symmvec.emplace_back(all.symm[i]);
+		for (const auto& s : all.symm) {
+			symmvec.emplace_back(s);
 		}
 
 		cluster_detail::UnitCellBuilder ucb(symmvec);
 		auto buildresult = ucb.build(all.points, all.types);
 
-
 		geometry::SpatialGrid<FloatingPointType> space;
 		space.build(buildresult.atoms.points, cell, cutoff);
 		auto bonds = WITH_LOG_M(space, get_bonds, false);
 
-		// Flags intentionally correspond only to the asymmetric-unit inputs; 
-		// VoronoiDiagram resizes the flag vector and treats symmetry-expanded sites as false.
 		Diagram diag(buildresult.atoms.points, bonds, cell, bools);
-
 		auto ce = diag.extractCells();
 
 		cpplib::voronoi::VoronoiFused vf(ce, cell.fracToCart());
 		vf.polyhedra.resize(all.points.size());
 
-		// Build return value
-		return Py_BuildValue("{s:N,s:N}",
+		auto critical_points = cpplib::BaderOperator::GenerateInitialCriticalPoints(vf);
+
+		// Expand Point Net
+		// 1. Calculate theoretical radius.
+		const size_t max_type = cpplib::ElectronDensitySplines.size();
+		const size_t initial_type_size = buildresult.atoms.types.size();
+		std::vector<double> spline_max_radius(max_type, double(0.0));
+		double ED_cutoff = 0.0;
+		for (size_t i = 0; i < initial_type_size; i++)
+		{
+			const auto type = buildresult.atoms.types[i];
+			auto& active_spline = cpplib::ElectronDensitySplines[type].spline;
+			if (spline_max_radius[type] == double(0.0)) {
+
+				constexpr double OPTIMAL_RADIUS = 3.0;
+
+				double phi, dphi, ddphi;
+				active_spline.eval(OPTIMAL_RADIUS, phi, dphi, ddphi);
+				double value = active_spline.find_value(OPTIMAL_RADIUS, phi*1.0E-6);
+
+				ED_cutoff = std::max(ED_cutoff, value);
+			}
+		}
+
+		// 2. Use cutoff for prepare PointsSoA
+		cpplib::PointsSoA<double> psoa;
+		psoa.reserve(initial_type_size);
+
+		buildresult
+
+		auto bounds = cpplib::PointsSoA<double>::getBoundsFrac(cell.cartToFrac(), ED_cutoff);
+
+		auto density_func = [&](const PointType& point) -> cpplib::TripleDouble {
+			return BaderOperator::ComputeTotalDensity(point,
+													  buildresult.atoms.points,
+													  buildresult.atoms.types,
+													  cell,
+													  cpplib::ElectronDensitySplines);
+			};
+
+		// 3. Оптимизируем положения
+		std::vector<PointType> optimized_positions =
+			BaderOperator::OptimizeCriticalPoints(critical_points, density_func);
+
+		// 4. Формируем результат для Python
+		PyObject* py_critical_points = PyList_New(0);
+		for (const auto& p : optimized_positions) {
+			PyList_Append(py_critical_points, Py_BuildValue("(fff)", p[0], p[1], p[2]));
+		}
+
+		return Py_BuildValue("{s:N,s:N,s:N}",
 							 "voronoi_cells", py_util::convert(vf),
-							 "unit_cell", py_util::convert(buildresult.atoms));
+							 "unit_cell", py_util::convert(buildresult.atoms),
+							 "critical_points", py_critical_points);
 	}
 
 	static struct PyMethodDef methods[] = {

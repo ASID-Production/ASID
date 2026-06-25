@@ -57,7 +57,7 @@ add_library(optimizations INTERFACE)
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         target_compile_options(optimizations INTERFACE 
             $<$<CONFIG:Release>:
-                -Ofast
+                -O3
                 -DNDEBUG
                 -march=native
                 -mtune=native
@@ -68,6 +68,7 @@ add_library(optimizations INTERFACE)
                 -fno-exceptions
                 -D_HAS_EXCEPTIONS=0
                 -fno-rtti
+                -ffast-math
             >
         )
         message(STATUS "Linux: max performance with safe math optimizations")
@@ -152,7 +153,7 @@ set(CPPLIB_PY_SOURCES
 # ============================================================================
 # OBJECT library
 # ============================================================================
-add_library(cpplib_objects OBJECT ${CPPLIB_SOURCES} "cpplib/src/Classes/Reader.h")
+add_library(cpplib_objects OBJECT ${CPPLIB_SOURCES})
 
 target_include_directories(cpplib_objects 
     PUBLIC 
@@ -244,7 +245,7 @@ if(EXISTS ${CMAKE_SOURCE_DIR}/cpplib/Tests AND WIN32)
     add_subdirectory(cpplib/Tests)
     message(STATUS "Tests enabled for Windows build")
 elseif(EXISTS ${CMAKE_SOURCE_DIR}/cpplib/Tests)
-    message(STATUS "Tests directory exists but not configured (requires Windows)")
+    message(STATUS "Tests directory exists but disabled (requires Windows)")
 endif()
 
 # add_compile_definitions(DEBUG_MESS_ON)

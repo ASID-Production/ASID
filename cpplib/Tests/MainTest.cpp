@@ -39,7 +39,7 @@
 #include "../src/BaseHeaders/Currents.h"
 #include "../src/BaseHeaders/DebugMes.h"
 
-#include "../src/Classes/Bader.h"
+#include "../src/Classes/BaderOperator.h"
 #include "../src/Classes/Cluster.h"
 #include "../src/Classes/Distances.h"
 #include "../src/Classes/FindMolecules.h"
