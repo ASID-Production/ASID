@@ -895,33 +895,15 @@ extern "C" {
 
 		// Expand Point Net
 		// 1. Calculate theoretical radius.
+		
+		const auto ED_cutoff = cpplib::BaderOperator::GetOptimalRadius(3.0, 1.0E-6, ElectronDensitySplines, buildresult.atoms.types);
 		const size_t max_type = cpplib::ElectronDensitySplines.size();
 		const size_t initial_type_size = buildresult.atoms.types.size();
-		std::vector<double> spline_max_radius(max_type, double(0.0));
-		double ED_cutoff = 0.0;
-		for (size_t i = 0; i < initial_type_size; i++)
-		{
-			const auto type = buildresult.atoms.types[i];
-			auto& active_spline = cpplib::ElectronDensitySplines[type].spline;
-			if (spline_max_radius[type] == double(0.0)) {
-
-				constexpr double OPTIMAL_RADIUS = 3.0;
-
-				double phi, dphi, ddphi;
-				active_spline.eval(OPTIMAL_RADIUS, phi, dphi, ddphi);
-				double value = active_spline.find_value(OPTIMAL_RADIUS, phi*1.0E-6);
-
-				ED_cutoff = std::max(ED_cutoff, value);
-			}
-		}
 
 		// 2. Use cutoff for prepare PointsSoA
 		cpplib::PointsSoA<double> psoa;
-		psoa.reserve(initial_type_size);
+		psoa.initializeWithPeriodicImages(buildresult.atoms.points, buildresult.atoms.types, cell.fracToCart(), cell.cartToFrac(), ED_cutoff);
 
-		buildresult
-
-		auto bounds = cpplib::PointsSoA<double>::getBoundsFrac(cell.cartToFrac(), ED_cutoff);
 
 		auto density_func = [&](const PointType& point) -> cpplib::TripleDouble {
 			return BaderOperator::ComputeTotalDensity(point,
@@ -931,11 +913,9 @@ extern "C" {
 													  cpplib::ElectronDensitySplines);
 			};
 
-		// 3. Оптимизируем положения
 		std::vector<PointType> optimized_positions =
 			BaderOperator::OptimizeCriticalPoints(critical_points, density_func);
 
-		// 4. Формируем результат для Python
 		PyObject* py_critical_points = PyList_New(0);
 		for (const auto& p : optimized_positions) {
 			PyList_Append(py_critical_points, Py_BuildValue("(fff)", p[0], p[1], p[2]));

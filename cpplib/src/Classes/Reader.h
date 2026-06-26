@@ -131,10 +131,11 @@ namespace cpplib {
 
                 // Read the values array (N_KNOTS elements)
                 const size_t total_values = atom.n_knots;
-                atom.values.resize(atom.n_knots);
+                atom.values.resize(atom.n_knots + 1);
                 for (size_t i = 0; i < total_values; ++i) {
                     ptr = parse_value(ptr, end, atom.values[i]);
                 }
+                atom.values.back() = 0;
                 rs_ret[atom.element] = RadialSpline(atom.r_min, atom.r_max, atom.n_knots, atom.values);
             }
 

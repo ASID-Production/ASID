@@ -41,7 +41,7 @@
 namespace cpplib {
 
 	// Global vector of RadialSplines of Electron Density
-	inline const auto ElectronDensitySplines = DensityParser::parse_file("ED.txt");
+	inline const auto ElectronDensitySplines = DensityParser::parse_file(".\\ED.txt");
 
 	template <typename T, size_t N = 2>
 	struct PointsSoA {
@@ -95,7 +95,7 @@ namespace cpplib {
 
 
 		static constexpr auto p_near = unrollPositions<char>();
-		std::array<uint32_t, TOTAL_SHIFTS> flat_shifts;
+		std::array<int32_t, TOTAL_SHIFTS> flat_shifts;
 
 
 		void computeRuntimeFlatShifts() {
@@ -202,8 +202,9 @@ namespace cpplib {
 			}
 		}
 
+		template<typename AtomType>
 		void initializeWithPeriodicImages(const std::vector<geometry::Point<T>>& base_fractional_points,
-										  const std::vector<uint32_t>& base_spline_ids,
+										  const std::vector<AtomType>& base_spline_ids,
 										  const geometry::Matrix<T>& mat_FracToCart,
 										  const geometry::Matrix<T>& mat_CartToFrac,
 										  T cutoff) {
@@ -244,10 +245,9 @@ namespace cpplib {
 							y.push_back(base_cart_y + shift_cart_y);
 							z.push_back(base_cart_z + shift_cart_z);
 
-							spline_ids.push_back(base_spline_ids[pt_idx]);
+							spline_ids.push_back(static_cast<uint32_t>(base_spline_ids[pt_idx]));
 							voron_ids.push_back(pt_idx);
 						}
-
 					}
 				}
 			}
@@ -292,6 +292,7 @@ namespace cpplib {
 				cartesians[i + 3] = cart_max;
 			}
 		}
+
 		std::array<int32_t, TOTAL_SHIFTS> generateFlatOffsets() const {
 
 			std::array<int32_t, TOTAL_SHIFTS>  flatOffsets;
@@ -349,9 +350,10 @@ namespace cpplib {
 	class CriticalPoint {
 	public:
 		using PointType = typename RadialSpline::PointType;
-		static constexpr PointType::value_type MAX_STEP = 0.2;
-		static constexpr PointType::value_type MAX_STEP_SQ = MAX_STEP * MAX_STEP;
-		static constexpr double EPS = 1e-12;
+		using value_type = typename PointType::value_type;
+		static constexpr value_type MAX_STEP = 0.2;
+		static constexpr value_type MAX_STEP_SQ = MAX_STEP * MAX_STEP;
+		static constexpr value_type EPS = 1e-12;
 
 		enum class TYPE {
 			N = 0,
@@ -366,17 +368,48 @@ namespace cpplib {
 			switch (type_) {
 				using enum TYPE;
 				case N:
-					assert(false);
-					return pos_;
+					return PartitionedRFO<0>();
 				case B:
-					return EigenVectorFollowing();
+					return PartitionedRFO<1>();
 				case R:
-					return EigenVectorFollowing();
+					return PartitionedRFO<2>();
 				case C:
-					return NewtonRaphsonPredict();
+					return PartitionedRFO<3>();
 			}
 			return pos_;
 		}
+		TripleDouble CalculateEDinPoint(const PointsSoA<value_type>& psoa,
+										const std::vector<RadialSpline>& splines) {
+			TripleDouble result;
+
+			const uint32_t home_cell = psoa.getCellIndexForPoint(pos_);
+			const uint32_t total_cells = static_cast<uint32_t>(psoa.offset_sh.size() - 1);
+
+			for (int32_t shift:psoa.flat_shifts) {
+				int64_t cell_idx = static_cast<int64_t>(home_cell) + shift;
+				if (cell_idx < 0 || cell_idx >= static_cast<int64_t>(total_cells))
+					continue;
+
+				uint32_t start = psoa.offset_sh[cell_idx];
+				uint32_t end = psoa.offset_sh[cell_idx + 1];
+
+				for (uint32_t idx = start; idx < end; ++idx) {
+					uint32_t atom_i = psoa.ids_sh[idx];
+
+					PointType delta(pos_[0] - psoa.x[atom_i],
+									pos_[1] - psoa.y[atom_i],
+									pos_[2] - psoa.z[atom_i]);
+
+					uint32_t spline_id = psoa.spline_ids[atom_i];
+					result += splines[spline_id].evaluate(delta);
+				}
+			}
+
+			return result;
+		}
+
+
+
 		void UpdatePoint(const PointType& pos, const TripleDouble& value) {
 			pos_ = pos;
 			value_ = value;
@@ -388,34 +421,35 @@ namespace cpplib {
 
 			auto eig = h.EigenvaluesAndVectors();
 
-
 			int idx = 0;
 			if (type_ == TYPE::B) {
-				double max_val = eig.values[0];
+				value_type max_val = eig.values[0];
 				if (eig.values[1] > max_val) {
 					max_val = eig.values[1];
 					idx = 1;
 				}
 				if (eig.values[2] > max_val) {
+					max_val = eig.values[2];
 					idx = 2;
 				}
 			} else {
-				double min_val = eig.values[0];
+				value_type min_val = eig.values[0];
 				if (eig.values[1] < min_val) {
 					min_val = eig.values[1];
 					idx = 1;
 				}
 				if (eig.values[2] < min_val) {
+					min_val = eig.values[2];
 					idx = 2;
 				}
 			}
 
 			const auto& v = eig.vectors[idx];
-			double lambda = eig.values[idx];
+			value_type lambda = eig.values[idx];
 
-			double grad_dot_v = g[0] * v[0] + g[1] * v[1] + g[2] * v[2];
+			value_type grad_dot_v = g[0] * v[0] + g[1] * v[1] + g[2] * v[2];
 
-			double alpha = 0.0;
+			value_type alpha = 0.0;
 
 			if (std::abs(lambda) > EPS) {
 				alpha = -grad_dot_v / lambda;
@@ -428,25 +462,25 @@ namespace cpplib {
 			return pos_ + PointType(v[0] * alpha, v[1] * alpha, v[2] * alpha);
 		}
 
+
 		PointType NewtonRaphsonPredict() const {
 			const auto& g = value_.grad;
 			const auto& h = value_.hess;
 
-			double det = h.Det();
+			value_type det = h.Det();
 			if (std::abs(det) < EPS) {
-				double step = 0.01;
+				value_type step = 0.01;
 				return pos_ + PointType(-g[0] * step, -g[1] * step, -g[2] * step);
 			}
 
 			const auto H_inv = h.Invert();
-			double delta_x = -(H_inv.El(0, 0) * g[0] + H_inv.El(0, 1) * g[1] + H_inv.El(0, 2) * g[2]);
-			double delta_y = -(H_inv.El(1, 0) * g[0] + H_inv.El(1, 1) * g[1] + H_inv.El(1, 2) * g[2]);
-			double delta_z = -(H_inv.El(2, 0) * g[0] + H_inv.El(2, 1) * g[1] + H_inv.El(2, 2) * g[2]);
+			value_type delta_x = -(H_inv.El(0, 0) * g[0] + H_inv.El(0, 1) * g[1] + H_inv.El(0, 2) * g[2]);
+			value_type delta_y = -(H_inv.El(1, 0) * g[0] + H_inv.El(1, 1) * g[1] + H_inv.El(1, 2) * g[2]);
+			value_type delta_z = -(H_inv.El(2, 0) * g[0] + H_inv.El(2, 1) * g[1] + H_inv.El(2, 2) * g[2]);
 
-			const double alpha_sq = delta_x * delta_x + delta_y * delta_y + delta_z * delta_z;
-			if (alpha_sq > MAX_STEP_SQ) { // TODO: Maybe add [[unlikely]]
-				const double step_over_alpha = std::sqrt(MAX_STEP_SQ / alpha_sq);
-
+			const value_type alpha_sq = delta_x * delta_x + delta_y * delta_y + delta_z * delta_z;
+			if (alpha_sq > MAX_STEP_SQ) {
+				const value_type step_over_alpha = std::sqrt(MAX_STEP_SQ / alpha_sq);
 				delta_x *= step_over_alpha;
 				delta_y *= step_over_alpha;
 				delta_z *= step_over_alpha;
@@ -455,7 +489,83 @@ namespace cpplib {
 			return pos_ + PointType(delta_x, delta_y, delta_z);
 		}
 
-	private:
+		template<int Target>
+		PointType PartitionedRFO() const {
+			static_assert(Target >= 0 && Target <= 3,
+						  "Target index must be 0 (min), 1 (saddle), 2 (ring), or 3 (max)");
+
+			const auto& g = value_.grad;
+			auto A = value_.hess; // a copy
+			auto eig = A.EigenvaluesAndVectors();  // values[0] >= values[1] >= values[2]
+
+			const std::array<value_type, 3> lam = {eig.values[2], eig.values[1], eig.values[0]};
+
+			value_type eta;
+			if constexpr (Target == 0) {
+				eta = lam[0] - std::max(1e-4, std::abs(lam[0]) * 1e-3);
+			} else if constexpr (Target == 3) {
+				eta = lam[2] + std::max(1e-4, std::abs(lam[2]) * 1e-3);
+			} else {
+				// Saddle Target (1 or 2)
+				value_type left = lam[Target - 1];
+				value_type right = lam[Target];
+				if (right - left < 1e-8) [[unlikely]] {
+					right = left + 1e-6;
+					left = left - 1e-6;
+				}
+				eta = 0.5 * (left + right);
+			}
+
+			// A = H - eta * I
+			A.El(0, 0) -= eta;
+			A.El(1, 1) -= eta;
+			A.El(2, 2) -= eta;
+
+			const value_type rhs[3] = {-g[0], -g[1], -g[2]};
+
+			const value_type e00 = A.El(0, 0);
+			const value_type e01 = A.El(0, 1);
+			const value_type e02 = A.El(0, 2);
+			const value_type e10 = A.El(1, 0);
+			const value_type e11 = A.El(1, 1);
+			const value_type e12 = A.El(1, 2);
+			const value_type e20 = A.El(2, 0);
+			const value_type e21 = A.El(2, 1);
+			const value_type e22 = A.El(2, 2);
+
+			const value_type c00 = e11 * e22 - e12 * e12;
+			const value_type c11 = e00 * e22 - e02 * e02;
+			const value_type c22 = e00 * e11 - e01 * e01;
+
+			const value_type c01 = -(e01 * e22 - e02 * e12);
+			const value_type c02 = e01 * e12 - e02 * e11;
+			const value_type c12 = -(e00 * e12 - e02 * e01);
+
+			const value_type detA = e00 * c00 + e01 * c01 + e02 * c02;
+
+			if (std::abs(detA) < EPS) [[unlikely]] {
+				const value_type step = 0.1;
+				return pos_ + PointType(-g[0] * step, -g[1] * step, -g[2] * step);
+			}
+
+			const value_type invDet = 1.0 / detA;
+			value_type dx[3];
+			dx[0] = (c00 * rhs[0] + c01 * rhs[1] + c02 * rhs[2]) * invDet;
+			dx[1] = (c01 * rhs[0] + c11 * rhs[1] + c12 * rhs[2]) * invDet;
+			dx[2] = (c02 * rhs[0] + c12 * rhs[1] + c22 * rhs[2]) * invDet;
+
+			const value_type len_sq = dx[0] * dx[0] + dx[1] * dx[1] + dx[2] * dx[2];
+			if (len_sq > MAX_STEP_SQ) [[unlikely]] {
+				const value_type scale = std::sqrt(MAX_STEP_SQ / len_sq);
+				dx[0] *= scale;
+				dx[1] *= scale;
+				dx[2] *= scale;
+			}
+
+			return pos_ + PointType(dx[0], dx[1], dx[2]);
+		}
+
+	public:
 		TYPE type_ = TYPE::N;
 		PointType pos_{};
 		TripleDouble value_{};
@@ -466,48 +576,36 @@ namespace cpplib {
 		using PointType = typename geometry::Point<TripleDouble::value_type>;
 		using value_type = CubicSpline<>::value_type;
 		static constexpr value_type EPS = voronoi::EPSILON;
-		static PointsSoA<value_type> CreatePointGrid(const voronoi::VoronoiFused& vf, 
-													 const std::vector<char>& types, 
-													 value_type radius) {
-			using return_type = PointsSoA<value_type>;
-			return_type grid;
 
-			const auto v_size = vf.polyhedra.size();
-
-			for (size_t i = 0; i < v_size; i++)
-			{
-				grid.addPoint(vf.polyhedra[i].center, i, types[i]);
-			}
-
-			grid.calculateSpatialIndexes(return_type::NEAR / radius);
-
-			// TODO
-
-
-			return grid;
-		}
-
-		static value_type GetOptimalRadius(value_type radius, 
-										   value_type vertical_eps, 
-										   const std::vector<RadialSpline>& splines, 
-										   const std::vector<uint8_t>& active_elems) {
+		static value_type GetOptimalRadius(value_type radius,
+										   value_type vertical_eps,
+										   const std::vector<RadialSpline>& splines,
+										   const std::vector<basic_types::AtomTypeBase>& unfiltered_types) {
 			value_type max_x = 0;
-			const size_t active_elems_size = active_elems.size();
-			for (size_t i = 0; i < active_elems_size; i++)
-			{
-				value_type phi;
-				value_type dphi;
-				value_type ddphi;
-				uint8_t active_index = active_elems[i];
-				auto& active_spline = splines[active_index].spline;
+
+			std::vector<bool> visited(splines.size(), false);
+
+			for (const auto& active_index : unfiltered_types) {
+				const size_t idx = static_cast<size_t>(active_index);
+
+				if (visited[idx]) {
+					continue;
+				}
+				visited[idx] = true;
+
+				value_type phi, dphi, ddphi;
+				auto& active_spline = splines[idx].spline;
+
 				active_spline.eval(radius, phi, dphi, ddphi);
 				value_type x = active_spline.find_value(radius, phi * vertical_eps);
+
 				max_x = std::max(x, max_x);
 			}
+
 			return max_x;
 		}
 
-		static std::vector<CriticalPoint> GenerateInitialCriticalPoints(const voronoi::VoronoiFused& vf) {
+		static std::vector<CriticalPoint> GenerateInitialCriticalPoints(const voronoi::VoronoiFused& vf, const geometry::Matrix<value_type>& fracToCart) {
 
 			std::vector<CriticalPoint> result;
 			result.reserve(vf.vertices.size() + vf.edges.size() + vf.polygons.size());
@@ -520,6 +618,7 @@ namespace cpplib {
 				if (x >= 1.0 - EPS) x = 0.0;
 				if (y >= 1.0 - EPS) y = 0.0;
 				if (z >= 1.0 - EPS) z = 0.0;
+				result.emplace_back(t, fracToCart * CriticalPoint::PointType(x, y, z));
 				};
 
 			// 1. Type C (Cage)
@@ -551,11 +650,5 @@ namespace cpplib {
 
 			return result;
 		}
-
-
-		static void CalculateEDinPoint() {
-
-		}
-		// TODO
 	};
 }

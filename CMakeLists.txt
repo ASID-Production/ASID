@@ -150,6 +150,15 @@ set(CPPLIB_PY_SOURCES
     cpplib/src/Python/PythonInterface.cpp
 )
 
+set(DATA_FILES 
+    BondLength.ini
+    ED.txt
+)
+set(DATA_FULL_PATHS "")
+foreach(file ${DATA_FILES})
+    list(APPEND DATA_FULL_PATHS ${CMAKE_SOURCE_DIR}/module/${file})
+endforeach()
+
 # ============================================================================
 # OBJECT library
 # ============================================================================

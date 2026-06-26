@@ -34,6 +34,8 @@
 #include <tuple>
 #include <utility>
 #include <vector>
+#include <fstream>
+#include <format>
 
 #include "../src/BaseHeaders/BaseTypes.h"
 #include "../src/BaseHeaders/Currents.h"
@@ -94,6 +96,99 @@ struct FMIC_TS {
 		return ClusterCreate(cell, symm, types, points, anch, r2, b);
 	}
 };
+
+TEST(FindCPTest, Benzene) {
+	using Diagram = cpplib::voronoi::VoronoiDiagram;
+	using BaderOperator = cpplib::BaderOperator;
+	std::array<cpplib::basic_types::FloatingPointType, 6> cell_in{7.243, 9.310, 6.756, 90.0, 90.0, 90.0};
+	std::vector<const char*> symm{
+		"x, y, z",
+		"-x+1/2, -y, z+1/2",
+		"-x, y+1/2, -z+1/2",
+		"x+1/2, -y+1/2, -z",
+		"-x, -y, -z",
+		"x+1/2, y, -z+1/2",
+		"x, -y+1/2, z+1/2",
+		"-x+1/2, y+1/2, z"
+	};
+
+	std::vector<AtomTypeBase> types{6, 6, 6, 1, 1, 1};
+	std::vector<cpplib::geometry::Point<cpplib::basic_types::FloatingPointType>> xyz{{
+		{-0.06070, 0.13930, -0.00690},
+		{-0.13770, 0.04470,  0.12600},
+		{ 0.07700, 0.09580, -0.13250},
+		{-0.10460, 0.25020, -0.01230},
+		{-0.24580, 0.07810,  0.22410},
+		{ 0.13710, 0.16810, -0.23600}}};
+
+	geometry::Cell cell(cell_in);
+	std::vector<bool> bools(xyz.size(), true);
+
+	std::vector<geometry::Symm<FloatingPointType>> symmvec;
+	symmvec.reserve(symm.size());
+	for (const auto& s : symm) {
+		symmvec.emplace_back(s);
+	}
+
+	cluster_detail::UnitCellBuilder ucb(symmvec);
+	auto buildresult = ucb.build(xyz, types);
+
+	geometry::SpatialGrid<FloatingPointType> space;
+	space.build(buildresult.atoms.points, cell, 6.0);
+	auto bonds = WITH_LOG_M(space, get_bonds, false);
+
+	Diagram diag(buildresult.atoms.points, bonds, cell, bools);
+	auto ce = diag.extractCells();
+
+	cpplib::voronoi::VoronoiFused vf(ce, cell.fracToCart());
+	vf.polyhedra.resize(xyz.size());
+
+	auto critical_points = cpplib::BaderOperator::GenerateInitialCriticalPoints(vf, cell.fracToCart());
+
+	// Expand Point Net
+	// 1. Calculate theoretical radius.
+
+	const auto ED_cutoff = cpplib::BaderOperator::GetOptimalRadius(3.0, 1.0E-6, ElectronDensitySplines, buildresult.atoms.types);
+	const size_t max_type = cpplib::ElectronDensitySplines.size();
+	const size_t initial_type_size = buildresult.atoms.types.size();
+
+	
+
+	// 2. Use cutoff for prepare PointsSoA
+	cpplib::PointsSoA<double> psoa;
+	psoa.initializeWithPeriodicImages(buildresult.atoms.points, buildresult.atoms.types, cell.fracToCart(), cell.cartToFrac(), ED_cutoff);
+
+
+	std::ofstream of("out.txt");
+	for (size_t i = 0; i < 100; i++)
+	{
+		for (size_t j = 0; j < 100; j++)
+		{
+			for (size_t k = 0; k < 100; k++)
+			{
+				
+				CriticalPoint a(CriticalPoint::TYPE::C, PointType(i / 10.0, j / 10.0, k / 10.0));
+		auto ret = a.CalculateEDinPoint(psoa, ElectronDensitySplines);
+		auto str = std::format("{:4.3f} {:4.3f} {:4.3f} val= {:4.3f}  {:4.3f} {:4.3f} {:4.3f}\n",
+							   a.pos_[0],
+							   a.pos_[1],
+							   a.pos_[2],
+							   ret.val,
+							   ret.grad[0],
+							   ret.grad[1],
+							   ret.grad[2]);
+		of << str;
+
+			}
+		}
+	}
+
+
+}
+
+
+
+
 
 TEST(CreateClusterTest, SingleNegative) {
 	p_distances = &testdistances;

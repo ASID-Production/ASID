@@ -92,7 +92,7 @@ namespace cpplib {
 
 		void create(value_type r_min, value_type r_max, size_t n_knots, const std::vector<value_type>& values) {
 			// Validate that the incoming active nodes match the provided intervals count
-			assert(values.size() == n_knots);
+			assert(values.size() == n_knots + 1);
 			assert(n_knots <= SIZE); // Ensure it fits into our maximum fixed capacity
 			assert(r_min > 0.0 && r_max > r_min);
 

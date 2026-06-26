@@ -64,10 +64,12 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 )
 
 add_custom_command(
-        TARGET MyTests POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            ${CMAKE_SOURCE_DIR}/module/BondLength.ini
-            $<TARGET_FILE_DIR:${PROJECT_NAME}>/BondLength.ini)
+    TARGET MyTests POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        ${DATA_FULL_PATHS}
+        $<TARGET_FILE_DIR:${PROJECT_NAME}>
+    COMMENT "Copy DATA-files into test dirrectory"
+)
 
 include(GoogleTest)
 gtest_discover_tests(${PROJECT_NAME})
