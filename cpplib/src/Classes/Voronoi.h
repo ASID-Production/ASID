@@ -323,6 +323,53 @@ namespace cpplib::voronoi {
 		inline State calculateState() {
 			using enum State;
 
+			uint32_t v_size = vertices.size();
+			uint32_t e_size = edges.size();
+			uint32_t v_valid = 0;
+			uint32_t v_mod = 0;
+			uint32_t v_del = 0;
+			uint32_t v_inv = 0;
+			uint32_t e_valid = 0;
+			uint32_t e_mod = 0;
+			uint32_t e_del = 0;
+			uint32_t e_inv = 0;
+			for (auto & ver: vertices)
+			{
+				switch (ver->get_state()) {
+					case VALID:
+						v_valid++;
+						break;
+					case MODIFICATION:
+						v_mod++;
+						break;
+					case DELETE:
+						e_del++;
+						break;
+					case INVALID:
+						v_inv++;
+				}
+			}
+			for (auto& ed : edges)
+			{
+				switch (ed->get_state()) {
+					case VALID:
+						e_valid++;
+						break;
+					case MODIFICATION:
+						e_mod++;
+						break;
+					case DELETE:
+						e_del++;
+						break;
+					case INVALID:
+						e_inv++;
+				}
+			}
+			bool no_INVALIDES = v_inv + e_inv == 0;
+			// TODO on modification
+
+
+
 			if (vertices.size() == edges.size()) {
 				uint32_t counter = 0;
 				set_state(VALID);
@@ -587,7 +634,10 @@ namespace cpplib::voronoi {
 					continue;
 				}
 				f->calculateState();
-				assert(f->get_state() != INVALID);
+				if (f->get_state() == INVALID) {
+					
+					assert(f->get_state() != INVALID);
+				}
 			}
 
 			// 3. Cut edges
