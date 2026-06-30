@@ -54,7 +54,7 @@ add_executable(${PROJECT_NAME} ${TEST_SRC})
 target_link_libraries( ${PROJECT_NAME} 
     PRIVATE  
         GTest::gtest_main
-        cpplib_objects
+        $<TARGET_OBJECTS:cpplib_objects>
         optimizations
 )
 

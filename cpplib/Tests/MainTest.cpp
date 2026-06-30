@@ -206,7 +206,6 @@ TEST(FindCPTest, Benzene) {
 		{ 0.13710, 0.16810, -0.23600}}};
 
 	geometry::Cell cell(cell_in);
-	std::vector<bool> bools(xyz.size(), true);
 
 	std::vector<geometry::Symm<FloatingPointType>> symmvec;
 	symmvec.reserve(symm.size());
@@ -221,11 +220,11 @@ TEST(FindCPTest, Benzene) {
 	space.build(buildresult.atoms.points, cell, 6.0);
 	auto bonds = WITH_LOG_M(space, get_bonds, false);
 
+	std::vector<bool> bools(buildresult.atoms.points.size(), true);
 	Diagram diag(buildresult.atoms.points, bonds, cell, bools);
 	auto ce = diag.extractCells();
 
 	cpplib::voronoi::VoronoiFused vf(ce, cell.fracToCart());
-	vf.polyhedra.resize(xyz.size());
 
 	auto critical_points = cpplib::BaderOperator::GenerateInitialCriticalPoints(vf, cell.fracToCart());
 
@@ -241,6 +240,35 @@ TEST(FindCPTest, Benzene) {
 	// 2. Use cutoff for prepare PointsSoA
 	cpplib::PointsSoA<double> psoa;
 	psoa.initializeWithPeriodicImages(buildresult.atoms.points, buildresult.atoms.types, cell.fracToCart(), cell.cartToFrac(), ED_cutoff);
+	critical_points[0] = CriticalPoint(CriticalPoint::TYPE::R, PointType(0, 0, 0));
+	// Optimize points
+	std::array<double, 5> array_of_eps {{1.0e-1, 1.0e-2, 1.0e-4, 1.0e-8, 1.0e-16}};
+	for (auto& cp : critical_points) {
+
+		auto val = cp.CalculateEDinPoint(psoa, cpplib::ElectronDensitySplines);
+		cp.UpdateVal(val);
+
+		for (double eps : array_of_eps) {
+
+			for (size_t i = 0; i < 10; i++)
+			{
+				BaderOperator::OptimizePoint(cp, psoa, eps);
+				auto eigen = cp.value_.hess.EigenvaluesAndVectors();
+				int rang = static_cast<int>(eigen.values[0] > 0) +
+					static_cast<int>(eigen.values[1] > 0) +
+					static_cast<int>(eigen.values[2] > 0);
+				if (cp.type_ != static_cast<CriticalPoint::TYPE>(rang)) {
+					//cp.type_ = static_cast<CriticalPoint::TYPE>(rang);
+					continue;
+				}
+				break;
+			}
+
+		}
+	}
+	
+	// Write points
+	BaderOperator::writeCriticalPointsToFile(critical_points, "CPs.pdb");
 
 
 	//std::ofstream of("out.txt");
