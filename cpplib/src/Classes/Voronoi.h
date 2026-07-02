@@ -1030,7 +1030,7 @@ namespace cpplib::voronoi {
 
 		/// @brief Polygon (face) in the fused structure
 		struct PolygonIn {
-			geometry::ShiftCode::ShiftPoint second_shift; ///< Shift code of the second atom
+			geometry::ShiftCode::ShiftPoint second_shift; ///< Shift point of the second atom
 			FloatingPointType area;                       ///< Area of Polygon
 			FloatingPointType solidangle;                 ///< Solid angle of Polygon
 			::std::vector<uint32_t>   vert_ids;           ///< Vertex indexes forming the polygon

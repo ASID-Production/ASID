@@ -232,7 +232,7 @@ TEST(FindCPTest, Benzene) {
 	// 1. Calculate theoretical radius.
 
 	const auto ED_cutoff = cpplib::BaderOperator::GetOptimalRadius(3.0, 1.0E-6, ElectronDensitySplines, buildresult.atoms.types);
-	const size_t max_type = cpplib::ElectronDensitySplines.size();
+	const size_t max_type = cpplib::ElectronDensitySplines.size()-1;
 	const size_t initial_type_size = buildresult.atoms.types.size();
 
 
@@ -240,30 +240,18 @@ TEST(FindCPTest, Benzene) {
 	// 2. Use cutoff for prepare PointsSoA
 	cpplib::PointsSoA<double> psoa;
 	psoa.initializeWithPeriodicImages(buildresult.atoms.points, buildresult.atoms.types, cell.fracToCart(), cell.cartToFrac(), ED_cutoff);
-	critical_points[0] = CriticalPoint(CriticalPoint::TYPE::R, PointType(0, 0, 0));
+	//critical_points[0] = CriticalPoint(CriticalPoint::TYPE::B, (buildresult.atoms.points[0] + buildresult.atoms.points[0]) * 0.5);
 	// Optimize points
-	std::array<double, 5> array_of_eps {{1.0e-1, 1.0e-2, 1.0e-4, 1.0e-8, 1.0e-16}};
+	std::array<double, 1> array_of_eps {{1.0e-12}};
 	for (auto& cp : critical_points) {
 
-		auto val = cp.CalculateEDinPoint(psoa, cpplib::ElectronDensitySplines);
+		auto val = CriticalPoint::CalculateEDinPoint(cp.pos_, psoa, cpplib::ElectronDensitySplines);
 		cp.UpdateVal(val);
 
 		for (double eps : array_of_eps) {
 
-			for (size_t i = 0; i < 10; i++)
-			{
-				BaderOperator::OptimizePoint(cp, psoa, eps);
-				auto eigen = cp.value_.hess.EigenvaluesAndVectors();
-				int rang = static_cast<int>(eigen.values[0] > 0) +
-					static_cast<int>(eigen.values[1] > 0) +
-					static_cast<int>(eigen.values[2] > 0);
-				if (cp.type_ != static_cast<CriticalPoint::TYPE>(rang)) {
-					//cp.type_ = static_cast<CriticalPoint::TYPE>(rang);
-					continue;
-				}
-				break;
-			}
-
+			BaderOperator::OptimizePoint(cp, psoa, eps);
+			BaderOperator::UpdateType(cp);
 		}
 	}
 	

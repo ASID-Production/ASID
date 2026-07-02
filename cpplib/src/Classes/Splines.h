@@ -75,6 +75,9 @@ namespace cpplib {
 			}
 			return result;
 		}
+		constexpr value_type getGradSq() const noexcept {
+			return grad[0] * grad[0] + grad[1] * grad[1] + grad[2] * grad[2];
+		}
 	};
 
 	template <size_t N = 576>
