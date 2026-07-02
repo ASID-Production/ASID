@@ -59,5 +59,6 @@ void main()
     {
         color_frag = color_vert;
         normals_frag = vec3(translation * perspective * aspect_ratio * scale * rotation * scene_shift * vec4(pos_vert, 1.0));
+        frag_pos = translation * perspective * aspect_ratio * scale * rotation * scene_shift * vec4(pos_vert, 1.0);
         gl_Position = translation * perspective * aspect_ratio * scale * rotation * scene_shift * vec4(pos_vert, 1.0);
     }
