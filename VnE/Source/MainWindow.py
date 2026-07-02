@@ -270,8 +270,8 @@ class OpenGlWidget(QOpenGLWidget):
         glBindFramebuffer(GL_FRAMEBUFFER, self.screen_fbo)
         glReadBuffer(GL_COLOR_ATTACHMENT0)
 
-        c = np.zeros((res[1], res[0], 1), dtype=np.uint32)
-        glReadPixels(0, 0, *res, GL_RGBA, GL_UNSIGNED_INT_8_8_8_8_REV, c)
+        c = np.zeros((res[1], res[0], 4), dtype=np.uint8)
+        glReadPixels(0, 0, *res, GL_RGBA, GL_UNSIGNED_BYTE, c)
         c = c[::-1]
         im = Image.fromarray(c, 'RGBA')
         im.save(filename)
