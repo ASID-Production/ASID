@@ -367,6 +367,18 @@ def voronoiFunc():
         voronoi.execute()
 
 
+def pxrdFunc():
+    import sys
+    if '--debug' in sys.argv or '-d' in sys.argv:
+        import importlib
+        from . import pxrd_pattern
+        importlib.reload(pxrd_pattern)
+        pxrd_pattern.execute()
+    else:
+        from . import pxrd_pattern
+        pxrd_pattern.execute()
+
+
 def setup(menu, model, uniform_model=None, *args, main_widget=None, **kwargs):
     from PySide6.QtGui import QAction
 
@@ -458,5 +470,9 @@ def setup(menu, model, uniform_model=None, *args, main_widget=None, **kwargs):
     action_voronoi.triggered.connect(voronoiFunc)
     cmenu.addAction(action_voronoi)
 
-    actions = [open_action, action_test, action_DB, save_action, action_sym_op, action_export, action_winx, action_cls, action_aimall, action_2d_export, action_multiwfn, action_symm_poscar, action_assemble, action_cluster, action_polyhedron, action_instruments, action_voronoi]
+    action_pxrd = QAction('Powder')
+    action_pxrd.triggered.connect(pxrdFunc)
+    cmenu.addAction(action_pxrd)
+
+    actions = [open_action, action_test, action_DB, save_action, action_sym_op, action_export, action_winx, action_cls, action_aimall, action_2d_export, action_multiwfn, action_symm_poscar, action_assemble, action_cluster, action_polyhedron, action_instruments, action_voronoi, action_pxrd]
     return actions

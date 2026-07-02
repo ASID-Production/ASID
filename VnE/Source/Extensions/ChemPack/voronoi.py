@@ -335,6 +335,45 @@ def execute():
                 out.write(f'{pol.atoms[0].name}({symFromMat(pol.symops[0])});{pol.atoms[1].name}({symFromMat(pol.symops[1])});{pol.area};{pol.solid_angle};{pol.solid_angle/s}\n')
         out.close()
 
+    def saveObj(sum_p, p_list):
+        from .MoleculeClass import fracToDec
+        out, _ = QFileDialog.getSaveFileName(caption='Obj file', filter='*.obj')
+        if not out:
+            return
+        ...
+        out = open(out, 'w')
+        v = []
+        vn = []
+        f = []
+        iv = 1
+        atoms = [p.atom for p in p_list]
+        for p in sum_p.polygons:
+            z = 0
+            verts = []
+            for vert in p.points:
+                z += 1
+                v.append(fracToDec(*vert.cell, [vert.coord])[0])
+                verts.append(v[-1])
+            ac = p.atoms[0].coord if p.atoms[0] in atoms else p.atoms[1].coords
+            n = np.cross(verts[1]-verts[0], verts[-1]-verts[0])
+            n = n/np.linalg.norm(n)
+            s = np.sign(np.dot(n, verts[0] - ac))
+            n *= s
+            vn.append(n)
+            f += [[(0+iv, None, len(vn)), (1+iv+x, None, len(vn)), (2+iv+x, None, len(vn))] for x in range(z-2)]
+            iv += z
+        for vert in v:
+            out.write(f'v  {vert[0]:>12.4f}{vert[1]:>12.4f}{vert[2]:>12.4f}\n')
+        out.write('\n')
+        for n in vn:
+            out.write(f'vn {n[0]:>12.4f}{n[1]:>12.4f}{n[2]:>12.4f}\n')
+        out.write('\n')
+        for face in f:
+            out.write(f'f  {face[0][0]:>6d}//{face[0][2]:<6d}{face[1][0]:>6d}//{face[1][2]:<6d}{face[2][0]:>6d}//{face[2][2]:<6d}\n')
+        out.write('\n')
+        out.close()
+
+
 
 
     def process(mol_sys):
@@ -380,7 +419,6 @@ def execute():
         points_list = point_class.PointsList(TREE_MODEL.getRoot(), name='Voronoi polyhedron')
         colors_list = point_class.PointsList(points_list, name='Colors')
         atoms_poly_list = point_class.PointsList(points_list, name='Atoms')
-        sum_poly_list = point_class.PointsList(points_list, name='Polyhedra')
         v_color = point_class.Point(colors_list, name='Vertex color', color=[1, 0, 0, 1])
         e_color = point_class.Point(colors_list, name='Edge color', color=[0, 0, 0, 1])
         p_color = point_class.Point(colors_list, name='Polygon color', color=[0, 1, 0, 0.5])
@@ -394,7 +432,10 @@ def execute():
         sum_poly = Polyhedron.mergePolyhedra(polyh)
         if CHECKBOX.isChecked():
             saveCsv(sum_poly, polyh)
-        ls = sum_poly.createList(sum_poly_list, colors, new=True)
+        if CHECKBOX_OBJ.isChecked():
+            saveObj(sum_poly, polyh)
+        ls = sum_poly.createList(points_list, colors, new=True)
+        ls.name = 'Polyhedra'
 
         TREE_MODEL.insertRow(TREE_MODEL.rowCount())
         for l in lists:
@@ -405,9 +446,12 @@ def execute():
 
     global DIALOG
     global CHECKBOX
+    global CHECKBOX_OBJ
     CHECKBOX = QCheckBox('Save .csv')
+    CHECKBOX_OBJ = QCheckBox('Save .obj')
     DIALOG = SelectMolDialog(MOLECULE_SYSTEMS, process)
     DIALOG.layout().insertWidget(1, CHECKBOX)
+    DIALOG.layout().insertWidget(2, CHECKBOX_OBJ)
     DIALOG.show()
 
 
