@@ -607,16 +607,14 @@ namespace cpplib::geometry {
 
 			// ------------------------------------------------------------------------
 			// Step 2: Depress the cubic: la = mu + I1/3
-			// Result: mu^3 + p*mu + q = 0
 			// ------------------------------------------------------------------------
 			const T I1_div3 = I1 / 3.0;
-			const T p = I2 - I1 * I1_div3 - I1_div3 * I1_div3 * 2.0;
-			const T q = (2.0 * I1_div3 * I1_div3 * I1_div3) -
-				(I1 * I2) / 3.0 + I3;
+
+			const T p = I2 - (I1 * I1) / 3.0;
+			const T q = (I1 * I2) / 3.0 - (2.0 * I1 * I1 * I1) / 27.0 - I3;
 
 			// ------------------------------------------------------------------------
-			// Step 3: Solve depressed cubic using trigonometric method (faster than Cardano)
-			// For 3 real roots: discriminant D = (q/2) + (p/3) <= 0
+			// Step 3: Solve depressed cubic using Cardano-Vieta trigonometric method
 			// ------------------------------------------------------------------------
 			const T p3 = p / 3.0;
 			const T q2 = q / 2.0;
@@ -624,104 +622,138 @@ namespace cpplib::geometry {
 
 			T eigenvalues[3];
 
-			if (D > 0.0) {
-				// One real root, two complex conjugates (unlikely for symmetric matrices)
-				// Use Cardano's formula
-				const T sqrtD = std::sqrt(D);
-				const T A_root = std::cbrt(-q2 + sqrtD);
-				const T B_root = std::cbrt(-q2 - sqrtD);
-				eigenvalues[0] = A_root + B_root + I1_div3;
-				eigenvalues[1] = eigenvalues[2] = eigenvalues[0];
+			if (p3 >= -1e-12) {
+				eigenvalues[0] = I1_div3;
+				eigenvalues[1] = I1_div3;
+				eigenvalues[2] = I1_div3;
 			} else {
-				// Three real roots (standard case for symmetric matrices)
 				const T r = 2.0 * std::sqrt(-p3);
-				const T phi = std::acos(-q / (r * r * r / 4.0));  // acos(q / (2 * r/8))
-				const T phi_div3 = phi / 3.0;
-				const T r_div3 = r / 3.0;
 
-				eigenvalues[0] = r_div3 * std::cos(phi_div3) + I1_div3;
-				eigenvalues[1] = r_div3 * std::cos(phi_div3 + 2.0943951023931953) + I1_div3;  // +120
-				eigenvalues[2] = r_div3 * std::cos(phi_div3 + 4.1887902047863905) + I1_div3;  // +240
+				T arg = -q / (r * r * r / 4.0);
+
+				arg = std::max(static_cast<T>(-1.0), std::min(static_cast<T>(1.0), arg));
+
+				const T phi = std::acos(arg);
+				const T phi_div3 = phi / 3.0;
+
+				eigenvalues[0] = r * std::cos(phi_div3) + I1_div3;
+				eigenvalues[1] = r * std::cos(phi_div3 + 2.0943951023931953) + I1_div3; // +2*pi/3
+				eigenvalues[2] = r * std::cos(phi_div3 + 4.1887902047863905) + I1_div3; // +4*pi/3
 			}
 
-			// Sort eigenvalues in descending order (optional, but typical)
-			std::sort(eigenvalues, eigenvalues + 3, std::greater<double>());
+			std::sort(eigenvalues, eigenvalues + 3, std::greater<T>());
 
-			// Store eigenvalues
 			for (int i = 0; i < 3; ++i) {
 				result.values[i] = static_cast<T>(eigenvalues[i]);
 			}
 
 			// ------------------------------------------------------------------------
-			// Step 4: Compute eigenvectors using inverse iteration for each eigenvalue
-			// Fast method: solve (A - la*I)·v = 0 using cross product for 3x3
+			// Step 4: Compute eigenvectors using Gaussian elimination / Cofactors
 			// ------------------------------------------------------------------------
 			for (int eig_idx = 0; eig_idx < 3; ++eig_idx) {
 				const T lambda = eigenvalues[eig_idx];
 
-				// Build matrix M = A - la*I
-				const T M00 = m00 - lambda;
-				const T M01 = m01;
-				const T M02 = m02;
-				const T M10 = m10;
-				const T M11 = m11 - lambda;
-				const T M12 = m12;
-				const T M20 = m20;
-				const T M21 = m21;
-				const T M22 = m22 - lambda;
+				const T M00 = m00 - lambda; const T M01 = m01;          const T M02 = m02;
+				const T M10 = m10;          const T M11 = m11 - lambda; const T M12 = m12;
+				const T M20 = m20;          const T M21 = m21;          const T M22 = m22 - lambda;
 
-				// Find eigenvector by taking cross product of two rows
-				// This gives a vector orthogonal to both rows -> in the null space
-				T vx = M01 * M12 - M02 * M11;
-				T vy = M02 * M10 - M00 * M12;
-				T vz = M00 * M11 - M01 * M10;
+				T vx0 = M01 * M12 - M02 * M11;
+				T vy0 = M02 * M10 - M00 * M12;
+				T vz0 = M00 * M11 - M01 * M10;
 
-				// Fallback: try other row combinations if first is degenerate
-				T normSq = vx * vx + vy * vy + vz * vz;
-				if (normSq < 1e-12) {
-					// Try rows 1 & 2
-					vx = M11 * M22 - M12 * M21;
-					vy = M12 * M20 - M10 * M22;
-					vz = M10 * M21 - M11 * M20;
-					normSq = vx * vx + vy * vy + vz * vz;
+				T vx1 = M11 * M22 - M12 * M21;
+				T vy1 = M12 * M20 - M10 * M22;
+				T vz1 = M10 * M21 - M11 * M20;
+
+				T vx2 = M21 * M02 - M22 * M01;
+				T vy2 = M22 * M00 - M20 * M02;
+				T vz2 = M20 * M01 - M21 * M00;
+
+				T n0 = vx0 * vx0 + vy0 * vy0 + vz0 * vz0;
+				T n1 = vx1 * vx1 + vy1 * vy1 + vz1 * vz1;
+				T n2 = vx2 * vx2 + vy2 * vy2 + vz2 * vz2;
+
+				T vx = vx0, vy = vy0, vz = vz0;
+				T maxNormSq = n0;
+
+				if (n1 > maxNormSq) {
+					maxNormSq = n1; vx = vx1; vy = vy1; vz = vz1;
 				}
-				if (normSq < 1e-12) {
-					// Try rows 0 & 2
-					vx = M00 * M22 - M02 * M20;
-					vy = -vx;  // Actually M02 * M20 - M00 * M22
-					vz = M00 * M20 - M00 * M20;
-					normSq = vx * vx + vy * vy + vz * vz;
+				if (n2 > maxNormSq) {
+					maxNormSq = n2; vx = vx2; vy = vy2; vz = vz2;
 				}
 
-				// Normalize eigenvector
-				const T invNorm = 1.0 / std::sqrt(normSq);
+				if (maxNormSq < 1e-12) {
+					T abs0 = std::abs(M00);
+					T abs1 = std::abs(M11);
+					T abs2 = std::abs(M22);
+
+					if (abs0 <= abs1 && abs0 <= abs2) {
+						vx = 1.0; vy = 0.0; vz = 0.0;
+					} else if (abs1 <= abs0 && abs1 <= abs2) {
+						vx = 0.0; vy = 1.0; vz = 0.0;
+					} else {
+						vx = 0.0; vy = 0.0; vz = 1.0;
+					}
+					maxNormSq = 1.0;
+				}
+
+				const T invNorm = 1.0 / std::sqrt(maxNormSq);
 				result.vectors[eig_idx][0] = static_cast<T>(vx * invNorm);
 				result.vectors[eig_idx][1] = static_cast<T>(vy * invNorm);
 				result.vectors[eig_idx][2] = static_cast<T>(vz * invNorm);
 			}
 
 			// ------------------------------------------------------------------------
-			// Step 5: Orthogonalize eigenvectors (Gram-Schmidt) for symmetric matrices
-			// This ensures numerical stability and orthonormality
+			// Step 5: Orthogonalize eigenvectors (Gram-Schmidt) - ROBUST VERSION
 			// ------------------------------------------------------------------------
 			for (int i = 0; i < 3; ++i) {
 				for (int j = 0; j < i; ++j) {
-					// Project out component along previous eigenvectors
 					T dot = 0.0;
 					for (int k = 0; k < 3; ++k) {
-						dot += result.vectors[i][k] *
-							result.vectors[j][k];
+						dot += result.vectors[i][k] * result.vectors[j][k];
 					}
 					for (int k = 0; k < 3; ++k) {
 						result.vectors[i][k] -= dot * result.vectors[j][k];
 					}
 				}
-				// Renormalize
+
 				T norm = 0.0;
 				for (int k = 0; k < 3; ++k) {
 					const double val = result.vectors[i][k];
 					norm += val * val;
 				}
+
+				if (norm < 1e-12) {
+					const T bases[3][3] = {{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}};
+
+					for (int b_idx = 0; b_idx < 3; ++b_idx) {
+						result.vectors[i][0] = bases[b_idx][0];
+						result.vectors[i][1] = bases[b_idx][1];
+						result.vectors[i][2] = bases[b_idx][2];
+
+						for (int j = 0; j < i; ++j) {
+							T dot = 0.0;
+							for (int k = 0; k < 3; ++k) {
+								dot += result.vectors[i][k] * result.vectors[j][k];
+							}
+							for (int k = 0; k < 3; ++k) {
+								result.vectors[i][k] -= dot * result.vectors[j][k];
+							}
+						}
+
+						norm = 0.0;
+						for (int k = 0; k < 3; ++k) {
+							const double val = result.vectors[i][k];
+							norm += val * val;
+						}
+
+						if (norm > 1e-12) {
+							break;
+						}
+					}
+				}
+
 				const double invNorm = 1.0 / std::sqrt(norm);
 				for (int k = 0; k < 3; ++k) {
 					result.vectors[i][k] = static_cast<T>(result.vectors[i][k] * invNorm);

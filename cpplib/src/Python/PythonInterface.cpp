@@ -891,7 +891,7 @@ extern "C" {
 		cpplib::voronoi::VoronoiFused vf(ce, cell.fracToCart());
 		vf.polyhedra.resize(all.points.size());
 
-		auto critical_points = cpplib::BaderOperator::GenerateInitialCriticalPoints(vf);
+		auto critical_points = cpplib::BaderOperator::GenerateInitialCriticalPoints(vf,cell.fracToCart());
 
 		// Expand Point Net
 		// 1. Calculate theoretical radius.
@@ -904,27 +904,23 @@ extern "C" {
 		cpplib::PointsSoA<double> psoa;
 		psoa.initializeWithPeriodicImages(buildresult.atoms.points, buildresult.atoms.types, cell.fracToCart(), cell.cartToFrac(), ED_cutoff);
 
+		// Optimize points
+		std::array<double, 1> array_of_eps{{1.0e-12}};
+		for (auto& cp : critical_points) {
 
-		auto density_func = [&](const PointType& point) -> cpplib::TripleDouble {
-			return BaderOperator::ComputeTotalDensity(point,
-													  buildresult.atoms.points,
-													  buildresult.atoms.types,
-													  cell,
-													  cpplib::ElectronDensitySplines);
-			};
+			auto val = CriticalPoint::CalculateEDinPoint(cp.pos_, psoa, cpplib::ElectronDensitySplines);
+			cp.UpdateVal(val);
 
-		std::vector<PointType> optimized_positions =
-			BaderOperator::OptimizeCriticalPoints(critical_points, density_func);
+			for (double eps:array_of_eps) {
 
-		PyObject* py_critical_points = PyList_New(0);
-		for (const auto& p : optimized_positions) {
-			PyList_Append(py_critical_points, Py_BuildValue("(fff)", p[0], p[1], p[2]));
+				BaderOperator::OptimizePoint(cp, psoa, eps);
+			}
 		}
 
-		return Py_BuildValue("{s:N,s:N,s:N}",
-							 "voronoi_cells", py_util::convert(vf),
-							 "unit_cell", py_util::convert(buildresult.atoms),
-							 "critical_points", py_critical_points);
+		// Write points
+		BaderOperator::writeCriticalPointsToFile(critical_points, "CPs.pdb");
+
+		Py_RETURN_NONE;
 	}
 
 	static struct PyMethodDef methods[] = {
