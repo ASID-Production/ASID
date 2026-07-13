@@ -917,9 +917,48 @@ extern "C" {
 			}
 		}
 
+		BaderOperator::deleteAllDublicates(critical_points, 0.05);
+
+		constexpr CriticalPoint::value_type step = 0.02;
+		std::vector<std::vector<PointType>> paths;
+		for (const auto& cp : critical_points) {
+			if (cp.type_ != CriticalPoint::TYPE::B)
+				continue;
+			auto [p1, p2] = cp.CalculatePaths<step>(psoa, cpplib::ElectronDensitySplines);
+			paths.push_back(p1);
+			paths.push_back(p2);
+		}
+
 		// Write points
 		BaderOperator::writeCriticalPointsToFile(critical_points, "CPs.pdb");
 
+		// Write Paths
+		{
+			std::ofstream file_paths("paths.pdb", std::ios::binary);
+			size_t total_i = 1;
+			size_t path_i = 1;
+			for (auto& path : paths) {
+				const auto path_s = path.size();
+				std::string result;
+				result.reserve(10 + path_s * 80);
+
+				for (size_t i = 0; i < path_s; i++)
+				{
+					auto& p = path[i];
+					std::format_to(
+						std::back_inserter(result),
+						"HETATM{:>5}  C  PTH A {:>4}    {:>8.3f}{:>8.3f}{:>8.3f}  1.00  0.00           C\n",
+						total_i, path_i,
+						p[0], p[1], p[2]
+					);
+					total_i++;
+				}
+				std::format_to(std::back_inserter(result), "TER\n");
+				file_paths.write(result.data(), result.size());
+
+				path_i++;
+			}
+		}
 		Py_RETURN_NONE;
 	}
 

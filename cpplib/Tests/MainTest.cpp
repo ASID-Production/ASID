@@ -238,22 +238,62 @@ TEST(FindCPTest, Benzene) {
 			BaderOperator::OptimizePoint(cp, psoa, eps);
 		}
 	}
-	
+
+	BaderOperator::deleteAllDublicates(critical_points, 0.05);
+
+	constexpr CriticalPoint::value_type step = 0.02;
+	std::vector<std::vector<PointType>> paths;
+	for (const auto& cp : critical_points) {
+		if (cp.type_ != CriticalPoint::TYPE::B)
+			continue;
+		auto [p1,p2] = cp.CalculatePaths<step>(psoa, cpplib::ElectronDensitySplines);
+		paths.push_back(p1);
+		paths.push_back(p2);
+	}
+
 	// Write points
 	BaderOperator::writeCriticalPointsToFile(critical_points, "CPs.pdb");
-
-	std::ofstream file("benzene.xyz", std::ios::binary);
-	const auto psoa_s = psoa.x.size();
-
-	std::string result;
-	result.reserve(10 + psoa_s * 80);
-	std::format_to(std::back_inserter(result),"{}\n\n", psoa_s);
-
-	for (size_t i = 0; i < psoa_s; i++)
 	{
-		std::format_to(std::back_inserter(result), "{:>4} {:>16.8f} {:>16.8f} {:>16.8f}\n", psoa.spline_ids[i], psoa.x[i], psoa.y[i], psoa.z[i]);
+		std::ofstream file("benzene.xyz", std::ios::binary);
+		const auto psoa_s = psoa.x.size();
+
+		std::string result;
+		result.reserve(10 + psoa_s * 80);
+		std::format_to(std::back_inserter(result), "{}\n\n", psoa_s);
+
+		for (size_t i = 0; i < psoa_s; i++)
+		{
+			std::format_to(std::back_inserter(result), "{:>4} {:>16.8f} {:>16.8f} {:>16.8f}\n", psoa.spline_ids[i], psoa.x[i], psoa.y[i], psoa.z[i]);
+		}
+		file.write(result.data(), result.size());
 	}
-	file.write(result.data(), result.size());
+	// Write Paths
+	{
+		std::ofstream file_paths("paths.pdb", std::ios::binary);
+		size_t total_i = 1;
+		size_t path_i = 1;
+		for (auto& path : paths) {
+			const auto path_s = path.size();
+			std::string result;
+			result.reserve(10 + path_s * 80);
+
+			for (size_t i = 0; i < path_s; i++)
+			{
+				auto& p = path[i];
+				std::format_to(
+					std::back_inserter(result),
+					"HETATM{:>5}  C  PTH A {:>4}    {:>8.3f}{:>8.3f}{:>8.3f}  1.00  0.00           C\n",
+					total_i, path_i,
+					p[0], p[1], p[2]
+				);
+				total_i++;
+			}
+			std::format_to(std::back_inserter(result), "TER\n");
+			file_paths.write(result.data(), result.size());
+
+			path_i++;
+		}
+	}
 }
 
 

@@ -391,6 +391,7 @@ namespace cpplib {
 			const uint32_t total_cells = static_cast<uint32_t>(psoa.offset_sh.size() - 1);
 
 			int total_splines = 0;
+			int zero_splines = 0;
 
 			for (int32_t shift:psoa.flat_shifts) {
 				int64_t cell_idx = static_cast<int64_t>(home_cell) + shift;
@@ -408,15 +409,17 @@ namespace cpplib {
 									point[2] - psoa.z[atom_i]);
 
 					uint32_t spline_id = psoa.spline_ids[atom_i];
-					result += splines[spline_id].evaluate(delta);
+					auto TD = splines[spline_id].evaluate(delta);
+					if (TD.val < 1.0e-10)
+						zero_splines++;
+					result += TD;
 					total_splines++;
-					total_splines++;
-					total_splines--;
 				}
 			}
 
 			return result;
 		}
+
 
 
 		constexpr void UpdatePos(const PointType& pos) noexcept {
@@ -426,6 +429,51 @@ namespace cpplib {
 			value_ = value;
 		}
 	public:
+		PointType GradientPathInitVector(value_type step_length) const {
+			auto eigen = value_.hess.EigenvaluesAndVectors();
+			return eigen.vectors[0] * step_length;
+		}
+		template<value_type step_length>
+		std::pair<std::vector<PointType>, std::vector<PointType>> CalculatePaths(
+			const PointsSoA<value_type>& psoa,
+			const std::vector<RadialSpline>& splines) const 
+		{
+			auto shift_pos = GradientPathInitVector(step_length);
+			PointType next_pos = pos_ + shift_pos;
+			PointType next_neg = pos_ - shift_pos;
+			CriticalPoint cp_pos(TYPE::B, next_pos);
+			CriticalPoint cp_neg(TYPE::B, next_neg);
+			cp_pos.value_ = CalculateEDinPoint(next_pos, psoa, splines);
+			cp_neg.value_ = CalculateEDinPoint(next_neg, psoa, splines);
+			return std::make_pair(cp_pos.SinglePath<step_length>(psoa, splines),
+								  cp_neg.SinglePath<step_length>(psoa, splines));
+		}
+
+		template<value_type step_length>
+		std::vector<PointType> SinglePath(const PointsSoA<value_type>& psoa,
+										  const std::vector<RadialSpline>& splines) {
+			static_assert(step_length <= 5.0);
+			constexpr size_t max_step = 5 / step_length - 1;
+
+			std::vector<PointType> ret_val;
+			ret_val.reserve(max_step + 1);
+			ret_val.push_back(pos_);
+
+			for (size_t i = 0; i < max_step; i++)
+			{
+				auto r = value_.grad.r();
+				auto next_point = pos_ + value_.grad * (1 / r) * step_length;
+				auto next_value = CalculateEDinPoint(next_point, psoa, splines);
+				if (PointType::Scalar(value_.grad, next_value.grad) <= 0) {
+					break;
+				}
+				pos_ = next_point;
+				value_ = next_value;
+				ret_val.push_back(pos_);
+			}
+			return ret_val;
+		}
+
 		PointType NewtonRaphsonPredict() const {
 			const auto& g = value_.grad;
 			const auto& h = value_.hess;
@@ -819,11 +867,48 @@ namespace cpplib {
 
 			std::ofstream file(filename, std::ios::binary);
 
-			//constexpr size_t bufSize = 1 << 20; 
-			//std::unique_ptr<char[]> buf(new char[bufSize]);
-			//file.rdbuf()->pubsetbuf(buf.get(), bufSize);
-
 			file.write(data.data(), data.size());
+		}
+		static void deleteAllDublicates(std::vector<CriticalPoint>& cps, value_type eps) {
+			value_type eps_sq = eps * eps;
+			std::sort(cps.begin(), cps.end(), 
+					  [](const CriticalPoint& a, const CriticalPoint& b) {
+						  return a.pos_[0] < b.pos_[0];
+					  });
+			size_t cps_s = cps.size();
+			std::vector<bool> is_active(cps_s, true);
+			size_t j = 0;
+			auto Upgrade_j = [&](size_t i) {
+				j = std::max(i, j);
+				auto x = cps[i].pos_[0];
+				for (; j < cps_s - 1; j++)
+				{
+					if (std::abs(x - cps[j + 1].pos_[0]) > eps) {
+						break;
+					}
+				}
+			};
+			for (size_t i = 0; i < cps_s; i++)
+			{
+				if (is_active[i] == false) continue;
+				Upgrade_j(i);
+				for (size_t k = i + 1; k <= j; k++)
+				{
+					if (is_active[k] == false) continue;
+					if (PointType::distanceSq(cps[i].pos_, cps[k].pos_) < eps_sq)
+						is_active[k] = false;
+				}
+			}
+			size_t write_idx = 0;
+			for (size_t read_idx = 0; read_idx < cps_s; ++read_idx) {
+				if (is_active[read_idx]) {
+					if (write_idx != read_idx) {
+						cps[write_idx] = std::move(cps[read_idx]);
+					}
+					write_idx++;
+				}
+			}
+			cps.resize(write_idx);
 		}
 	};
 }
