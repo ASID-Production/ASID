@@ -768,14 +768,14 @@ TEST(VoronoiTest, FaceStateCalculation) {
 	e3.set_state(State::VALID);
 	EXPECT_EQ(face.calculateState(), State::VALID);
 
-	// One edge MODIFICATION -> face MODIFICATION
-	e1.set_state(State::MODIFICATION);
+	// One vertex DELETE -> face MODIFICATION
+	v1->set_state(State::DELETE);
 	EXPECT_EQ(face.calculateState(), State::MODIFICATION);
 
-	// All edges DELETE -> face DELETE
-	e1.set_state(State::DELETE);
-	e2.set_state(State::DELETE);
-	e3.set_state(State::DELETE);
+	// All vertexes DELETE -> face DELETE
+	v1->set_state(State::DELETE);
+	v2->set_state(State::DELETE);
+	v3->set_state(State::DELETE);
 	EXPECT_EQ(face.calculateState(), State::DELETE);
 }
 

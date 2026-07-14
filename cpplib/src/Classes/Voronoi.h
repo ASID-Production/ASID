@@ -214,30 +214,27 @@ namespace cpplib::voronoi {
 		/// Otherwise, it's INVALID.
 		inline State calculateState() noexcept {
 			using enum State;
-			if (vertices.size() == 2 && faces.size() == 2) {
-				uint32_t counter = 0;
-				for (const auto v : vertices)
-				{
-					auto curstate = v->get_state();
-					if (curstate == VALID || curstate == MODIFICATION)
-						counter++;
-				}
-				switch (counter) {
-					case 2:
-						set_state(VALID);
-						break;
-					case 1:
-						set_state(MODIFICATION);
-						break;
-					case 0:
-						set_state(DELETE);
-						break;
-					default:
-						// Impossible
-						break;
-				}
-			} else {
+			if (vertices.size() != 2 || faces.size() != 2) [[unlikely]] {
 				set_state(INVALID);
+				return get_state();
+			}
+			auto it = vertices.begin();
+			State s1 = (*it)->get_state();
+			++it;
+			State s2 = (*it)->get_state();
+
+			if (s1 == DELETE && s2 == DELETE) {
+				set_state(DELETE);
+			} else if ((s1 == VALID && s2 == DELETE) || (s1 == DELETE && s2 == VALID)) {
+				set_state(MODIFICATION); // Intersection
+			} else if ((s1 == VALID && s2 == MODIFICATION) || (s1 == MODIFICATION && s2 == VALID)) {
+				set_state(VALID);
+			} else if (s1 == MODIFICATION && s2 == MODIFICATION) {
+				set_state(MODIFICATION); 
+			} else if ((s1 == DELETE && s2 == MODIFICATION) || (s1 == MODIFICATION && s2 == DELETE)) {
+				set_state(DELETE); 
+			} else {
+				set_state(VALID);
 			}
 			return get_state();
 		}
@@ -267,7 +264,8 @@ namespace cpplib::voronoi {
 					   plane.a[2] * v1->point[2] +
 					   plane.a[3]) / denom;
 
-			assert(t > 0.0 && t < 1.0);
+			if (t <= 0.0 || t >= 1.0)
+				assert(t > 0.0 && t < 1.0);
 
 			return v1->point + direction * t;
 		}
@@ -324,15 +322,9 @@ namespace cpplib::voronoi {
 			using enum State;
 
 			uint32_t v_size = vertices.size();
-			uint32_t e_size = edges.size();
 			uint32_t v_valid = 0;
 			uint32_t v_mod = 0;
-			uint32_t v_del = 0;
 			uint32_t v_inv = 0;
-			uint32_t e_valid = 0;
-			uint32_t e_mod = 0;
-			uint32_t e_del = 0;
-			uint32_t e_inv = 0;
 			for (auto & ver: vertices)
 			{
 				switch (ver->get_state()) {
@@ -342,56 +334,21 @@ namespace cpplib::voronoi {
 					case MODIFICATION:
 						v_mod++;
 						break;
-					case DELETE:
-						e_del++;
-						break;
-					case INVALID:
-						v_inv++;
 				}
 			}
-			for (auto& ed : edges)
-			{
-				switch (ed->get_state()) {
-					case VALID:
-						e_valid++;
-						break;
-					case MODIFICATION:
-						e_mod++;
-						break;
-					case DELETE:
-						e_del++;
-						break;
-					case INVALID:
-						e_inv++;
-				}
+
+			if (v_valid == 0) {
+				set_state(DELETE);
+				return get_state();
 			}
-			bool no_INVALIDES = v_inv + e_inv == 0;
-			// TODO on modification
-
-
-
-			if (vertices.size() == edges.size()) {
-				uint32_t counter = 0;
-				set_state(VALID);
-				for (const auto e : edges)
-				{
-					auto estate = e->get_state();
-					if (estate == VALID) {
-						counter++;
-					} else if (estate == MODIFICATION) {
-						counter++;
-						set_state(MODIFICATION);
-					}
-				}
-				if (counter == 0) {
-					set_state(DELETE);
-				} else if (counter == 1) { // ERROR STATE!!!
-					set_state(INVALID);
-				}
-			} else {
-				set_state(INVALID);
+			else if (v_valid + v_mod < v_size) {
+				set_state(MODIFICATION);
+				return get_state();
 			}
+
+			set_state(VALID);
 			return get_state();
+
 		}
 	};
 
@@ -635,7 +592,6 @@ namespace cpplib::voronoi {
 				}
 				f->calculateState();
 				if (f->get_state() == INVALID) {
-					
 					assert(f->get_state() != INVALID);
 				}
 			}
@@ -647,6 +603,14 @@ namespace cpplib::voronoi {
 				if (e->get_state() != MODIFICATION) {
 					continue;
 				}
+
+				auto v1 = *e->vertices.begin();
+				auto v2 = e->get_second_vertex(v1);
+				if (!((v1->get_state() == State::VALID && v2->get_state() == State::DELETE) ||
+					  (v1->get_state() == State::DELETE && v2->get_state() == State::VALID))) {
+					continue;
+				}
+
 				auto intersection = e->intersectSegmentPlane(clipping_plane);
 				auto new_vertex_ptr = add_vertex(intersection);
 
@@ -727,7 +691,6 @@ namespace cpplib::voronoi {
 					raw_face_ptr->edges.emplace(e.get());
 					e->faces.emplace(raw_face_ptr);
 					e->set_state(VALID);
-					assert(e->calculateState() == VALID);
 				}
 			}
 
