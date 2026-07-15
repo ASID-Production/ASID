@@ -72,11 +72,14 @@ namespace cpplib::voronoi {
 	/// - INVALID: Object is in an inconsistent state (error condition)
 	/// 
 	/// - MODIFICATION: Object is being modified by a clipping operation
+	/// 
+	/// - ONPLANE: Object is laying directely on a clipping plane
 	enum class State : char {
 		DELETE = 0,       ///< Object should be deleted
 		VALID = 1,        ///< Object is valid
 		INVALID = 2,      ///< Object is in invalid state
-		MODIFICATION = 3  ///< Object is being modified
+		MODIFICATION = 3, ///< Object is being modified
+		ONPLANE = 4       ///< Object is on a clipping plane
 	};
 
 	/// @brief Base class for Voronoi geometric objects with state and ID management
@@ -133,7 +136,6 @@ namespace cpplib::voronoi {
 		/// @brief 3D point type for vertex position
 		using PointType = geometry::Point<basic_types::FloatingPointType>;
 
-
 		/// @brief 3D position of this vertex
 		PointType point;
 
@@ -170,9 +172,8 @@ namespace cpplib::voronoi {
 		///
 		/// Uses EPSILON to handle floating-point precision.
 		inline friend bool operator==(const Vertex& a, const Vertex& b) {
-			return std::abs(a.point[0] - b.point[0]) < EPSILON &&
-				std::abs(a.point[1] - b.point[1]) < EPSILON &&
-				std::abs(a.point[2] - b.point[2]) < EPSILON;
+			static constexpr basic_types::FloatingPointType EPSILONSQ = EPSILON * EPSILON;
+			return geometry::Point<basic_types::FloatingPointType>::distanceSq(a.point, b.point) < EPSILONSQ;
 		}
 	};
 
@@ -209,7 +210,8 @@ namespace cpplib::voronoi {
 		/// @return Updated State
 		///
 		/// An edge is VALID if it has 2 vertices and 2 faces, with both vertices valid.
-		/// An edge is MODIFICATION if it's properly formed but one vertex is being modified.
+		/// An edge is MODIFICATION if it's vertices are separated by clipping plane.
+		/// An edge is ONPLANE if both it's vertices are laying on clipping plane.
 		/// An edge is DELETE if both vertices are deleted.
 		/// Otherwise, it's INVALID.
 		inline State calculateState() noexcept {
@@ -227,11 +229,11 @@ namespace cpplib::voronoi {
 				set_state(DELETE);
 			} else if ((s1 == VALID && s2 == DELETE) || (s1 == DELETE && s2 == VALID)) {
 				set_state(MODIFICATION); // Intersection
-			} else if ((s1 == VALID && s2 == MODIFICATION) || (s1 == MODIFICATION && s2 == VALID)) {
+			} else if ((s1 == VALID && s2 == ONPLANE) || (s1 == ONPLANE && s2 == VALID)) {
 				set_state(VALID);
-			} else if (s1 == MODIFICATION && s2 == MODIFICATION) {
-				set_state(MODIFICATION); 
-			} else if ((s1 == DELETE && s2 == MODIFICATION) || (s1 == MODIFICATION && s2 == DELETE)) {
+			} else if (s1 == ONPLANE && s2 == ONPLANE) {
+				set_state(ONPLANE);
+			} else if ((s1 == DELETE && s2 == ONPLANE) || (s1 == ONPLANE && s2 == DELETE)) {
 				set_state(DELETE); 
 			} else {
 				set_state(VALID);
@@ -257,7 +259,8 @@ namespace cpplib::voronoi {
 			auto denom = PointType::Scalar(unnormalized_normal, direction);
 
 			// Check that Edge is not parallel to plane
-			assert(std::abs(denom) >= 1e-6);
+			if(std::abs(denom) < EPSILON)
+				assert(std::abs(denom) >= EPSILON);
 
 			auto t = -(plane.a[0] * v1->point[0] +
 					   plane.a[1] * v1->point[1] +
@@ -323,7 +326,7 @@ namespace cpplib::voronoi {
 
 			uint32_t v_size = vertices.size();
 			uint32_t v_valid = 0;
-			uint32_t v_mod = 0;
+			uint32_t v_pln = 0;
 			uint32_t v_inv = 0;
 			for (auto & ver: vertices)
 			{
@@ -331,8 +334,8 @@ namespace cpplib::voronoi {
 					case VALID:
 						v_valid++;
 						break;
-					case MODIFICATION:
-						v_mod++;
+					case ONPLANE:
+						v_pln++;
 						break;
 				}
 			}
@@ -341,7 +344,7 @@ namespace cpplib::voronoi {
 				set_state(DELETE);
 				return get_state();
 			}
-			else if (v_valid + v_mod < v_size) {
+			else if (v_valid + v_pln < v_size) {
 				set_state(MODIFICATION);
 				return get_state();
 			}
@@ -374,7 +377,7 @@ namespace cpplib::voronoi {
 		/// @brief Epsilon for geometric comparisons
 		///
 		/// Used to determine if a vertex lies exactly on a clipping plane.
-		static constexpr FloatingPointType limit = 2 * ::std::numeric_limits<FloatingPointType>::epsilon();
+		static constexpr FloatingPointType limit = EPSILON;
 
 		/// @brief Owned vertices in this cell (smart pointers)
 		std::vector<std::unique_ptr<Vertex>> vertices;
@@ -562,7 +565,7 @@ namespace cpplib::voronoi {
 					modified = true;
 				} else if (side < limit) {
 					// Point on the Face
-					v->set_state(MODIFICATION);
+					v->set_state(ONPLANE);
 				}
 			}
 
@@ -570,7 +573,7 @@ namespace cpplib::voronoi {
 			if (modified == false) {
 				for (auto& v : vertices)
 				{
-					if (v->get_state() == MODIFICATION) {
+					if (v->get_state() == ONPLANE) {
 						v->set_state(VALID);
 					}
 				}
@@ -608,6 +611,7 @@ namespace cpplib::voronoi {
 				auto v2 = e->get_second_vertex(v1);
 				if (!((v1->get_state() == State::VALID && v2->get_state() == State::DELETE) ||
 					  (v1->get_state() == State::DELETE && v2->get_state() == State::VALID))) {
+					e->set_state(State::VALID);
 					continue;
 				}
 
@@ -630,7 +634,7 @@ namespace cpplib::voronoi {
 				for (auto& f : e->faces) {
 					f->vertices.emplace(new_vertex_ptr);
 				}
-				new_vertex_ptr->set_state(MODIFICATION); // Mark as on the NEW FACE
+				new_vertex_ptr->set_state(ONPLANE); // Mark as on the NEW FACE
 
 				// Now, new vertex complete, so edge is VALID too:
 				e->set_state(VALID);
@@ -656,7 +660,7 @@ namespace cpplib::voronoi {
 				// Find new vertices (those on the clipping plane)
 				while (iter_vertex != f->vertices.cend()) {
 					v1 = *iter_vertex;
-					if (v1->get_state() == MODIFICATION) {
+					if (v1->get_state() == ONPLANE) {
 						iter_vertex++;
 						break;
 					}
@@ -664,7 +668,7 @@ namespace cpplib::voronoi {
 				}
 				while (iter_vertex != f->vertices.cend()) {
 					v2 = *iter_vertex;
-					if (v2->get_state() == MODIFICATION) {
+					if (v2->get_state() == ONPLANE) {
 						break;
 					}
 					iter_vertex++;
@@ -676,7 +680,7 @@ namespace cpplib::voronoi {
 				const auto& new_edge = edges.emplace_back(std::make_unique<Edge>(static_cast<uint32_t>(edges.size()), v1, v2));
 				new_edge->faces.emplace(f.get());
 				f->edges.emplace(new_edge.get());
-				new_edge->set_state(MODIFICATION);
+				new_edge->set_state(ONPLANE);
 				f->set_state(VALID);
 			}
 
@@ -684,20 +688,20 @@ namespace cpplib::voronoi {
 			const auto& new_face = faces.emplace_back(std::make_unique<Face>(static_cast<uint32_t>(faces.size())));
 			auto raw_face_ptr = new_face.get();
 
-			// Add all MODIFICATION edges to the new face
+			// Add all ONPLANE edges to the new face
 			for (const auto& e : edges)
 			{
-				if (e->get_state() == MODIFICATION) {
+				if (e->get_state() == ONPLANE) {
 					raw_face_ptr->edges.emplace(e.get());
 					e->faces.emplace(raw_face_ptr);
 					e->set_state(VALID);
 				}
 			}
 
-			// Add all MODIFICATION vertices to the new face
+			// Add all ONPLANE vertices to the new face
 			for (const auto& v : vertices)
 			{
-				if (v->get_state() == MODIFICATION) {
+				if (v->get_state() == ONPLANE) {
 					raw_face_ptr->vertices.emplace(v.get());
 					v->faces.emplace(raw_face_ptr);
 					v->set_state(VALID);
