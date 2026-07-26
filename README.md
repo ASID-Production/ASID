@@ -2,19 +2,13 @@
 
 <p align="center">
 	<a href=https://github.com/ASID-Production/ASID/releases/latest><img src=https://img.shields.io/github/v/release/ASID-Production/ASID?sort=date&style=plastic&color=brightgreen></a>
-	<img src=https://img.shields.io/badge/C++-14-blue.svg?style=plastic>
+	<img src=https://img.shields.io/badge/C++-20-blue.svg?style=plastic>
     <img src=https://img.shields.io/badge/Python-3.10-blue.svg?style=plastic>
     <img src=https://img.shields.io/badge/Django-3.2.24-blue.svg?style=plastic>
 </p>
 
 __ASID__ is an "easy-to-use" open source program designed for generating and statistically processing large numbers of chemical structures.
 The project is a database with a graphical shell, specialized for work in chemical research institutes and industry.
-
-----
-#### CPPLIB Build Status:
-
-[![Windows Build](https://github.com/ASID-Production/ASID/actions/workflows/cmake-windows.yml/badge.svg)](https://github.com/ASID-Production/ASID/actions/workflows/cmake-windows.yml)
-[![Linux Build](https://github.com/ASID-Production/ASID/actions/workflows/cmake-linux.yml/badge.svg)](https://github.com/ASID-Production/ASID/actions/workflows/cmake-linux.yml)
 
 ----
 
@@ -28,7 +22,7 @@ click [^](#top) to return here
 
 <a name="SystemRequirements"></a>
 ## System Requirements <sup>[^](#top)</sup>
-* OS: x64 only, Windows 10/11, Linux (Tested on Ubuntu 22+)
+* OS: x64 only, Windows 10/11, Linux (Tested on Ubuntu 20/22)
 * Processor: 2 or more cores, AMD Piledriver / Intel Haswell (2012) or newer are strongly recommended
 * RAM: 4 GB
 * Graphics Card: Compatible with OpenGL 4.6
