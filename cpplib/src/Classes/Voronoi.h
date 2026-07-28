@@ -1,4 +1,4 @@
-// Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
+﻿// Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
 // This file is part of ASID - Atomistic Simulation Instruments and Database
 // For more information see <https://github.com/ASID-Production/ASID>
 //
@@ -342,6 +342,11 @@ namespace cpplib::voronoi {
 
 			if (v_valid == 0) {
 				set_state(DELETE);
+				for (auto& e : edges) {
+					if (e->get_state() != DELETE) {
+						e->faces.erase(this);
+					}
+				}
 				return get_state();
 			}
 			else if (v_valid + v_pln < v_size) {
