@@ -379,6 +379,18 @@ def pxrdFunc():
         pxrd_pattern.execute()
 
 
+def shortFunc():
+    import sys
+    if '--debug' in sys.argv or '-d' in sys.argv:
+        import importlib
+        from . import shortContacts
+        importlib.reload(shortContacts)
+        shortContacts.execute()
+    else:
+        from . import shortContacts
+        shortContacts.execute()
+
+
 def setup(menu, model, uniform_model=None, *args, main_widget=None, **kwargs):
     from PySide6.QtGui import QAction
 
@@ -474,5 +486,9 @@ def setup(menu, model, uniform_model=None, *args, main_widget=None, **kwargs):
     action_pxrd.triggered.connect(pxrdFunc)
     cmenu.addAction(action_pxrd)
 
-    actions = [open_action, action_test, action_DB, save_action, action_sym_op, action_export, action_winx, action_cls, action_aimall, action_2d_export, action_multiwfn, action_symm_poscar, action_assemble, action_cluster, action_polyhedron, action_instruments, action_voronoi, action_pxrd]
+    action_short = QAction('Short')
+    action_short.triggered.connect(shortFunc)
+    cmenu.addAction(action_short)
+
+    actions = [open_action, action_test, action_DB, save_action, action_sym_op, action_export, action_winx, action_cls, action_aimall, action_2d_export, action_multiwfn, action_symm_poscar, action_assemble, action_cluster, action_polyhedron, action_instruments, action_voronoi, action_pxrd, action_short]
     return actions

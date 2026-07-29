@@ -28,6 +28,7 @@
 
 
 from . import MoleculeClass
+from .MoleculeClass import Molecule, Atom
 from ..ChemPack import PALETTE
 
 
@@ -45,13 +46,18 @@ class SaveFile:
 
     def save_xyz(self, molecule, filename):
         mol = molecule
-        while not isinstance(mol.children[0], MoleculeClass.Atom):
-            mol = molecule.children[0]
+        if molecule.children and isinstance(molecule.children[0], Molecule):
+            atoms = []
+            for m in mol.children:
+                atoms += m.children
+            mol = atoms
+        elif molecule.children and isinstance(molecule.children[0], Atom):
+            mol = molecule.children
 
         out = open(filename, 'w')
-        out.write(f'{len(mol.children)}\n')
+        out.write(f'{len(mol)}\n')
         out.write('\n')
-        for atom in mol.children:
+        for atom in mol:
             line = f'{PALETTE.getName(atom.atom_type)}{atom.coord[0]:> 19.9f}{atom.coord[1]:> 17.9f}{atom.coord[2]:> 17.9f}\n'
             out.write(line)
         out.close()
@@ -59,13 +65,18 @@ class SaveFile:
 
     def save_pdb(self, molecule, filename):
         mol = molecule
-        while not isinstance(mol.children[0], MoleculeClass.Atom):
-            mol = molecule.children[0]
+        if molecule.children and isinstance(molecule.children[0], Molecule):
+            atoms = []
+            for m in mol.children:
+                atoms += m.children
+            mol = atoms
+        elif molecule.children and isinstance(molecule.children[0], Atom):
+            mol = molecule.children
 
         out = open(filename, 'w')
         i = 1
-        prev_atom = mol.children[0]
-        for atom in mol.children:
+        prev_atom = mol[0]
+        for atom in mol:
             if prev_atom.pdb_chain != atom.pdb_chain or prev_atom.pdb_flag != atom.pdb_flag:
                 ter_line = f'TER   {i:>5}{prev_atom.pdb_res_name:>9} {prev_atom.pdb_chain}{prev_atom.pdb_res_seq:>4}{prev_atom.pdb_iCode}\n'
                 out.write(ter_line)
@@ -99,10 +110,15 @@ class SaveFile:
             return mat
 
         mol = molecule
-        while not isinstance(mol.children[0], MoleculeClass.Atom):
-            mol = molecule.children[0]
+        if molecule.children and isinstance(molecule.children[0], Molecule):
+            atoms = []
+            for m in mol.children:
+                atoms += m.children
+            mol = atoms
+        elif molecule.children and isinstance(molecule.children[0], Atom):
+            mol = molecule.children
 
-        atm = mol.children[0]
+        atm = mol[0]
         cell_st = [DefaultData.__getattr__(DefaultData, 'cif_cell_a'),
                    DefaultData.__getattr__(DefaultData, 'cif_cell_b'),
                    DefaultData.__getattr__(DefaultData, 'cif_cell_c'),

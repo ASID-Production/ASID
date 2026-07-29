@@ -25,8 +25,7 @@
 #  ORCID:       0009-0003-5298-6836
 #
 # ******************************************************************************************
-
-
+import os.path
 import sys
 from PySide6 import QtCore
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
@@ -499,9 +498,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.extension_menu = Extensions.getMenu(self.model, self.uniformModel, main_widget=widget, main_menu=self.menu)
         self.uniformAction = self.menu.addAction('Uniforms')
         self.screenshotAction = self.menu.addAction('Screenshot')
+        self.saveStateAction = self.menu.addAction('Save state')
+        self.loadStateAction = self.menu.addAction('Load state')
         self.menu.addMenu(self.extension_menu)
         self.uniformAction.triggered.connect(self.uniformWid.show)
         self.screenshotAction.triggered.connect(self.screenshot)
+        self.saveStateAction.triggered.connect(self.saveState)
+        self.loadStateAction.triggered.connect(self.loadState)
 
         self.about = self.menu.addAction('About')
 
@@ -519,6 +522,105 @@ class MainWindow(QtWidgets.QMainWindow):
     def screenshot(self):
         self.screen_dialog = SaveScreenDialog(self.opengl_widget.screenshot)
         self.screen_dialog.show()
+
+    def saveState(self):
+        import json
+        d = []
+        ps = []
+        def recDict(p):
+            if p not in ps:
+                d.append(p.toDict())
+                ps.append(p)
+            else:
+                return
+            for c in p.children:
+                recDict(c)
+        recDict(self.points_list)
+        uniforms = self.opengl_widget.uniforms
+        scene_state = {k: getattr(uniforms, k) for k in uniforms.getInfo()}
+        def rec(l):
+            if isinstance(l, np.ndarray):
+                l = list(l)
+            for i, v in enumerate(l):
+                if isinstance(v, np.ndarray):
+                    l[i] = rec(v)
+                elif isinstance(v, np.int32) or isinstance(v, np.intc):
+                    l[i] = int(v)
+                elif isinstance(v, np.float32):
+                    l[i] = float(v)
+            return l
+
+        for k in scene_state:
+            if isinstance(scene_state[k], np.ndarray):
+                scene_state[k] = scene_state[k].tolist()
+            elif isinstance(scene_state[k], np.int32) or isinstance(scene_state[k], np.intc):
+                scene_state[k] = int(scene_state[k])
+            elif isinstance(scene_state[k], np.float32):
+                scene_state[k] = float(scene_state[k])
+        d = {'scene_state': scene_state,
+             'points': d}
+        j = json.dumps(d, indent=2)
+        f, _ = QtWidgets.QFileDialog.getSaveFileName(caption='Scene state', filter='*.json')
+        if f:
+            f = open(f, 'w')
+            f.write(j)
+            f.close()
+        ...
+
+    def loadState(self):
+        import json
+        from . import point_class
+        file, _ = QtWidgets.QFileDialog.getOpenFileName(caption='Scene state', filter='*.json')
+        if not file:
+            return
+        f = open(file, 'r').read()
+        d = json.loads(f)
+        t = {'Point': point_class.Point, 'PointsList': point_class.PointsList}
+        points = {}
+        obs = {}
+        for p in d['points']:
+            obj = t[p['type']]()
+            points[p['seq']] = obj
+            for prop, v in p['static_props'].items():
+                obj.addProperty(prop, v)
+            for ob in p['obs']:
+                l = obs.get(ob, None)
+                if not l:
+                    obs[ob] = [obj]
+                else:
+                    l.append(obj)
+        for p in d['points']:
+            obj = points[p['seq']]
+            parent = points[p['parent']] if p['parent'] else None
+            if parent:
+                parent.addChild(obj)
+            else:
+                root = obj
+
+            children = [points[x] for x in p['children']]
+            if children:
+                for ch in children:
+                    obj.addChild(ch)
+
+            for prop, seq in p['dynamic_props'].items():
+                obj.addProperty(prop, points[seq])
+
+        root.addProperty('name', os.path.basename(file))
+        self.points_list.addChild(root)
+        self.model.update()
+
+        for ob, ps in obs.items():
+            for p in ps:
+                ind = self.model.index(by_point=p)
+                self.model.attachObserver(ind, ob)
+
+
+
+
+        for k, v in d['scene_state'].items():
+            if isinstance(v, list):
+                v = np.array(v, dtype=np.float32)
+            self.opengl_widget.uniforms.__setattr__(k, v)
 
 
 def show():

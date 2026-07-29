@@ -25,11 +25,12 @@
 #  ORCID:       0009-0003-5298-6836
 #
 # ******************************************************************************************
+import numpy as np
 
 from ..ChemPack import MAIN_WIDGET, MOLECULE_SYSTEMS, TREE_MODEL
 from . import contacts
 from PySide6.QtWidgets import QLabel, QFrame, QSizePolicy
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QItemSelectionModel
 
 
 class CalcWidget(QLabel):
@@ -44,8 +45,11 @@ class CalcWidget(QLabel):
 
     def calc(self):
         atoms = []
-        for atms in self.sel.values():
-            atoms += atms
+        for atms in list(self.sel.values()):
+            if atms.isValid():
+                atoms.append(atms)
+            else:
+                self.sel.pop(atms)
         if len(atoms) > 4:
             angle = contacts.angle(atoms, False)
             line = f'{atoms[0].name}--{atoms[1].name}--{atoms[2].name}  {atoms[-1].name}--{atoms[-2].name}--{atoms[-3].name}: {angle: .1f}'
@@ -64,16 +68,9 @@ class CalcWidget(QLabel):
         self.setText(line)
 
     def add(self, index):
-        atoms = []
         point = index.internalPointer()
-        for mol_sys in MOLECULE_SYSTEMS.values():
-            atoms += mol_sys.findProp('_point', point)
-        atoms_with_coords = []
-        for atom in atoms:
-            if atom.coord is not None:
-                atoms_with_coords.append(atom)
-        if atoms_with_coords:
-            self.sel[point] = atoms_with_coords
+        if isinstance(point.coord, np.ndarray) and point.coord.shape == (3,):
+            self.sel[point] = point
             self.calc()
 
     def remove(self, index):

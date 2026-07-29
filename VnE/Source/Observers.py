@@ -53,6 +53,7 @@ class SingleObserver:
 
 
 class aObserver(ABC):
+    NAME = 'Observer'
 
     @abstractmethod
     def __init__(self, facade, scene):
@@ -76,6 +77,7 @@ class aObserver(ABC):
 
 
 class SphereObserver(aObserver):
+    NAME = 'Sphere'
 
     def __init__(self, facade, scene):
 
@@ -144,6 +146,7 @@ class SphereObserver(aObserver):
 
 
 class EllipsoidObserver(aObserver):
+    NAME = 'Ellipsoid'
 
     def __init__(self, facade, scene):
 
@@ -216,6 +219,7 @@ class EllipsoidObserver(aObserver):
 
 
 class BondsObserver(aObserver):
+    NAME = 'Bond'
 
     def __init__(self, facade, scene):
 
@@ -307,6 +311,7 @@ class BondsObserver(aObserver):
 
 
 class LabelObserver(aObserver):
+    NAME = 'Label'
 
     def __init__(self, facade, scene, wh=None):
         #TODO: Figure something out with _points list, it's used in selection draw mode, but with specific of this representation draw order, it creates problems with adding and removing labels
@@ -444,6 +449,8 @@ class LabelObserver(aObserver):
 
 
 class PlaneObserver(aObserver):
+    NAME = 'Plane'
+
     def __init__(self, facade, scene):
 
         from .ShaderPipelines import PlaneShaderPipeline
@@ -528,6 +535,7 @@ class PlaneObserver(aObserver):
 
 
 class LineObserver(aObserver):
+    NAME = 'Line'
 
     def __init__(self, facade, scene):
         from .ShaderPipelines import LinesShaderPipeline

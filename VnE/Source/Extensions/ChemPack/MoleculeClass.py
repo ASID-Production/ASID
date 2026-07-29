@@ -231,7 +231,7 @@ class Bond:
         return self._point
 
     def remove(self):
-        self.__del__()
+        self.destroy()
 
     def __eq__(self, other):
         if isinstance(other, Bond):
@@ -240,7 +240,7 @@ class Bond:
         else:
             return False
 
-    def __del__(self):
+    def destroy(self):
         if self.point()[0]: self.point()[0].destroy()
         if self.point()[1]: self.point()[1].destroy()
         for a in self.parents().copy():
@@ -347,7 +347,6 @@ class Molecule(aEntity):
         return self._points_list
 
     def genBonds(self):
-        import os
         import cpplib
         if self.__len__() < 1:
             return
@@ -358,6 +357,37 @@ class Molecule(aEntity):
             bond = Bond(*pair)
             pair[0].addBond(bond)
             pair[1].addBond(bond)
+
+    def splitMol(self):
+        import copy
+        def rec_mol(a, mem=None):
+            if not mem:
+                mem = [a]
+                atoms.remove(a)
+            else:
+                if a not in mem:
+                    mem.append(a)
+                    atoms.remove(a)
+                else:
+                    return mem
+            for bond in a.bonds():
+                rec_mol(bond.get(a), mem)
+            return mem
+
+        atoms = self.children.copy()
+        mols = []
+        while atoms:
+            atms = rec_mol(atoms[0])
+            new_mol = type(self)()
+            for a in atms:
+                #na = Atom(coord=a.coord.copy(), name=a.name, )
+                props = {k: v for k, v in a.__dict__.items() if k[0] != '_'}
+                props = copy.deepcopy(props)
+                na = Atom(parent=new_mol, **props)
+                new_mol.addChild(na)
+            mols.append(new_mol)
+            new_mol.genBonds()
+        return mols
 
 
 class MoleculeSystem(aEntity):
