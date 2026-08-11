@@ -1,4 +1,4 @@
-// Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
+﻿// Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
 // This file is part of ASID - Atomistic Simulation Instruments and Database
 // For more information see <https://github.com/ASID-Production/ASID>
 //
@@ -359,7 +359,7 @@ namespace cpplib::cluster_detail {
 			std::iota(result.atom_to_trmol_id.begin(), result.atom_to_trmol_id.end(), 0);
 
 			for (auto& bond : bonds) {
-				if (bond.first == bond.second)
+				if (bond.first == bond.second && bond.shiftcode.get_code() == uint8_t(13))
 					continue;
 
 				unite(bond, result.molecules, result.atom_to_trmol_id);

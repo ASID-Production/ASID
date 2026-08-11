@@ -1,4 +1,4 @@
-// Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
+﻿// Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
 // This file is part of ASID - Atomistic Simulation Instruments and Database
 // For more information see <https://github.com/ASID-Production/ASID>
 //
@@ -1267,7 +1267,7 @@ namespace cpplib::geometry {
 		struct BondWithShift {
 			int first = 0;
 			int second = 0;
-			ShiftCode shiftcode = 13;
+			ShiftCode shiftcode = ShiftCode(13);
 			BondWithShift() = default;
 			BondWithShift(int a, int b)
 				: first(a), second(b) {}
