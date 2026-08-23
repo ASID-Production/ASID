@@ -83,9 +83,12 @@ namespace cpplib::geometry {
 	public:
 		// Constructors
 		constexpr Point() noexcept = default;
-		constexpr Point(value_type x, value_type y, value_type z) noexcept : a{x, y, z} {};
-		explicit constexpr Point(const array_type& other) noexcept : a(other) {};
-		explicit constexpr Point(array_type&& other) noexcept : a(::std::move(other)) {};
+		constexpr Point(value_type x, value_type y, value_type z) noexcept : a{x, y, z} {
+		};
+		explicit constexpr Point(const array_type& other) noexcept : a(other) {
+		};
+		explicit constexpr Point(array_type&& other) noexcept : a(::std::move(other)) {
+		};
 
 		template <typename T2>
 			requires ((::std::integral<T2> || ::std::floating_point<T2>) && ::std::is_convertible<T2, T>::value)
@@ -302,14 +305,15 @@ namespace cpplib::geometry {
 	public:
 		constexpr Matrix() noexcept = default;
 
-		template<class T2> explicit constexpr Matrix(const Matrix<T2>& r) noexcept 
-			: data {
+		template<class T2> explicit constexpr Matrix(const Matrix<T2>& r) noexcept
+			: data{
 			static_cast<T>(r.data[0]),	static_cast<T>(r.data[1]),	static_cast<T>(r.data[2]),
 			static_cast<T>(r.data[3]),	static_cast<T>(r.data[4]),	static_cast<T>(r.data[5]),
-			static_cast<T>(r.data[6]),	static_cast<T>(r.data[7]),	static_cast<T>(r.data[8])} 
-		{}
-		template<class T2> explicit constexpr Matrix(Matrix<T2>&& r) noexcept 
-			: data {
+			static_cast<T>(r.data[6]),	static_cast<T>(r.data[7]),	static_cast<T>(r.data[8])}
+		{
+		}
+		template<class T2> explicit constexpr Matrix(Matrix<T2>&& r) noexcept
+			: data{
 			static_cast<T>(std::move(r.data[0])),
 			static_cast<T>(std::move(r.data[1])),
 			static_cast<T>(std::move(r.data[2])),
@@ -319,8 +323,10 @@ namespace cpplib::geometry {
 			static_cast<T>(std::move(r.data[6])),
 			static_cast<T>(std::move(r.data[7])),
 			static_cast<T>(std::move(r.data[8]))
-		} {}
-		explicit constexpr Matrix(const T v) noexcept : data{{ v,0,0,0,v,0,0,0,v }} {}
+			} {
+		}
+		explicit constexpr Matrix(const T v) noexcept : data{{ v,0,0,0,v,0,0,0,v }} {
+		}
 		explicit constexpr Matrix(const T** input_massive) noexcept
 			: data{
 			static_cast<T>(input_massive[0][0]),
@@ -332,8 +338,9 @@ namespace cpplib::geometry {
 			static_cast<T>(input_massive[2][0]),
 			static_cast<T>(input_massive[2][1]),
 			static_cast<T>(input_massive[2][2])
-		} {}
-		explicit constexpr Matrix(const T* input_massive) noexcept 
+			} {
+		}
+		explicit constexpr Matrix(const T* input_massive) noexcept
 			: data{
 			static_cast<T>(input_massive[0]),
 			static_cast<T>(input_massive[1]),
@@ -344,9 +351,12 @@ namespace cpplib::geometry {
 			static_cast<T>(input_massive[6]),
 			static_cast<T>(input_massive[7]),
 			static_cast<T>(input_massive[8])
-		} {}
-		explicit constexpr Matrix(const_array_type& in) noexcept : data(in) {}
-		explicit constexpr Matrix(array_type&& in) noexcept : data(std::move(in)) {}
+			} {
+		}
+		explicit constexpr Matrix(const_array_type& in) noexcept : data(in) {
+		}
+		explicit constexpr Matrix(array_type&& in) noexcept : data(std::move(in)) {
+		}
 		[[nodiscard]] constexpr T& El(const size_t a, const size_t b) noexcept {
 			return data[3 * a + b];
 		}
@@ -383,16 +393,16 @@ namespace cpplib::geometry {
 			} else {
 				return Matrix<RT>(std::array<RT, 9>{
 					m00* r00 + m01 * r10 + m02 * r20,
-					m00* r01 + m01 * r11 + m02 * r21,
-					m00* r02 + m01 * r12 + m02 * r22,
+						m00* r01 + m01 * r11 + m02 * r21,
+						m00* r02 + m01 * r12 + m02 * r22,
 
-					m10* r00 + m11 * r10 + m12 * r20,
-					m10* r01 + m11 * r11 + m12 * r21,
-					m10* r02 + m11 * r12 + m12 * r22,
+						m10* r00 + m11 * r10 + m12 * r20,
+						m10* r01 + m11 * r11 + m12 * r21,
+						m10* r02 + m11 * r12 + m12 * r22,
 
-					m20* r00 + m21 * r10 + m22 * r20,
-					m20* r01 + m21 * r11 + m22 * r21,
-					m20* r02 + m21 * r12 + m22 * r22
+						m20* r00 + m21 * r10 + m22 * r20,
+						m20* r01 + m21 * r11 + m22 * r21,
+						m20* r02 + m21 * r12 + m22 * r22
 				});
 			}
 		}
@@ -400,8 +410,8 @@ namespace cpplib::geometry {
 		[[nodiscard]] constexpr std::array<decltype(T()* T2()), 3> operator*(const std::array<T2, 3>& right) const {
 			return std::array<decltype(T() * T2()), 3> {
 				std::fma(data[0], right[0], std::fma(data[1], right[1], data[2] * right[2])),
-				std::fma(data[3], right[0], std::fma(data[4], right[1], data[5] * right[2])),
-				std::fma(data[6], right[0], std::fma(data[7], right[1], data[8] * right[2]))
+					std::fma(data[3], right[0], std::fma(data[4], right[1], data[5] * right[2])),
+					std::fma(data[6], right[0], std::fma(data[7], right[1], data[8] * right[2]))
 			};
 		}
 		template<class T2>
@@ -409,21 +419,21 @@ namespace cpplib::geometry {
 			using RT = decltype(T() / T2());
 			return Matrix<RT>(std::array<RT, 9>{
 				data[0] / right,
-				data[1] / right,
-				data[2] / right,
-				data[3] / right,
-				data[4] / right,
-				data[5] / right,
-				data[6] / right,
-				data[7] / right,
-				data[8] / right
+					data[1] / right,
+					data[2] / right,
+					data[3] / right,
+					data[4] / right,
+					data[5] / right,
+					data[6] / right,
+					data[7] / right,
+					data[8] / right
 			});
 		}
 		[[nodiscard]] constexpr Matrix<T> Transponate() const noexcept {
 			return Matrix<T>(std::array<T, 9>{
 				data[0], data[3], data[6],
-				data[1], data[4], data[7],
-				data[2], data[5], data[8] 
+					data[1], data[4], data[7],
+					data[2], data[5], data[8]
 			});
 		}
 		[[nodiscard]] constexpr Matrix<T> Invert() const {
@@ -443,30 +453,30 @@ namespace cpplib::geometry {
 			if constexpr (std::is_floating_point_v<T>) {
 				return Matrix<T>(std::array<T, 9>{
 					std::fma(m11, m22, -m12 * m21)* inv_det,
-					std::fma(m02, m21, -m01 * m22)* inv_det,
-					std::fma(m01, m12, -m02 * m11)* inv_det,
+						std::fma(m02, m21, -m01 * m22)* inv_det,
+						std::fma(m01, m12, -m02 * m11)* inv_det,
 
-					std::fma(m12, m20, -m10 * m22)* inv_det,
-					std::fma(m00, m22, -m02 * m20)* inv_det,
-					std::fma(m02, m10, -m00 * m12)* inv_det,
+						std::fma(m12, m20, -m10 * m22)* inv_det,
+						std::fma(m00, m22, -m02 * m20)* inv_det,
+						std::fma(m02, m10, -m00 * m12)* inv_det,
 
-					std::fma(m10, m21, -m11 * m20)* inv_det,
-					std::fma(m01, m20, -m00 * m21)* inv_det,
-					std::fma(m00, m11, -m01 * m10)* inv_det
+						std::fma(m10, m21, -m11 * m20)* inv_det,
+						std::fma(m01, m20, -m00 * m21)* inv_det,
+						std::fma(m00, m11, -m01 * m10)* inv_det
 				});
 			} else {
 				return Matrix<T>(std::array<T, 9>{
 					(m11* m22 - m12 * m21)* inv_det,
-					(m02* m21 - m01 * m22)* inv_det,
-					(m01* m12 - m02 * m11)* inv_det,
+						(m02* m21 - m01 * m22)* inv_det,
+						(m01* m12 - m02 * m11)* inv_det,
 
-					(m12* m20 - m10 * m22)* inv_det,
-					(m00* m22 - m02 * m20)* inv_det,
-					(m02* m10 - m00 * m12)* inv_det,
+						(m12* m20 - m10 * m22)* inv_det,
+						(m00* m22 - m02 * m20)* inv_det,
+						(m02* m10 - m00 * m12)* inv_det,
 
-					(m10* m21 - m11 * m20)* inv_det,
-					(m01* m20 - m00 * m21)* inv_det,
-					(m00* m11 - m01 * m10)* inv_det
+						(m10* m21 - m11 * m20)* inv_det,
+						(m01* m20 - m00 * m21)* inv_det,
+						(m00* m11 - m01 * m10)* inv_det
 				});
 			}
 		}
@@ -474,20 +484,20 @@ namespace cpplib::geometry {
 			if constexpr (std::is_floating_point_v<T>) {
 				return Matrix<T>(std::array<T, 9>{
 					std::abs(data[0]), std::abs(data[1]), std::abs(data[2]),
-					std::abs(data[3]), std::abs(data[4]), std::abs(data[5]),
-					std::abs(data[6]), std::abs(data[7]), std::abs(data[8])
+						std::abs(data[3]), std::abs(data[4]), std::abs(data[5]),
+						std::abs(data[6]), std::abs(data[7]), std::abs(data[8])
 				});
 			} else {
 				return Matrix<T>(std::array<T, 9>{
 					data[0] < 0?-data[0]:data[0],
-					data[1] < 0?-data[1]:data[1],
-					data[2] < 0?-data[2]:data[2],
-					data[3] < 0?-data[3]:data[3],
-					data[4] < 0?-data[4]:data[4],
-					data[5] < 0?-data[5]:data[5],
-					data[6] < 0?-data[6]:data[6],
-					data[7] < 0?-data[7]:data[7],
-					data[8] < 0?-data[8]:data[8]
+						data[1] < 0?-data[1]:data[1],
+						data[2] < 0?-data[2]:data[2],
+						data[3] < 0?-data[3]:data[3],
+						data[4] < 0?-data[4]:data[4],
+						data[5] < 0?-data[5]:data[5],
+						data[6] < 0?-data[6]:data[6],
+						data[7] < 0?-data[7]:data[7],
+						data[8] < 0?-data[8]:data[8]
 				});
 			}
 		}
@@ -502,8 +512,8 @@ namespace cpplib::geometry {
 			if constexpr (std::is_floating_point_v<T>) {
 				// Используем fma для меньшей ошибки округления
 				return std::fma(m00, std::fma(m11, m22, -m12 * m21),
-					   std::fma(-m01, std::fma(m10, m22, -m12 * m20),
-								m02 * std::fma(m10, m21, -m11 * m20)));
+								std::fma(-m01, std::fma(m10, m22, -m12 * m20),
+										 m02 * std::fma(m10, m21, -m11 * m20)));
 			} else {
 				return m00 * (m11 * m22 - m12 * m21)
 					- m01 * (m10 * m22 - m12 * m20)
@@ -537,14 +547,14 @@ namespace cpplib::geometry {
 			if constexpr (std::is_floating_point_v<RT>) {
 				return Point<RT>{
 					std::fma(left.data[0], x, std::fma(left.data[1], y, left.data[2] * z)),
-					std::fma(left.data[3], x, std::fma(left.data[4], y, left.data[5] * z)),
-					std::fma(left.data[6], x, std::fma(left.data[7], y, left.data[8] * z))
+						std::fma(left.data[3], x, std::fma(left.data[4], y, left.data[5] * z)),
+						std::fma(left.data[6], x, std::fma(left.data[7], y, left.data[8] * z))
 				};
 			} else {
 				return Point<RT>{
 					left.data[0] * x + left.data[1] * y + left.data[2] * z,
-					left.data[3] * x + left.data[4] * y + left.data[5] * z,
-					left.data[6] * x + left.data[7] * y + left.data[8] * z
+						left.data[3] * x + left.data[4] * y + left.data[5] * z,
+						left.data[6] * x + left.data[7] * y + left.data[8] * z
 				};
 			}
 		}
@@ -560,14 +570,14 @@ namespace cpplib::geometry {
 			if constexpr (std::is_floating_point_v<RT>) {
 				return Point<RT>{
 					std::fma(data[0], x, std::fma(data[3], y, data[6] * z)),
-					std::fma(data[1], x, std::fma(data[4], y, data[7] * z)),
-					std::fma(data[2], x, std::fma(data[5], y, data[8] * z))
+						std::fma(data[1], x, std::fma(data[4], y, data[7] * z)),
+						std::fma(data[2], x, std::fma(data[5], y, data[8] * z))
 				};
 			} else {
 				return Point<RT>{
 					data[0] * x + data[3] * y + data[6] * z,
-					data[1] * x + data[4] * y + data[7] * z,
-					data[2] * x + data[5] * y + data[8] * z
+						data[1] * x + data[4] * y + data[7] * z,
+						data[2] * x + data[5] * y + data[8] * z
 				};
 			}
 		}
@@ -950,8 +960,8 @@ namespace cpplib::geometry {
 		bool check_corectness() const noexcept {
 			constexpr std::array<Point<int8_t>, 10> shiftTable = {{
 				{-1, -1, -1}, { 0, -1, -1}, { 1, -1, -1},
-				{-1,  0, -1}, { 1,  0, -1}, {-1,  1, -1}, 
-				{ 0,  1, -1}, { 1,  1, -1}, {-1, -1,  0}, 
+				{-1,  0, -1}, { 1,  0, -1}, {-1,  1, -1},
+				{ 0,  1, -1}, { 1,  1, -1}, {-1, -1,  0},
 				{ 1, -1,  0}
 			}};
 
@@ -960,7 +970,7 @@ namespace cpplib::geometry {
 
 			for (char i = 0; i < 10; i++) {
 				auto rsq = (fracToCart_ * shiftTable[i]).rSq();
-                if (minlatSq - rsq > 1e-5)
+				if (minlatSq - rsq > 1e-5)
 					return false;
 			}
 			return true;
@@ -1004,25 +1014,25 @@ namespace cpplib::geometry {
 
 				unsigned char minDimention = 0;
 				switch (i) {
-					case 0:
-					case 1:
-						if (lattice_[1] * currentSuperCell[1] > lattice_[2] * currentSuperCell[2]) minDimention = 2;
-						else minDimention = 1;
-						break;
-					case 2:
-					case 3:
-						if (lattice_[0] * currentSuperCell[0] > lattice_[2] * currentSuperCell[2]) minDimention = 2;
-						else minDimention = 0;
-						break;
-					case 4:
-					case 5:
-						if (lattice_[0] * currentSuperCell[0] > lattice_[1] * currentSuperCell[1]) minDimention = 1;
-						else minDimention = 0;
-						break;
-					default:
-						if (lattice_[minDimention] * currentSuperCell[minDimention] > lattice_[1] * currentSuperCell[1]) minDimention = 1;
-						if (lattice_[minDimention] * currentSuperCell[minDimention] > lattice_[2] * currentSuperCell[2]) minDimention = 2;
-						break;
+				case 0:
+				case 1:
+					if (lattice_[1] * currentSuperCell[1] > lattice_[2] * currentSuperCell[2]) minDimention = 2;
+					else minDimention = 1;
+					break;
+				case 2:
+				case 3:
+					if (lattice_[0] * currentSuperCell[0] > lattice_[2] * currentSuperCell[2]) minDimention = 2;
+					else minDimention = 0;
+					break;
+				case 4:
+				case 5:
+					if (lattice_[0] * currentSuperCell[0] > lattice_[1] * currentSuperCell[1]) minDimention = 1;
+					else minDimention = 0;
+					break;
+				default:
+					if (lattice_[minDimention] * currentSuperCell[minDimention] > lattice_[1] * currentSuperCell[1]) minDimention = 1;
+					if (lattice_[minDimention] * currentSuperCell[minDimention] > lattice_[2] * currentSuperCell[2]) minDimention = 2;
+					break;
 				}
 				currentSuperCell[minDimention] = currentSuperCell[minDimention] + 1;
 			}
@@ -1098,39 +1108,39 @@ namespace cpplib::geometry {
 			for (unsigned int i = 0; i < len; i++) // iterator "i" modifies in parseshift function
 			{
 				switch (str[i]) {
-					case 'x': [[fallthrough]];
-					case 'X':
-						if (minus == true) p[0] = -1;
-						else p[0] = 1;
-						minus = false;
-						break;
-					case 'y': [[fallthrough]];
-					case 'Y':
-						if (minus == true) p[1] = -1;
-						else p[1] = 1;
-						minus = false;
-						break;
-					case 'z': [[fallthrough]];
-					case 'Z':
-						if (minus == true) p[2] = -1;
-						else p[2] = 1;
-						minus = false;
-						break;
-					case ' ': [[fallthrough]];
-					case '\'': [[fallthrough]];
-					case '\"': [[fallthrough]];
-					case '+':
-						break;
-					case '-':
-						minus = !minus;
-						break;
-					default:
+				case 'x': [[fallthrough]];
+				case 'X':
+					if (minus == true) p[0] = -1;
+					else p[0] = 1;
+					minus = false;
+					break;
+				case 'y': [[fallthrough]];
+				case 'Y':
+					if (minus == true) p[1] = -1;
+					else p[1] = 1;
+					minus = false;
+					break;
+				case 'z': [[fallthrough]];
+				case 'Z':
+					if (minus == true) p[2] = -1;
+					else p[2] = 1;
+					minus = false;
+					break;
+				case ' ': [[fallthrough]];
+				case '\'': [[fallthrough]];
+				case '\"': [[fallthrough]];
+				case '+':
+					break;
+				case '-':
+					minus = !minus;
+					break;
+				default:
 
-						T partshift = parseshift(str, i, len); // Modifies "i"
-						if (minus) shift -= partshift;
-						else shift += partshift;
-						minus = false;
-						break;
+					T partshift = parseshift(str, i, len); // Modifies "i"
+					if (minus) shift -= partshift;
+					else shift += partshift;
+					minus = false;
+					break;
 				}
 			}
 			return std::make_pair(p, shift);
@@ -1146,21 +1156,21 @@ namespace cpplib::geometry {
 			{
 				if (str[iter] < '0' || str[iter] > '9') {
 					switch (str[iter]) {
-						case '.':
-							dot = true;
-							break;
-						case '+':
-						case '-':
-							iter--;
-							return upper / static_cast<T>(lower);
-						case '/':
-							slash = true;
-							iter++;
-							lower = (str[iter] - '0');
-							break;
-						default:
-							// unexpected symbol
-							break;
+					case '.':
+						dot = true;
+						break;
+					case '+':
+					case '-':
+						iter--;
+						return upper / static_cast<T>(lower);
+					case '/':
+						slash = true;
+						iter++;
+						lower = (str[iter] - '0');
+						break;
+					default:
+						// unexpected symbol
+						break;
 					}
 				} else {
 					int num = (str[iter] - '0');
@@ -1215,7 +1225,7 @@ namespace cpplib::geometry {
 			return code;
 		}
 		static constexpr ShiftPoint get_shift(uint8_t c) noexcept {
-			assert( c <= 26);
+			assert(c <= 26);
 			return shiftTable[c];
 		}
 		constexpr void inverse() noexcept {
@@ -1229,7 +1239,7 @@ namespace cpplib::geometry {
 			assert(sc.code <= 26);
 			return ShiftCode(26 - sc.code);
 		}
-				
+
 		static constexpr std::array<ShiftPoint, 27> shiftTable = {{
 			{-1, -1, -1}, { 0, -1, -1}, { 1, -1, -1}, // code 0, 1, 2
 			{-1,  0, -1}, { 0,  0, -1}, { 1,  0, -1}, // code 3, 4, 5
@@ -1270,9 +1280,11 @@ namespace cpplib::geometry {
 			ShiftCode shiftcode = ShiftCode(13);
 			BondWithShift() = default;
 			BondWithShift(int a, int b)
-				: first(a), second(b) {}
+				: first(a), second(b) {
+			}
 			BondWithShift(int a, int b, ShiftCode scode)
-				: first(a), second(b), shiftcode(scode) {}
+				: first(a), second(b), shiftcode(scode) {
+			}
 
 		};
 
@@ -1510,6 +1522,166 @@ namespace cpplib::geometry {
 									const std::array<uint8_t, 3>& grid) const {
 			return ix + iy * grid[0] + iz * grid[0] * grid[1];
 		}
+	};
+
+	template <class T>
+	class SG {
+	public:
+		using FloatingPoint = T;
+		using PointType = Point<T>;
+
+		template<class T2>
+		using Container = std::vector<T2>;
+
+		struct BondWithShift : public Bond {
+			using ShiftType = Point<int8_t>;
+			using FloatingPoint = T;
+
+			ShiftType shift;
+			FloatingPoint distance = FloatingPoint(0.0);
+
+			BondWithShift() = default;
+			BondWithShift(int a, int b)
+				: Bond(a, b) {
+			}
+			BondWithShift(int a, int b, ShiftType s)
+				: Bond(a, b), shift(s) {
+			}
+			BondWithShift(int a, int b, ShiftType s, FloatingPoint dist)
+				: Bond(a, b), shift(s), distance(dist) {
+			}
+
+		};
+
+	private:
+		Container<PointType>* p_init_data = nullptr;
+		size_t init_size = 0;
+
+		Container<T> flat_buffer;
+		Container<size_t> mask_buffer;
+		Container<size_t> offset;
+
+		std::array<size_t, 3> dim_size = {1,1,1};
+		std::array<size_t, 3> dim_size_minus_one = {0,0,0};
+		std::array<size_t, 3> dim_shift = {1,1,1};
+		size_t dim_mesh_size = 0;
+
+		bool use_pbc = true;
+		Matrix<T> fracToCart;
+		std::array<PointType, 3> latticeVector;
+
+	public:
+		SG(Cell<T>& cell, bool use_pbc_flag) :
+			use_pbc(use_pbc_flag),
+			fracToCart(cell.fracToCart())
+		{
+			latticeVector[0] = fracToCart * PointType(1, 0, 0);
+			latticeVector[1] = fracToCart * PointType(0, 1, 0);
+			latticeVector[2] = fracToCart * PointType(0, 0, 1);
+		}
+
+		void updateCellAndPoints(Container<PointType>& data, FloatingPoint cutoff, const Cell<T>& cell) {
+			fracToCart = cell.fracToCart();
+
+			latticeVector[0] = fracToCart * PointType(1, 0, 0);
+			latticeVector[1] = fracToCart * PointType(0, 1, 0);
+			latticeVector[2] = fracToCart * PointType(0, 0, 1);
+
+			p_init_data = &data;
+			init_size = data.size();
+
+			calculateDimSizes(cutoff, cell);
+			maskingData();
+		}
+
+		void updateOnlyPoints(Container<PointType>& data) {
+			p_init_data = &data;
+			init_size = data.size();
+
+			maskingData();
+		}
+		
+		std::vector<BondWithShift> findAllContacts() const {
+			
+
+
+
+		}
+
+
+		// TODO finalise
+
+
+	private:
+		void calculateDimSizes(FloatingPoint cutoff, const Cell<T>& cell) {
+			dim_size[0] = static_cast<size_t>(std::ceil(cell.lat_dir(0) / cutoff));
+			dim_size[1] = static_cast<size_t>(std::ceil(cell.lat_dir(1) / cutoff));
+			dim_size[2] = static_cast<size_t>(std::ceil(cell.lat_dir(2) / cutoff));
+
+			dim_size_minus_one[0] = dim_size[0] - 1;
+			dim_size_minus_one[1] = dim_size[1] - 1;
+			dim_size_minus_one[2] = dim_size[2] - 1;
+
+			dim_shift[0] = 1;
+			dim_shift[1] = dim_size[0];
+			dim_shift[2] = dim_size[0] * dim_size[1];
+			dim_mesh_size = dim_size[0] * dim_size[1] * dim_size[2];
+		}
+
+		void maskingData() {
+			assert(p_init_data != nullptr);
+			const Container<PointType>& init_data = *p_init_data;
+
+			flat_buffer.assign(init_size * 6, static_cast<T>(0.0));
+			mask_buffer.assign(init_size, 0);
+			offset.assign(dim_mesh_size + 1, 0);
+
+			for (const PointType& elem : init_data) {
+				size_t shift = calculateShiftOfPoint(elem) + 1;
+				offset[shift]++;
+			}
+
+			std::partial_sum(offset.begin() + 1, offset.end(), offset.begin() + 1);
+
+			std::vector<size_t> current_position = offset;
+
+			T* f_x = flat_buffer.data();
+			T* f_y = f_x + init_size;
+			T* f_z = f_y + init_size;
+
+			T* c_x = f_z + init_size;
+			T* c_y = c_x + init_size;
+			T* c_z = c_y + init_size;
+
+			size_t* m_ptr = mask_buffer.data();
+
+			for (size_t i = 0; i < init_size; ++i) {
+				const auto& elem = init_data[i];
+				size_t shift = calculateShiftOfPoint(elem);
+				size_t target_idx = current_position[shift];
+
+				f_x[target_idx] = elem[0];
+				f_y[target_idx] = elem[1];
+				f_z[target_idx] = elem[2];
+
+				PointType cart_point = fracToCart * elem;
+				c_x[target_idx] = cart_point[0];
+				c_y[target_idx] = cart_point[1];
+				c_z[target_idx] = cart_point[2];
+
+				m_ptr[target_idx] = i;
+
+				current_position[shift]++;
+			}
+		}
+
+		inline size_t calculateShiftOfPoint(const PointType& p) const noexcept {
+			size_t d0 = static_cast<uint32_t>(std::clamp(static_cast<int32_t>(p[0] * dim_size[0]), 0, static_cast<int32_t>(dim_size_minus_one[0])));
+			size_t d1 = static_cast<uint32_t>(std::clamp(static_cast<int32_t>(p[1] * dim_size[1]), 0, static_cast<int32_t>(dim_size_minus_one[1])));
+			size_t d2 = static_cast<uint32_t>(std::clamp(static_cast<int32_t>(p[2] * dim_size[2]), 0, static_cast<int32_t>(dim_size_minus_one[2])));
+			return d0 + d1 * dim_shift[1] + d2 * dim_shift[2];
+		}
+		
 	};
 
 } // namespace cpplib::geometry
