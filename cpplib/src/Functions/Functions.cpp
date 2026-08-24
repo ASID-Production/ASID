@@ -467,12 +467,11 @@ Cluster::ClusterData ClusterCreate(const std::array<cpplib::basic_types::Floatin
 			                       bool& hasPolymer) {
 
 	using ShiftType = Cluster::ShiftType;
-	auto& distances = *p_distances;
-	if (p_distances->isReady() == false) {
-		{
-			return {};
-		}
+
+	if ((p_distances == nullptr) || p_distances->isReady() == false) {
+		return {};
 	}
+	auto& distances = *p_distances;
 
 	cpplib::geometry::Cell cell(unit_cell);
 	std::vector<geometry::Symm<FloatingPointType>> symms;
@@ -483,7 +482,7 @@ Cluster::ClusterData ClusterCreate(const std::array<cpplib::basic_types::Floatin
 
 	Cluster cluster(cell, symms, std::move(anchors), std::move(points), std::move(types), polymer_cutoff);
 
-	auto ret = cluster.execute(distances, hasPolymer);
+	auto ret = WITH_LOG_M(cluster, execute, distances, hasPolymer);
 
 	return ret;
 }

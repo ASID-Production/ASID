@@ -35,10 +35,13 @@
 #include <cstdint>
 #include <functional>
 #include <limits>
+#include <numeric>
 #include <optional>
 #include <type_traits>
 #include <utility>
 #include <vector>
+
+#include "../Classes/Bond.h"
 
 namespace cpplib::geometry {
 	template <class T> inline T GradtoRad(T a) {
