@@ -341,7 +341,7 @@ namespace cpplib::cluster_detail {
 			geometry::SpatialGrid<FloatingPointType> sg;
 			sg.build(atoms_01.points, cell, 4.0);
 			auto bonds = sg.get_bonds(false);
-			dist.filter_bond_list(bonds,
+			auto filtered_bonds = dist.filter_bond_list(bonds,
 								  atoms_01.types,
 								  atoms_01.points,
 								  [this](const PointType& a, const PointType& b)
@@ -358,9 +358,7 @@ namespace cpplib::cluster_detail {
 			result.atom_to_trmol_id.resize(atom_s);
 			std::iota(result.atom_to_trmol_id.begin(), result.atom_to_trmol_id.end(), 0);
 
-			for (auto& bond : bonds) {
-				if (bond.first == bond.second && bond.shiftcode.get_code() == uint8_t(13))
-					continue;
+			for (auto& bond : filtered_bonds) {
 
 				unite(bond, result.molecules, result.atom_to_trmol_id);
 

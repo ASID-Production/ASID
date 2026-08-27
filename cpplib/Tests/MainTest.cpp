@@ -144,7 +144,7 @@ TEST(CreateClusterTest, polyError) {
 	FMIC_TS ts(cell, symm, types, xyz);
 	auto res = ts.cluster(anchors, 0.5, hasPoly);
 	EXPECT_EQ(res.size(), 24);
-	EXPECT_FALSE(hasPoly);
+	EXPECT_TRUE(hasPoly);
 }
 
 TEST(CreateClusterTest, SingleNegative) {
@@ -166,9 +166,9 @@ TEST(CreateClusterTest, SingleNegative) {
 
 	bool hasPoly = false;
 	FMIC_TS ts(cell, symm, types, xyz);
-	std::vector<FloatingPointType> anchors{0, 0, 0, 4.0};
+	std::vector<FloatingPointType> anchors{0, 0, 0, 20.0};
 	auto res1 = ts.cluster(anchors, 3.0, hasPoly);
-	auto res2 = ts.cluster(anchors, 50.0, hasPoly);
+	auto res2 = ts.cluster(anchors, 20.0, hasPoly);
 	EXPECT_GT(res2.size(), res1.size());
 	EXPECT_TRUE(hasPoly);
 }

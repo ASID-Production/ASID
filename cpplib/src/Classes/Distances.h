@@ -117,11 +117,16 @@ namespace cpplib {
 		}
 
 		template<typename Func>
-		void filter_bond_list(std::vector<geometry::SpatialGrid<FloatingPointType>::BondWithShift>& bondlist,
-							  const ::std::vector<AtomTypeBase>& types,
-							  const ::std::vector<PointType>& points,
-							  Func dist) const noexcept {
+		std::vector<geometry::SpatialGrid<FloatingPointType>::BondWithShift> filter_bond_list(
+			const std::vector<geometry::SpatialGrid<FloatingPointType>::BondWithShift>& bondlist,
+			const ::std::vector<AtomTypeBase>& types,
+			const ::std::vector<PointType>& points,
+			Func dist) const noexcept 
+		{
 			auto iter = ::std::begin(bondlist);
+
+			std::vector<geometry::SpatialGrid<FloatingPointType>::BondWithShift> ret;
+			ret.reserve(bondlist.size());
 
 			while (iter != ::std::end(bondlist)) {
 				const auto l1 = iter->first;
@@ -135,13 +140,13 @@ namespace cpplib {
 
 				char is_real_bond = isBond(types[l1], types[l2], dist(points[l1], moved_point2));
 
-				if (is_real_bond == 0) {
-					iter->first = 0;
-					iter->second = 0;
+				if (is_real_bond != 0) {
+					ret.push_back(*iter);
 				}
 
 				iter++;
 			}
+			return ret;
 		}
 	};
 }
