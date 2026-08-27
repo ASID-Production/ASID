@@ -1,4 +1,4 @@
-// Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
+﻿// Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
 // This file is part of ASID - Atomistic Simulation Instruments and Database
 // For more information see <https://github.com/ASID-Production/ASID>
 //
@@ -458,7 +458,7 @@ std::tuple<std::vector<cpplib::geometry::Point<FloatingPointType>>, std::list<st
 	return std::make_tuple(std::move(compaqed), res_errors);
 }
 
-Cluster::ClusterData ClusterCreate(std::array<cpplib::basic_types::FloatingPointType, 6> unit_cell,
+Cluster::ClusterData ClusterCreate(const std::array<cpplib::basic_types::FloatingPointType, 6> unit_cell,
 			                       const std::vector<const char*>& symm,
 			                       cpplib::FAM_Struct::AtomContainerType& types,
 			                       cpplib::FAM_Struct::PointConteinerType& points,
@@ -467,12 +467,11 @@ Cluster::ClusterData ClusterCreate(std::array<cpplib::basic_types::FloatingPoint
 			                       bool& hasPolymer) {
 
 	using ShiftType = Cluster::ShiftType;
-	auto& distances = *p_distances;
-	if (p_distances->isReady() == false) {
-		{
-			return {};
-		}
+
+	if ((p_distances == nullptr) || p_distances->isReady() == false) {
+		return {};
 	}
+	auto& distances = *p_distances;
 
 	cpplib::geometry::Cell cell(unit_cell);
 	std::vector<geometry::Symm<FloatingPointType>> symms;
@@ -483,7 +482,7 @@ Cluster::ClusterData ClusterCreate(std::array<cpplib::basic_types::FloatingPoint
 
 	Cluster cluster(cell, symms, std::move(anchors), std::move(points), std::move(types), polymer_cutoff);
 
-	auto ret = cluster.execute(distances, hasPolymer);
+	auto ret = WITH_LOG_M(cluster, execute, distances, hasPolymer);
 
 	return ret;
 }

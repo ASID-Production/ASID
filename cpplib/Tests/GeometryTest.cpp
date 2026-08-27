@@ -33,10 +33,11 @@
 #include <vector>
 #include <utility>
 
-#include "../../src/BaseHeaders/BaseTypes.h"
-#include "../../src/Classes/Cluster.h"
-#include "../../src/Classes/Geometry.h"
-#include "../../src/Classes/Voronoi.h"
+
+#include "../src/BaseHeaders/BaseTypes.h"
+#include "../src/Classes/Cluster.h"
+#include "../src/Classes/Geometry.h"
+#include "../src/Classes/Voronoi.h"
 
 using namespace std;
 using namespace cpplib;
@@ -180,7 +181,7 @@ TEST(MatrixTest, BasicOperations) {
 
 	// Test trace
 	FloatingPointType trace2 = m2.Trace();
-	EXPECT_NEAR(trace2, 5.0f, EPSILON); // (1+5+9)/3 = 5
+	EXPECT_NEAR(trace2, 15.0f, EPSILON); // (1+5+9) = 15
 }
 
 TEST(MatrixTest, MatrixOperations) {
@@ -767,14 +768,14 @@ TEST(VoronoiTest, FaceStateCalculation) {
 	e3.set_state(State::VALID);
 	EXPECT_EQ(face.calculateState(), State::VALID);
 
-	// One edge MODIFICATION -> face MODIFICATION
-	e1.set_state(State::MODIFICATION);
+	// One vertex DELETE -> face MODIFICATION
+	v1->set_state(State::DELETE);
 	EXPECT_EQ(face.calculateState(), State::MODIFICATION);
 
-	// All edges DELETE -> face DELETE
-	e1.set_state(State::DELETE);
-	e2.set_state(State::DELETE);
-	e3.set_state(State::DELETE);
+	// All vertexes DELETE -> face DELETE
+	v1->set_state(State::DELETE);
+	v2->set_state(State::DELETE);
+	v3->set_state(State::DELETE);
 	EXPECT_EQ(face.calculateState(), State::DELETE);
 }
 

@@ -47,8 +47,11 @@ namespace debug {
     }
 }
 
+#define DEBUG_CONCAT_HIDDEN(a, b) a##b
+#define DEBUG_CONCAT(a, b) DEBUG_CONCAT_HIDDEN(a, b)
+
 #define WITH_LOG(func, ...) debug::execute(#func, func, ##__VA_ARGS__)
-#define LOG_INTERFACE_GUARD(name) debug::InterfaceGuard guard_##__LINE__(name)
+#define LOG_INTERFACE_GUARD(name) debug::InterfaceGuard DEBUG_CONCAT(guard_, __LINE__)##(name)
 #define WITH_LOG_M(obj, method, ...) \
     debug::execute_method(#method, obj, &std::remove_pointer_t<decltype(&obj)>::method, ##__VA_ARGS__)
 

@@ -27,7 +27,7 @@
 // ******************************************************************************************
 #include <array>
 #include <cmath>
-#include <list>
+#include <cstddef>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -35,10 +35,15 @@
 
 #include "../Functions/Functions.h"
 #include "../BaseHeaders/BaseTypes.h"
+#include "../BaseHeaders/Currents.h"
 #include "../BaseHeaders/DebugMes.h"
+#include "../Classes/BaderOperator.h"
+#include "../Classes/Cluster.h"
 #include "../Classes/Distances.h"
 #include "../Classes/FindMolecules.h"
 #include "../Classes/Geometry.h"
+#include "../Classes/MoleculeGraph.h"
+#include "../Classes/SearchGraph.h"
 #include "../Classes/Voronoi.h"
 #include "../Python/PythonInterface.h"
 
@@ -756,17 +761,18 @@ extern "C" {
 	}
 
 	// Args: [cell,symm,tuples,anchors,radius]
-	static PyObject* cpplib_ClusterCreate(PyObject* self, PyObject* args) {
+	static PyObject* cpplib_Cluster(PyObject* self, PyObject* args) {
 		PyObject* ocell = NULL;
 		PyObject* osymm = NULL;
 		PyObject* otuples = NULL;
 		PyObject* ocoords = NULL;
-		cpplib::basic_types::FloatingPointType over_radius = 0;
-		if (!PyArg_ParseTuple(args, "OOOOf", &ocell, &osymm, &otuples, &ocoords, &over_radius)) {
+		double over_radius = 0;
+		if (!PyArg_ParseTuple(args, "OOOOd", &ocell, &osymm, &otuples, &ocoords, &over_radius)) {
 			Py_RETURN_NONE;
 		}
+		useDistances(self);
 
-		LOG_INTERFACE_GUARD("cpplib_ClusterCreate");
+		LOG_INTERFACE_GUARD("cpplib_Cluster");
 		Prepare_IC all(ocell, osymm, otuples);
 
 		Py_ssize_t s = PyList_Size(ocoords);
@@ -782,7 +788,8 @@ extern "C" {
 				static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 3))));
 		}
 		bool hasPolymer = false;
-		auto ret = WITH_LOG(ClusterCreate, all.cell, all.symm, all.types, all.points, anchors, over_radius, hasPolymer);
+		auto poly_rad = static_cast<cpplib::basic_types::FloatingPointType>(over_radius);
+		auto ret = WITH_LOG(ClusterCreate, all.cell, all.symm, all.types, all.points, anchors, poly_rad, hasPolymer);
 
 		return Py_BuildValue("{s:N,s:N}",
 							 "points", py_util::convert(ret),
@@ -849,6 +856,114 @@ extern "C" {
 							 "unit_cell", py_util::convert(buildresult.atoms));
 	}
 
+	static PyObject* cpplib_FindCP(PyObject* self, PyObject* args) {
+		using Diagram = cpplib::voronoi::VoronoiDiagram;
+		using BaderOperator = cpplib::BaderOperator;
+
+		PyObject* ocell = NULL;
+		PyObject* osymm = NULL;
+		PyObject* otuples = NULL;
+		float cutoff = 6.0;
+		if (!PyArg_ParseTuple(args, "OOOOf", &ocell, &osymm, &otuples, &cutoff)) {
+			Py_RETURN_NONE;
+		}
+
+		LOG_INTERFACE_GUARD("cpplib_FindCP");
+
+		Prepare_IC all(ocell, osymm, otuples);
+		geometry::Cell cell(all.cell);
+		std::vector<bool> bools(all.points.size(), true);
+
+		std::vector<geometry::Symm<FloatingPointType>> symmvec;
+		symmvec.reserve(all.symm.size());
+		for (const auto& s : all.symm) {
+			symmvec.emplace_back(s);
+		}
+
+		cluster_detail::UnitCellBuilder ucb(symmvec);
+		auto buildresult = ucb.build(all.points, all.types);
+
+		geometry::SpatialGrid<FloatingPointType> space;
+		space.build(buildresult.atoms.points, cell, cutoff);
+		auto bonds = WITH_LOG_M(space, get_bonds, false);
+
+		Diagram diag(buildresult.atoms.points, bonds, cell, bools);
+		auto ce = diag.extractCells();
+
+		cpplib::voronoi::VoronoiFused vf(ce, cell.fracToCart());
+		vf.polyhedra.resize(all.points.size());
+
+		auto critical_points = cpplib::BaderOperator::GenerateInitialCriticalPoints(vf,cell.fracToCart());
+
+		// Expand Point Net
+		// 1. Calculate theoretical radius.
+		
+		const auto ED_cutoff = cpplib::BaderOperator::GetOptimalRadius(3.0, 1.0E-6, ElectronDensitySplines, buildresult.atoms.types);
+		const size_t max_type = cpplib::ElectronDensitySplines.size();
+		const size_t initial_type_size = buildresult.atoms.types.size();
+
+		// 2. Use cutoff for prepare PointsSoA
+		cpplib::PointsSoA<double> psoa;
+		psoa.initializeWithPeriodicImages(buildresult.atoms.points, buildresult.atoms.types, cell.fracToCart(), cell.cartToFrac(), ED_cutoff);
+
+		// Optimize points
+		std::array<double, 1> array_of_eps{{1.0e-12}};
+		for (auto& cp : critical_points) {
+
+			auto val = CriticalPoint::CalculateEDinPoint(cp.pos_, psoa, cpplib::ElectronDensitySplines);
+			cp.UpdateVal(val);
+
+			for (double eps:array_of_eps) {
+
+				BaderOperator::OptimizePoint(cp, psoa, eps);
+			}
+		}
+
+		BaderOperator::deleteAllDublicates(critical_points, 0.05);
+
+		constexpr CriticalPoint::value_type step = 0.02;
+		std::vector<std::vector<PointType>> paths;
+		for (const auto& cp : critical_points) {
+			if (cp.type_ != CriticalPoint::TYPE::B)
+				continue;
+			auto [p1, p2] = cp.CalculatePaths<step>(psoa, cpplib::ElectronDensitySplines);
+			paths.push_back(p1);
+			paths.push_back(p2);
+		}
+
+		// Write points
+		BaderOperator::writeCriticalPointsToFile(critical_points, "CPs.pdb");
+
+		// Write Paths
+		{
+			std::ofstream file_paths("paths.pdb", std::ios::binary);
+			size_t total_i = 1;
+			size_t path_i = 1;
+			for (auto& path : paths) {
+				const auto path_s = path.size();
+				std::string result;
+				result.reserve(10 + path_s * 80);
+
+				for (size_t i = 0; i < path_s; i++)
+				{
+					auto& p = path[i];
+					std::format_to(
+						std::back_inserter(result),
+						"HETATM{:>5}  C  PTH A {:>4}    {:>8.3f}{:>8.3f}{:>8.3f}  1.00  0.00           C\n",
+						total_i, path_i,
+						p[0], p[1], p[2]
+					);
+					total_i++;
+				}
+				std::format_to(std::back_inserter(result), "TER\n");
+				file_paths.write(result.data(), result.size());
+
+				path_i++;
+			}
+		}
+		Py_RETURN_NONE;
+	}
+
 	static struct PyMethodDef methods[] = {
 		{ "GenBonds", cpplib_GenBonds, METH_O, "Generate bond list"},
 		{ "GenBondsEx", cpplib_GenBondsEx, METH_O, "Generate bond list with length"},
@@ -869,8 +984,9 @@ extern "C" {
 		{ "SubSearch", cpplib_SubSearch, METH_VARARGS, "Compare two graphs"},
 		{ "compaq", cpplib_compaq, METH_VARARGS, "Do the same as Olex2 'compaq' function"},
 		{ "SortDatabase", cpplib_SortDatabase, METH_O, "Sort graph"},
-		{ "Cluster", cpplib_ClusterCreate, METH_VARARGS, "Create cluster"},
+		{ "Cluster", cpplib_Cluster, METH_VARARGS, "Create cluster"},
 		{ "VoronoiCalculation", cpplib_Voronoi, METH_VARARGS, "Calculate Voronoi cells"},
+		{ "FindCP", cpplib_FindCP, METH_VARARGS, "Find CP in crystal"},
 
 
 		{ NULL, NULL, 0, NULL }
