@@ -197,12 +197,13 @@ class UniformListModel(QAbstractListModel):
 
 class QtPointsPropertyModel(QAbstractListModel):
 
-    def __init__(self, parent=None, data=None):
+    def __init__(self, parent=None, data=None, main_window=None):
         self._root = data
         self.selected = []
         self.selected_len = 0
         self.rows = 0
         self.props = {}
+        self.main_window = main_window
         super().__init__(parent)
 
     def addProperty(self, property):
@@ -355,6 +356,8 @@ class QtPointsPropertyModel(QAbstractListModel):
                 else:
                     selected.internalPointer().addProperty(property, None)
                 selected.internalPointer().__setattr__(property, value)
+        if self.main_window:
+            self.main_window.updateOpenGL()
 
     def flags(self, index: QModelIndex) -> Qt.ItemFlag:
         if not index.isValid():
@@ -368,10 +371,11 @@ class QtPointsTreeModel(QAbstractItemModel):
     item_deselected = Signal(QModelIndex)
     selection_changed = Signal(QModelIndex)
 
-    def __init__(self, parent=None, data=None):
+    def __init__(self, parent=None, data=None, main_window=None):
         if data is None:
             data = PointsList()
         self._root = data
+        self.main_window = main_window
         super().__init__(parent=parent)
         a = 0
 
@@ -394,6 +398,8 @@ class QtPointsTreeModel(QAbstractItemModel):
                 observer = SINGLE_OBSERVER.getObserver(observer_cls)
                 if observer not in index.internalPointer().observers:
                     index.internalPointer().attach(observer)
+                    if self.main_window:
+                        self.main_window.updateOpenGL()
                 return
 
     def detachObserver(self, index: QModelIndex, observer_name):
@@ -405,10 +411,12 @@ class QtPointsTreeModel(QAbstractItemModel):
             for observer in item.observers:
                 if isinstance(observer, observer_cls):
                     item.detach(observer)
+                    if self.main_window:
+                        self.main_window.updateOpenGL()
                     break
             return
 
-    def index(self, row, column, parent=QModelIndex(), *args, by_point=None, **kwargs) -> QModelIndex:
+    def index(self, row=0, column=0, parent=QModelIndex(), *args, by_point=None, **kwargs) -> QModelIndex:
         if by_point is not None:
             point = by_point
             child = by_point
@@ -466,9 +474,14 @@ class QtPointsTreeModel(QAbstractItemModel):
     def data(self, index: QModelIndex, role: int = ...):
         if not index.isValid():
             return None
+        item = index.internalPointer()
+        if role == Qt.ItemDataRole.CheckStateRole:
+            if item._checked:
+                return Qt.CheckState.Checked
+            else:
+                return Qt.CheckState.Unchecked
         if role != Qt.ItemDataRole.DisplayRole and role != Qt.ItemDataRole.ToolTipRole:
             return None
-        item = index.internalPointer()
         if role == Qt.ItemDataRole.DisplayRole:
             if item.name is None:
                 return item.__str__()
@@ -503,14 +516,22 @@ class QtPointsTreeModel(QAbstractItemModel):
             point.__setattr__(property, value)
             return True
         else:
+            if role == Qt.ItemDataRole.CheckStateRole:
+                if index.internalPointer() is None:
+                    return
+                else:
+                    v = True if value == Qt.CheckState.Checked.value else False
+                    if v != index.internalPointer()._checked:
+                        index.internalPointer()._checked = v
+                        self.dataChanged.emit(index, index, [Qt.ItemDataRole.CheckStateRole])
             return super().setData(index, value, role)
 
     def flags(self, index: QModelIndex) -> Qt.ItemFlag:
         if not index.isValid():
             return Qt.ItemFlag.NoItemFlags
         if type(index.internalPointer()).__name__ == 'PointsList':
-            return (Qt.ItemFlag.ItemIsEnabled|Qt.ItemFlag.ItemIsSelectable)
-        return (Qt.ItemFlag.ItemIsEnabled|Qt.ItemFlag.ItemIsSelectable|Qt.ItemFlag.ItemIsDragEnabled)
+            return (Qt.ItemFlag.ItemIsEnabled|Qt.ItemFlag.ItemIsSelectable|Qt.ItemFlag.ItemIsUserCheckable)
+        return (Qt.ItemFlag.ItemIsEnabled|Qt.ItemFlag.ItemIsSelectable|Qt.ItemFlag.ItemIsDragEnabled|Qt.ItemFlag.ItemIsUserCheckable)
 
     def headerData(self, section: int, orientation: Qt.Orientation, role: int = ...):
         if role != Qt.ItemDataRole.DisplayRole:
@@ -614,8 +635,10 @@ class TreeView(QtWidgets.QTreeView):
         self.setDragEnabled(True)
         self.setDropIndicatorShown(True)
         self.setAcceptDrops(True)
+        self.setHeaderHidden(True)
         self.setSelectionMode(QtWidgets.QAbstractItemView.ExtendedSelection)
         self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.setItemDelegate(TreeViewDelegate(self))
         self.customContextMenuRequested.connect(self.showContextMenu)
 
     def eventFilter(self, object: QObject, event: QEvent) -> bool:
@@ -743,6 +766,13 @@ class TreeView(QtWidgets.QTreeView):
         super().setSelection(rect, command)
 
 
+class TreeViewDelegate(QtWidgets.QStyledItemDelegate):
+    def initStyleOption(self, option: QtWidgets.QStyleOptionViewItem, index: QModelIndex) -> None:
+        super().initStyleOption(option, index)
+        # Убираем флаг, указывающий на наличие индикатора чекбокса
+        option.features &= ~QtWidgets.QStyleOptionViewItem.HasCheckIndicator
+
+
 class ListView(QtWidgets.QListView):
 
     def __init__(self, parent=None):
@@ -826,7 +856,6 @@ class SelectionModel(QItemSelectionModel):
     def clearResp(self, index):
         for ind in self.selectedIndexes():
             self.model().setData(ind, ('pick', 0.0), role=99)
-
 
     def selectResp(self, index):
         for ind in index:

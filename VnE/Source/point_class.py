@@ -103,8 +103,8 @@ class Sequence:
             index = self._empty_index.pop()
             return index
         else:
-            index = self._max_index + 1
-            self._max_index = index
+            index = self._max_index
+            self._max_index += 1
             return index
 
     def removeIndex(self, index):
@@ -119,11 +119,12 @@ class aPoint(ABC):
     def __init__(self, parent=None):
 
         super().__setattr__('_destroyed', False)
-        self._not_observed_properties: List[str, ...] = ['parent', 'children', 'observers', 'dependency_observer']
+        self._not_observed_properties: List[str, ...] = ['parent', 'children', 'observers', 'dependency_observer', '_checked']
         self._dependent_properties = {}
         self._properties: Dict[str: Any] = {'seq': self.seq}
         self._dependency_observer = CopyPointObserver(self)
         self._seq = sequence.getIndex()
+        self._checked = False
         self.parent = parent
         if self.parent is not None:
             self.parent.addChild(self)
@@ -170,6 +171,8 @@ class aPoint(ABC):
             if self.parent is not None:
                 self.parent.destroy(point=point)
         else:
+            if self._destroyed:
+                return
             for child in self.children.copy():
                 child.destroy()
             for observer in self.observers.copy():
@@ -275,6 +278,79 @@ class aPoint(ABC):
             selection = child.select(pos, tol, selection, mod)
         return selection
 
+    def toDict(self):
+
+        def rec(l):
+            if isinstance(l, np.ndarray):
+                l = l.tolist()
+            for i, v in enumerate(l):
+                if isinstance(v, np.ndarray):
+                    l[i] = rec(v)
+                elif isinstance(v, np.int32) or isinstance(v, np.intc):
+                    l[i] = int(v)
+                elif isinstance(v, np.float32):
+                    l[i] = float(v)
+            return l
+
+        def recCheck(l):
+            if isinstance(l, list):
+                for i, v in enumerate(l):
+                    r = False
+                    if isinstance(v, list):
+                        r = recCheck(v)
+                        if not r:
+                            return r
+                    elif isinstance(v, np.ndarray):
+                        v = v.tolist()
+                        l[i] = v
+                        r = recCheck(v)
+                        if not r:
+                            return r
+                    elif isinstance(v, int):
+                        r = True
+                        continue
+                    elif isinstance(v, float):
+                        r = True
+                        continue
+                    elif isinstance(v, str):
+                        r = True
+                        continue
+            return r
+
+        p = self.getProperties()
+        props = {}
+        con = {}
+        seq = self.seq
+        obs = [x.NAME for x in self.observers if not isinstance(x, CopyPointObserver)]
+        parent = self.parent.seq if self.parent else None
+        children = [x.seq for x in self.children]
+        for k in p:
+            if isinstance(p[k], aPoint):
+                con[k] = p[k].seq
+            elif k != 'seq':
+                if isinstance(p[k], np.ndarray):
+                    props[k] = p[k].tolist()
+                elif isinstance(p[k], np.float32):
+                    props[k] = float(p[k])
+                elif isinstance(p[k], np.intc) or isinstance(p[k], np.int32):
+                    props[k] = int(p[k])
+                elif any([isinstance(p[k], x) for x in (float, int, list, str)]):
+                    if isinstance(p[k], list):
+                        if recCheck(p[k]):
+                            props[k] = p[k]
+                    else:
+                        props[k] = p[k]
+
+        d = {
+             'seq': seq,
+             'parent': parent,
+             'children': children,
+             'obs': obs,
+             'static_props': props,
+             'dynamic_props': con
+             }
+        return d
+
     def __del__(self):
         self.destroy()
 
@@ -370,6 +446,11 @@ class Point(aPoint):
 
     def linkCopy(self):
         pass
+
+    def toDict(self):
+        d = aPoint.toDict(self)
+        d['type'] = 'Point'
+        return d
 
     @property
     def coord(self):
@@ -484,6 +565,11 @@ class PointsList(aPoint):
         for child in self.children:
             selection = child.select(pos, tol, selection, mod, obs=obs)
         return selection
+
+    def toDict(self):
+        d = aPoint.toDict(self)
+        d['type'] = 'PointsList'
+        return d
 
     def __str__(self):
         return f'PointsList {self._seq}'

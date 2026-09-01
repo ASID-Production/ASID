@@ -449,27 +449,7 @@ class FileParser:
             args = [*cell, cell_coords]
             cell_dec_coords = self.fracToDec(*args)
 
-            def pf(atom_list, atom):
-                coord = atom.coord.copy()
-                add_data = atom.sup_data_dict
-                if add_data is None:
-                    point = point_class.Point(parent=atom_list, coord=coord, rad=atom_list,
-                                              color=PALETTE.point_dict[PALETTE.getName(atom.atom_type)],
-                                              atom_type=atom.atom_type,
-                                              name=atom.name,
-                                              label=atom.name.replace(' ', '_'),
-                                              el_rad=atom_list)
-                else:
-                    point = point_class.Point(parent=atom_list, coord=coord, rad=atom_list,
-                                              color=PALETTE.point_dict[PALETTE.getName(atom.atom_type)],
-                                              atom_type=atom.atom_type,
-                                              name=atom.name,
-                                              label=atom.name,
-                                              el_rad=atom_list,
-                                              **add_data)
-                return point
-
-            mol_sys, list_tuple = self.parsMolSys(mol_sys, bond, root, point_func=pf)
+            mol_sys, list_tuple = self.parsMolSys(mol_sys, bond, root, point_func=self._pointCreation)
             list_tuple[1].addProperty('el_rad', 0.5)
             mol_list = list_tuple[0]
 
@@ -548,27 +528,28 @@ class FileParser:
             mol_list = point_class.PointsList(parent=root, name=mol_sys.name)
             mol.assignPoint(mol_list)
             MOLECULE_SYSTEMS[mol_list] = mol_sys
-            atom_list = point_class.PointsList(parent=mol_list, rad=0.25, name='Atoms')
+            atom_list = point_class.PointsList(parent=mol_list, rad=0.15, name='Atoms', el_rad=0.5)
             i = 1
             for atom in mol.children:
-                coord = atom.coord.copy()
                 point = point_func(atom_list, atom)
                 atom.assignPoint(point)
                 i += 1
             if bond:
-                bonds_l = point_class.PointsList(parent=mol_list, rad=0.1, name='Bonds')
+                bonds_l = point_class.PointsList(parent=mol_list, rad=0.05, name='Bonds', freq=1, hfreq=1)
                 bond_atm = []
                 for atom in mol:
                     for bond in atom.bonds():
                         atm = bond.get(atom)
                         if atm not in bond_atm:
-                            bond_l = point_class.PointsList(parent=bonds_l, name=f'{bond.parents()[0].point().name}_{bond.parents()[1].point().name}', rad=bonds_l)
-                            b1 = point_class.Point(coord=bond.parents()[0].point(), color=bond.parents()[0].point(),
+                            bond_l = point_class.PointsList(parent=bonds_l, name=f'{bond.parents()[0].point().name}_{bond.parents()[1].point().name}', rad=bonds_l, freq=bonds_l, hfreq=bonds_l)
+                            b1 = point_class.Point(coord=bond.parents()[0].point(), color=bond.parents()[0].point(), name=bond.parents()[0].point(),
                                                    rad=bond_l,
-                                                   parent=bond_l)
-                            b2 = point_class.Point(coord=bond.parents()[1].point(), color=bond.parents()[1].point(),
+                                                   parent=bond_l,
+                                                   freq=bond_l, hfreq=bond_l)
+                            b2 = point_class.Point(coord=bond.parents()[1].point(), color=bond.parents()[1].point(), name=bond.parents()[1].point(),
                                                    rad=bond_l,
-                                                   parent=bond_l)
+                                                   parent=bond_l,
+                                                   freq=bond_l, hfreq=bond_l)
                             bond.assignPoint((b1,b2))
                     bond_atm.append(atom)
         return mol_sys, (mol_list, atom_list, bonds_l)
@@ -1140,13 +1121,13 @@ class FileParser:
         coord = atom.coord.copy()
         add_data = atom.sup_data_dict
         if add_data is None:
-            point = point_class.Point(parent=atom_list, coord=coord, rad=atom_list,
+            point = point_class.Point(parent=atom_list, coord=coord, rad=atom_list, el_rad=atom_list,
                                       color=PALETTE.point_dict[PALETTE.getName(atom.atom_type)],
                                       atom_type=atom.atom_type,
                                       name=atom.name,
                                       label=atom.name.replace(' ', '_'))
         else:
-            point = point_class.Point(parent=atom_list, coord=coord, rad=atom_list,
+            point = point_class.Point(parent=atom_list, coord=coord, rad=atom_list, el_rad=atom_list,
                                       color=PALETTE.point_dict[PALETTE.getName(atom.atom_type)],
                                       atom_type=atom.atom_type,
                                       name=atom.name,

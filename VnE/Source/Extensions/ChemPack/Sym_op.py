@@ -174,12 +174,16 @@ class SymOpDialog(QtWidgets.QDialog):
                             'cif_cell_al': cell[3],
                             'cif_cell_be': cell[4],
                             'cif_cell_ga': cell[5],
-                            'cif_frac_coords': np.array(atom[1:], dtype=np.float32)}
+                            'cif_frac_coords': np.array(atom[1:], dtype=np.float32),
+                            }
+                cif_data['cif_anisou_mat'] = atoms[i%len(atoms)].cif_anisou_mat.copy()
+                cif_data['cif_anisou_eigs'] = atoms[i%len(atoms)].cif_anisou_eigs.copy()
+                cif_data['cif_anisou_eigv'] = atoms[i%len(atoms)].cif_anisou_eigv.copy()
                 coord = np.array(new_dec_coords[i], dtype=np.float32)
                 if i < len(atoms):
-                    atom = MoleculeClass.Atom(coord.copy(), atom[0], parent=mol, name=atoms[i].name, **cif_data)
+                    atom = MoleculeClass.Atom(coord.copy(), atom[0], parent=mol, name=atoms[i].name, sup_data_dict=atoms[i].sup_data_dict, **cif_data)
                 else:
-                    atom = MoleculeClass.Atom(coord.copy(), atom[0], parent=mol, name=PALETTE.getName(atom[0]), **cif_data)
+                    atom = MoleculeClass.Atom(coord.copy(), atom[0], parent=mol, name=PALETTE.getName(atom[0]), sup_data_dict=atoms[i%len(atoms)].sup_data_dict, **cif_data)
             args = PARSER.parsMolSys(new_mol_sys, True, TREE_MODEL.getRoot())
             loadMolSys(args[0], args[1])
             index = TREE_MODEL.index(0, 0, by_point=self.curr_sys[0])

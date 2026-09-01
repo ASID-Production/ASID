@@ -412,7 +412,7 @@ def execute():
         data = [tuple([x.atom_type, *list(x.cif_frac_coords)]) for x in atoms]
         bools = [True if x in sel else False for x in atoms]
 
-        res = cpplib.VoronoiCalculation(cell, symms[:-6], data, bools, 15.0)
+        res = cpplib.VoronoiCalculation(cell, symms[:-6] if len(symms) > 6 else symms, data, bools, 15.0)
 
         polyh = Polyhedron.fromCppLib(res, atoms, cell)
 

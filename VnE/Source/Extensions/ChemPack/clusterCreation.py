@@ -23,10 +23,9 @@ def execute():
         symm = [x[1] for x in molsys.children[0].children[0].cif_sym_codes]
         tuples = [(at.atom_type, *at.cif_frac_coords) for at in molsys.children[0]]
         coords = [(*at.cif_frac_coords, r) for at in molsys.children[0]]
-        ver_radius = float(5)
+        ver_radius = float(r)
         ret = cpplib.Cluster(cell, symm, tuples, coords, ver_radius)
         dec = PARSER.fracToDec(*cell, [x['point_frac'][:3] for x in ret['points']])
-        #dec = [x['point_cart'][:3] for x in ret['points']]
         new_mol_sys = MoleculeSystem()
         new_mol_sys.name = molsys.name + ' cluster'
         new_mol = Molecule(new_mol_sys)
@@ -36,10 +35,16 @@ def execute():
             if nat['shift'] == (0,0,0) and nat['symmref'] == 0:
                 at = molsys.children[0].children[nat['index']]
                 cif['cif_frac_coords'] = at.cif_frac_coords.copy()
-                new_mol.addChild(Atom(at.coord.copy(), at.atom_type, name=at.name, creation_code=(0, 0, 0, 0), **cif))
+                cif['cif_anisou_mat'] = at.cif_anisou_mat.copy()
+                cif['cif_anisou_eigs'] = at.cif_anisou_eigs.copy()
+                cif['cif_anisou_eigv'] = at.cif_anisou_eigv.copy()
+                new_mol.addChild(Atom(at.coord.copy(), at.atom_type, name=at.name, creation_code=(0, 0, 0, 0), sup_data_dict=at.sup_data_dict, **cif))
             else:
                 cif['cif_frac_coords'] = np.array(nat['point_frac'])
-                new_mol.addChild(Atom(dec[i], molsys.children[0].children[nat['index']].atom_type, name=f'{molsys.children[0].children[nat["index"]].name}_{nat["symmref"]},{nat["shift"][0]},{nat["shift"][1]},{nat["shift"][2]}', creation_code=(*[nat['symmref'], *nat["shift"]],), **cif, cif_uniq=False))
+                cif['cif_anisou_mat'] = molsys.children[0].children[nat['index']].cif_anisou_mat.copy()
+                cif['cif_anisou_eigs'] = molsys.children[0].children[nat['index']].cif_anisou_eigs.copy()
+                cif['cif_anisou_eigv'] = molsys.children[0].children[nat['index']].cif_anisou_eigv.copy()
+                new_mol.addChild(Atom(dec[i], molsys.children[0].children[nat['index']].atom_type, name=f'{molsys.children[0].children[nat["index"]].name}_{nat["symmref"]},{nat["shift"][0]},{nat["shift"][1]},{nat["shift"][2]}', creation_code=(*[nat['symmref'], *nat["shift"]],), sup_data_dict=molsys.children[0].children[nat['index']].sup_data_dict, **cif, cif_uniq=False))
         lists = PARSER.parsMolSys(new_mol_sys, True, TREE_MODEL.getRoot())
 
         cell_coords = [[0, 0, 0],

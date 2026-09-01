@@ -55,26 +55,26 @@ class ContMol:
         mol_list = PointsList(parent=parent, name=str(self.symm))
         self.mol.genBonds()
         self.mol.assignPoint(mol_list)
-        atom_list = PointsList(parent=mol_list, rad=0.15, name='Atoms')
+        atom_list = PointsList(parent=mol_list, rad=0.15, name='Atoms', el_rad=0.5)
         i = 1
         for atom in self.mol.children:
             point = FileParser._pointCreation(atom_list, atom)
             atom.assignPoint(point)
             i += 1
-        bonds_l = PointsList(parent=mol_list, rad=0.05, name='Bonds')
+        bonds_l = PointsList(parent=mol_list, rad=0.05, name='Bonds', freq=1, hfreq=1)
         bond_atm = []
         for atom in self.mol:
             for bond in atom.bonds():
                 atm = bond.get(atom)
                 if atm not in bond_atm:
-                    bond_l = PointsList(parent=bonds_l,
+                    bond_l = PointsList(parent=bonds_l, freq=bonds_l, hfreq=bonds_l,
                                         name=f'{bond.parents()[0].point().name}_{bond.parents()[1].point().name}',
                                         rad=bonds_l)
                     b1 = Point(coord=bond.parents()[0].point(), color=bond.parents()[0].point(),
-                               rad=bond_l,
+                               rad=bond_l, freq=bond_l, hfreq=bond_l,
                                parent=bond_l)
                     b2 = Point(coord=bond.parents()[1].point(), color=bond.parents()[1].point(),
-                               rad=bond_l,
+                               rad=bond_l, freq=bond_l, hfreq=bond_l,
                                parent=bond_l)
                     bond.assignPoint((b1, b2))
             bond_atm.append(atom)
@@ -91,6 +91,7 @@ class ContAtom:
         self.symm = symm
         self.parent = parent
         self.point = None
+
 
 class Contact:
     def __init__(self, source: ContAtom, dest: ContAtom):
@@ -114,7 +115,7 @@ class Contact:
             return
         else:
             self.point_list = PointsList(parent=parent, name=f'{self.source.atom.name}:{self.source.symm}--{self.dest.atom.name}:{self.dest.symm} = {self.dist}')
-            self.dp = Point(parent=self.point_list, color=np.array([*PALETTE.getColor(self.dest.atom.atom_type), 255], dtype=np.float32)/255, name=f'{self.dest.atom.name}:{self.dest.symm}', rad=0.10, coord=self.dest.atom.coord.copy())
+            self.dp = Point(parent=self.point_list, color=np.array([*PALETTE.getColor(self.dest.atom.atom_type), 255], dtype=np.float32)/255, name=f'{self.dest.atom.name}:{self.dest.symm}', rad=0.1, coord=self.dest.atom.coord.copy())
             self.cps = Point(parent=self.point_list, color=np.array([*PALETTE.getColor(self.source.atom.atom_type), 255], dtype=np.float32)/255, name=f'{self.source.atom.name}:{self.source.symm}--{self.dest.atom.name}:{self.dest.symm}', rad=0.025, freq=5, hfreq=1, coord=self.source.atom.coord.copy())
             self.cpd = Point(parent=self.point_list, color=np.array([*PALETTE.getColor(self.dest.atom.atom_type), 255], dtype=np.float32)/255, name=f'{self.source.atom.name}:{self.source.symm}--{self.dest.atom.name}:{self.dest.symm}', rad=0.025, freq=5, hfreq=1, coord=self.dest.atom.coord.copy())
             atoms_index = TREE_MODEL.index(0, 0, by_point=self.dp)
@@ -147,6 +148,7 @@ class Contact:
             scene.contacts.remove(self)
         except ValueError:
             return
+
 
 class Scene:
 
@@ -186,12 +188,18 @@ class Scene:
                 if nat['shift'] == (0, 0, 0) and nat['symmref'] == 0:
                     at = self.cent[ind].mol.children[nat['index']]
                     cif['cif_frac_coords'] = at.cif_frac_coords.copy()
-                    new_mol.addChild(Atom(at.coord.copy(), at.atom_type, name=at.name, creation_code=(0, 0, 0, 0), **cif))
+                    cif['cif_anisou_mat'] = at.cif_anisou_mat.copy()
+                    cif['cif_anisou_eigs'] = at.cif_anisou_eigs.copy()
+                    cif['cif_anisou_eigv'] = at.cif_anisou_eigv.copy()
+                    new_mol.addChild(Atom(at.coord.copy(), at.atom_type, name=at.name, creation_code=(0, 0, 0, 0), sup_data_dict=at.sup_data_dict, **cif))
                 else:
                     cif['cif_frac_coords'] = np.array(nat['point_frac'])
+                    cif['cif_anisou_mat'] = self.cent[ind].mol.children[nat['index']].cif_anisou_mat.copy()
+                    cif['cif_anisou_eigs'] = self.cent[ind].mol.children[nat['index']].cif_anisou_eigs.copy()
+                    cif['cif_anisou_eigv'] = self.cent[ind].mol.children[nat['index']].cif_anisou_eigv.copy()
                     new_mol.addChild(Atom(dec[i], self.cent[ind].mol.children[nat['index']].atom_type,
                                           name=f'{self.cent[ind].mol.children[nat["index"]].name}_{nat["symmref"]},{nat["shift"][0]},{nat["shift"][1]},{nat["shift"][2]}',
-                                          creation_code=(*[nat['symmref'], *nat["shift"]],), **cif, cif_uniq=False))
+                                          creation_code=(*[nat['symmref'], *nat["shift"]],), sup_data_dict=self.cent[ind].mol.children[nat['index']].sup_data_dict, **cif, cif_uniq=False))
             new_mol.genBonds()
             new_mols = new_mol.splitMol()
             mol_surr = []
@@ -228,6 +236,7 @@ class Scene:
                 source.drain_contacts.append(c)
                 dest.source_contacts.append(c)
 
+
 def execute():
     from ..ChemPack import MOLECULE_SYSTEMS, TREE_MODEL
     from ..ChemPack import loadMolSys
@@ -242,6 +251,7 @@ def execute():
         except ValueError:
             r = 2.5
         if not scene:
+            #molsys.genBonds()
             mols = [ContMol(x, (0,0,0,0), i) for i, x in enumerate(molsys.children[0].splitMol())]
             new_molsys = MoleculeSystem()
             point_list = PointsList(parent=TREE_MODEL.getRoot(), name='test')
@@ -252,7 +262,6 @@ def execute():
             for c in scene.contacts:
                 if c.dist < float(text_edit2.text()):
                     c.vis(scene.contacts_list)
-            ...
         else:
             for c in scene.contacts:
                 if c.dp and c.dp.pick:
@@ -264,6 +273,8 @@ def execute():
                     c.vis(scene.contacts_list)
         return
     def setRad():
+        if scene is None:
+            process()
         for c in scene.contacts:
             if c.dist < float(text_edit2.text()):
                 c.vis(scene.contacts_list)
@@ -277,12 +288,14 @@ def execute():
 
     layout = QHBoxLayout()
     layout2 = QHBoxLayout()
-    label = QLabel("Search radius:")
-    label2 = QLabel("Visible radius:")
+    label = QLabel("Cluster radius:")
+    label2 = QLabel("rad:")
     text_edit = QLineEdit()
+    text_edit.setText('5')
     text_edit2 = QLineEdit()
-    button = QPushButton(text='Generate contact')
-    button2 = QPushButton(text='Set visible radius')
+    text_edit2.setText('2.5')
+    button = QPushButton(text='Gen')
+    button2 = QPushButton(text='Set Rad')
     layout.addWidget(label)
     layout.addWidget(text_edit)
     layout2.addWidget(label2)

@@ -45,11 +45,22 @@ class CalcWidget(QLabel):
 
     def calc(self):
         atoms = []
+        coords = []
         for atms in list(self.sel.values()):
             if atms.isValid():
                 atoms.append(atms)
+                coords.append(atms.coord)
             else:
                 self.sel.pop(atms)
+        if len(atoms) > 6:
+            atoms = [*atoms[:3], *atoms[-3:]]
+        for i, a in enumerate(atoms):
+            b = [all(a.coord == x) for x in coords[i+1:]]
+            if any(b):
+                ind = [x + i + 1 for x in range(len(b)) if b[x]]
+                for i1 in ind:
+                    coords.pop(i1)
+                    atoms.pop(i1)
         if len(atoms) > 4:
             angle = contacts.angle(atoms, False)
             line = f'{atoms[0].name}--{atoms[1].name}--{atoms[2].name}  {atoms[-1].name}--{atoms[-2].name}--{atoms[-3].name}: {angle: .1f}'

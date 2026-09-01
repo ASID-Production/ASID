@@ -342,6 +342,8 @@ class UniformWid(QtWidgets.QWidget):
         self.hlayout = QtWidgets.QHBoxLayout()
         self.hlayout.addWidget(self.listView)
         self.setLayout(self.hlayout)
+        self.hlayout.setSpacing(0)
+        self.hlayout.setContentsMargins(0,0,0,0)
         self.model = UniformListModel(self)
 
     def setUniforms(self, uniform):
@@ -440,22 +442,32 @@ class MainWindow(QtWidgets.QMainWindow):
         self.setWindowIcon(QtGui.QIcon('Source/ico.ico'))
         self.setWindowTitle('ASID View & Explore')
         widget = QtWidgets.QWidget()
-        self.frame = QtWidgets.QFrame(parent=widget)
-        self.frame.setObjectName('lists_frame')
+        #self.frame = QtWidgets.QFrame(parent=widget)
+        #self.frame.setObjectName('lists_frame')
         self.opengl_frame = QtWidgets.QFrame(parent=widget)
         self.opengl_frame.setObjectName('opengl_frame')
         self.opengl_frame.setLayout(QtWidgets.QVBoxLayout())
         self.opengl_frame.layout().setSpacing(0)
-        vlayout = QtWidgets.QVBoxLayout()
+        #self.setCentralWidget(self.opengl_frame)
+        self.setCentralWidget(widget)
+        #vlayout = QtWidgets.QVBoxLayout()
         hlayout = QtWidgets.QHBoxLayout()
         hlayout.setSpacing(0)
 
         self.treeView = TreeView()
         self.listView = ListView()
+        self.treeDock = QtWidgets.QDockWidget('Points list', self)
+        self.treeDock.setObjectName('treeDock')
+        self.treeDock.setWidget(self.treeView)
+        self.treeDock.setFeatures(QtWidgets.QDockWidget.DockWidgetMovable | QtWidgets.QDockWidget.DockWidgetFloatable)
+        self.listDock = QtWidgets.QDockWidget('Props list', self)
+        self.listDock.setObjectName('listDock')
+        self.listDock.setWidget(self.listView)
+        self.listDock.setFeatures(QtWidgets.QDockWidget.DockWidgetMovable | QtWidgets.QDockWidget.DockWidgetFloatable)
 
-        self.model = QtPointsTreeModel(parent=self.treeView, data=self.points_list)
+        self.model = QtPointsTreeModel(parent=self.treeView, data=self.points_list, main_window=self)
         self.selection_model = SelectionModel(model=self.model)
-        self.list_model = QtPointsPropertyModel(data=self.points_list)
+        self.list_model = QtPointsPropertyModel(data=self.points_list, main_window=self)
 
         self.selection_model.newSelection.connect(lambda args: self.list_model.setSelected(*args))
 
@@ -464,23 +476,32 @@ class MainWindow(QtWidgets.QMainWindow):
         self.listView.setModel(self.list_model)
 
         self.uniformWid = UniformWid()
+        self.uniformDock = QtWidgets.QDockWidget('Uniforms', self)
+        self.uniformDock.setObjectName('uniformDock')
+        self.uniformDock.setWidget(self.uniformWid)
+        self.uniformDock.setFeatures(QtWidgets.QDockWidget.DockWidgetMovable | QtWidgets.QDockWidget.DockWidgetFloatable | QtWidgets.QDockWidget.DockWidgetClosable)
+        self.uniformDock.hide()
+
+        self.addDockWidget(Qt.LeftDockWidgetArea, self.uniformDock)
+        self.addDockWidget(Qt.LeftDockWidgetArea, self.treeDock)
+        self.addDockWidget(Qt.LeftDockWidgetArea, self.listDock)
 
         self.opengl_widget = OpenGlWidget(parent=widget, model=self.points_list, uniformWidget=self.uniformWid)
         self.opengl_widget.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
         self.opengl_widget.setSelectionModel(self.selection_model)
         self.opengl_frame.layout().addWidget(self.opengl_widget)
 
-        self.listView.setSizePolicy(QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Expanding)
-        self.listView.setMinimumWidth(300)
-        self.treeView.setSizePolicy(QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Expanding)
-        self.treeView.setMinimumWidth(300)
-        self.frame.setSizePolicy(QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Expanding)
-        self.frame.setMinimumWidth(300)
+        #self.listView.setSizePolicy(QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Expanding)
+        #self.listView.setMinimumWidth(300)
+        #self.treeView.setSizePolicy(QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Expanding)
+        #self.treeView.setMinimumWidth(300)
+        #self.frame.setSizePolicy(QtWidgets.QSizePolicy.Maximum, QtWidgets.QSizePolicy.Expanding)
+        #self.frame.setMinimumWidth(300)
 
-        vlayout.addWidget(self.treeView)
-        vlayout.addWidget(self.listView)
-        self.frame.setLayout(vlayout)
-        hlayout.addWidget(self.frame)
+        #vlayout.addWidget(self.treeView)
+        #vlayout.addWidget(self.listView)
+        #self.frame.setLayout(vlayout)
+        #hlayout.addWidget(self.frame)
         hlayout.addWidget(self.opengl_frame)
 
         self.uniformModel = UniformListModel()
@@ -489,7 +510,6 @@ class MainWindow(QtWidgets.QMainWindow):
         widget.setLayout(hlayout)
         self.resize(1280, 720)
 
-        self.setCentralWidget(widget)
         from . import Extensions
 
         self.menu = self.menuBar()
@@ -501,9 +521,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.saveStateAction = self.menu.addAction('Save state')
         self.loadStateAction = self.menu.addAction('Load state')
         self.menu.addMenu(self.extension_menu)
-        self.uniformAction.triggered.connect(self.uniformWid.show)
+        self.uniformAction.triggered.connect(self.uniformDock.show)
         self.screenshotAction.triggered.connect(self.screenshot)
-        self.saveStateAction.triggered.connect(self.saveState)
+        self.saveStateAction.triggered.connect(self.saveSceneState)
         self.loadStateAction.triggered.connect(self.loadState)
 
         self.about = self.menu.addAction('About')
@@ -515,15 +535,25 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self.about.triggered.connect(self.about_dialog.show)
 
+        settings = QtCore.QSettings('ASID', 'LRSI')
+        state = settings.value("windowState")
+        geom = settings.value("windowGeom")
+        if state:
+            self.restoreState(state, version=0)
+        if geom:
+            self.restoreGeometry(geom)
+
     def closeEvent(self, event, *args, **kwargs):
-        ret = QtWidgets.QMainWindow.closeEvent(self, event)
-        sys.exit()
+        settings = QtCore.QSettings('ASID', 'LRSI')
+        settings.setValue("windowState", self.saveState(version=0))
+        settings.setValue("windowGeom", self.saveGeometry())
+        QtWidgets.QApplication.quit()
 
     def screenshot(self):
         self.screen_dialog = SaveScreenDialog(self.opengl_widget.screenshot)
         self.screen_dialog.show()
 
-    def saveState(self):
+    def saveSceneState(self):
         import json
         d = []
         ps = []
@@ -591,11 +621,11 @@ class MainWindow(QtWidgets.QMainWindow):
                     l.append(obj)
         for p in d['points']:
             obj = points[p['seq']]
-            parent = points[p['parent']] if p['parent'] else None
-            if parent:
-                parent.addChild(obj)
-            else:
+            parent = None if p['parent'] is None else points[p['parent']]
+            if parent is None:
                 root = obj
+            else:
+                parent.addChild(obj)
 
             children = [points[x] for x in p['children']]
             if children:
@@ -621,6 +651,9 @@ class MainWindow(QtWidgets.QMainWindow):
             if isinstance(v, list):
                 v = np.array(v, dtype=np.float32)
             self.opengl_widget.uniforms.__setattr__(k, v)
+
+    def updateOpenGL(self):
+        self.opengl_widget.update()
 
 
 def show():
