@@ -126,7 +126,8 @@ class SceneUniformBuffer(aUniformBuffer):
                      'wh': List[float],
                      'width': float,
                      'height': float,
-                     'scene_shift': float}
+                     'scene_shift': float,
+                     'background': list[float]}
 
         self.size = 456
         self._scale = np.array([[1.0, 0.0, 0.0, 0.0],
@@ -187,8 +188,9 @@ class SceneUniformBuffer(aUniformBuffer):
                                       [0.0, 1.0, 0.0, 0.0],
                                       [0.0, 0.0, 1.0, 0.0],
                                       [0.0, 0.0, 0.0, 1.0]]).astype(dtype=np.float32)
+        self._background = [1.0,1.0,1.0,1.0]
 
-
+        glClearColor(*self.background)
         self.id = glGenBuffers(1)
         glBindBuffer(GL_UNIFORM_BUFFER, self.id)
         glBufferData(GL_UNIFORM_BUFFER, self.size, np.array([self._scale.transpose(),
@@ -580,3 +582,13 @@ class SceneUniformBuffer(aUniformBuffer):
         self._scene_shift[2, 3] = shift
         self.rotation_point = self.rotation_point
         self.replaceData(self._scene_shift.transpose(), self.properties['scene_shift'])
+
+    @property
+    def background(self):
+        return self._background
+
+    @background.setter
+    def background(self, color):
+        self._background = color
+        self.makeCurrent()
+        glClearColor(*color)

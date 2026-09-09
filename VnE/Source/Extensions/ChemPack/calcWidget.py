@@ -59,8 +59,11 @@ class CalcWidget(QLabel):
             if any(b):
                 ind = [x + i + 1 for x in range(len(b)) if b[x]]
                 for i1 in ind:
-                    coords.pop(i1)
-                    atoms.pop(i1)
+                    try:
+                        coords.pop(i1)
+                        atoms.pop(i1)
+                    except IndexError:
+                        pass
         if len(atoms) > 4:
             angle = contacts.angle(atoms, False)
             line = f'{atoms[0].name}--{atoms[1].name}--{atoms[2].name}  {atoms[-1].name}--{atoms[-2].name}--{atoms[-3].name}: {angle: .1f}'

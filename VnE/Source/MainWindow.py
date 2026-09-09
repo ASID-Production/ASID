@@ -45,6 +45,7 @@ from PySide6.QtCore import *
 
 from . import QtModels
 from .QtModels import ListView, UniformListModel, TreeView, QtPointsTreeModel, SelectionModel, QtPointsPropertyModel
+from .selector import MacroDockWidget
 from PIL import Image
 
 
@@ -140,6 +141,7 @@ class OpenGlWidget(QOpenGLWidget):
         self.facade.changeUniformBufferProperty(self.uniforms_id, 'perspective', np.array([-100, 100, 100, -100, 100, 2500]))
         self.facade.changeUniformBufferProperty(self.uniforms_id, 'scene_shift', -500)
         self.facade.changeUniformBufferProperty(self.uniforms_id, 'scale', np.array([5, 5, 5]))
+        #glClearColor(1.0,0.0,0.0,1.0)
 
     def resizeGL(self, w: int, h: int) -> None:
         self.facade.changeUniformBufferProperty(self.uniforms_id, 'wh', [w, h])
@@ -482,9 +484,16 @@ class MainWindow(QtWidgets.QMainWindow):
         self.uniformDock.setFeatures(QtWidgets.QDockWidget.DockWidgetMovable | QtWidgets.QDockWidget.DockWidgetFloatable | QtWidgets.QDockWidget.DockWidgetClosable)
         self.uniformDock.hide()
 
+        macro_dir = os.path.normpath(f'{os.path.dirname(__file__)}/macros')
+        os.makedirs(macro_dir, exist_ok=True)
+        self.macroDock = MacroDockWidget(macro_dir, self, self.model, self.selection_model)
+        self.macroDock.setObjectName('macroDock')
+        self.macroDock.hide()
+
         self.addDockWidget(Qt.LeftDockWidgetArea, self.uniformDock)
         self.addDockWidget(Qt.LeftDockWidgetArea, self.treeDock)
         self.addDockWidget(Qt.LeftDockWidgetArea, self.listDock)
+        self.addDockWidget(Qt.RightDockWidgetArea, self.macroDock)
 
         self.opengl_widget = OpenGlWidget(parent=widget, model=self.points_list, uniformWidget=self.uniformWid)
         self.opengl_widget.setSizePolicy(QtWidgets.QSizePolicy.Expanding, QtWidgets.QSizePolicy.Preferred)
@@ -517,11 +526,13 @@ class MainWindow(QtWidgets.QMainWindow):
         self.menu.setObjectName('MenuBar')
         self.extension_menu = Extensions.getMenu(self.model, self.uniformModel, main_widget=widget, main_menu=self.menu)
         self.uniformAction = self.menu.addAction('Uniforms')
+        self.macroAction = self.menu.addAction('Macros')
         self.screenshotAction = self.menu.addAction('Screenshot')
         self.saveStateAction = self.menu.addAction('Save state')
         self.loadStateAction = self.menu.addAction('Load state')
         self.menu.addMenu(self.extension_menu)
-        self.uniformAction.triggered.connect(self.uniformDock.show)
+        self.uniformAction.triggered.connect(lambda: self.toggleWidget(self.uniformDock))
+        self.macroAction.triggered.connect(lambda: self.toggleWidget(self.macroDock))
         self.screenshotAction.triggered.connect(self.screenshot)
         self.saveStateAction.triggered.connect(self.saveSceneState)
         self.loadStateAction.triggered.connect(self.loadState)
@@ -543,10 +554,14 @@ class MainWindow(QtWidgets.QMainWindow):
         if geom:
             self.restoreGeometry(geom)
 
+    def toggleWidget(self, widget):
+        widget.setVisible(not widget.isVisible())
+
     def closeEvent(self, event, *args, **kwargs):
         settings = QtCore.QSettings('ASID', 'LRSI')
         settings.setValue("windowState", self.saveState(version=0))
         settings.setValue("windowGeom", self.saveGeometry())
+        settings.setValue("macroDock/splitter", self.macroDock.splitter.saveState())
         QtWidgets.QApplication.quit()
 
     def screenshot(self):

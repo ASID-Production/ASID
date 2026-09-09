@@ -35,6 +35,7 @@ import numpy as np
 
 
 class CopyPointObserver:
+    NAME = 'CopyPoint'
 
     def __init__(self, owner):
         self._owner = owner

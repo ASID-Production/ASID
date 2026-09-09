@@ -105,7 +105,7 @@ class Scene(aScene):
         glEnable(GL_MULTISAMPLE)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
         glEnable(GL_BLEND)
-        glClearColor(1.0, 1.0, 1.0, 1.0)
+        #glClearColor(1.0, 1.0, 1.0, 1.0)
         self.last_mode = 'DEFAULT'
 
     def selectMode(self):
@@ -126,7 +126,7 @@ class TestScene(aScene):
         glEnable(GL_MULTISAMPLE)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
         glEnable(GL_BLEND)
-        glClearColor(1.0, 1.0, 1.0, 1.0)
+        #glClearColor(1.0, 1.0, 1.0, 1.0)
         glUseProgram(0)
         for buffer in self.uniform_buffers:
             buffer.bind()

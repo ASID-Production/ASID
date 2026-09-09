@@ -334,13 +334,14 @@ def clusterCreationFunc():
 def instrumentsFunc():
     import sys
     if '--debug' in sys.argv or '-d' in sys.argv:
-        import importlib
+        #import importlib
+        #from . import instruments
+        #importlib.reload(instruments)
         from . import instruments
-        importlib.reload(instruments)
-        instruments.execute()
+        instruments.execute(MAIN_WIDGET)
     else:
         from . import instruments
-        instruments.execute()
+        instruments.execute(MAIN_WIDGET)
 
 
 def polyhedronFunc():

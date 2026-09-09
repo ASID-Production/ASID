@@ -27,7 +27,7 @@
 #  ******************************************************************************************
 
 from abc import ABC, abstractmethod
-from PySide6.QtWidgets import QDialog
+from PySide6.QtWidgets import QDialog, QDockWidget
 from .ui.ui_instruments import Ui_Dialog
 from PySide6 import QtCore
 import time
@@ -35,6 +35,7 @@ from . import MAIN_WIDGET, MOLECULE_SYSTEMS
 from PySide6.QtOpenGLWidgets import QOpenGLWidget
 import numpy as np
 
+DIALOG = None
 
 class Command(ABC):
 
@@ -78,14 +79,15 @@ class Command(ABC):
         Command.reverse_stack = []
 
 
-class Dialog(QDialog):
+class Dialog(QDockWidget):
     def __init__(self, parent=None):
-        super().__init__(parent)
+        super().__init__("Instruments", parent)
         self.ui = Ui_Dialog()
         self.ui.setupUi(self)
         self.setWindowFlag(QtCore.Qt.WindowStaysOnTopHint, True)
         self.opengl_widget = MAIN_WIDGET.findChild(QOpenGLWidget, "OpenGLWidget")
         self.old_filter = self.opengl_widget.eventFilterf
+        print(self.old_filter)
         self.tr_mode = self.translate
         self.sl_mode = None
         self.ui.pushButton.clicked.connect(lambda: setattr(self, 'tr_mode', self.translate))
@@ -93,10 +95,6 @@ class Dialog(QDialog):
         self.ui.pushButton_3.clicked.connect(self.deleteSel)
         self.ui.pushButton_4.clicked.connect(lambda: setattr(self, 'sl_mode', self.select_mol) if self.ui.pushButton_4.isChecked() else setattr(self, 'sl_mode', None))
 
-    def show(self):
-        self.old_filter = self.opengl_widget.eventFilterf
-        self.opengl_widget.eventFilterf = self.customEventFilter
-        QDialog.show(self)
 
     def translate(self, dir):
         sel = self.opengl_widget.selection_model.selection()
@@ -281,12 +279,22 @@ class Dialog(QDialog):
             else:
                 self.scale_func(-1)
 
-    def closeEvent(self, arg__1):
+    def hideEvent(self, event):
         self.opengl_widget.eventFilterf = self.old_filter
-        QDialog.closeEvent(self, arg__1)
+        super().hideEvent(event)
+
+    def showEvent(self, event):
+        self.old_filter = self.opengl_widget.eventFilterf
+        self.opengl_widget.eventFilterf = self.customEventFilter
+        self.tr_mode = self.translate
+        self.ui.pushButton.click()
+        super().showEvent(event)
 
 
-def execute():
+def execute(main_wid):
     global DIALOG
-    DIALOG = Dialog()
+    if DIALOG is None:
+        DIALOG = Dialog(main_wid.parent())
+        main_wid.parent().addDockWidget(QtCore.Qt.RightDockWidgetArea, DIALOG)
+
     DIALOG.show()

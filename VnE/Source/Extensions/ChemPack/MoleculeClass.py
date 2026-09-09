@@ -288,9 +288,10 @@ class Atom(DefaultData):
 
     def addBond(self, bond):
         if any([bond == x for x in self._bonds]):
-            return
+            return False
         else:
             self._bonds.append(bond)
+            return True
 
     def parent(self):
         return self._parent

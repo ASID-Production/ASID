@@ -20,11 +20,13 @@ from PySide6.QtWidgets import (QApplication, QDialog, QHBoxLayout, QPushButton,
 
 class Ui_Dialog(object):
     def setupUi(self, Dialog):
-        if not Dialog.objectName():
-            Dialog.setObjectName(u"Dialog")
-        Dialog.resize(174, 42)
+        central = QWidget()
+        Dialog.setWidget(central)
+        Dialog = central
         self.horizontalLayout_2 = QHBoxLayout(Dialog)
         self.horizontalLayout_2.setObjectName(u"horizontalLayout_2")
+        self.horizontalLayout_2.setSpacing(0)
+        self.horizontalLayout_2.setContentsMargins(0, 0, 0, 0)
         self.pushButton = QPushButton(Dialog)
         self.pushButton.setObjectName(u"pushButton")
         sizePolicy = QSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)

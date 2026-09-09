@@ -388,6 +388,8 @@ class QtPointsTreeModel(QAbstractItemModel):
     def update(self):
         self.beginResetModel()
         self.endResetModel()
+        if self.main_window:
+            self.main_window.updateOpenGL()
 
     def attachObserver(self, index: QModelIndex, observer_name):
         if index.isValid() and index.internalPointer() is not None:
@@ -622,6 +624,8 @@ class QtPointsTreeModel(QAbstractItemModel):
         self.beginRemoveRows(parent, row, row+1)
         item.destroy()
         self.endRemoveRows()
+        if self.main_window:
+            self.main_window.updateOpenGL()
         return True
 
 

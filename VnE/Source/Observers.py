@@ -603,6 +603,8 @@ class LineObserver(aObserver):
             for property in self._properties:
                 try:
                     data[property] = object.__getattribute__(property)
+                    if isinstance(data[property], list):
+                        data[property] = np.array(data[property], dtype=np.float32)
                     if isinstance(data[property], float) or isinstance(data[property], int):
                         data[property] = np.array([data[property]], dtype=np.float32)
                 except AttributeError:
