@@ -58,7 +58,7 @@ namespace cpplib::cluster_detail {
 	using AtomIndex = cpplib::basic_types::AtomIndex;
 	using SymmType = cpplib::geometry::Symm<FloatingPointType>;
 	using AtomTypeBase = cpplib::basic_types::AtomTypeBase;
-	using BondWithShift = typename geometry::SpatialGrid<FloatingPointType>::BondWithShift;
+	using BondWithShift = typename geometry::SG<FloatingPointType>::BondWithShift;
 	using BondList = ::std::vector<BondWithShift>;
 
 	class ClusterData {
@@ -215,10 +215,11 @@ namespace cpplib::cluster_detail {
 		explicit UnitCellBuilder(const ::std::vector<SymmType>& symmetries,
 								 Config config = Config{true,
 														cpplib::geometry::crystallography_eq_position_eps_fractalspace})
-			: symmetries_(symmetries), config_(config) {}
+			: symmetries_(symmetries), config_(config) {
+		}
 
 		BuildResult build(const std::vector<PointType>& points,
-						 const std::vector<AtomTypeBase>& types) const {
+						  const std::vector<AtomTypeBase>& types) const {
 
 			BuildResult result;
 			result.original_asymmetric_count = points.size();
@@ -330,7 +331,8 @@ namespace cpplib::cluster_detail {
 
 		ConstructMolecules(const CellType& unit_cell,
 						   const Distances& distances) noexcept
-			: cell(unit_cell), dist(distances) {}
+			: cell(unit_cell), dist(distances) {
+		}
 
 		ResultType execute(const ClusterData& atoms_01) const {
 			ResultType result;
@@ -338,18 +340,18 @@ namespace cpplib::cluster_detail {
 			auto atom_s = atoms_01.size();
 
 
-			geometry::SpatialGrid<FloatingPointType> sg;
-			sg.build(atoms_01.points, cell, 4.0);
-			auto bonds = sg.get_bonds(false);
-			dist.filter_bond_list(bonds,
-								  atoms_01.types,
-								  atoms_01.points,
-								  [this](const PointType& a, const PointType& b)
-								  {
-									  return (cell.fracToCart() * (a - b)).r();
-								  });
+			geometry::SG<FloatingPointType> sg(cell, true, 6.0);
+			sg.updateOnlyPoints(atoms_01.points);
+			auto bonds = sg.findAllContacts();
+			auto filtered_bonds = dist.filter_bond_list(bonds,
+														atoms_01.types,
+														atoms_01.points,
+														[this](const PointType& a, const PointType& b)
+														{
+															return (cell.fracToCart() * (a - b)).r();
+														});
 
-			// Based on union-find separation
+								  // Based on union-find separation
 			result.molecules.resize(atom_s);
 			for (int i = 0; i < atom_s; i++)
 			{
@@ -358,9 +360,7 @@ namespace cpplib::cluster_detail {
 			result.atom_to_trmol_id.resize(atom_s);
 			std::iota(result.atom_to_trmol_id.begin(), result.atom_to_trmol_id.end(), 0);
 
-			for (auto& bond : bonds) {
-				if (bond.first == bond.second && bond.shiftcode.get_code() == uint8_t(13))
-					continue;
+			for (auto& bond : filtered_bonds) {
 
 				unite(bond, result.molecules, result.atom_to_trmol_id);
 
@@ -400,7 +400,7 @@ namespace cpplib::cluster_detail {
 
 			Molecule& mol_a = m[a_to_m[bond.first]];
 			Molecule& mol_b = m[a_to_m[bond.second]];
-			const auto bondshift = bond.shiftcode.get_shift();
+			const auto bondshift = bond.shift.get_shift();
 
 			// Check mol_a and mol_b are the same molecules
 			if (&mol_a == &mol_b) {
@@ -602,10 +602,10 @@ namespace cpplib {
 
 			for (const auto& atom : atoms) {
 				ret.push_back(unit_cell.atoms[atom.id].index,
-								 unit_cell.atoms[atom.id].type,
-								 unit_cell.atoms[atom.id].point + atom.shift,
-								 unit_cell.atoms[atom.id].symm,
-								 unit_cell.atoms[atom.id].shift + atom.shift);
+							  unit_cell.atoms[atom.id].type,
+							  unit_cell.atoms[atom.id].point + atom.shift,
+							  unit_cell.atoms[atom.id].symm,
+							  unit_cell.atoms[atom.id].shift + atom.shift);
 			}
 			return ret;
 		}
@@ -631,9 +631,9 @@ namespace cpplib {
 
 
 		inline FloatingPointType dist0(const Plane& plane, const PointType& p) const {
-			return plane.side(p) / sqrt(fma(plane.a[0], plane.a[0], 
-											fma(plane.a[1], plane.a[1], 
-												plane.a[2]* plane.a[2])));
+			return plane.side(p) / sqrt(fma(plane.a[0], plane.a[0],
+											fma(plane.a[1], plane.a[1],
+												plane.a[2] * plane.a[2])));
 		}
 
 		void constructBox(const AnchorType& anchor,
@@ -674,7 +674,7 @@ namespace cpplib {
 				for (const auto& anchor : anchors_cart) {
 					// Calculate distance to anchor
 
-					if(PointType::distanceSq(point, anchor.point) < anchor.radius* anchor.radius) {
+					if (PointType::distanceSq(point, anchor.point) < anchor.radius * anchor.radius) {
 						return true;
 					}
 				}
