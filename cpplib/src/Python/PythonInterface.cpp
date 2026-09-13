@@ -761,17 +761,18 @@ extern "C" {
 	}
 
 	// Args: [cell,symm,tuples,anchors,radius]
-	static PyObject* cpplib_ClusterCreate(PyObject* self, PyObject* args) {
+	static PyObject* cpplib_Cluster(PyObject* self, PyObject* args) {
 		PyObject* ocell = NULL;
 		PyObject* osymm = NULL;
 		PyObject* otuples = NULL;
 		PyObject* ocoords = NULL;
-		cpplib::basic_types::FloatingPointType over_radius = 0;
-		if (!PyArg_ParseTuple(args, "OOOOf", &ocell, &osymm, &otuples, &ocoords, &over_radius)) {
+		double over_radius = 0;
+		if (!PyArg_ParseTuple(args, "OOOOd", &ocell, &osymm, &otuples, &ocoords, &over_radius)) {
 			Py_RETURN_NONE;
 		}
+		useDistances(self);
 
-		LOG_INTERFACE_GUARD("cpplib_ClusterCreate");
+		LOG_INTERFACE_GUARD("cpplib_Cluster");
 		Prepare_IC all(ocell, osymm, otuples);
 
 		Py_ssize_t s = PyList_Size(ocoords);
@@ -787,7 +788,8 @@ extern "C" {
 				static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 3))));
 		}
 		bool hasPolymer = false;
-		auto ret = WITH_LOG(ClusterCreate, all.cell, all.symm, all.types, all.points, anchors, over_radius, hasPolymer);
+		auto poly_rad = static_cast<cpplib::basic_types::FloatingPointType>(over_radius);
+		auto ret = WITH_LOG(ClusterCreate, all.cell, all.symm, all.types, all.points, anchors, poly_rad, hasPolymer);
 
 		return Py_BuildValue("{s:N,s:N}",
 							 "points", py_util::convert(ret),
@@ -982,7 +984,7 @@ extern "C" {
 		{ "SubSearch", cpplib_SubSearch, METH_VARARGS, "Compare two graphs"},
 		{ "compaq", cpplib_compaq, METH_VARARGS, "Do the same as Olex2 'compaq' function"},
 		{ "SortDatabase", cpplib_SortDatabase, METH_O, "Sort graph"},
-		{ "Cluster", cpplib_ClusterCreate, METH_VARARGS, "Create cluster"},
+		{ "Cluster", cpplib_Cluster, METH_VARARGS, "Create cluster"},
 		{ "VoronoiCalculation", cpplib_Voronoi, METH_VARARGS, "Calculate Voronoi cells"},
 		{ "FindCP", cpplib_FindCP, METH_VARARGS, "Find CP in crystal"},
 
