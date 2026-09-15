@@ -1723,8 +1723,7 @@ class DrawerGL(QOpenGLWidget):
 
     def __init__(self, *args, parent=None):
         super().__init__(parent)
-        self.surface_format = QtGui.QSurfaceFormat()
-        self.surface_format.setSamples(8)
+        self.surface_format = QtGui.QSurfaceFormat.defaultFormat()
         self.setFormat(self.surface_format)
         self.error = []
         self._events = []

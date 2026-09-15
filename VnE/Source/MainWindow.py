@@ -51,15 +51,20 @@ from PIL import Image
 
 class OpenGlWidget(QOpenGLWidget):
 
+    @staticmethod
+    def defaultSurfaceFormat():
+        surface_format = QtGui.QSurfaceFormat()
+        surface_format.setSamples(8)
+        surface_format.setOption(QtGui.QSurfaceFormat.DebugContext)
+        surface_format.setRenderableType(QtGui.QSurfaceFormat.OpenGL)
+        surface_format.setProfile(QtGui.QSurfaceFormat.CoreProfile)
+        surface_format.setMajorVersion(4)
+        surface_format.setMinorVersion(5)
+        return surface_format
+
     def __init__(self, parent, facade=None, scene=None, pipeline=None, model=None, **kwargs):
         super().__init__(parent)
-        self.surface_format = QtGui.QSurfaceFormat()
-        self.surface_format.setSamples(4)
-        self.surface_format.setOption(QtGui.QSurfaceFormat.DebugContext)
-        self.surface_format.setRenderableType(QtGui.QSurfaceFormat.OpenGL)
-        self.surface_format.setProfile(QtGui.QSurfaceFormat.CoreProfile)
-        self.surface_format.setMajorVersion(4)
-        self.surface_format.setMinorVersion(6)
+        self.surface_format = self.defaultSurfaceFormat()
         self.setFormat(self.surface_format)
         self.timer = QtCore.QTimer()
         self.timer.timeout.connect(self.update)
@@ -672,6 +677,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
 
 def show():
+    QtGui.QSurfaceFormat.setDefaultFormat(OpenGlWidget.defaultSurfaceFormat())
     app = QtWidgets.QApplication(sys.argv)
 
     window = MainWindow()
