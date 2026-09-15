@@ -114,7 +114,6 @@ def general_cell_filter(request, queryset, value, qc=''):
         f'{qc}reduced_cells__al__range': (params[3] - params[3] * abc_deviation, params[3] + params[3] * angle_deviation),
         f'{qc}reduced_cells__be__range': (params[4] - params[4] * abc_deviation, params[4] + params[4] * angle_deviation),
         f'{qc}reduced_cells__ga__range': (params[5] - params[5] * abc_deviation, params[5] + params[5] * angle_deviation),
-        f'{qc}cell__centring__exact': centrings[params[6].upper()]
     }
     queryset = queryset.filter(**cell_filter).distinct()
     return queryset

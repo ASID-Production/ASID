@@ -26,15 +26,14 @@
 #
 # *****************************************************************************************
 
-import os.path
-
-from django.db import models
-from django.contrib.auth import get_user_model
-from io import BytesIO
 import base64
+import os.path
+from io import BytesIO
+
+from django.contrib.auth import get_user_model
+from django.db import models
 
 from modules.gen2d.gen2d import gen2d
-
 
 User = get_user_model()
 
@@ -260,8 +259,8 @@ class AbstractInChI(models.Model):
 
     def get_inchi_string(self):
         inchi_parts = ['version', 'formula', 'connectivity', 'hydrogens',
-                 'q_charge', 'p_charge', 'b_stereo', 't_stereo',
-                 'm_stereo', 's_stereo', 'i_isotopic']
+                       'q_charge', 'p_charge', 'b_stereo', 't_stereo',
+                       'm_stereo', 's_stereo', 'i_isotopic']
         inchi = 'InChI='
         for inchi_part in inchi_parts:
             value = getattr(self, inchi_part)
@@ -286,6 +285,7 @@ class AbstractSubstructure1(models.Model):
     NO2 = models.BooleanField(verbose_name='N-(O)2 group', default=False)
     SO2 = models.BooleanField(verbose_name='S-(O)2 group', default=False)
     CS = models.BooleanField(verbose_name='C-S bond', default=False)
+
     # C_Met = models.BooleanField(verbose_name='C-Metall bond', default=False)
     # N_Met = models.BooleanField(verbose_name='N-Metall bond', default=False)
 
@@ -310,6 +310,7 @@ class AbstractSubstructure2(models.Model):
     CNO = models.BooleanField(verbose_name='C-N-O group', default=False)
     C3P = models.BooleanField(verbose_name='(C)3-P group', default=False)
     CO2 = models.BooleanField(verbose_name='C-(O)2 group', default=False)
+
     # C_Hal = models.BooleanField(verbose_name='C-Halogen bond', default=False)
 
     class Meta:
@@ -1041,7 +1042,7 @@ class Journal(models.Model):
         null=True,
     )
     name = models.CharField(max_length=500, verbose_name='Journal')
-    discontinued = models.BooleanField(verbose_name='Discontinued', blank=True, null=True,)
+    discontinued = models.BooleanField(verbose_name='Discontinued', blank=True, null=True, )
     fullname = models.CharField(max_length=1000, verbose_name='Journal', blank=True, null=True)
     translated_name = models.CharField(max_length=500, blank=True, null=True, verbose_name='Journal')
     abbreviated_translated_name = models.CharField(
