@@ -44,12 +44,662 @@
 #include "../Classes/Bond.h"
 #include "../Classes/Geometry.h"
 
-/// @brief Voronoi diagram construction and analysis namespace
-///
-/// This namespace contains classes and utilities for constructing and manipulating
-/// Voronoi diagrams in 3D space. The Voronoi diagram partitions space based on
-/// proximity to a set of input points (typically atom positions).
+// ============================================================================
+//  LEVEL 0: Pure Data (POD Structures)
+//  Inert, dense, cache-aligned. No methods. Zero polymorphism.
+// ============================================================================
+
 namespace cpplib::voronoi {
+
+	using IDtype = uint16_t;
+	using LocalIdx = uint16_t;
+	using FloatingPointType = basic_types::FloatingPointType;
+	using PointType = geometry::Point<FloatingPointType>;
+	using MatrixType = geometry::Matrix<FloatingPointType>;
+
+	constexpr IDtype INVALID_ID = std::numeric_limits<IDtype>::max();
+
+	// --- Vertex: 32 bytes ---
+	struct alignas(32) Vertex {
+		PointType  pos;      // Cartesian position
+		FloatingPointType distance; // Distance to atom (service)
+	};
+
+	// --- HalfEdge: 8 bytes ---
+	struct alignas(8) HalfEdge {
+		IDtype origin_vertex_id;
+		IDtype polygon_id;
+		IDtype next_edge_id;
+		IDtype twin_edge_id;
+	};
+
+	// --- Polygon: 8 bytes ---
+	struct alignas(8) Polygon {
+		IDtype first_edge_id;  // Stable global ID of first HalfEdge
+		IDtype other_cell;     // ID of another Polyhedron
+		ShiftCode other_shift; // Shift of another Polyhedron
+	};
+
+	// --- Polyhedron: 32 bytes ---
+	struct alignas(32) Polyhedron {
+		PointType  center;         // Polyhedron center (atom position)
+		FloatingPointType volume;  // Computed volume
+	};
+	static_assert(sizeof(Polyhedron) <= 64, "Polyhedron should fit in one cache-line");
+
+} // namespace cpplib::voronoi
+
+// ============================================================================
+//  LEVEL 1: Technical Storage (SoA Container)
+//  Memory management only: add, remove (swap-and-pop O(1)), point access.
+//  Knows nothing about geometry or physics.
+// ============================================================================
+
+namespace cpplib::voronoi {
+
+	template <typename T, size_t MAX_POOL = 256>
+	class Storage {
+	public:
+		explicit Storage(IDtype max_id = MAX_POOL - 1)
+			: mask_(static_cast<size_t>(max_id), INVALID_ID) {
+		}
+
+		// Insert object: returns local dense index
+		LocalIdx add(const T& obj) {
+			assert(next_ < mask_.size());
+			assert(mask_[next_] == INVALID_ID);
+			LocalIdx idx = static_cast<LocalIdx>(data_.size());
+			data_.push_back(obj);
+			ids_.push_back(next_);
+			mask_[next_] = idx;
+			++next_;
+			return idx;
+		}
+
+		// O(1) removal: swap-and-pop + single mask cell update for the moved element
+		void remove_by_id(IDtype global_id) noexcept {
+			if (global_id >= mask_.size()) return;
+			LocalIdx idx = mask_[global_id];
+			if (idx == INVALID_ID) return;
+
+			LocalIdx last = static_cast<LocalIdx>(data_.size() - 1);
+			if (idx != last) {
+				data_[idx] = std::move(data_[last]);
+				ids_[idx] = ids_[last];
+				mask_[ids_[idx]] = idx;
+			}
+			data_.pop_back();
+			ids_.pop_back();
+			mask_[global_id] = INVALID_ID;
+		}
+
+		// Branchless point access by global_id: 1 L1 cycle
+		const T& get_by_id(IDtype global_id) const noexcept {
+			assert(global_id < mask_.size() && mask_[global_id] != INVALID_ID);
+
+			return data_[mask_[global_id]];
+		}
+		T& get_by_id(IDtype global_id) noexcept {
+			assert(global_id < mask_.size() && mask_[global_id] != INVALID_ID);
+
+			return data_[mask_[global_id]];
+		}
+
+		// Dense range for iteration
+		const T* data() const noexcept {
+			return data_.data();
+		}
+		T* data() noexcept {
+			return data_.data();
+		}
+		size_t size() const noexcept {
+			return data_.size();
+		}
+		bool empty() const noexcept {
+			return data_.empty();
+		}
+
+		// Iteration over all active elements
+		template <typename Fn>
+		void for_each(Fn&& fn) {
+			for (size_t i = 0; i < data_.size(); ++i)
+				fn(data_[i]);
+		}
+
+		IDtype get_id(LocalIdx index) const noexcept {
+			return ids_[index];
+		}
+
+		void clear() noexcept {
+			data_.clear();
+			std::fill(mask_.begin(), mask_.end(), INVALID_ID);
+		}
+
+		void reserve(size_t n) {
+			data_.reserve(n);
+		}
+
+	private:
+		std::vector<T>        data_;
+		std::vector<IDtype>   ids_;
+		std::vector<LocalIdx> mask_; // global_id -> local dense index (L1-friendly)
+		IDtype next_ = 0; // next empty ID
+	};
+
+
+// --- United Storage ---
+	struct PolyhedronData {
+		Storage<Vertex>   vert;
+		Storage<HalfEdge> edge;
+		Storage<Polygon>  face;
+
+		void clear() noexcept {
+			vert.clear(); edge.clear(); face.clear();
+		}
+		void reserve(size_t nv, size_t ne, size_t nf) {
+			vert.reserve(nv); edge.reserve(ne); face.reserve(nf);
+		}
+
+		IDtype add_vertex(const PointType& p) {
+			Vertex v{}; v.pos = p; v.distance = FloatingPointType(0);
+			const LocalIdx idx = vert.add(v);
+			return static_cast<IDtype>(idx);
+		}
+		IDtype add_halfedge(IDtype origin, IDtype poly, IDtype next, IDtype twin) {
+			HalfEdge h{}; h.origin_vertex_id = origin;
+			h.polygon_id = poly; h.next_edge_id = next; h.twin_edge_id = twin;
+			const LocalIdx idx = edge.add(h);
+			return static_cast<IDtype>(idx);
+		}
+		IDtype add_face(IDtype first_he, IDtype other_cell, ShiftCode shift) {
+			Polygon p{}; p.first_edge_id = first_he;
+			p.other_cell = other_cell; p.other_shift = shift;
+			const LocalIdx idx = face.add(p);
+			return static_cast<IDtype>(idx);
+		}
+	};
+} // namespace cpplib::voronoi
+
+// ============================================================================
+//  LEVEL 2: Math Engine (Low-Level, Stateless)
+//  Pure static inline functions. Zero fields. Ideal for -O3 / AVX2 / FMA.
+//  All functions accept data by const-reference from outside.
+// ============================================================================
+
+namespace cpplib::voronoi {
+
+	struct MathEngine {
+		using PlaneType = geometry::Plane<FloatingPointType>;
+
+		static constexpr FloatingPointType EPS = static_cast<FloatingPointType>(1.0e-10);
+
+		// --- Triangle area from 3 points (cross-product magnitude / 2) ---
+		static inline FloatingPointType triangle_area(const PointType& vector_AB,
+													  const PointType& vector_AC) noexcept {
+			return PointType::Vector(vector_AB, vector_AC).r()* FloatingPointType(0.5);
+		}
+
+		// --- Polygon normal via Newell's method (robust for concave polygons) ---
+		static inline PointType polygon_normal(const PolyhedronData& d,
+											   IDtype first_he) noexcept {
+			const HalfEdge& e0 = d.edge.get_by_id(first_he);
+			PointType v0 = d.vert.get_by_id(e0.origin_vertex_id).pos;
+
+			IDtype next_he = e0.next_edge_id;
+			PointType v1 = d.vert.get_by_id(d.edge.get_by_id(next_he).origin_vertex_id).pos;
+
+			FloatingPointType nx = 0, ny = 0, nz = 0;
+
+			while (true) {
+				nx += (v0[1] - v1[1]) * (v0[2] + v1[2]);
+				ny += (v0[2] - v1[2]) * (v0[0] + v1[0]);
+				nz += (v0[0] - v1[0]) * (v0[1] + v1[1]);
+
+				if (next_he == first_he) break;
+
+				v0 = v1;
+				const HalfEdge& e = d.edge.get_by_id(next_he);
+				next_he = e.next_edge_id;
+				v1 = d.vert.get_by_id(d.edge.get_by_id(next_he).origin_vertex_id).pos;
+			}
+
+			const FloatingPointType len = std::sqrt(nx * nx + ny * ny + nz * nz);
+			if (len > EPS) {
+				nx /= len; ny /= len; nz /= len;
+			}
+			return PointType(nx, ny, nz);
+		}
+
+		// --- Polygon area (fan triangulation) ---
+		static inline FloatingPointType polygon_area(const PolyhedronData& d,
+													 IDtype first_he) noexcept {
+			const HalfEdge& e0 = d.edge.get_by_id(first_he);
+			const PointType p0 = d.vert.get_by_id(e0.origin_vertex_id).pos;
+
+			const HalfEdge& e1 = d.edge.get_by_id(e0.next_edge_id);
+
+			PointType v1 = d.vert.get_by_id(e1.origin_vertex_id).pos - p0;
+
+			IDtype e2 = e1.next_edge_id;
+			FloatingPointType area = FloatingPointType(0);
+
+			while (e2 != first_he) {
+				const HalfEdge& e2_he = d.edge.get_by_id(e2);
+				const PointType p2 = d.vert.get_by_id(e2_he.origin_vertex_id).pos;
+				PointType v2 = p2 - p0;
+				area += triangle_area(v1, v2);
+				v1 = v2;
+				e2 = e2_he.next_edge_id;
+			}
+			return area;
+		}
+
+		static inline PlaneType polygon_plane(const PolyhedronData& d,
+															 IDtype first_he) noexcept {
+			const HalfEdge& e0 = d.edge.get_by_id(first_he);
+			const IDtype e1_id = e0.next_edge_id;
+			const HalfEdge& e1 = d.edge.get_by_id(e1_id);
+			const IDtype e2_id = e1.next_edge_id;
+			return PlaneType(
+				d.vert.get_by_id(e0.origin_vertex_id).pos,
+				d.vert.get_by_id(e1.origin_vertex_id).pos,
+				d.vert.get_by_id(d.edge.get_by_id(e2_id).origin_vertex_id).pos);
+		}
+
+		// --- Solid angle of a polygon face at point 'origin' (van Oosterom-Strackee) ---
+		static inline FloatingPointType polygon_solid_angle(const PolyhedronData& d,
+															IDtype first_he,
+															const PointType& origin) noexcept {
+			const HalfEdge& e0 = d.edge.get_by_id(first_he);
+			const PointType v0 = d.vert.get_by_id(e0.origin_vertex_id).pos - origin;
+			const FloatingPointType r0 = v0.r();
+
+			IDtype next_he = e0.next_edge_id;
+			const PointType v1 = d.vert.get_by_id(
+				d.edge.get_by_id(next_he).origin_vertex_id).pos - origin;
+
+			PointType         v_prev = v1;
+			FloatingPointType r_prev = v1.r();
+			FloatingPointType dot0_prev = PointType::Scalar(v0, v1);
+
+			next_he = d.edge.get_by_id(next_he).next_edge_id;
+
+			FloatingPointType angle = FloatingPointType(0);
+
+			while (next_he != first_he) {
+				const HalfEdge& he = d.edge.get_by_id(next_he);
+				const PointType v_curr = d.vert.get_by_id(he.origin_vertex_id).pos - origin;
+
+				const FloatingPointType r_curr = v_curr.r();
+				const FloatingPointType dot0_curr = PointType::Scalar(v0, v_curr);
+
+				const FloatingPointType cross = std::abs(
+					PointType::Scalar(v0, PointType::Vector(v_prev, v_curr)));
+
+				const FloatingPointType denom =
+					r0 * r_prev * r_curr
+					+ dot0_prev * r_curr
+					+ dot0_curr * r_prev
+					+ PointType::Scalar(v_prev, v_curr) * r0;
+
+				if (cross > EPS) angle += std::atan2(cross, denom);
+
+				v_prev = v_curr;
+				r_prev = r_curr;
+				dot0_prev = dot0_curr;
+
+				next_he = he.next_edge_id;
+			}
+
+			return angle * FloatingPointType(2);
+		}
+
+		// --- Volume: sum of pyramid contributions per face ---
+		//   volume = sum over faces: dist(center, face_plane) * face_area / 3
+		static inline FloatingPointType cell_volume(const PolyhedronData& d,
+													const PointType& center) noexcept {
+			const Polygon* polys = d.face.data();
+			const size_t   nf = d.face.size();
+
+			FloatingPointType volume = FloatingPointType(0);
+			for (size_t i = 0; i < nf; ++i) {
+				const IDtype fh = polys[i].first_edge_id;
+				const FloatingPointType area = polygon_area(d, fh);
+				const auto              pl = polygon_plane(d, fh);
+				volume += area * std::abs(pl.distance(center));
+			}
+			return volume * FloatingPointType(1.0 / 3.0);
+		}
+
+		// --- Edge length ---
+		static inline FloatingPointType edge_length(const PointType& a,
+													const PointType& b) noexcept {
+			return PointType::distance(a, b);
+		}
+	};
+
+} // namespace cpplib::voronoi
+
+// ============================================================================
+//  LEVEL 3: Topological Context (Mid-Level Manager)
+//  OWNS all Level-1 storages. Knows PBC, supercell, spatial hashing.
+//  Coordinates topology updates and defragmentation.
+// ============================================================================
+
+namespace cpplib::voronoi {
+
+	struct VoronoiCell {
+		Polyhedron     meta;   // {center, volume}
+		PolyhedronData topo;   // {vert, edge, face}
+
+		void clear() noexcept {
+			meta = Polyhedron{};
+			topo.clear();
+		}
+		void reserve(size_t nv, size_t ne, size_t nf) {
+			topo.reserve(nv, ne, nf);
+		}
+	};
+
+	struct VoronoiContext {
+		std::vector<VoronoiCell> cells;
+
+		MatrixType FtoC, CtoF;
+		int sup_x = 1, sup_y = 1, sup_z = 1;
+		uint32_t          max_neighbors = 12;
+		FloatingPointType cutoff = FloatingPointType(0);
+
+		struct SpatialHash {
+			FloatingPointType cell_size = FloatingPointType(1);
+			std::unordered_map<uint64_t, std::vector<LocalIdx>> grid;
+
+			static inline uint64_t key(int64_t ix, int64_t iy, int64_t iz) noexcept {
+				return (uint64_t(ix) * 73856093ull)
+					^ (uint64_t(iy) * 19349663ull)
+					^ (uint64_t(iz) * 83492791ull);
+			}
+
+			void rebuild(const PointType* pts, size_t count, FloatingPointType cs) {
+				cell_size = cs;
+				grid.clear();
+				grid.reserve(count * 2);
+				for (size_t i = 0; i < count; ++i) {
+					const int64_t ix = static_cast<int64_t>(std::floor(pts[i][0] / cs));
+					const int64_t iy = static_cast<int64_t>(std::floor(pts[i][1] / cs));
+					const int64_t iz = static_cast<int64_t>(std::floor(pts[i][2] / cs));
+					grid[key(ix, iy, iz)].push_back(static_cast<LocalIdx>(i));
+				}
+			}
+
+			template <typename Fn>
+			void query(const PointType& c, FloatingPointType radius, Fn&& fn) const {
+				const int32_t r = static_cast<int32_t>(std::ceil(radius / cell_size));
+				const int64_t cx = static_cast<int64_t>(std::floor(c[0] / cell_size));
+				const int64_t cy = static_cast<int64_t>(std::floor(c[1] / cell_size));
+				const int64_t cz = static_cast<int64_t>(std::floor(c[2] / cell_size));
+				for (int32_t dx = -r; dx <= r; ++dx)
+					for (int32_t dy = -r; dy <= r; ++dy)
+						for (int32_t dz = -r; dz <= r; ++dz) {
+							auto it = grid.find(key(cx + dx, cy + dy, cz + dz));
+							if (it != grid.end())
+								for (auto idx : it->second) fn(idx);
+						}
+			}
+		} hash;
+
+		// ------------------------------------------------------------------
+		void clear() noexcept {
+			cells.clear();
+			hash.grid.clear();
+		}
+
+		VoronoiCell& cell(size_t i)       noexcept {
+			return cells[i];
+		}
+		const VoronoiCell& cell(size_t i) const noexcept {
+			return cells[i];
+		}
+
+		static void recompute_cell_metrics(VoronoiCell& c) noexcept {
+			c.meta.volume = MathEngine::cell_volume(c.topo, c.meta.center);
+		}
+
+		struct Stats {
+			size_t n_cells = 0;
+			size_t n_vertices = 0;
+			size_t n_edges = 0;
+			size_t n_faces = 0;
+			FloatingPointType total_volume = FloatingPointType(0);
+		};
+
+		Stats get_stats() const noexcept {
+			Stats s;
+			s.n_cells = cells.size();
+			for (const auto& c : cells) {
+				s.n_vertices += c.topo.vert.size();
+				s.n_edges += c.topo.edge.size();
+				s.n_faces += c.topo.face.size();
+				s.total_volume += c.meta.volume;
+			}
+			return s;
+		}
+	};
+
+} // namespace cpplib::voronoi
+
+
+// ============================================================================
+//  LEVEL 4: Orchestrator / Top-Level Pipeline
+//  "Pure reason": drives iteration loops, coordinates L3 <-> L2.
+//  Declarative: prepare data -> compute -> update state.
+// ============================================================================
+
+namespace cpplib::voronoi {
+
+	struct VoronoiPipeline {
+		struct Config {
+			uint32_t          max_neighbors = 12;
+			FloatingPointType cutoff_scale = 1.0;
+			bool              use_supercell = true;
+			int               sup_x = 1, sup_y = 1, sup_z = 1;
+			bool              compute_volumes = true;
+			bool              compute_areas = true;
+			bool              compute_solid_angles = true;
+		};
+
+		Config           config;
+		VoronoiContext   context;
+
+		// --- Main entry: build Voronoi diagram for a set of atoms ---
+		void build(const PointType* atom_pos, size_t n_atoms,
+				   const MatrixType& FtoC) {
+			context.FtoC = FtoC;
+			context.max_neighbors = config.max_neighbors;
+			context.vertex_storage.reserve(n_atoms * 4);
+			context.cell_storage.reserve(n_atoms);
+
+			// Step 1: Spatial hashing + neighbor list (Level 3)
+			FloatingPointType avg_dist = estimate_avg_distance(atom_pos, n_atoms);
+			FloatingPointType cutoff = avg_dist * config.cutoff_scale;
+			context.build_neighbor_list(atom_pos, n_atoms, cutoff);
+
+			// Step 2: Build one cell per atom (Level 3 orchestrates, Level 2 computes)
+			for (size_t i = 0; i < n_atoms; ++i)
+				build_single_cell(static_cast<IDtype>(i), atom_pos, n_atoms, FtoC);
+
+			// Step 3: Extract edges and vertices from face topology
+			build_edges_and_vertices();
+
+			// Step 4: Final metric recomputation (Level 2)
+			if (config.compute_volumes)      recompute_volumes();
+			if (config.compute_areas)        recompute_areas();
+			if (config.compute_solid_angles) recompute_solid_angles();
+		}
+
+		// --- Incremental update after MD step (atom positions changed) ---
+		void update(const PointType* new_pos, size_t n_atoms) {
+			for (size_t i = 0; i < n_atoms; ++i) {
+				IDtype cid = static_cast<IDtype>(i);
+				if (Cell* cell = context.cell_storage.get_by_id(cid)) {
+					cell->center = new_pos[i];
+					context.update_cell_topology(cid);
+				}
+			}
+			if (config.compute_volumes)      recompute_volumes();
+			if (config.compute_areas)        recompute_areas();
+			if (config.compute_solid_angles) recompute_solid_angles();
+		}
+
+		// --- Public accessors for external consumers ---
+		const Cell* get_cell(IDtype id)   const noexcept {
+			return context.cell_storage.get_by_id(id);
+		}
+		const Face* get_face(IDtype id)   const noexcept {
+			return context.face_storage.get_by_id(id);
+		}
+		const Vertex* get_vertex(IDtype id) const noexcept {
+			return context.vertex_storage.get_by_id(id);
+		}
+
+		size_t              n_cells() const noexcept {
+			return context.cell_storage.size();
+		}
+		VoronoiContext::Stats stats() const noexcept {
+			return context.get_stats();
+		}
+
+	private:
+		// --- Estimate average nearest-neighbor distance (for cutoff heuristic) ---
+		static inline FloatingPointType estimate_avg_distance(
+			const PointType* pts, size_t n) noexcept {
+			if (n < 2) return FloatingPointType(1.0);
+			FloatingPointType sum = 0;
+			size_t sample = std::min(n, size_t{100});
+			for (size_t i = 0; i < sample; ++i) {
+				FloatingPointType min_d = std::numeric_limits<FloatingPointType>::max();
+				for (size_t j = 0; j < n; ++j) {
+					if (i == j) continue;
+					min_d = std::min(min_d, MathEngine::distance(pts[i], pts[j]));
+				}
+				sum += min_d;
+			}
+			return sum / static_cast<FloatingPointType>(sample);
+		}
+
+		// --- Build Voronoi cell for atom i ---
+		void build_single_cell(IDtype cell_id, const PointType* atoms,
+							   size_t n_atoms, const MatrixType& FtoC) {
+			(void)FtoC;
+			(void)n_atoms;
+
+			Cell cell{};
+			cell.id = cell_id;
+			cell.atom_id = cell_id;
+			cell.center = atoms[cell_id];
+			cell.volume = 0;
+			cell.n_faces = 0;
+			cell.n_vertices = 0;
+			cell.n_edges = 0;
+			context.cell_storage.add(cell_id, cell);
+
+			// Register atom center as a vertex in storage
+			Vertex vcenter{};
+			vcenter.pos = atoms[cell_id];
+			vcenter.id = cell_id * 1024;  // local vertex ID namespace
+			vcenter.cell_id = cell_id;
+			context.vertex_storage.add(vcenter.id, vcenter);
+
+			// Phase A: Collect neighbor atoms (Level 3 spatial hash)
+			// Phase B: Construct bisecting planes (Level 2)
+			// Phase C: Intersect planes -> face polygons (Level 2)
+			// Phase D: Write Face records into context (Level 3)
+			// [Full geometric construction elided — depends on specific
+			//  Voronoi algorithm variant (Fortune, incremental, etc.)]
+		}
+
+		// --- Derive edges and unique vertices from face topology ---
+		void build_edges_and_vertices() {
+			context.face_storage.for_each([&](const Face& f) {
+				const TopologyBuffer& fv = context.face_to_vertices[f.id];
+				for (LocalIdx k = 0; k + 1 < fv.count; ++k) {
+					IDtype v0 = fv.data[k];
+					IDtype v1 = fv.data[k + 1];
+
+					Vertex* p0 = context.vertex_storage.get_by_id(v0);
+					Vertex* p1 = context.vertex_storage.get_by_id(v1);
+					if (!p0 || !p1) continue;
+
+					Edge e{};
+					e.v0 = v0;
+					e.v1 = v1;
+					e.face_id = f.id;
+					e.length = MathEngine::edge_length(p0->pos, p1->pos);
+
+					IDtype e_id = v0 ^ (v1 << 1);
+					if (!context.edge_storage.get_by_id(e_id))
+						context.edge_storage.add(e_id, e);
+				}
+										  });
+		}
+
+		// --- Recompute all cell volumes (delegates to Level 2) ---
+		void recompute_volumes() {
+			context.cell_storage.for_each([&](const Cell& c) {
+				const Face* faces = context.face_storage.data();
+				FloatingPointType vol = MathEngine::cell_volume(
+					c.center,
+					faces,
+					c.n_faces,
+					context.vertex_storage.data(),
+					context.face_to_vertices.data()
+				);
+				if (Cell* cell = context.cell_storage.get_by_id(c.id))
+					cell->volume = vol;
+										  });
+		}
+
+		// --- Recompute all face areas ---
+		void recompute_areas() {
+			context.face_storage.for_each([&](const Face& f) {
+				const TopologyBuffer& fv = context.face_to_vertices[f.id];
+				if (fv.count < 3) return;
+				const Vertex* vdata = context.vertex_storage.data();
+				std::array<PointType, 16> cart_buf;
+				uint32_t n = std::min<uint32_t>(fv.count, 16);
+				for (uint32_t i = 0; i < n; ++i)
+					cart_buf[i] = vdata[fv.data[i]].pos;
+
+				FloatingPointType area = MathEngine::polygon_area(cart_buf.data(), n);
+				if (Face* face = context.face_storage.get_by_id(f.id))
+					face->area = area;
+										  });
+		}
+
+		// --- Recompute solid angles at cell centers ---
+		void recompute_solid_angles() {
+			context.face_storage.for_each([&](const Face& f) {
+				const TopologyBuffer& fv = context.face_to_vertices[f.id];
+				if (fv.count < 3) return;
+				Cell* cell = context.cell_storage.get_by_id(f.cell_id);
+				if (!cell) return;
+
+				const Vertex* vdata = context.vertex_storage.data();
+				std::array<PointType, 16> cart_buf;
+				uint32_t n = std::min<uint32_t>(fv.count, 16);
+				for (uint32_t i = 0; i < n; ++i)
+					cart_buf[i] = vdata[fv.data[i]].pos;
+
+				FloatingPointType sa = MathEngine::solid_angle(
+					cart_buf.data(), n, cell->center);
+				if (Face* face = context.face_storage.get_by_id(f.id))
+					face->solid_angle = sa;
+										  });
+		}
+	};
+
+}
+
+namespace cpplib::voronoi_old {
 	// Forward declarations
 	struct Vertex;
 	struct Edge;
@@ -118,14 +768,15 @@ namespace cpplib::voronoi {
 		/// @param ID Unique identifier
 		/// @param s Initial state (default: INVALID)
 		constexpr explicit Object(uint32_t ID, State s = State::INVALID) noexcept
-			: state(s), id(ID) {}
+			: state(s), id(ID) {
+		}
 	};
 
 	/// @brief Epsilon for comparing vertex positions
 	///
 	/// Vertices within this distance are considered equal to handle
 	/// floating-point precision issues.
-	constexpr basic_types::FloatingPointType EPSILON = (2<<16) * std::numeric_limits<basic_types::FloatingPointType>::epsilon();
+	constexpr basic_types::FloatingPointType EPSILON = 1E-6;
 
 	/// @brief Represents a vertex in a Voronoi diagram
 	///
@@ -149,28 +800,32 @@ namespace cpplib::voronoi {
 		Container<Face*> faces;
 
 		/// @brief Default constructor with ID 0
-		Vertex() noexcept : Object(0, State::VALID) {}
+		Vertex() noexcept : Object(0, State::VALID) {
+		}
 
-		/// @brief Construct vertex with given ID
-		/// @param ID Unique identifier for this vertex
-		explicit Vertex(uint32_t ID) noexcept : Object(ID, State::VALID) {}
+/// @brief Construct vertex with given ID
+/// @param ID Unique identifier for this vertex
+		explicit Vertex(uint32_t ID) noexcept : Object(ID, State::VALID) {
+		}
 
-		/// @brief Construct vertex with ID and position
-		/// @param ID Unique identifier
-		/// @param p Position point
-		Vertex(uint32_t ID, const PointType& p) noexcept : Object(ID, State::VALID), point(p) {}
+/// @brief Construct vertex with ID and position
+/// @param ID Unique identifier
+/// @param p Position point
+		Vertex(uint32_t ID, const PointType& p) noexcept : Object(ID, State::VALID), point(p) {
+		}
 
-		/// @brief Construct vertex with ID and position (move)
-		/// @param ID Unique identifier
-		/// @param p Position point (moved)
-		Vertex(uint32_t ID, PointType&& p) noexcept : Object(ID, State::VALID), point(std::move(p)) {}
+/// @brief Construct vertex with ID and position (move)
+/// @param ID Unique identifier
+/// @param p Position point (moved)
+		Vertex(uint32_t ID, PointType&& p) noexcept : Object(ID, State::VALID), point(std::move(p)) {
+		}
 
-		/// @brief Compare vertices for equality using spatial epsilon
-		/// @param a First vertex
-		/// @param b Second vertex
-		/// @return True if vertices are spatially equivalent
-		///
-		/// Uses EPSILON to handle floating-point precision.
+/// @brief Compare vertices for equality using spatial epsilon
+/// @param a First vertex
+/// @param b Second vertex
+/// @return True if vertices are spatially equivalent
+///
+/// Uses EPSILON to handle floating-point precision.
 		inline friend bool operator==(const Vertex& a, const Vertex& b) {
 			static constexpr basic_types::FloatingPointType EPSILONSQ = EPSILON * EPSILON;
 			return geometry::Point<basic_types::FloatingPointType>::distanceSq(a.point, b.point) < EPSILONSQ;
@@ -234,7 +889,7 @@ namespace cpplib::voronoi {
 			} else if (s1 == ONPLANE && s2 == ONPLANE) {
 				set_state(ONPLANE);
 			} else if ((s1 == DELETE && s2 == ONPLANE) || (s1 == ONPLANE && s2 == DELETE)) {
-				set_state(DELETE); 
+				set_state(DELETE);
 			} else {
 				set_state(VALID);
 			}
@@ -259,7 +914,7 @@ namespace cpplib::voronoi {
 			auto denom = PointType::Scalar(unnormalized_normal, direction);
 
 			// Check that Edge is not parallel to plane
-			if(std::abs(denom) < EPSILON)
+			if (std::abs(denom) < EPSILON)
 				assert(std::abs(denom) >= EPSILON);
 
 			auto t = -(plane.a[0] * v1->point[0] +
@@ -312,15 +967,16 @@ namespace cpplib::voronoi {
 
 		/// @brief Construct a face with given ID
 		/// @param ID Unique identifier
-		explicit Face(uint32_t ID) : Object(ID) {}
+		explicit Face(uint32_t ID) : Object(ID) {
+		}
 
-		/// @brief Calculate and update the state of this face
-		/// @return Updated State
-		///
-		/// A face is VALID if it has equal numbers of vertices and edges, and all edges are valid.
-		/// A face is MODIFICATION if any edge is being modified.
-		/// A face is DELETE if all edges are deleted.
-		/// A face with exactly one valid edge is INVALID (error condition).
+/// @brief Calculate and update the state of this face
+/// @return Updated State
+///
+/// A face is VALID if it has equal numbers of vertices and edges, and all edges are valid.
+/// A face is MODIFICATION if any edge is being modified.
+/// A face is DELETE if all edges are deleted.
+/// A face with exactly one valid edge is INVALID (error condition).
 		inline State calculateState() {
 			using enum State;
 
@@ -328,15 +984,15 @@ namespace cpplib::voronoi {
 			uint32_t v_valid = 0;
 			uint32_t v_pln = 0;
 			uint32_t v_inv = 0;
-			for (auto & ver: vertices)
+			for (auto& ver : vertices)
 			{
 				switch (ver->get_state()) {
-					case VALID:
-						v_valid++;
-						break;
-					case ONPLANE:
-						v_pln++;
-						break;
+				case VALID:
+					v_valid++;
+					break;
+				case ONPLANE:
+					v_pln++;
+					break;
 				}
 			}
 
@@ -348,8 +1004,7 @@ namespace cpplib::voronoi {
 					}
 				}
 				return get_state();
-			}
-			else if (v_valid + v_pln < v_size) {
+			} else if (v_valid + v_pln < v_size) {
 				set_state(MODIFICATION);
 				return get_state();
 			}
@@ -652,12 +1307,12 @@ namespace cpplib::voronoi {
 				// 4.1. Find and delete all unnecessary edges and vertices
 				std::erase_if(f->edges, [](const auto* ptr) {
 					return ptr->get_state() == DELETE;
-					});
+							  });
 				std::erase_if(f->vertices, [](const auto* ptr) {
 					return ptr->get_state() == DELETE;
-					});
+							  });
 
-				// 4.2 Modify the face: add Edge
+						  // 4.2 Modify the face: add Edge
 				auto iter_vertex = f->vertices.cbegin();
 				Vertex* v1 = nullptr;
 				Vertex* v2 = nullptr;
@@ -678,7 +1333,7 @@ namespace cpplib::voronoi {
 					}
 					iter_vertex++;
 				}
-				if(iter_vertex == f->vertices.cend())
+				if (iter_vertex == f->vertices.cend())
 					assert(iter_vertex != f->vertices.cend());
 
 				// Create edge connecting the two new vertices
@@ -828,6 +1483,7 @@ namespace cpplib::voronoi {
 				if (flags_[i] == false)
 					continue;
 				manager(cells_[i], vec[i], points_in_unit01, unitcell);
+				std::cout << i << std::endl;
 			}
 		}
 
@@ -968,8 +1624,8 @@ namespace cpplib::voronoi {
 				} else if (std::abs(ny) > 1e-9) {
 					b[0] += 1.0;
 
-					c[2] += 1.0; 
-					c[1] -= nz / ny; 
+					c[2] += 1.0;
+					c[1] -= nz / ny;
 				} else {
 					b[0] += 1.0;
 					c[1] += 1.0;
@@ -982,7 +1638,7 @@ namespace cpplib::voronoi {
 					plane_other.a[2] = -plane_other.a[2];
 					plane_other.a[3] = -plane_other.a[3];
 				}
-				
+
 				cell.clipByPlaneAndAddNewFace(plane_other, second, code);
 			}
 		}
@@ -1087,9 +1743,9 @@ namespace cpplib::voronoi {
 			// Sort by coordinate sum (for efficient proximity search)
 			std::sort(sortentries.begin(), sortentries.end(), [](auto& a, auto& b) {
 				return a.key < b.key;
-			});
+					  });
 
-			// Merge coincident vertices using two-pointer technique
+					  // Merge coincident vertices using two-pointer technique
 			count_vertices = static_cast<uint32_t>(sortentries.size());
 			uint32_t right = 0;
 			for (uint32_t left = 0; left < count_vertices; left++) {
@@ -1120,7 +1776,7 @@ namespace cpplib::voronoi {
 			// Remove deleted entries and finalize vertices
 			std::erase_if(sortentries, [](const auto& entry) {
 				return entry.ptr == nullptr;
-			});
+						  });
 			count_vertices = static_cast<uint32_t>(sortentries.size());
 			vertices.reserve(sortentries.size());
 			for (uint32_t i = 0; i < count_vertices; ++i) {
@@ -1165,15 +1821,15 @@ namespace cpplib::voronoi {
 						continue;
 					// Skip duplicate internal faces (keep only one copy)
 					if (cells[face->other_id].vertices.empty() == false &&
-					   face->other_shiftcode.get_code() == 13 &&
-					   face->owner_id > face->other_id) {
+						face->other_shiftcode.get_code() == 13 &&
+						face->owner_id > face->other_id) {
 						continue;
 					}
 
 					// Create polygon entry
 					polyhedra[face->owner_id].poly_ids.push_back(polygons.size());
 					if (cells[face->other_id].vertices.empty() == false &&
-					    face->other_shiftcode.get_code() == 13) {
+						face->other_shiftcode.get_code() == 13) {
 						polyhedra[face->other_id].poly_ids.push_back(polygons.size());
 					}
 					polygons.emplace_back();
@@ -1302,11 +1958,9 @@ namespace cpplib::voronoi {
 					polyhedra[v1].edge_ids.push_back(edge);
 					i1++;
 					i2++;
-				}
-				else if (v1 < v2) {
+				} else if (v1 < v2) {
 					i1++;
-				}
-				else {
+				} else {
 					i2++;
 				}
 			}
@@ -1391,13 +2045,13 @@ namespace cpplib::voronoi {
 			FloatingPointType angle = 0;
 			for (uint32_t i = 2; i < cart_size; i++) {
 				angle += atan2(abs(PointType::Scalar(cart_verts[0], PointType::Vector(cart_verts[i - 1], cart_verts[i]))),
-							   cart_verts_r[0]* cart_verts_r[i-1] * cart_verts_r[i] +
+							   cart_verts_r[0] * cart_verts_r[i - 1] * cart_verts_r[i] +
 							   PointType::Scalar(cart_verts[0], cart_verts[i - 1]) * cart_verts_r[i] +
 							   PointType::Scalar(cart_verts[0], cart_verts[i]) * cart_verts_r[i - 1] +
 							   PointType::Scalar(cart_verts[i - 1], cart_verts[i]) * cart_verts_r[0]);
 			}
 
-			return angle*2;
+			return angle * 2;
 		}
 
 		// Requires area to be calculated in polygons
@@ -1409,7 +2063,7 @@ namespace cpplib::voronoi {
 				auto i2 = polygons[poly].vert_ids[1];
 				auto i3 = polygons[poly].vert_ids[2];
 				geometry::Plane plane(FtoC * vertices[i1], FtoC * vertices[i2], FtoC * vertices[i3]);
-				volume += plane.distance(FtoC * p.center) * polygons[poly].area * FloatingPointType(1./3);
+				volume += plane.distance(FtoC * p.center) * polygons[poly].area * FloatingPointType(1. / 3);
 			}
 
 			return volume;
