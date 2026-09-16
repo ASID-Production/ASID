@@ -35,13 +35,10 @@
 #include <cstdint>
 #include <functional>
 #include <limits>
-#include <numeric>
 #include <optional>
 #include <type_traits>
 #include <utility>
 #include <vector>
-
-#include "../Classes/Bond.h"
 
 namespace cpplib::geometry {
 	template <class T> inline T GradtoRad(T a) {
@@ -1273,7 +1270,7 @@ namespace cpplib::geometry {
 	/// @brief Class for using spartial hashing algorithm to find all bonds in 3D periodic space.
 	/// @tparam T Floating point type
 	template <class T>
-	struct SpatialGrid {
+	struct [[deprecated("Use SG class instead.")]] SpatialGrid {
 		using ShiftType = Point<int8_t>;
 		using PointType = Point<T>;
 		using CellType = Cell<T>;
@@ -1527,166 +1524,365 @@ namespace cpplib::geometry {
 		}
 	};
 
+	// ============================================================================
+	//  SG<T> — Uniform-grid spatial index for 3D periodic point sets.
+	// ============================================================================
 	template <class T>
 	class SG {
 	public:
 		using FloatingPoint = T;
 		using PointType = Point<T>;
+		using MatrixType = Matrix<T>;
+		using ShiftCode = geometry::ShiftCode;
+		using ShiftPoint = ShiftCode::ShiftPoint;
+		using LocalIdx = uint32_t;
+		using CellType = Cell<T>;
 
-		template<class T2>
-		using Container = std::vector<T2>;
-
-		struct BondWithShift : public Bond {
-			using ShiftType = Point<int8_t>;
-			using FloatingPoint = T;
-
-			ShiftType shift;
-			FloatingPoint distance = FloatingPoint(0.0);
-
-			BondWithShift() = default;
-			BondWithShift(int a, int b)
-				: Bond(a, b) {
-			}
-			BondWithShift(int a, int b, ShiftType s)
-				: Bond(a, b), shift(s) {
-			}
-			BondWithShift(int a, int b, ShiftType s, FloatingPoint dist)
-				: Bond(a, b), shift(s), distance(dist) {
-			}
-
+		// ---- Output records ----------------------------------------------------
+		struct Neighbor {
+			LocalIdx      idx;
+			ShiftCode     shift;
+			FloatingPoint dist_sq;
 		};
 
-	private:
-		Container<PointType>* p_init_data = nullptr;
-		size_t init_size = 0;
+		struct BondWithShift {
+			LocalIdx      first;
+			LocalIdx      second;
+			ShiftCode     shift;
+			FloatingPoint dist_sq;
+		};
 
-		Container<T> flat_buffer;
-		Container<size_t> mask_buffer;
-		Container<size_t> offset;
+		// ========================================================================
+		//  Internal data layouts — public so external code can:
+		//    • name the type (SG<T>::CSR, SG<T>::GridGeometry, …)
+		//    • hold const-refs and run its own SIMD / cache-blocked loops
+		//    • declare variables of these types in test code
+		//  The *instances* are private — see below.
+		// ========================================================================
 
-		std::array<size_t, 3> dim_size = {1,1,1};
-		std::array<size_t, 3> dim_size_minus_one = {0,0,0};
-		std::array<size_t, 3> dim_shift = {1,1,1};
-		size_t dim_mesh_size = 0;
+		struct GridGeometry {
+			std::array<int32_t, 3>    dim{1, 1, 1};       // cells per axis
+			int32_t                   mesh_size = 1;       // dim[0]*dim[1]*dim[2]
+			std::array<T, 3>          lat_len{0, 0, 0};    // |a0|, |a1|, |a2|
+			MatrixType                fracToCart;
+			MatrixType                cartToFrac;
+			std::array<PointType, 27> shift_cart;           // per ShiftCode
+		};
 
-		bool use_pbc = true;
-		Matrix<T> fracToCart;
-		std::array<PointType, 3> latticeVector;
+		struct CSR {
+			std::vector<uint32_t> offsets;    // [mesh_size + 1]
+			std::vector<LocalIdx> data;       // [N] in cell order
+		};
 
-	public:
-		SG(Cell<T>& cell, bool use_pbc_flag) :
-			use_pbc(use_pbc_flag),
-			fracToCart(cell.fracToCart())
-		{
-			latticeVector[0] = fracToCart * PointType(1, 0, 0);
-			latticeVector[1] = fracToCart * PointType(0, 1, 0);
-			latticeVector[2] = fracToCart * PointType(0, 0, 1);
+		struct CellOrderPositions {
+			std::vector<T> cx, cy, cz;        // Cartesian, parallel to CSR::data
+		};
+
+		struct AtomOrderPositions {
+			std::vector<T>        px, py, pz;     // Cartesian
+			std::vector<T>        afx, afy, afz;  // fractional
+			std::vector<uint32_t> cell_of;        // [N] → linear cell index
+		};
+
+		struct Config {
+			bool use_pbc = true;
+			T    cutoff = T(1);
+		};
+
+		// ---- Lifecycle --------------------------------------------------------
+		SG() = default;
+		explicit SG(const CellType& cell, bool use_pbc_flag = true, FloatingPoint cutoff_ = 6.0) {
+			cfg_.use_pbc = use_pbc_flag;
+			cfg_.cutoff = cutoff_;
+			setCell(cell);
 		}
 
-		void updateCellAndPoints(Container<PointType>& data, FloatingPoint cutoff, const Cell<T>& cell) {
-			fracToCart = cell.fracToCart();
+		void setCell(const CellType& cell) {
+			geom_.fracToCart = cell.fracToCart();
+			geom_.cartToFrac = cell.cartToFrac();
+			geom_.lat_len[0] = cell.lat_dir(0);
+			geom_.lat_len[1] = cell.lat_dir(1);
+			geom_.lat_len[2] = cell.lat_dir(2);
 
-			latticeVector[0] = fracToCart * PointType(1, 0, 0);
-			latticeVector[1] = fracToCart * PointType(0, 1, 0);
-			latticeVector[2] = fracToCart * PointType(0, 0, 1);
-
-			p_init_data = &data;
-			init_size = data.size();
-
-			calculateDimSizes(cutoff, cell);
-			maskingData();
+			for (int c = 0; c < 27; ++c) {
+				const ShiftPoint sp = ShiftCode::shiftTable[c];
+				geom_.shift_cart[c] = geom_.fracToCart * PointType(
+					static_cast<T>(sp[0]), static_cast<T>(sp[1]), static_cast<T>(sp[2]));
+			}
 		}
 
-		void updateOnlyPoints(Container<PointType>& data) {
-			p_init_data = &data;
-			init_size = data.size();
-
-			maskingData();
+		void updateCellAndPoints(const std::vector<PointType>& data,
+								 FloatingPoint cutoff_,
+								 const CellType& cell) {
+			setCell(cell);
+			rebuild(data, cutoff_);
 		}
-		
+
+		void updateOnlyPoints(const std::vector<PointType>& data) {
+			rebuild(data, cfg_.cutoff);
+		}
+
+		// ---- Introspection ---------------------------------------------------
+		size_t size()       const noexcept {
+			return atoms_.px.size();
+		}
+		bool   empty()      const noexcept {
+			return atoms_.px.empty();
+		}
+		T      cutoff()     const noexcept {
+			return cfg_.cutoff;
+		}
+		T      cutoff_sq()  const noexcept {
+			return cfg_.cutoff * cfg_.cutoff;
+		}
+		bool   pbc_enabled() const noexcept {
+			return cfg_.use_pbc;
+		}
+
+		PointType position_frac(LocalIdx i) const noexcept {
+			return PointType(atoms_.afx[i], atoms_.afy[i], atoms_.afz[i]);
+		}
+		PointType position_cart(LocalIdx i) const noexcept {
+			return PointType(atoms_.px[i], atoms_.py[i], atoms_.pz[i]);
+		}
+
+		const std::array<int32_t, 3>& grid_dim()     const noexcept {
+			return geom_.dim;
+		}
+		int32_t                       grid_mesh()    const noexcept {
+			return geom_.mesh_size;
+		}
+		const MatrixType& frac_to_cart() const noexcept {
+			return geom_.fracToCart;
+		}
+		const MatrixType& cart_to_frac() const noexcept {
+			return geom_.cartToFrac;
+		}
+
+// ---- Read-only accessors to internal storage -------------------------
+		const GridGeometry& geometry()       const noexcept {
+			return geom_;
+		}
+		const CSR& csr()            const noexcept {
+			return csr_;
+		}
+		const CellOrderPositions& cell_order_pos() const noexcept {
+			return cell_pos_;
+		}
+		const AtomOrderPositions& atoms()          const noexcept {
+			return atoms_;
+		}
+		const Config& config()         const noexcept {
+			return cfg_;
+		}
+
+// ---- Queries ---------------------------------------------------------
+		template <typename Fn>
+		void for_each_neighbor(LocalIdx self, Fn&& fn) const {
+			const auto& dim = geom_.dim;
+			const T csq = cfg_.cutoff * cfg_.cutoff;
+
+			const T qx = atoms_.px[self];
+			const T qy = atoms_.py[self];
+			const T qz = atoms_.pz[self];
+
+			// Decompose the cached linear cell index — avoids recomputing
+			// floor(frac * dim) for every query.
+			const uint32_t base = atoms_.cell_of[self];
+			const int32_t cx0 = static_cast<int32_t>(base % dim[0]);
+			const int32_t cy0 = static_cast<int32_t>((base / dim[0]) % dim[1]);
+			const int32_t cz0 = static_cast<int32_t>(base / (dim[0] * dim[1]));
+
+			const T* __restrict cxa = cell_pos_.cx.data();
+			const T* __restrict cya = cell_pos_.cy.data();
+			const T* __restrict cza = cell_pos_.cz.data();
+			const LocalIdx* __restrict ida = csr_.data.data();
+
+			const int lo = cfg_.use_pbc?-1:0;
+			const int hi = cfg_.use_pbc?+1:0;
+
+			for (int dz = lo; dz <= hi; ++dz) {
+				const int32_t rawz = cz0 + dz;
+				const int32_t wz = wrap_int(rawz, dim[2]);
+				const int     sz = shift_dir(rawz, dim[2]);
+
+				for (int dy = lo; dy <= hi; ++dy) {
+					const int32_t rawy = cy0 + dy;
+					const int32_t wy = wrap_int(rawy, dim[1]);
+					const int     sy = shift_dir(rawy, dim[1]);
+
+					for (int dx = lo; dx <= hi; ++dx) {
+						const int32_t rawx = cx0 + dx;
+						const int32_t wx = wrap_int(rawx, dim[0]);
+						const int     sx = shift_dir(rawx, dim[0]);
+
+						const uint32_t ci = static_cast<uint32_t>(
+							(wz * dim[1] + wy) * dim[0] + wx);
+						const uint32_t beg = csr_.offsets[ci];
+						const uint32_t end = csr_.offsets[ci + 1];
+						if (beg == end) continue;
+
+						const int       code = shift_code(sx, sy, sz);
+						const PointType sc = geom_.shift_cart[code];
+						const T qsx = qx + sc[0];
+						const T qsy = qy + sc[1];
+						const T qsz = qz + sc[2];
+
+						// Scalar inner loop. SIMD hook: cxa/cya/cza are
+						// contiguous in [beg, end) — load 8 lanes (AVX2) or
+						// 4 lanes (SSE2), FMA into squared distance,
+						// compare-mask, movemask+tzcnt to extract matches.
+						for (uint32_t k = beg; k < end; ++k) {
+							const LocalIdx j = ida[k];
+							if (j == self) continue;
+
+							const T dx_ = qsx - cxa[k];
+							const T dy_ = qsy - cya[k];
+							const T dz_ = qsz - cza[k];
+							const T dsq = dx_ * dx_ + dy_ * dy_ + dz_ * dz_;
+
+							if (dsq <= csq)
+								fn(Neighbor{j, ShiftCode(static_cast<uint8_t>(code)), dsq});
+						}
+					}
+				}
+			}
+		}
+
+		template <typename Fn>
+		void for_each_pair(Fn&& fn) const {
+			const LocalIdx n = static_cast<LocalIdx>(size());
+			for (LocalIdx i = 0; i < n; ++i) {
+				for_each_neighbor(i, [&](const Neighbor& nb) {
+					if (nb.idx > i)
+						fn(BondWithShift{i, nb.idx, nb.shift, nb.dist_sq});
+					else if (nb.idx == i && nb.shift.get_code() != 13)
+						fn(BondWithShift{i, nb.idx, nb.shift, nb.dist_sq});
+								  });
+			}
+		}
+
+		void build_neighbor_list(std::vector<uint32_t>& offsets,
+								 std::vector<Neighbor>& neighbors) const {
+			const size_t n = size();
+			offsets.assign(n + 1, 0u);
+
+			for (LocalIdx i = 0; i < n; ++i) {
+				uint32_t cnt = 0;
+				for_each_neighbor(i, [&](const Neighbor&) { ++cnt; });
+				offsets[i + 1] = cnt;
+			}
+			for (size_t i = 0; i < n; ++i) offsets[i + 1] += offsets[i];
+
+			neighbors.resize(offsets[n]);
+			std::vector<uint32_t> cur(offsets.begin(), offsets.end() - 1);
+			for (LocalIdx i = 0; i < n; ++i)
+				for_each_neighbor(i, [&](const Neighbor& nb) { neighbors[cur[i]++] = nb; });
+		}
+
+		std::vector<Neighbor> query(LocalIdx i) const {
+			std::vector<Neighbor> out;
+			for_each_neighbor(i, [&](const Neighbor& nb) { out.push_back(nb); });
+			return out;
+		}
+		std::vector<BondWithShift> pairs() const {
+			std::vector<BondWithShift> out;
+			for_each_pair([&](const BondWithShift& b) { out.push_back(b); });
+			return out;
+		}
 		std::vector<BondWithShift> findAllContacts() const {
-			
-
-
-
+			return pairs();
 		}
-
-
-		// TODO finalise
-
 
 	private:
-		void calculateDimSizes(FloatingPoint cutoff, const Cell<T>& cell) {
-			dim_size[0] = static_cast<size_t>(std::ceil(cell.lat_dir(0) / cutoff));
-			dim_size[1] = static_cast<size_t>(std::ceil(cell.lat_dir(1) / cutoff));
-			dim_size[2] = static_cast<size_t>(std::ceil(cell.lat_dir(2) / cutoff));
+		// ========================================================================
+		//  State — all private. Direct writes would break invariants
+		//  (offsets ↔ data, afx ↔ cell_of, dim ↔ mesh_size).
+		//  Read-only views are exposed via geometry()/csr()/… above.
+		// ========================================================================
+		GridGeometry       geom_;
+		CSR                csr_;
+		CellOrderPositions cell_pos_;
+		AtomOrderPositions atoms_;
+		Config             cfg_;
 
-			dim_size_minus_one[0] = dim_size[0] - 1;
-			dim_size_minus_one[1] = dim_size[1] - 1;
-			dim_size_minus_one[2] = dim_size[2] - 1;
+		// ---- Rebuild CSR + SoA ----------------------------------------------
+		void rebuild(const std::vector<PointType>& data, T cutoff_) {
+			cfg_.cutoff = cutoff_;
+			const size_t n = data.size();
 
-			dim_shift[0] = 1;
-			dim_shift[1] = dim_size[0];
-			dim_shift[2] = dim_size[0] * dim_size[1];
-			dim_mesh_size = dim_size[0] * dim_size[1] * dim_size[2];
-		}
-
-		void maskingData() {
-			assert(p_init_data != nullptr);
-			const Container<PointType>& init_data = *p_init_data;
-
-			flat_buffer.assign(init_size * 6, static_cast<T>(0.0));
-			mask_buffer.assign(init_size, 0);
-			offset.assign(dim_mesh_size + 1, 0);
-
-			for (const PointType& elem : init_data) {
-				size_t shift = calculateShiftOfPoint(elem) + 1;
-				offset[shift]++;
+			for (int k = 0; k < 3; ++k) {
+				int32_t d = static_cast<int32_t>(std::floor(geom_.lat_len[k] / cutoff_));
+				if (d < 1) d = 1;
+				geom_.dim[k] = d;
 			}
+			geom_.mesh_size = geom_.dim[0] * geom_.dim[1] * geom_.dim[2];
 
-			std::partial_sum(offset.begin() + 1, offset.end(), offset.begin() + 1);
+			atoms_.px.resize(n);  atoms_.py.resize(n);  atoms_.pz.resize(n);
+			atoms_.afx.resize(n); atoms_.afy.resize(n); atoms_.afz.resize(n);
+			atoms_.cell_of.resize(n);
 
-			std::vector<size_t> current_position = offset;
+			csr_.offsets.assign(geom_.mesh_size + 1, 0u);
+			csr_.data.resize(n);
 
-			T* f_x = flat_buffer.data();
-			T* f_y = f_x + init_size;
-			T* f_z = f_y + init_size;
+			// Pass 1: per-atom cell index + bucket size.
+			for (size_t i = 0; i < n; ++i) {
+				const PointType pc = geom_.fracToCart * data[i];
+				atoms_.px[i] = pc[0];
+				atoms_.py[i] = pc[1];
+				atoms_.pz[i] = pc[2];
 
-			T* c_x = f_z + init_size;
-			T* c_y = c_x + init_size;
-			T* c_z = c_y + init_size;
+				atoms_.afx[i] = data[i][0];
+				atoms_.afy[i] = data[i][1];
+				atoms_.afz[i] = data[i][2];
 
-			size_t* m_ptr = mask_buffer.data();
+				const int32_t cxi = wrap_int(
+					static_cast<int32_t>(atoms_.afx[i] * geom_.dim[0]), geom_.dim[0]);
+				const int32_t cyi = wrap_int(
+					static_cast<int32_t>(atoms_.afy[i] * geom_.dim[1]), geom_.dim[1]);
+				const int32_t czi = wrap_int(
+					static_cast<int32_t>(atoms_.afz[i] * geom_.dim[2]), geom_.dim[2]);
+				const uint32_t ci = static_cast<uint32_t>(
+					(czi * geom_.dim[1] + cyi) * geom_.dim[0] + cxi);
 
-			for (size_t i = 0; i < init_size; ++i) {
-				const auto& elem = init_data[i];
-				size_t shift = calculateShiftOfPoint(elem);
-				size_t target_idx = current_position[shift];
+				atoms_.cell_of[i] = ci;
+				++csr_.offsets[ci + 1];
+			}
+			for (int32_t c = 0; c < geom_.mesh_size; ++c)
+				csr_.offsets[c + 1] += csr_.offsets[c];
 
-				f_x[target_idx] = elem[0];
-				f_y[target_idx] = elem[1];
-				f_z[target_idx] = elem[2];
+			// Pass 2: fill CSR data + cell-order Cartesian SoA.
+			cell_pos_.cx.resize(n);
+			cell_pos_.cy.resize(n);
+			cell_pos_.cz.resize(n);
 
-				PointType cart_point = fracToCart * elem;
-				c_x[target_idx] = cart_point[0];
-				c_y[target_idx] = cart_point[1];
-				c_z[target_idx] = cart_point[2];
-
-				m_ptr[target_idx] = i;
-
-				current_position[shift]++;
+			std::vector<uint32_t> cursor(csr_.offsets.begin(), csr_.offsets.end() - 1);
+			for (size_t i = 0; i < n; ++i) {
+				const uint32_t p = cursor[atoms_.cell_of[i]]++;
+				csr_.data[p] = static_cast<LocalIdx>(i);
+				cell_pos_.cx[p] = atoms_.px[i];
+				cell_pos_.cy[p] = atoms_.py[i];
+				cell_pos_.cz[p] = atoms_.pz[i];
 			}
 		}
 
-		inline size_t calculateShiftOfPoint(const PointType& p) const noexcept {
-			size_t d0 = static_cast<uint32_t>(std::clamp(static_cast<int32_t>(p[0] * dim_size[0]), 0, static_cast<int32_t>(dim_size_minus_one[0])));
-			size_t d1 = static_cast<uint32_t>(std::clamp(static_cast<int32_t>(p[1] * dim_size[1]), 0, static_cast<int32_t>(dim_size_minus_one[1])));
-			size_t d2 = static_cast<uint32_t>(std::clamp(static_cast<int32_t>(p[2] * dim_size[2]), 0, static_cast<int32_t>(dim_size_minus_one[2])));
-			return d0 + d1 * dim_shift[1] + d2 * dim_shift[2];
+		// ---- Integer helpers --------------------------------------------------
+		static inline int32_t wrap_int(int32_t v, int32_t m) noexcept {
+			if (v < 0)  return v + m;
+			if (v >= m) return v - m;
+			return v;
 		}
-		
-	};
 
+		static inline int shift_dir(int32_t raw, int32_t m) noexcept {
+			if (raw < 0)  return +1;
+			if (raw >= m) return -1;
+			return 0;
+		}
+
+		static inline int shift_code(int sx, int sy, int sz) noexcept {
+			return (sx + 1) + (sy + 1) * 3 + (sz + 1) * 9;
+		}
+	}; 
 } // namespace cpplib::geometry
 
 template<class T>

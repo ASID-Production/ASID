@@ -1,4 +1,4 @@
-// Copyright 2026 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
+﻿// Copyright 2026 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
 // This file is part of ASID - Atomistic Simulation Instruments and Database
 // For more information see <https://github.com/ASID-Production/ASID>
 //
@@ -697,7 +697,7 @@ namespace cpplib {
 	public:
 		using PointType = typename geometry::Point<TripleDouble::value_type>;
 		using value_type = CubicSpline<>::value_type;
-		static constexpr value_type EPS = voronoi::EPSILON;
+		static constexpr value_type EPS = 1E-6;
 
 		static value_type GetOptimalRadius(value_type radius,
 										   value_type vertical_eps,
@@ -745,13 +745,16 @@ namespace cpplib {
 
 			// 1. Type B (Bond)
 			for (const auto& poly : vf.polygons) {
-				PointType center = (vf.polyhedra[poly.atom_ids[0]].center + vf.polyhedra[poly.atom_ids[1]].center + poly.second_shift) * 0.5;
+				
+				PointType center = (vf.polyhedra[poly.owner_atom].center +
+									vf.polyhedra[poly.other_atom].center +
+									poly.other_shift.get_shift()) * 0.5;
 				add_candidate(center, CriticalPoint::TYPE::B);
 			}
 			// 2. Type R (Ring)
 			for (const auto& edge : vf.edges) {
-				const auto& v1 = vf.vertices[edge.vert_ids[0]];
-				const auto& v2 = vf.vertices[edge.vert_ids[1]];
+				const auto& v1 = vf.vertices[edge.v0];
+				const auto& v2 = vf.vertices[edge.v1];
 				PointType mid((v1[0] + v2[0]) * 0.5,
 							  (v1[1] + v2[1]) * 0.5,
 							  (v1[2] + v2[2]) * 0.5);

@@ -30,13 +30,15 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cassert>
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <limits>
-#include <memory>
-#include <tuple>
-#include <unordered_set>
+#include <numeric>
+#include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -51,39 +53,89 @@
 
 namespace cpplib::voronoi {
 
-	using IDtype = uint16_t;
+	// ------------------------------------------------------------------------
+	//  ID types
+	//
+	//  LocalId  — ID of an element inside one Voronoi cell. Bounded by the
+	//             per-cell element count (V ≈ 260, E ≈ 390, F ≈ 130 for a
+	//             dense 100-neighbour shell), so uint16_t is ample.
+	//
+	//  LocalIdx — dense index inside a Storage<>. Same size as LocalId but
+	//             semantically distinct: it never contains gaps.
+	//
+	//  AtomId   — global atom index in VoronoiContext::cells. Grows with the
+	//             system size, up to 10^7 atoms, so uint32_t.
+	// ------------------------------------------------------------------------
+	using LocalId = uint16_t;
 	using LocalIdx = uint16_t;
-	using FloatingPointType = basic_types::FloatingPointType;
-	using PointType = geometry::Point<FloatingPointType>;
-	using MatrixType = geometry::Matrix<FloatingPointType>;
+	using AtomId = uint32_t;
 
-	constexpr IDtype INVALID_ID = std::numeric_limits<IDtype>::max();
+
+	using ExternalFloatType = basic_types::FloatingPointType;
+	using ExternalPointType = geometry::Point<ExternalFloatType>;
+	using ExternalUnitCell = geometry::Cell<ExternalFloatType>;
+
+    // Internal working precision.
+	using InternalFloatType = double;
+
+	using PointType = geometry::Point<InternalFloatType>;
+	using MatrixType = geometry::Matrix<InternalFloatType>;
+	using ShiftCode = geometry::ShiftCode;
+	using UnitCell = geometry::Cell<InternalFloatType>;
+
+	constexpr LocalId INVALID_LOCAL_ID = std::numeric_limits<LocalId>::max();
+	constexpr AtomId  INVALID_ATOM_ID = std::numeric_limits<AtomId>::max();
 
 	// --- Vertex: 32 bytes ---
+	//
+	//  Layout (packed to 32 bytes so two vertices fit one 64-byte cache
+	//  line without straddling):
+	//
+	//    pos       24 B — Cartesian position
+	//    dist_sq    4 B — cached squared distance to the cell center. Used
+	//                     by max_vertex_dist_sq, which runs several times
+	//                     per cell during clipping; caching it turns a
+	//                     10-op scan over 24-byte Points into a 1-op scan
+	//                     over 4-byte floats. float precision (~1e-5 A^2
+	//                     at 10 A) is far beyond what the early-exit
+	//                     bound needs.
+	//    edge_hint  2 B — LocalId of one incident half-edge. Reserved for
+	//                     a future O(1) vertex -> incident-edge lookup;
+	//                     not used yet.
+	//    _flags     2 B — bit-packed state. Reserved.
 	struct alignas(32) Vertex {
-		PointType  pos;      // Cartesian position
-		FloatingPointType distance; // Distance to atom (service)
+		PointType pos;
+		float     dist_sq = 0.0f;
+		LocalId   edge_hint = INVALID_LOCAL_ID;
+		uint16_t  _flags = 0;
 	};
+	static_assert(sizeof(Vertex) == 32, "Vertex must stay 32 bytes");
 
 	// --- HalfEdge: 8 bytes ---
+	//  All four fields are LocalId: they refer to elements of the same cell.
 	struct alignas(8) HalfEdge {
-		IDtype origin_vertex_id;
-		IDtype polygon_id;
-		IDtype next_edge_id;
-		IDtype twin_edge_id;
+		LocalId origin_vertex_id;
+		LocalId polygon_id;
+		LocalId next_edge_id;
+		LocalId twin_edge_id;
 	};
+	static_assert(sizeof(HalfEdge) == 8, "HalfEdge must fit in 8 bytes");
 
 	// --- Polygon: 8 bytes ---
+	//  Field order chosen so the struct packs into exactly 8 bytes with no
+	//  internal padding: AtomId(4) + LocalId(2) + ShiftCode(1) + pad(1).
 	struct alignas(8) Polygon {
-		IDtype first_edge_id;  // Stable global ID of first HalfEdge
-		IDtype other_cell;     // ID of another Polyhedron
-		ShiftCode other_shift; // Shift of another Polyhedron
+		AtomId    other_cell;     // Global atom ID of the neighbouring cell
+		LocalId   first_edge_id;  // Local half-edge ID, entry point of the cycle
+		ShiftCode other_shift;    // Shift of the neighbour
+		uint8_t   _pad = 0;       // Explicit padding
 	};
+	static_assert(sizeof(Polygon) == 8, "Polygon must fit in 8 bytes");
 
 	// --- Polyhedron: 32 bytes ---
 	struct alignas(32) Polyhedron {
 		PointType  center;         // Polyhedron center (atom position)
-		FloatingPointType volume;  // Computed volume
+		InternalFloatType volume;  // Computed volume
 	};
 	static_assert(sizeof(Polyhedron) <= 64, "Polyhedron should fit in one cache-line");
 
@@ -100,14 +152,14 @@ namespace cpplib::voronoi {
 	template <typename T, size_t MAX_POOL = 256>
 	class Storage {
 	public:
-		explicit Storage(IDtype max_id = MAX_POOL - 1)
-			: mask_(static_cast<size_t>(max_id), INVALID_ID) {
+		explicit Storage(LocalId max_id = MAX_POOL - 1)
+			: mask_(static_cast<size_t>(max_id), INVALID_LOCAL_ID) {
 		}
 
 		// Insert object: returns local dense index
 		LocalIdx add(const T& obj) {
 			assert(next_ < mask_.size());
-			assert(mask_[next_] == INVALID_ID);
+			assert(mask_[next_] == INVALID_LOCAL_ID);
 			LocalIdx idx = static_cast<LocalIdx>(data_.size());
 			data_.push_back(obj);
 			ids_.push_back(next_);
@@ -117,10 +169,10 @@ namespace cpplib::voronoi {
 		}
 
 		// O(1) removal: swap-and-pop + single mask cell update for the moved element
-		void remove_by_id(IDtype global_id) noexcept {
+		void remove_by_id(LocalId global_id) noexcept {
 			if (global_id >= mask_.size()) return;
 			LocalIdx idx = mask_[global_id];
-			if (idx == INVALID_ID) return;
+			if (idx == INVALID_LOCAL_ID) return;
 
 			LocalIdx last = static_cast<LocalIdx>(data_.size() - 1);
 			if (idx != last) {
@@ -130,22 +182,23 @@ namespace cpplib::voronoi {
 			}
 			data_.pop_back();
 			ids_.pop_back();
-			mask_[global_id] = INVALID_ID;
+			mask_[global_id] = INVALID_LOCAL_ID;
 		}
 
 		// Branchless point access by global_id: 1 L1 cycle
-		const T& get_by_id(IDtype global_id) const noexcept {
-			assert(global_id < mask_.size() && mask_[global_id] != INVALID_ID);
-
+		const T& get_by_id(LocalId global_id) const noexcept {
+			assert(global_id < mask_.size() && mask_[global_id] != INVALID_LOCAL_ID);
 			return data_[mask_[global_id]];
 		}
-		T& get_by_id(IDtype global_id) noexcept {
-			assert(global_id < mask_.size() && mask_[global_id] != INVALID_ID);
-
+		T& get_by_id(LocalId global_id) noexcept {
+			assert(global_id < mask_.size() && mask_[global_id] != INVALID_LOCAL_ID);
 			return data_[mask_[global_id]];
 		}
+		LocalIdx index_of(LocalId global_id) const noexcept {
+			assert(global_id < mask_.size() && mask_[global_id] != INVALID_LOCAL_ID);
+			return mask_[global_id];
+		}
 
-		// Dense range for iteration
 		const T* data() const noexcept {
 			return data_.data();
 		}
@@ -159,39 +212,45 @@ namespace cpplib::voronoi {
 			return data_.empty();
 		}
 
-		// Iteration over all active elements
 		template <typename Fn>
 		void for_each(Fn&& fn) {
 			for (size_t i = 0; i < data_.size(); ++i)
 				fn(data_[i]);
 		}
 
-		IDtype get_id(LocalIdx index) const noexcept {
+		LocalId get_id(LocalIdx index) const noexcept {
 			return ids_[index];
 		}
 
 		void clear() noexcept {
 			data_.clear();
-			std::fill(mask_.begin(), mask_.end(), INVALID_ID);
+			ids_.clear();
+			std::fill(mask_.begin(), mask_.end(), INVALID_LOCAL_ID);
+			next_ = 0;
 		}
 
 		void reserve(size_t n) {
 			data_.reserve(n);
+			ids_.reserve(n);
 		}
 
 	private:
 		std::vector<T>        data_;
-		std::vector<IDtype>   ids_;
-		std::vector<LocalIdx> mask_; // global_id -> local dense index (L1-friendly)
-		IDtype next_ = 0; // next empty ID
+		std::vector<LocalId>  ids_;
+		std::vector<LocalIdx> mask_; // global_id -> local dense index
+		LocalId next_ = 0;           // next empty ID
 	};
 
 
-// --- United Storage ---
+	// --- United Storage ---
+	//  Pool sizes follow Euler's formula for a convex polyhedron:
+	//    V - E + F = 2,  E ≈ 3V/2.
+	//  For F = 128 faces (a dense 100-neighbour shell): V ≈ 258, E ≈ 384.
+	//  The pools below give a ×2 safety margin.
 	struct PolyhedronData {
-		Storage<Vertex>   vert;
-		Storage<HalfEdge> edge;
-		Storage<Polygon>  face;
+		Storage<Vertex, 1024> vert;
+		Storage<HalfEdge, 2048> edge;
+		Storage<Polygon, 1024> face;
 
 		void clear() noexcept {
 			vert.clear(); edge.clear(); face.clear();
@@ -200,22 +259,36 @@ namespace cpplib::voronoi {
 			vert.reserve(nv); edge.reserve(ne); face.reserve(nf);
 		}
 
-		IDtype add_vertex(const PointType& p) {
-			Vertex v{}; v.pos = p; v.distance = FloatingPointType(0);
+		// Add a fresh vertex at position p with the cell center given, so
+		// the cached squared distance can be computed once here instead of
+		// on every call to max_vertex_dist_sq.
+		LocalId add_vertex(const PointType& p, const PointType& center) {
+			Vertex v{};
+			v.pos = p;
+			v.dist_sq = static_cast<float>((p - center).rSq());
+			v.edge_hint = INVALID_LOCAL_ID;
+			v._flags = 0;
 			const LocalIdx idx = vert.add(v);
-			return static_cast<IDtype>(idx);
+			return static_cast<LocalId>(idx);
 		}
-		IDtype add_halfedge(IDtype origin, IDtype poly, IDtype next, IDtype twin) {
+
+		// Copy an existing vertex verbatim (including dist_sq).
+		LocalId copy_vertex(const Vertex& src) {
+			const LocalIdx idx = vert.add(src);
+			return static_cast<LocalId>(idx);
+		}
+
+		LocalId add_halfedge(LocalId origin, LocalId poly, LocalId next, LocalId twin) {
 			HalfEdge h{}; h.origin_vertex_id = origin;
 			h.polygon_id = poly; h.next_edge_id = next; h.twin_edge_id = twin;
 			const LocalIdx idx = edge.add(h);
-			return static_cast<IDtype>(idx);
+			return static_cast<LocalId>(idx);
 		}
-		IDtype add_face(IDtype first_he, IDtype other_cell, ShiftCode shift) {
+		LocalId add_face(LocalId first_he, AtomId other_cell, ShiftCode shift) {
 			Polygon p{}; p.first_edge_id = first_he;
 			p.other_cell = other_cell; p.other_shift = shift;
 			const LocalIdx idx = face.add(p);
-			return static_cast<IDtype>(idx);
+			return static_cast<LocalId>(idx);
 		}
 	};
 } // namespace cpplib::voronoi
@@ -229,26 +302,26 @@ namespace cpplib::voronoi {
 namespace cpplib::voronoi {
 
 	struct MathEngine {
-		using PlaneType = geometry::Plane<FloatingPointType>;
+		using PlaneType = geometry::Plane<InternalFloatType>;
 
-		static constexpr FloatingPointType EPS = static_cast<FloatingPointType>(1.0e-10);
+		static constexpr InternalFloatType EPS = static_cast<InternalFloatType>(1.0e-10);
 
-		// --- Triangle area from 3 points (cross-product magnitude / 2) ---
-		static inline FloatingPointType triangle_area(const PointType& vector_AB,
-													  const PointType& vector_AC) noexcept {
-			return PointType::Vector(vector_AB, vector_AC).r()* FloatingPointType(0.5);
+		// --- Triangle area from two vectors sharing a common origin ---
+		static inline InternalFloatType triangle_area(const PointType& v1,
+													  const PointType& v2) noexcept {
+			return PointType::Vector(v1, v2).r() * InternalFloatType(0.5);
 		}
 
 		// --- Polygon normal via Newell's method (robust for concave polygons) ---
 		static inline PointType polygon_normal(const PolyhedronData& d,
-											   IDtype first_he) noexcept {
+											   LocalId first_he) noexcept {
 			const HalfEdge& e0 = d.edge.get_by_id(first_he);
 			PointType v0 = d.vert.get_by_id(e0.origin_vertex_id).pos;
 
-			IDtype next_he = e0.next_edge_id;
+			LocalId next_he = e0.next_edge_id;
 			PointType v1 = d.vert.get_by_id(d.edge.get_by_id(next_he).origin_vertex_id).pos;
 
-			FloatingPointType nx = 0, ny = 0, nz = 0;
+			InternalFloatType nx = 0, ny = 0, nz = 0;
 
 			while (true) {
 				nx += (v0[1] - v1[1]) * (v0[2] + v1[2]);
@@ -263,25 +336,24 @@ namespace cpplib::voronoi {
 				v1 = d.vert.get_by_id(d.edge.get_by_id(next_he).origin_vertex_id).pos;
 			}
 
-			const FloatingPointType len = std::sqrt(nx * nx + ny * ny + nz * nz);
+			const InternalFloatType len = std::sqrt(nx * nx + ny * ny + nz * nz);
 			if (len > EPS) {
 				nx /= len; ny /= len; nz /= len;
 			}
 			return PointType(nx, ny, nz);
 		}
 
-		// --- Polygon area (fan triangulation) ---
-		static inline FloatingPointType polygon_area(const PolyhedronData& d,
-													 IDtype first_he) noexcept {
+		// --- Polygon area (fan triangulation over a half-edge cycle) ---
+		static inline InternalFloatType polygon_area(const PolyhedronData& d,
+													 LocalId first_he) noexcept {
 			const HalfEdge& e0 = d.edge.get_by_id(first_he);
 			const PointType p0 = d.vert.get_by_id(e0.origin_vertex_id).pos;
 
 			const HalfEdge& e1 = d.edge.get_by_id(e0.next_edge_id);
-
 			PointType v1 = d.vert.get_by_id(e1.origin_vertex_id).pos - p0;
 
-			IDtype e2 = e1.next_edge_id;
-			FloatingPointType area = FloatingPointType(0);
+			LocalId e2 = e1.next_edge_id;
+			InternalFloatType area = InternalFloatType(0);
 
 			while (e2 != first_he) {
 				const HalfEdge& e2_he = d.edge.get_by_id(e2);
@@ -295,48 +367,48 @@ namespace cpplib::voronoi {
 		}
 
 		static inline PlaneType polygon_plane(const PolyhedronData& d,
-															 IDtype first_he) noexcept {
+											  LocalId first_he) noexcept {
 			const HalfEdge& e0 = d.edge.get_by_id(first_he);
-			const IDtype e1_id = e0.next_edge_id;
+			const LocalId e1_id = e0.next_edge_id;
 			const HalfEdge& e1 = d.edge.get_by_id(e1_id);
-			const IDtype e2_id = e1.next_edge_id;
+			const LocalId e2_id = e1.next_edge_id;
 			return PlaneType(
 				d.vert.get_by_id(e0.origin_vertex_id).pos,
 				d.vert.get_by_id(e1.origin_vertex_id).pos,
 				d.vert.get_by_id(d.edge.get_by_id(e2_id).origin_vertex_id).pos);
 		}
 
-		// --- Solid angle of a polygon face at point 'origin' (van Oosterom-Strackee) ---
-		static inline FloatingPointType polygon_solid_angle(const PolyhedronData& d,
-															IDtype first_he,
+		// --- Solid angle of a polygon face at point `origin` (van Oosterom-Strackee) ---
+		static inline InternalFloatType polygon_solid_angle(const PolyhedronData& d,
+															LocalId first_he,
 															const PointType& origin) noexcept {
 			const HalfEdge& e0 = d.edge.get_by_id(first_he);
 			const PointType v0 = d.vert.get_by_id(e0.origin_vertex_id).pos - origin;
-			const FloatingPointType r0 = v0.r();
+			const InternalFloatType r0 = v0.r();
 
-			IDtype next_he = e0.next_edge_id;
+			LocalId next_he = e0.next_edge_id;
 			const PointType v1 = d.vert.get_by_id(
 				d.edge.get_by_id(next_he).origin_vertex_id).pos - origin;
 
 			PointType         v_prev = v1;
-			FloatingPointType r_prev = v1.r();
-			FloatingPointType dot0_prev = PointType::Scalar(v0, v1);
+			InternalFloatType r_prev = v1.r();
+			InternalFloatType dot0_prev = PointType::Scalar(v0, v1);
 
 			next_he = d.edge.get_by_id(next_he).next_edge_id;
 
-			FloatingPointType angle = FloatingPointType(0);
+			InternalFloatType angle = InternalFloatType(0);
 
 			while (next_he != first_he) {
 				const HalfEdge& he = d.edge.get_by_id(next_he);
 				const PointType v_curr = d.vert.get_by_id(he.origin_vertex_id).pos - origin;
 
-				const FloatingPointType r_curr = v_curr.r();
-				const FloatingPointType dot0_curr = PointType::Scalar(v0, v_curr);
+				const InternalFloatType r_curr = v_curr.r();
+				const InternalFloatType dot0_curr = PointType::Scalar(v0, v_curr);
 
-				const FloatingPointType cross = std::abs(
+				const InternalFloatType cross = std::abs(
 					PointType::Scalar(v0, PointType::Vector(v_prev, v_curr)));
 
-				const FloatingPointType denom =
+				const InternalFloatType denom =
 					r0 * r_prev * r_curr
 					+ dot0_prev * r_curr
 					+ dot0_curr * r_prev
@@ -351,30 +423,24 @@ namespace cpplib::voronoi {
 				next_he = he.next_edge_id;
 			}
 
-			return angle * FloatingPointType(2);
+			return angle * InternalFloatType(2);
 		}
 
 		// --- Volume: sum of pyramid contributions per face ---
 		//   volume = sum over faces: dist(center, face_plane) * face_area / 3
-		static inline FloatingPointType cell_volume(const PolyhedronData& d,
+		static inline InternalFloatType cell_volume(const PolyhedronData& d,
 													const PointType& center) noexcept {
 			const Polygon* polys = d.face.data();
 			const size_t   nf = d.face.size();
 
-			FloatingPointType volume = FloatingPointType(0);
+			InternalFloatType volume = InternalFloatType(0);
 			for (size_t i = 0; i < nf; ++i) {
-				const IDtype fh = polys[i].first_edge_id;
-				const FloatingPointType area = polygon_area(d, fh);
+				const LocalId fh = polys[i].first_edge_id;
+				const InternalFloatType area = polygon_area(d, fh);
 				const auto              pl = polygon_plane(d, fh);
 				volume += area * std::abs(pl.distance(center));
 			}
-			return volume * FloatingPointType(1.0 / 3.0);
-		}
-
-		// --- Edge length ---
-		static inline FloatingPointType edge_length(const PointType& a,
-													const PointType& b) noexcept {
-			return PointType::distance(a, b);
+			return volume * InternalFloatType(1.0 / 3.0);
 		}
 	};
 
@@ -382,15 +448,21 @@ namespace cpplib::voronoi {
 
 // ============================================================================
 //  LEVEL 3: Topological Context (Mid-Level Manager)
-//  OWNS all Level-1 storages. Knows PBC, supercell, spatial hashing.
-//  Coordinates topology updates and defragmentation.
 // ============================================================================
 
 namespace cpplib::voronoi {
 
+// ============================================================================
+//  VoronoiCell
+//
+//  One Voronoi polyhedron = metadata + private topology.
+//  Fully self-contained: no references to other cells, except
+//  Polygon::other_cell / other_shift — those are AtomId keys into
+//  VoronoiContext::cells, not pointers.
+// ============================================================================
 	struct VoronoiCell {
 		Polyhedron     meta;   // {center, volume}
-		PolyhedronData topo;   // {vert, edge, face}
+		PolyhedronData topo;   // {vert, edge, face} of this cell
 
 		void clear() noexcept {
 			meta = Polyhedron{};
@@ -401,56 +473,31 @@ namespace cpplib::voronoi {
 		}
 	};
 
+
+	// ============================================================================
+	//  VoronoiContext
+	//
+	//  Dense vector of independent cells (index = atom_id) + shared read-only
+	//  spatial index SG<T>.
+	// ============================================================================
 	struct VoronoiContext {
+		using GridType = geometry::SG<InternalFloatType>;
+
+		// --- Cells: index = atom_id, dense, 1:1 with atoms ---
 		std::vector<VoronoiCell> cells;
 
-		MatrixType FtoC, CtoF;
-		int sup_x = 1, sup_y = 1, sup_z = 1;
-		uint32_t          max_neighbors = 12;
-		FloatingPointType cutoff = FloatingPointType(0);
+		// --- Shared spatial index. Built once; during the parallel phase
+		//     it is only read (all query methods are const). ---
+		GridType grid;
 
-		struct SpatialHash {
-			FloatingPointType cell_size = FloatingPointType(1);
-			std::unordered_map<uint64_t, std::vector<LocalIdx>> grid;
+		// --- Configuration copied from the pipeline ---
+		uint32_t max_neighbors = 12;             // reserved for future tuning
+		bool     use_pbc = true;
+		int      sup_x = 1, sup_y = 1, sup_z = 1; // reserved for supercell support
 
-			static inline uint64_t key(int64_t ix, int64_t iy, int64_t iz) noexcept {
-				return (uint64_t(ix) * 73856093ull)
-					^ (uint64_t(iy) * 19349663ull)
-					^ (uint64_t(iz) * 83492791ull);
-			}
-
-			void rebuild(const PointType* pts, size_t count, FloatingPointType cs) {
-				cell_size = cs;
-				grid.clear();
-				grid.reserve(count * 2);
-				for (size_t i = 0; i < count; ++i) {
-					const int64_t ix = static_cast<int64_t>(std::floor(pts[i][0] / cs));
-					const int64_t iy = static_cast<int64_t>(std::floor(pts[i][1] / cs));
-					const int64_t iz = static_cast<int64_t>(std::floor(pts[i][2] / cs));
-					grid[key(ix, iy, iz)].push_back(static_cast<LocalIdx>(i));
-				}
-			}
-
-			template <typename Fn>
-			void query(const PointType& c, FloatingPointType radius, Fn&& fn) const {
-				const int32_t r = static_cast<int32_t>(std::ceil(radius / cell_size));
-				const int64_t cx = static_cast<int64_t>(std::floor(c[0] / cell_size));
-				const int64_t cy = static_cast<int64_t>(std::floor(c[1] / cell_size));
-				const int64_t cz = static_cast<int64_t>(std::floor(c[2] / cell_size));
-				for (int32_t dx = -r; dx <= r; ++dx)
-					for (int32_t dy = -r; dy <= r; ++dy)
-						for (int32_t dz = -r; dz <= r; ++dz) {
-							auto it = grid.find(key(cx + dx, cy + dy, cz + dz));
-							if (it != grid.end())
-								for (auto idx : it->second) fn(idx);
-						}
-			}
-		} hash;
-
-		// ------------------------------------------------------------------
 		void clear() noexcept {
 			cells.clear();
-			hash.grid.clear();
+			grid = GridType{};
 		}
 
 		VoronoiCell& cell(size_t i)       noexcept {
@@ -460,6 +507,38 @@ namespace cpplib::voronoi {
 			return cells[i];
 		}
 
+		size_t n_cells() const noexcept {
+			return cells.size();
+		}
+
+		// Access to the shared index. Const only — guarantees nobody
+		// mutates it during the parallel phase.
+		const GridType& spatial_grid() const noexcept {
+			return grid;
+		}
+
+		// ------------------------------------------------------------------
+		//  Build the spatial index. Must run BEFORE the parallel cell
+		//  construction: during that phase the grid is read-only.
+		//
+		//  points_frac  — fractional atom coordinates in [0,1).
+		//  use_pbc_flag — passed to the SG constructor; SG has no setter,
+		//                 so the grid is recreated on every rebuild.
+		// ------------------------------------------------------------------
+		void rebuildGrid(const std::vector<PointType>& points_frac,
+						 const UnitCell& cell_def,
+						 InternalFloatType cutoff,
+						 bool use_pbc_flag)
+		{
+			grid = GridType(cell_def, use_pbc_flag);
+			grid.updateCellAndPoints(points_frac, cutoff, cell_def);
+			use_pbc = use_pbc_flag;
+		}
+
+		// ------------------------------------------------------------------
+		//  Recompute metrics for a single cell. Fully local, safe to call
+		//  from a parallel loop: touches only the passed cell.
+		// ------------------------------------------------------------------
 		static void recompute_cell_metrics(VoronoiCell& c) noexcept {
 			c.meta.volume = MathEngine::cell_volume(c.topo, c.meta.center);
 		}
@@ -469,7 +548,7 @@ namespace cpplib::voronoi {
 			size_t n_vertices = 0;
 			size_t n_edges = 0;
 			size_t n_faces = 0;
-			FloatingPointType total_volume = FloatingPointType(0);
+			InternalFloatType total_volume = InternalFloatType(0);
 		};
 
 		Stats get_stats() const noexcept {
@@ -487,1586 +566,1934 @@ namespace cpplib::voronoi {
 
 } // namespace cpplib::voronoi
 
-
 // ============================================================================
 //  LEVEL 4: Orchestrator / Top-Level Pipeline
-//  "Pure reason": drives iteration loops, coordinates L3 <-> L2.
-//  Declarative: prepare data -> compute -> update state.
 // ============================================================================
 
 namespace cpplib::voronoi {
 
+	class VoronoiFused;   // forward declaration
+
+// ============================================================================
+//  WorkerPool
+//
+//  Portable worker pool built on std::jthread. Used instead of
+//  std::execution::par because:
+//
+//    - <execution> is not available or not usable on every toolchain
+//      (GCC without TBB, libc++ historically). On those platforms
+//      std::execution::par silently degrades to sequential execution,
+//      which is worse than a compile-time error.
+//    - jthread gives explicit control over the thread count.
+//    - Per-thread scratch state can be handed to each worker for the
+//      whole lifetime of one parallel_for call — critical for the
+//      Voronoi per-cell construction, which uses ~10 scratch vectors
+//      per cell and would otherwise thrash the allocator.
+//
+//  The pool does not attempt work stealing. Work is distributed via a
+//  single atomic counter; for the near-uniform per-cell cost in this
+//  codebase that is both simpler and faster than a stealing queue.
+// ============================================================================
+	class WorkerPool {
+	public:
+		// threads == 0 -> use hardware_concurrency (min 1).
+		explicit WorkerPool(size_t threads = 0)
+			: n_threads_(threads?threads
+						 :std::max<size_t>(1, std::thread::hardware_concurrency())) {
+		}
+
+		size_t size() const noexcept {
+			return n_threads_;
+		}
+
+		// Parallel loop over [0, n).
+		//   init  -> produces a fresh Scratch value for one worker
+		//   fn    -> callback (index, scratch&), must be thread-safe across indices
+		//
+		// Falls back to a sequential pass if the pool has one thread or
+		// the workload is small — the cost of spawning jthreads is not
+		// worth it below a few hundred microseconds of total work.
+		template <typename Scratch, typename Init, typename Fn>
+		void parallel_for(size_t n, const Init& init, const Fn& fn) const {
+			if (n == 0) return;
+
+			if (n_threads_ <= 1 || n < kMinParallelWork) {
+				Scratch scratch = init();
+				for (size_t i = 0; i < n; ++i)
+					fn(i, scratch);
+				return;
+			}
+
+			// Per-worker scratch: allocated once, reused across indices.
+			std::vector<Scratch> scratch;
+			scratch.reserve(n_threads_);
+			for (size_t t = 0; t < n_threads_; ++t)
+				scratch.emplace_back(init());
+
+			std::atomic<size_t> next{0};
+
+			auto worker = [&](size_t tid) noexcept {
+				Scratch& local = scratch[tid];
+				for (;;) {
+					const size_t i = next.fetch_add(1, std::memory_order_relaxed);
+					if (i >= n) return;
+					fn(i, local);
+				}
+				};
+
+				// Spawn n_threads_ - 1 workers; the calling thread also runs.
+			std::vector<std::jthread> workers;
+			workers.reserve(n_threads_ - 1);
+			for (size_t t = 1; t < n_threads_; ++t)
+				workers.emplace_back(worker, t);
+
+			worker(0);
+
+			// jthread destructors join.
+		}
+
+	private:
+		// Below this iteration count, a sequential pass wins.
+		static constexpr size_t kMinParallelWork = 64;
+
+		size_t n_threads_;
+	};
+
+
+// ============================================================================
+//  VoronoiPipeline
+//
+//  Orchestrator. The cutoff is supplied externally: the caller knows
+//  the physics (6 A typical, 10-30 A large complexes, up to the cell
+//  size for low-density structures).
+//
+//  Parallelism:
+//    - the spatial index is built once, then read-only;
+//    - per-cell construction writes only into cells[i];
+//    - metrics are recomputed per-cell, also independently.
+//
+//  The parallel loops go through a caller-supplied WorkerPool. If pool
+//  is null, everything runs sequentially — useful for debugging and for
+//  small inputs where thread startup would dominate.
+//
+//  Per-cell construction uses WorkerScratch, a bundle of reusable
+//  vectors. Each worker gets one instance per parallel_for call, so the
+//  hot path performs zero allocations after the first few cells warm up.
+// ============================================================================
 	struct VoronoiPipeline {
+
 		struct Config {
-			uint32_t          max_neighbors = 12;
-			FloatingPointType cutoff_scale = 1.0;
-			bool              use_supercell = true;
-			int               sup_x = 1, sup_y = 1, sup_z = 1;
-			bool              compute_volumes = true;
-			bool              compute_areas = true;
-			bool              compute_solid_angles = true;
+			// Reserved for future tuning knobs.
 		};
 
-		Config           config;
-		VoronoiContext   context;
+		Config         config;
+		VoronoiContext context;
 
-		// --- Main entry: build Voronoi diagram for a set of atoms ---
-		void build(const PointType* atom_pos, size_t n_atoms,
-				   const MatrixType& FtoC) {
-			context.FtoC = FtoC;
-			context.max_neighbors = config.max_neighbors;
-			context.vertex_storage.reserve(n_atoms * 4);
-			context.cell_storage.reserve(n_atoms);
+		// Optional. When non-null, build()/update() distribute work
+		// across the pool. Owned by the caller; the pipeline does not
+		// take ownership.
+		WorkerPool* pool = nullptr;
 
-			// Step 1: Spatial hashing + neighbor list (Level 3)
-			FloatingPointType avg_dist = estimate_avg_distance(atom_pos, n_atoms);
-			FloatingPointType cutoff = avg_dist * config.cutoff_scale;
-			context.build_neighbor_list(atom_pos, n_atoms, cutoff);
+		// ==================================================================
+		//  Public entry points
+		// ==================================================================
 
-			// Step 2: Build one cell per atom (Level 3 orchestrates, Level 2 computes)
-			for (size_t i = 0; i < n_atoms; ++i)
-				build_single_cell(static_cast<IDtype>(i), atom_pos, n_atoms, FtoC);
+		// ------------------------------------------------------------------
+		//  Full build. Caller provides the cutoff in Cartesian units.
+		// ------------------------------------------------------------------
+		template <typename ExtT = ExternalFloatType>
+		inline void build(const std::vector<geometry::Point<ExtT>>& points_frac,
+				   const geometry::Cell<ExtT>& cell_def,
+				   ExtT cutoff,
+				   bool use_pbc_flag = true)
+		{
+			using ExtPoint = geometry::Point<ExtT>;
+			using ExtCell = geometry::Cell<ExtT>;
 
-			// Step 3: Extract edges and vertices from face topology
-			build_edges_and_vertices();
+			if constexpr (std::is_same_v<ExtT, InternalFloatType>) {
+				// Same type — forward directly, no copy.
+				build_internal(points_frac, cell_def, cutoff, use_pbc_flag);
+			} else {
+				// Convert once, then run the internal pipeline.
+				std::vector<PointType> internal_pts(points_frac.size());
+				for (size_t i = 0; i < points_frac.size(); ++i)
+					internal_pts[i] = PointType(points_frac[i]);
 
-			// Step 4: Final metric recomputation (Level 2)
-			if (config.compute_volumes)      recompute_volumes();
-			if (config.compute_areas)        recompute_areas();
-			if (config.compute_solid_angles) recompute_solid_angles();
+				UnitCell internal_cell = to_internal_cell(cell_def);
+				build_internal(internal_pts, internal_cell, cutoff, use_pbc_flag);
+			}
 		}
 
-		// --- Incremental update after MD step (atom positions changed) ---
-		void update(const PointType* new_pos, size_t n_atoms) {
-			for (size_t i = 0; i < n_atoms; ++i) {
-				IDtype cid = static_cast<IDtype>(i);
-				if (Cell* cell = context.cell_storage.get_by_id(cid)) {
-					cell->center = new_pos[i];
-					context.update_cell_topology(cid);
+		// Rebuild a Cell<double> from a Cell<ExtT> by going through the public
+		// parameters: lattice lengths and angles. The frac->cart matrix is
+		// recomputed from these, so precision matches the internal type.
+		template <typename ExtT>
+		static UnitCell to_internal_cell(const geometry::Cell<ExtT>& ext) {
+			return UnitCell(
+				static_cast<InternalFloatType>(ext.lat_dir(0)),
+				static_cast<InternalFloatType>(ext.lat_dir(1)),
+				static_cast<InternalFloatType>(ext.lat_dir(2)),
+				static_cast<InternalFloatType>(ext.getAngleGrad(0)),
+				static_cast<InternalFloatType>(ext.getAngleGrad(1)),
+				static_cast<InternalFloatType>(ext.getAngleGrad(2)),
+				/*is_grad=*/true);
+		}
+
+		void build_internal(const std::vector<PointType>& points_frac,
+				   const UnitCell& cell_def,
+				   InternalFloatType cutoff,
+				   bool use_pbc_flag = true)
+		{
+			assert(!points_frac.empty());
+			assert(points_frac.size() <= static_cast<size_t>(INVALID_ATOM_ID));
+
+			context.clear();
+			const size_t n = points_frac.size();
+			context.cells.resize(n);
+
+			// Spatial index: single-threaded, sequential.
+			context.rebuildGrid(points_frac, cell_def, cutoff, use_pbc_flag);
+
+			// Per-cell construction: parallel over independent cells.
+			for_each_cell(n, [&](size_t i, WorkerScratch& scratch) {
+				build_single_cell(context.cells[i], static_cast<AtomId>(i),
+								  points_frac, cutoff, scratch);
+						  });
+
+						  // Metric pass: parallel over independent cells.
+			if (pool) {
+				pool->parallel_for<EmptyScratch>(
+					n,
+					[] { return EmptyScratch{}; },
+					[&](size_t i, EmptyScratch&) {
+						VoronoiContext::recompute_cell_metrics(context.cells[i]);
+					});
+			} else {
+				EmptyScratch scratch;
+				for (size_t i = 0; i < n; ++i)
+					VoronoiContext::recompute_cell_metrics(context.cells[i]);
+			}
+		}
+
+		// ------------------------------------------------------------------
+		//  Update: only atom positions changed. Topology kept.
+		// ------------------------------------------------------------------
+		template <typename ExtT = ExternalFloatType>
+		void update(const std::vector<geometry::Point<ExtT>>& points_frac) {
+			if constexpr (std::is_same_v<ExtT, InternalFloatType>) {
+				update_internal(points_frac);
+			} else {
+				std::vector<PointType> internal_pts(points_frac.size());
+				for (size_t i = 0; i < points_frac.size(); ++i)
+					internal_pts[i] = PointType(points_frac[i]);
+				update_internal(internal_pts);
+			}
+		}
+		
+		void update_internal(const std::vector<PointType>& points_frac) {
+			const size_t n = points_frac.size();
+			const MatrixType& FtoC = context.spatial_grid().frac_to_cart();
+
+			if (pool) {
+				pool->parallel_for<EmptyScratch>(
+					n,
+					[] { return EmptyScratch{}; },
+					[&](size_t i, EmptyScratch&) {
+						context.cells[i].meta.center = FtoC * points_frac[i];
+						VoronoiContext::recompute_cell_metrics(context.cells[i]);
+					});
+			} else {
+				for (size_t i = 0; i < n; ++i) {
+					context.cells[i].meta.center = FtoC * points_frac[i];
+					VoronoiContext::recompute_cell_metrics(context.cells[i]);
 				}
 			}
-			if (config.compute_volumes)      recompute_volumes();
-			if (config.compute_areas)        recompute_areas();
-			if (config.compute_solid_angles) recompute_solid_angles();
 		}
 
-		// --- Public accessors for external consumers ---
-		const Cell* get_cell(IDtype id)   const noexcept {
-			return context.cell_storage.get_by_id(id);
+		size_t                n_cells() const noexcept {
+			return context.n_cells();
 		}
-		const Face* get_face(IDtype id)   const noexcept {
-			return context.face_storage.get_by_id(id);
-		}
-		const Vertex* get_vertex(IDtype id) const noexcept {
-			return context.vertex_storage.get_by_id(id);
-		}
-
-		size_t              n_cells() const noexcept {
-			return context.cell_storage.size();
-		}
-		VoronoiContext::Stats stats() const noexcept {
+		VoronoiContext::Stats stats()   const noexcept {
 			return context.get_stats();
 		}
+		const VoronoiCell& cell(size_t i) const noexcept {
+			return context.cell(i);
+		}
+		const VoronoiContext& ctx()     const noexcept {
+			return context;
+		}
+
+		VoronoiFused fuse() const;
 
 	private:
-		// --- Estimate average nearest-neighbor distance (for cutoff heuristic) ---
-		static inline FloatingPointType estimate_avg_distance(
-			const PointType* pts, size_t n) noexcept {
-			if (n < 2) return FloatingPointType(1.0);
-			FloatingPointType sum = 0;
-			size_t sample = std::min(n, size_t{100});
-			for (size_t i = 0; i < sample; ++i) {
-				FloatingPointType min_d = std::numeric_limits<FloatingPointType>::max();
-				for (size_t j = 0; j < n; ++j) {
-					if (i == j) continue;
-					min_d = std::min(min_d, MathEngine::distance(pts[i], pts[j]));
-				}
-				sum += min_d;
-			}
-			return sum / static_cast<FloatingPointType>(sample);
-		}
+		// ==================================================================
+		//  Worker scratch
+		//
+		//  One instance per worker thread. All vectors keep their capacity
+		//  across cells, so the hot path performs zero allocations after
+		//  the first few cells warm up. Never shared between threads.
+		// ==================================================================
+		struct WorkerScratch {
+			std::vector<geometry::SG<InternalFloatType>::Neighbor> cand;
+			std::vector<uint8_t> state;              // VertexSide as uint8_t
+			std::vector<LocalId> vmap;               // old vertex -> new vertex
+			std::vector<LocalId> cross_vert;         // one entry per old half-edge
+			std::vector<LocalId> plane_verts;        // intersection vertex IDs
+			std::vector<size_t>  he_li;              // half-edge local indices
+			std::vector<size_t>  v_li;               // vertex local indices
+			std::vector<LocalId> new_cycle;          // scratch for face rebuild
+			std::vector<LocalId> he_ids;             // scratch for add_face_cycle
+			std::vector<LocalId> twin_a;             // rebuild_twins: origin per half-edge
+			std::vector<LocalId> twin_b;             // rebuild_twins: next-origin per half-edge
+		};
 
-		// --- Build Voronoi cell for atom i ---
-		void build_single_cell(IDtype cell_id, const PointType* atoms,
-							   size_t n_atoms, const MatrixType& FtoC) {
-			(void)FtoC;
-			(void)n_atoms;
+		// Placeholder for parallel loops that do not need scratch.
+		struct EmptyScratch {
+		};
 
-			Cell cell{};
-			cell.id = cell_id;
-			cell.atom_id = cell_id;
-			cell.center = atoms[cell_id];
-			cell.volume = 0;
-			cell.n_faces = 0;
-			cell.n_vertices = 0;
-			cell.n_edges = 0;
-			context.cell_storage.add(cell_id, cell);
-
-			// Register atom center as a vertex in storage
-			Vertex vcenter{};
-			vcenter.pos = atoms[cell_id];
-			vcenter.id = cell_id * 1024;  // local vertex ID namespace
-			vcenter.cell_id = cell_id;
-			context.vertex_storage.add(vcenter.id, vcenter);
-
-			// Phase A: Collect neighbor atoms (Level 3 spatial hash)
-			// Phase B: Construct bisecting planes (Level 2)
-			// Phase C: Intersect planes -> face polygons (Level 2)
-			// Phase D: Write Face records into context (Level 3)
-			// [Full geometric construction elided — depends on specific
-			//  Voronoi algorithm variant (Fortune, incremental, etc.)]
-		}
-
-		// --- Derive edges and unique vertices from face topology ---
-		void build_edges_and_vertices() {
-			context.face_storage.for_each([&](const Face& f) {
-				const TopologyBuffer& fv = context.face_to_vertices[f.id];
-				for (LocalIdx k = 0; k + 1 < fv.count; ++k) {
-					IDtype v0 = fv.data[k];
-					IDtype v1 = fv.data[k + 1];
-
-					Vertex* p0 = context.vertex_storage.get_by_id(v0);
-					Vertex* p1 = context.vertex_storage.get_by_id(v1);
-					if (!p0 || !p1) continue;
-
-					Edge e{};
-					e.v0 = v0;
-					e.v1 = v1;
-					e.face_id = f.id;
-					e.length = MathEngine::edge_length(p0->pos, p1->pos);
-
-					IDtype e_id = v0 ^ (v1 << 1);
-					if (!context.edge_storage.get_by_id(e_id))
-						context.edge_storage.add(e_id, e);
-				}
-										  });
-		}
-
-		// --- Recompute all cell volumes (delegates to Level 2) ---
-		void recompute_volumes() {
-			context.cell_storage.for_each([&](const Cell& c) {
-				const Face* faces = context.face_storage.data();
-				FloatingPointType vol = MathEngine::cell_volume(
-					c.center,
-					faces,
-					c.n_faces,
-					context.vertex_storage.data(),
-					context.face_to_vertices.data()
-				);
-				if (Cell* cell = context.cell_storage.get_by_id(c.id))
-					cell->volume = vol;
-										  });
-		}
-
-		// --- Recompute all face areas ---
-		void recompute_areas() {
-			context.face_storage.for_each([&](const Face& f) {
-				const TopologyBuffer& fv = context.face_to_vertices[f.id];
-				if (fv.count < 3) return;
-				const Vertex* vdata = context.vertex_storage.data();
-				std::array<PointType, 16> cart_buf;
-				uint32_t n = std::min<uint32_t>(fv.count, 16);
-				for (uint32_t i = 0; i < n; ++i)
-					cart_buf[i] = vdata[fv.data[i]].pos;
-
-				FloatingPointType area = MathEngine::polygon_area(cart_buf.data(), n);
-				if (Face* face = context.face_storage.get_by_id(f.id))
-					face->area = area;
-										  });
-		}
-
-		// --- Recompute solid angles at cell centers ---
-		void recompute_solid_angles() {
-			context.face_storage.for_each([&](const Face& f) {
-				const TopologyBuffer& fv = context.face_to_vertices[f.id];
-				if (fv.count < 3) return;
-				Cell* cell = context.cell_storage.get_by_id(f.cell_id);
-				if (!cell) return;
-
-				const Vertex* vdata = context.vertex_storage.data();
-				std::array<PointType, 16> cart_buf;
-				uint32_t n = std::min<uint32_t>(fv.count, 16);
-				for (uint32_t i = 0; i < n; ++i)
-					cart_buf[i] = vdata[fv.data[i]].pos;
-
-				FloatingPointType sa = MathEngine::solid_angle(
-					cart_buf.data(), n, cell->center);
-				if (Face* face = context.face_storage.get_by_id(f.id))
-					face->solid_angle = sa;
-										  });
-		}
-	};
-
-}
-
-namespace cpplib::voronoi_old {
-	// Forward declarations
-	struct Vertex;
-	struct Edge;
-	struct Face;
-	struct Cell;
-
-	/// @brief Container type for non-owning pointers in Voronoi structures
-	/// @tparam T Pointer type to store
-	template<class T>
-	using Container = ::std::unordered_set<T>;
-
-	/// @brief State of a Voronoi geometric object during construction
-	///
-	/// Objects transition through states during plane clipping operations:
-	/// 
-	/// - DELETE: Object is outside the valid region
-	/// 
-	/// - VALID: Object is fully valid and unchanged
-	/// 
-	/// - INVALID: Object is in an inconsistent state (error condition)
-	/// 
-	/// - MODIFICATION: Object is being modified by a clipping operation
-	/// 
-	/// - ONPLANE: Object is laying directely on a clipping plane
-	enum class State : char {
-		DELETE = 0,       ///< Object should be deleted
-		VALID = 1,        ///< Object is valid
-		INVALID = 2,      ///< Object is in invalid state
-		MODIFICATION = 3, ///< Object is being modified
-		ONPLANE = 4       ///< Object is on a clipping plane
-	};
-
-	/// @brief Base class for Voronoi geometric objects with state and ID management
-	///
-	/// Provides common functionality for tracking the state and unique identifier
-	/// of Voronoi vertices, edges, and faces during diagram construction.
-	class Object {
-		State state;     ///< Current state of the object
-		uint32_t id;     ///< Unique identifier
-	public:
-		/// @brief Get the unique identifier
-		/// @return Object's ID
-		inline uint32_t get_id() const noexcept {
-			return id;
-		}
-
-		/// @brief Set the unique identifier
-		/// @param i New ID value
-		inline void set_id(uint32_t i) noexcept {
-			id = i;
-		}
-
-		/// @brief Get the current state
-		/// @return Current State
-		inline State get_state() const noexcept {
-			return state;
-		}
-
-		/// @brief Set the current state
-		/// @param s New State value
-		inline void set_state(State s) noexcept {
-			state = s;
-		}
-
-		/// @brief Construct an Object with ID and optional state
-		/// @param ID Unique identifier
-		/// @param s Initial state (default: INVALID)
-		constexpr explicit Object(uint32_t ID, State s = State::INVALID) noexcept
-			: state(s), id(ID) {
-		}
-	};
-
-	/// @brief Epsilon for comparing vertex positions
-	///
-	/// Vertices within this distance are considered equal to handle
-	/// floating-point precision issues.
-	constexpr basic_types::FloatingPointType EPSILON = 1E-6;
-
-	/// @brief Represents a vertex in a Voronoi diagram
-	///
-	/// A Vertex stores a 3D point position, distance metric, and maintains
-	/// non-owning pointers to connected edges and faces. Vertices are compared
-	/// using a spatial epsilon for numerical stability.
-	struct Vertex : public Object {
-		/// @brief 3D point type for vertex position
-		using PointType = geometry::Point<basic_types::FloatingPointType>;
-
-		/// @brief 3D position of this vertex
-		PointType point;
-
-		/// @brief Distance metric for this vertex (typically squared distance to cell center)
-		basic_types::FloatingPointType distance = basic_types::FloatingPointType(0.0);
-
-		/// @brief Edges connected to this vertex (non-owning pointers)
-		Container<Edge*> edges;
-
-		/// @brief Faces connected to this vertex (non-owning pointers)
-		Container<Face*> faces;
-
-		/// @brief Default constructor with ID 0
-		Vertex() noexcept : Object(0, State::VALID) {
-		}
-
-/// @brief Construct vertex with given ID
-/// @param ID Unique identifier for this vertex
-		explicit Vertex(uint32_t ID) noexcept : Object(ID, State::VALID) {
-		}
-
-/// @brief Construct vertex with ID and position
-/// @param ID Unique identifier
-/// @param p Position point
-		Vertex(uint32_t ID, const PointType& p) noexcept : Object(ID, State::VALID), point(p) {
-		}
-
-/// @brief Construct vertex with ID and position (move)
-/// @param ID Unique identifier
-/// @param p Position point (moved)
-		Vertex(uint32_t ID, PointType&& p) noexcept : Object(ID, State::VALID), point(std::move(p)) {
-		}
-
-/// @brief Compare vertices for equality using spatial epsilon
-/// @param a First vertex
-/// @param b Second vertex
-/// @return True if vertices are spatially equivalent
-///
-/// Uses EPSILON to handle floating-point precision.
-		inline friend bool operator==(const Vertex& a, const Vertex& b) {
-			static constexpr basic_types::FloatingPointType EPSILONSQ = EPSILON * EPSILON;
-			return geometry::Point<basic_types::FloatingPointType>::distanceSq(a.point, b.point) < EPSILONSQ;
-		}
-	};
-
-	/// @brief Represents an edge in a Voronoi diagram
-	///
-	/// An Edge connects two vertices and is shared by (at most) two faces.
-	/// Edges maintain non-owning pointers to their vertices and adjacent faces.
-	struct Edge : public Object {
-		/// @brief Vertices at the endpoints of this edge (max 2, non-owning)
-		Container<Vertex*> vertices;
-
-		/// @brief Faces adjacent to this edge (max 2, non-owning)
-		Container<Face*> faces;
-
-		/// @brief 3D point type
-		using PointType = geometry::Point<basic_types::FloatingPointType>;
-		/// @brief Plane type for intersection calculations
-		using PlaneType = geometry::Plane<basic_types::FloatingPointType>;
-
-		/// @brief Construct an edge connecting two vertices
-		/// @param ID Unique identifier
-		/// @param v1 First vertex (must not be null)
-		/// @param v2 Second vertex (must not be null)
-		///
-		/// Automatically registers this edge with both vertices.
-		Edge(uint32_t ID, Vertex* v1, Vertex* v2) : Object(ID), vertices({v1, v2}) {
-			assert(v1 != nullptr);
-			assert(v2 != nullptr);
-			v1->edges.emplace(this);
-			v2->edges.emplace(this);
-		}
-
-		/// @brief Calculate and update the state of this edge
-		/// @return Updated State
-		///
-		/// An edge is VALID if it has 2 vertices and 2 faces, with both vertices valid.
-		/// An edge is MODIFICATION if it's vertices are separated by clipping plane.
-		/// An edge is ONPLANE if both it's vertices are laying on clipping plane.
-		/// An edge is DELETE if both vertices are deleted.
-		/// Otherwise, it's INVALID.
-		inline State calculateState() noexcept {
-			using enum State;
-			if (vertices.size() != 2 || faces.size() != 2) [[unlikely]] {
-				set_state(INVALID);
-				return get_state();
-			}
-			auto it = vertices.begin();
-			State s1 = (*it)->get_state();
-			++it;
-			State s2 = (*it)->get_state();
-
-			if (s1 == DELETE && s2 == DELETE) {
-				set_state(DELETE);
-			} else if ((s1 == VALID && s2 == DELETE) || (s1 == DELETE && s2 == VALID)) {
-				set_state(MODIFICATION); // Intersection
-			} else if ((s1 == VALID && s2 == ONPLANE) || (s1 == ONPLANE && s2 == VALID)) {
-				set_state(VALID);
-			} else if (s1 == ONPLANE && s2 == ONPLANE) {
-				set_state(ONPLANE);
-			} else if ((s1 == DELETE && s2 == ONPLANE) || (s1 == ONPLANE && s2 == DELETE)) {
-				set_state(DELETE);
+// ==================================================================
+//  Dispatch one parallel_for through the pool, or run sequentially.
+// ==================================================================
+		template <typename Fn>
+		void for_each_cell(size_t n, const Fn& fn) const {
+			if (pool) {
+				pool->parallel_for<WorkerScratch>(
+					n,
+					[] { return WorkerScratch{}; },
+					fn);
 			} else {
-				set_state(VALID);
-			}
-			return get_state();
-		}
-
-		/// @brief Calculate intersection point of this edge with a plane
-		/// @param plane Clipping plane
-		/// @return Intersection point
-		///
-		/// Requires that this edge is in MODIFICATION state (one vertex on each side of plane).
-		/// The edge must not be parallel to the plane.
-		PointType intersectSegmentPlane(PlaneType plane) {
-			assert(calculateState() == State::MODIFICATION);
-			auto it = vertices.begin();
-			auto v1 = *it;
-			it++;
-			auto v2 = *it;
-
-			PointType direction = v2->point - v1->point;
-			auto unnormalized_normal = PointType(plane.a[0], plane.a[1], plane.a[2]);
-			auto denom = PointType::Scalar(unnormalized_normal, direction);
-
-			// Check that Edge is not parallel to plane
-			if (std::abs(denom) < EPSILON)
-				assert(std::abs(denom) >= EPSILON);
-
-			auto t = -(plane.a[0] * v1->point[0] +
-					   plane.a[1] * v1->point[1] +
-					   plane.a[2] * v1->point[2] +
-					   plane.a[3]) / denom;
-
-			if (t <= 0.0 || t >= 1.0)
-				assert(t > 0.0 && t < 1.0);
-
-			return v1->point + direction * t;
-		}
-
-		/// @brief Get the other vertex of this edge
-		/// @param v One vertex of the edge
-		/// @return The other vertex
-		///
-		/// Requires that v is one of the two vertices of this edge.
-		Vertex* get_second_vertex(const Vertex* v) const {
-			for (auto& i : vertices) {
-				if (i != v)
-					return i;
-			}
-			assert(false); // Code should not reach here
-			return nullptr;
-		}
-	};
-
-	/// @brief Represents a face in a Voronoi diagram
-	///
-	/// A Face is a polygon formed by vertices and edges, separating two Voronoi cells.
-	/// Each face has an owner cell and an "other" cell (possibly shifted by periodic boundaries).
-	struct Face : public Object {
-		/// @brief ID of the cell that owns this face
-		uint32_t owner_id;
-
-		/// @brief ID of the neighboring cell on the other side of this face
-		uint32_t other_id;
-
-		/// @brief Shift code for periodic boundary conditions
-		///
-		/// Indicates which periodic image the "other" cell is in.
-		geometry::ShiftCode other_shiftcode;
-
-		/// @brief Vertices forming this face (non-owning pointers)
-		Container<Vertex*> vertices;
-
-		/// @brief Edges forming this face (non-owning pointers)
-		Container<Edge*> edges;
-
-		/// @brief Construct a face with given ID
-		/// @param ID Unique identifier
-		explicit Face(uint32_t ID) : Object(ID) {
-		}
-
-/// @brief Calculate and update the state of this face
-/// @return Updated State
-///
-/// A face is VALID if it has equal numbers of vertices and edges, and all edges are valid.
-/// A face is MODIFICATION if any edge is being modified.
-/// A face is DELETE if all edges are deleted.
-/// A face with exactly one valid edge is INVALID (error condition).
-		inline State calculateState() {
-			using enum State;
-
-			uint32_t v_size = vertices.size();
-			uint32_t v_valid = 0;
-			uint32_t v_pln = 0;
-			uint32_t v_inv = 0;
-			for (auto& ver : vertices)
-			{
-				switch (ver->get_state()) {
-				case VALID:
-					v_valid++;
-					break;
-				case ONPLANE:
-					v_pln++;
-					break;
-				}
-			}
-
-			if (v_valid == 0) {
-				set_state(DELETE);
-				for (auto& e : edges) {
-					if (e->get_state() != DELETE) {
-						e->faces.erase(this);
-					}
-				}
-				return get_state();
-			} else if (v_valid + v_pln < v_size) {
-				set_state(MODIFICATION);
-				return get_state();
-			}
-
-			set_state(VALID);
-			return get_state();
-
-		}
-	};
-
-	/// @brief Represents a complete Voronoi cell in 3D space
-	///
-	/// A Cell contains vertices, edges, and faces that define a Voronoi polyhedron.
-	/// Supports progressive clipping by planes to construct the final cell geometry.
-	/// Cells are initialized as cubes centered at an atomic position and then
-	/// iteratively clipped by planes perpendicular to neighboring atoms.
-	struct Cell {
-	public:
-		/// @brief Floating-point type for coordinates
-		using FloatingPointType = basic_types::FloatingPointType;
-		/// @brief 3D point type
-		using PointType = geometry::Point<FloatingPointType>;
-		/// @brief Integer shift type for periodic boundaries
-		using ShiftType = geometry::Point<int8_t>;
-		/// @brief Bond with periodic boundary shift
-		using BondWithShift = BondWithPoint<ShiftType>;
-		/// @brief Plane type for clipping operations
-		using PlaneType = geometry::Plane<FloatingPointType>;
-
-		/// @brief Epsilon for geometric comparisons
-		///
-		/// Used to determine if a vertex lies exactly on a clipping plane.
-		static constexpr FloatingPointType limit = EPSILON;
-
-		/// @brief Owned vertices in this cell (smart pointers)
-		std::vector<std::unique_ptr<Vertex>> vertices;
-
-		/// @brief Owned edges in this cell (smart pointers)
-		std::vector<std::unique_ptr<Edge>> edges;
-
-		/// @brief Owned faces in this cell (smart pointers)
-		std::vector<std::unique_ptr<Face>> faces;
-
-		/// @brief Center point of this cell (typically an atom position)
-		PointType center;
-
-		/// @brief Cell identifier (typically atom index)
-		int id = -1;
-
-		/// @brief Base cube vertices (8 corners, relative to center)
-		///
-		/// Initial geometry for a Voronoi cell before clipping.
-		static constexpr std::array<PointType, 8> base_vertices = {{
-			PointType{-0.5, -0.5, -0.5}, // 0
-			PointType{ 0.5, -0.5, -0.5}, // 1
-			PointType{ 0.5,  0.5, -0.5}, // 2
-			PointType{-0.5,  0.5, -0.5}, // 3
-			PointType{-0.5, -0.5,  0.5}, // 4
-			PointType{ 0.5, -0.5,  0.5}, // 5
-			PointType{ 0.5,  0.5,  0.5}, // 6
-			PointType{-0.5,  0.5,  0.5}  // 7
-		}};
-
-		/// @brief Vertex indexes for each face of the cube (counter-clockwise from outside)
-		static constexpr std::array<std::array<int, 4>, 6> face_indexes = {{
-			{4, 7, 6, 5}, // front face  (+Z)
-			{0, 1, 2, 3}, // back face   (-Z)
-			{0, 3, 7, 4}, // left face   (-X)
-			{1, 5, 6, 2}, // right face  (+X)
-			{0, 4, 5, 1}, // bottom face (-Y)
-			{3, 2, 6, 7}  // top face    (+Y)
-		}};
-
-		/// @brief Shift codes for each face of the base cube
-		///
-		/// Indicates which periodic image each cube face points toward.
-		static constexpr std::array<int8_t, 6> face_shiftcodes = {{
-			22, // front face
-			 4, // back face
-			12, // left face
-			14, // right face
-			10, // bottom face
-			16  // top face
-		}};
-
-		/// @brief Vertex indexes for each edge of the cube
-		static constexpr std::array<std::array<int, 2>, 12> edge_indexes = {{
-			{4, 7}, // edge 0: front-left
-			{7, 6}, // edge 1: front-top
-			{6, 5}, // edge 2: front-right
-			{5, 4}, // edge 3: front-bottom
-			{0, 1}, // edge 4: back-bottom
-			{1, 2}, // edge 5: back-right
-			{2, 3}, // edge 6: back-top
-			{3, 0}, // edge 7: back-left
-			{0, 4}, // edge 8: left-bottom
-			{3, 7}, // edge 9: left-top
-			{1, 5}, // edge 10: right-bottom
-			{2, 6}  // edge 11: right-top
-		}};
-
-		/// @brief Edge indexes for each face of the cube
-		static constexpr std::array<std::array<int, 4>, 6> face_edge_indexes = {{
-			{ 0,  1,  2,  3},  // front face
-			{ 4,  5,  6,  7},  // back face
-			{ 7,  9,  0,  8},  // left face
-			{10,  2, 11,  5},  // right face
-			{ 8,  3, 10,  4},  // bottom face
-			{ 9,  1, 11,  6}   // top face
-		}};
-
-	public:
-		/// @brief Default constructor
-		Cell() = default;
-
-		/// @brief Construct a Voronoi cell as a cube centered at given point
-		/// @param c Center point (typically atom position)
-		/// @param i Cell identifier (typically atom index)
-		///
-		/// Initializes the cell as a cube with 8 vertices, 12 edges, and 6 faces.
-		Cell(const PointType& c, int i) : center(c), id(i) {
-			vertices.reserve(128);
-			edges.reserve(128);
-			faces.reserve(64);
-
-			// Create base vertices
-			for (uint32_t vert_id = 0; vert_id < 8; vert_id++) {
-				vertices.emplace_back(std::make_unique<Vertex>(vert_id, base_vertices[vert_id] + center));
-			}
-
-			// Create edges connecting vertices
-			for (uint32_t edge_id = 0; edge_id < 12; edge_id++) {
-				auto vertex1_ptr = vertices[edge_indexes[edge_id][0]].get();
-				auto vertex2_ptr = vertices[edge_indexes[edge_id][1]].get();
-				auto owner_ptr = std::make_unique<Edge>(edge_id, vertex1_ptr, vertex2_ptr);
-				auto edge_ptr = owner_ptr.get();
-				edges.emplace_back(std::move(owner_ptr));
-				edge_ptr->set_state(State::VALID);
-			}
-
-			// Create faces
-			for (uint32_t face_id = 0; face_id < 6; face_id++) {
-				auto face = std::make_unique<Face>(face_id);
-				face->owner_id = id;
-				face->other_id = id;
-				face->other_shiftcode = face_shiftcodes[face_id];
-
-				// Fill vertices for this face
-				for (int j = 0; j < 4; j++) {
-					auto vertex_ptr = vertices[face_indexes[face_id][j]].get();
-					face->vertices.emplace(vertex_ptr);
-					vertex_ptr->faces.emplace(face.get());
-				}
-
-				// Fill edges for this face
-				for (int j = 0; j < 4; j++) {
-					auto edge_ptr = edges[face_edge_indexes[face_id][j]].get();
-					face->edges.emplace(edge_ptr);
-					edge_ptr->faces.emplace(face.get());
-				}
-
-				face->set_state(State::VALID);
-				faces.push_back(std::move(face));
+				WorkerScratch scratch;
+				for (size_t i = 0; i < n; ++i)
+					fn(i, scratch);
 			}
 		}
 
-		/// @brief Add a new vertex to the cell (with deduplication)
-		/// @param p Vertex position
-		/// @return Pointer to the vertex (new or existing)
-		///
-		/// If a vertex at this position already exists (within epsilon), returns
-		/// the existing vertex. Otherwise, creates a new vertex.
-		Vertex* add_vertex(const PointType& p) {
-			auto temp = std::make_unique<Vertex>(static_cast<uint32_t>(vertices.size()), p);
-			for (auto& v : vertices) {
-				if (*v == *temp)
-					return v.get();
-			}
-			auto simple_ptr = temp.get();
-			vertices.emplace_back(std::move(temp));
-			return simple_ptr;
-		}
+		// ==================================================================
+		//  Vertex classification result for one clipping pass.
+		// ==================================================================
+		enum class VertexSide : uint8_t {
+			Delete = 0,  // plane.side < -eps — will be removed
+			Keep = 1,  // plane.side >  eps — kept as-is
+			OnPlane = 2,  // |plane.side| <= eps — kept and snapped
+		};
 
-		/// @brief Clip cell by a plane and add the resulting face
-		/// @param clipping_plane Plane to clip by
-		/// @param id_of_another_cell ID of the neighboring cell
-		/// @param another_shiftcode Shift code for periodic boundaries
-		///
-		/// Progressively clips the Voronoi cell by a plane perpendicular to a neighboring atom.
-		/// This algorithm:
-		/// 
-		/// 1. Classifies vertices as deleted, modified, or valid based on their side of the plane
-		/// 
-		/// 2. Updates edge and face states accordingly
-		/// 
-		/// 3. Creates new vertices at edge-plane intersections
-		/// 
-		/// 4. Adds new edges and a new face where the plane cuts the cell
-		void clipByPlaneAndAddNewFace(const PlaneType& clipping_plane, uint32_t id_of_another_cell, geometry::ShiftCode another_shiftcode) {
-			using enum State;
+		// ==================================================================
+		//  Per-cell construction — top-level driver.
+		//
+		//  Steps:
+		//    1. Query the shared index for candidates within cutoff.
+		//    2. Sort candidates by squared distance, nearest first.
+		//    3. Seed with an axis-aligned box.
+		//    4. Clip iteratively:
+		//         early-exit if nb.dist_sq > 4 * max_vertex_dist_sq;
+		//         clip by the perpendicular bisector plane;
+		//         if the clip removed any vertex, refresh max_vertex_dist_sq.
+		//
+		//  The bisector between the cell center c and neighbour n sits at
+		//  distance |c - n| / 2 from c. If that distance exceeds the
+		//  current cell's farthest-vertex radius, the plane cannot cut
+		//  the cell. Solving |c - n| / 2 < r_max gives the bound used.
+		// ==================================================================
+		void build_single_cell(VoronoiCell& cell, AtomId atom_id,
+							   const std::vector<PointType>& points_frac,
+							   InternalFloatType cutoff,
+							   WorkerScratch& scratch) const
+		{
+			cell.clear();
+			cell.reserve(/*nv*/ 64, /*ne*/ 192, /*nf*/ 64);
 
-			// Check if the side is correct (center must be on positive side)
-			assert(clipping_plane.side(center) > 0);
+			const auto& grid = context.spatial_grid();
+			const MatrixType& FtoC = grid.frac_to_cart();
+			cell.meta.center = FtoC * points_frac[atom_id];
 
-			// Check cutting
-			bool modified = false;
-			// 1. Separate vertices to sides of plane
-			for (auto& v : vertices)
-			{
-				if (v->get_state() == DELETE) {
-					continue;
-				}
-				// calculate side:
-				auto side = clipping_plane.side(v->point);
-				if (side < -limit) {
-					// Point cutted off
-					v->set_state(DELETE);
-					modified = true;
-				} else if (side < limit) {
-					// Point on the Face
-					v->set_state(ONPLANE);
-				}
-			}
+			// --- 1. Collect candidates (reuse scratch buffer) -----------
+			auto& cand = scratch.cand;
+			cand.clear();
+			grid.for_each_neighbor(static_cast<uint32_t>(atom_id),
+								   [&](const geometry::SG<InternalFloatType>::Neighbor& nb) {
+									   cand.push_back(nb);
+								   });
 
-			// Early exit if no vertices were cut
-			if (modified == false) {
-				for (auto& v : vertices)
-				{
-					if (v->get_state() == ONPLANE) {
-						v->set_state(VALID);
-					}
-				}
-				return;
-			}
+							   // --- 2. Sort by squared distance -----------------------------
+			std::sort(cand.begin(), cand.end(),
+					  [](const auto& a, const auto& b) { return a.dist_sq < b.dist_sq; });
 
-			// 2. Calculate States of edges and faces
-			for (auto& e : edges)
-			{
-				if (e->get_state() == DELETE) {
-					continue;
-				}
-				e->calculateState();
-			}
-			for (auto& f : faces)
-			{
-				if (f->get_state() == DELETE) {
-					continue;
-				}
-				f->calculateState();
-				if (f->get_state() == INVALID) {
-					assert(f->get_state() != INVALID);
-				}
-			}
+			// --- 3. Seed with an axis-aligned box ------------------------
+			seed_box(cell, cutoff, scratch);
+			float max_vd_sq = max_vertex_dist_sq(cell);
 
-			// 3. Cut edges
-			// Check all Edges which need MODIFICATION
-			for (auto& e : edges)
-			{
-				if (e->get_state() != MODIFICATION) {
-					continue;
-				}
+			// --- 4. Iterative clipping -----------------------------------
+			const auto& geom = grid.geometry();
+			for (const auto& nb : cand) {
+				if (nb.dist_sq > InternalFloatType(4) * static_cast<InternalFloatType>(max_vd_sq)) break;
 
-				auto v1 = *e->vertices.begin();
-				auto v2 = e->get_second_vertex(v1);
-				if (!((v1->get_state() == State::VALID && v2->get_state() == State::DELETE) ||
-					  (v1->get_state() == State::DELETE && v2->get_state() == State::VALID))) {
-					e->set_state(State::VALID);
-					continue;
-				}
+				const PointType nbr_cart =
+					FtoC * points_frac[nb.idx] +
+					geom.shift_cart[nb.shift.get_code()];
 
-				auto intersection = e->intersectSegmentPlane(clipping_plane);
-				auto new_vertex_ptr = add_vertex(intersection);
+				// Bisector plane: perpendicular to (center - nbr), through
+				// the midpoint, oriented so the center is on the +side.
+				const PointType mid = (cell.meta.center + nbr_cart) * InternalFloatType(0.5);
+				const PointType normal = cell.meta.center - nbr_cart;
+				const geometry::Plane<InternalFloatType> bisector(mid, normal);
 
-				// Erase deleted vertex from set
-				std::erase_if(e->vertices,
-							  [](auto* ptr) {
-								  if (ptr->get_state() == DELETE) {
-									  return true;
-								  }
-								  return false;
-							  });
-				// Add new vertex to set
-				e->vertices.insert(new_vertex_ptr);
-
-				new_vertex_ptr->edges.insert(e.get());
-				new_vertex_ptr->faces.insert(e->faces.begin(), e->faces.end());
-				for (auto& f : e->faces) {
-					f->vertices.emplace(new_vertex_ptr);
-				}
-				new_vertex_ptr->set_state(ONPLANE); // Mark as on the NEW FACE
-
-				// Now, new vertex complete, so edge is VALID too:
-				e->set_state(VALID);
-			}
-
-			// 4. Cut Faces which need modification
-			for (auto& f : faces) {
-				if (f->get_state() != MODIFICATION) continue;
-
-				// 4.1. Find and delete all unnecessary edges and vertices
-				std::erase_if(f->edges, [](const auto* ptr) {
-					return ptr->get_state() == DELETE;
-							  });
-				std::erase_if(f->vertices, [](const auto* ptr) {
-					return ptr->get_state() == DELETE;
-							  });
-
-						  // 4.2 Modify the face: add Edge
-				auto iter_vertex = f->vertices.cbegin();
-				Vertex* v1 = nullptr;
-				Vertex* v2 = nullptr;
-
-				// Find new vertices (those on the clipping plane)
-				while (iter_vertex != f->vertices.cend()) {
-					v1 = *iter_vertex;
-					if (v1->get_state() == ONPLANE) {
-						iter_vertex++;
-						break;
-					}
-					iter_vertex++;
-				}
-				while (iter_vertex != f->vertices.cend()) {
-					v2 = *iter_vertex;
-					if (v2->get_state() == ONPLANE) {
-						break;
-					}
-					iter_vertex++;
-				}
-				if (iter_vertex == f->vertices.cend())
-					assert(iter_vertex != f->vertices.cend());
-
-				// Create edge connecting the two new vertices
-				const auto& new_edge = edges.emplace_back(std::make_unique<Edge>(static_cast<uint32_t>(edges.size()), v1, v2));
-				new_edge->faces.emplace(f.get());
-				f->edges.emplace(new_edge.get());
-				new_edge->set_state(ONPLANE);
-				f->set_state(VALID);
-			}
-
-			// 5. Create new Face (the clipping plane becomes a face)
-			const auto& new_face = faces.emplace_back(std::make_unique<Face>(static_cast<uint32_t>(faces.size())));
-			auto raw_face_ptr = new_face.get();
-
-			// Add all ONPLANE edges to the new face
-			for (const auto& e : edges)
-			{
-				if (e->get_state() == ONPLANE) {
-					raw_face_ptr->edges.emplace(e.get());
-					e->faces.emplace(raw_face_ptr);
-					e->set_state(VALID);
-				}
-			}
-
-			// Add all ONPLANE vertices to the new face
-			for (const auto& v : vertices)
-			{
-				if (v->get_state() == ONPLANE) {
-					raw_face_ptr->vertices.emplace(v.get());
-					v->faces.emplace(raw_face_ptr);
-					v->set_state(VALID);
-				}
-			}
-
-			raw_face_ptr->owner_id = id;
-			raw_face_ptr->other_id = id_of_another_cell;
-			raw_face_ptr->other_shiftcode = another_shiftcode.get_code();
-			raw_face_ptr->set_state(VALID);
-			assert(raw_face_ptr->calculateState() == VALID);
-
-			// Cleanup after modifications is not needed right now. 
-			// It may be done after last cut.
-		}
-
-		/// @brief Update vertex distances from the cell center
-		/// @param fractocart Transformation matrix (fractional to Cartesian)
-		/// @return Pointer to the vertex with maximum distance
-		///
-		/// Calculates squared distances for vertices that haven't been computed yet,
-		/// and returns the vertex farthest from the center. Used for early exit
-		/// optimization during cell construction.
-		const Vertex* update_vertices_distances(const geometry::Matrix<FloatingPointType>& fractocart) {
-			const Vertex* ret = nullptr;
-			FloatingPointType m = FloatingPointType(0.0);
-			auto s = static_cast<uint32_t>(vertices.size());
-
-			for (uint32_t i = 0; i < s; i++)
-			{
-				if (vertices[i]->get_state() == State::DELETE)
-					continue;
-				auto& curdist = vertices[i]->distance;
-				if (curdist == FloatingPointType(0.0)) {
-					curdist = (fractocart * (vertices[i]->point - center)).rSq();
-				}
-				if (curdist > m) {
-					m = curdist;
-					ret = vertices[i].get();
-				}
-			}
-			assert(ret != nullptr);
-			return ret;
-		}
-	};
-
-	/// @brief Main class for constructing Voronoi diagrams from atomic positions
-	///
-	/// VoronoiDiagram constructs Voronoi cells for a set of input points (atoms) by:
-	/// 
-	/// 1. Initializing each cell as a cube centered at the point
-	/// 
-	/// 2. Finding neighboring points via a spatial grid and bonds
-	/// 
-	/// 3. Iteratively clipping each cell by planes perpendicular to its neighbors
-	/// 
-	/// 4. Extracting the final cell geometry
-	///
-	/// Note: Only cells marked with flags=true are fully computed. Others are left empty.
-	class VoronoiDiagram {
-	public:
-		/// @brief Floating-point type
-		using FloatingPointType = basic_types::FloatingPointType;
-		/// @brief 3D point type
-		using PointType = geometry::Point<FloatingPointType>;
-		/// @brief Voronoi cell type
-		using VoronCell = voronoi::Cell;
-		/// @brief Vector of points
-		using PointVector = ::std::vector<PointType>;
-		/// @brief Vector of cells
-		using CellVector = ::std::vector<VoronCell>;
-		/// @brief Vector of flags
-		using BoolVector = ::std::vector<bool>;
-		/// @brief Spatial grid for neighbor finding
-		using SpatialGrid = geometry::SpatialGrid<FloatingPointType>;
-		/// @brief Transformation matrix type
-		using Matrix = geometry::Matrix<FloatingPointType>;
-		/// @brief Sorted list of neighbor interactions (index, shiftcode, distance?)
-		using PointsSorted = std::vector<std::tuple<int, geometry::ShiftCode, FloatingPointType>>;
-		/// @brief Plane type
-		using PlaneType = geometry::Plane<FloatingPointType>;
-
-	private:
-		//Data
-		/// @brief Flags indicating which cells to compute
-		BoolVector flags_;
-		/// @brief Computed Voronoi cells
-		CellVector cells_;
-
-	public:
-		/// @brief Construct a Voronoi diagram from points and bonds
-		/// @param points_in_unit01 Atomic positions in fractional coordinates [0,1]
-		/// @param bonds List of bonds with periodic shifts
-		/// @param FtoC Transformation matrix (fractional to Cartesian coordinates)
-		/// @param flags Optional flags indicating which cells to compute (default: all true)
-		///
-		/// The constructor performs the complete Voronoi construction:
-		/// - Initializes cells for all points
-		/// - Finds interactions via bonds
-		/// - Sorts neighbors by distance
-		/// - Clips each cell by planes to neighboring atoms
-		///
-		/// Only cells with flags[i]=true are fully computed. This allows computing only
-		/// the asymmetric unit cells while using symmetry-expanded points for boundaries.
-		explicit VoronoiDiagram(const PointVector& points_in_unit01,
-								const std::vector<SpatialGrid::BondWithShift>& bonds,
-								const geometry::Cell<FloatingPointType>& unitcell,
-								const BoolVector& flags = BoolVector()) : flags_(flags) {
-			if (flags.empty()) {
-				flags_.resize(points_in_unit01.size(), true);
-			} else if (points_in_unit01.size() != flags_.size()) {
-				flags_.resize(points_in_unit01.size(), false);
-			}
-			add_points(points_in_unit01, flags_);
-			auto vec = find_interactions(bonds);
-			calculate_and_sort(vec, points_in_unit01, unitcell.fracToCart());
-			for (uint32_t i = 0; i < static_cast<uint32_t>(cells_.size()); i++)
-			{
-				if (flags_[i] == false)
-					continue;
-				manager(cells_[i], vec[i], points_in_unit01, unitcell);
-				std::cout << i << std::endl;
+				if (clip_by_plane(cell, bisector,
+								  static_cast<AtomId>(nb.idx),
+								  nb.shift, scratch))
+					max_vd_sq = max_vertex_dist_sq(cell);
 			}
 		}
 
-		/// @brief Extract the computed Voronoi cells
-		/// @return Vector of cells (moved out)
-		///
-		/// After calling this, the diagram is left in an empty state.
-		CellVector extractCells() noexcept {
-			return std::move(cells_);
+		// ==================================================================
+		//  clip_by_plane — pipeline entry point.
+		//
+		//  Delegates each stage to a step helper. All scratch vectors come
+		//  from WorkerScratch; no allocations on the hot path.
+		// ==================================================================
+		bool clip_by_plane(VoronoiCell& cell,
+						   const geometry::Plane<InternalFloatType>& plane,
+						   AtomId other_cell,
+						   ShiftCode other_shift,
+						   WorkerScratch& scratch) const
+		{
+			const PolyhedronData& old = cell.topo;
+
+			// Step 1 — classify; early exit if the plane cuts nothing.
+			if (!classify_vertices(old, plane, scratch.state))
+				return false;
+
+			// Step 2 — fresh topology; copy surviving vertices.
+			PolyhedronData fresh;
+			fresh.reserve(old.vert.size() + 16,
+						  old.edge.size() + 32,
+						  old.face.size() + 4);
+
+			copy_surviving_vertices(old, scratch.state, fresh, scratch.vmap);
+
+			// Step 3 — compute intersections on crossing half-edges.
+			find_plane_crossings(old, scratch.state, plane, cell.meta.center,
+								 fresh, scratch.cross_vert, scratch.plane_verts);
+
+			// Step 4 — rebuild surviving faces.
+			rebuild_surviving_faces(old, scratch.state, scratch.vmap,
+									scratch.cross_vert, fresh, scratch);
+
+			// Step 5 — add the cutting face.
+			add_cutting_face(fresh, plane, cell.meta.center,
+							 scratch.plane_verts,
+							 other_cell, other_shift, scratch);
+
+			// Step 6 — restore twin links.
+			rebuild_twins(fresh, scratch);
+
+			// Step 7 — commit.
+			cell.topo = std::move(fresh);
+			return true;
 		}
 
-	private:
-		/// @brief Initialize cells for all points
-		/// @param points Atomic positions
-		/// @param flags Flags indicating which cells to compute
-		void add_points(const PointVector& points, const BoolVector& flags) noexcept {
-			cells_.reserve(points.size());
-			for (uint32_t i = 0; i < static_cast<uint32_t>(points.size()); i++)
-			{
-				if (flags[i]) {
-					cells_.emplace_back(points[i], i);
+		// ==================================================================
+		//  clip_by_plane — step 1
+		//
+		//  Classify every vertex relative to the plane. Vertices whose
+		//  |side| <= ON_PLANE_EPS are treated as ON_PLANE and survive;
+		//  this reduces the chance that the same physical vertex is
+		//  deleted in one cell and kept in its twin (numerical drift).
+		//
+		//  Returns true if at least one vertex was classified as Delete.
+		// ==================================================================
+		static bool classify_vertices(const PolyhedronData& old,
+									  const geometry::Plane<InternalFloatType>& plane,
+									  std::vector<uint8_t>& state)
+		{
+			constexpr InternalFloatType ON_PLANE_EPS = InternalFloatType(1e-8);
+
+			const size_t nv = old.vert.size();
+			state.resize(nv);
+
+			bool any_deleted = false;
+			for (size_t i = 0; i < nv; ++i) {
+				const InternalFloatType s = plane.side(old.vert.data()[i].pos);
+				if (s < -ON_PLANE_EPS) {
+					state[i] = static_cast<uint8_t>(VertexSide::Delete);
+					any_deleted = true;
+				} else if (s < ON_PLANE_EPS) {
+					state[i] = static_cast<uint8_t>(VertexSide::OnPlane);
 				} else {
-					cells_.emplace_back();
+					state[i] = static_cast<uint8_t>(VertexSide::Keep);
+				}
+			}
+			return any_deleted;
+		}
+
+		// ==================================================================
+		//  clip_by_plane — step 2
+		//
+		//  Copy all surviving vertices from `old` into `fresh`, building
+		//  the old -> new vertex ID map along the way. Deleted vertices
+		//  leave INVALID_LOCAL_ID in the map.
+		//
+		//  The whole Vertex is copied verbatim, including the cached
+		//  dist_sq field — no recomputation needed since the cell center
+		//  is unchanged across a clip.
+		// ==================================================================
+		static void copy_surviving_vertices(const PolyhedronData& old,
+											const std::vector<uint8_t>& state,
+											PolyhedronData& fresh,
+											std::vector<LocalId>& vmap)
+		{
+			const size_t nv = old.vert.size();
+			vmap.assign(nv, INVALID_LOCAL_ID);
+
+			const auto del = static_cast<uint8_t>(VertexSide::Delete);
+			for (size_t i = 0; i < nv; ++i) {
+				if (state[i] != del)
+					vmap[i] = fresh.copy_vertex(old.vert.data()[i]);
+			}
+		}
+
+		// ==================================================================
+		//  clip_by_plane — step 3
+		//
+		//  Find every crossing half-edge (KEEP/ON_PLANE -> DELETE), compute
+		//  the intersection with the plane once per undirected edge, and
+		//  record the fresh vertex in both directed slots of cross_vert.
+		//
+		//  plane_verts collects the unique intersection vertex IDs — they
+		//  are the boundary of the new cutting face.
+		// ==================================================================
+		static void find_plane_crossings(const PolyhedronData& old,
+										 const std::vector<uint8_t>& state,
+										 const geometry::Plane<InternalFloatType>& plane,
+										 const PointType& cell_center,
+										 PolyhedronData& fresh,
+										 std::vector<LocalId>& cross_vert,
+										 std::vector<LocalId>& plane_verts)
+		{
+			const size_t ne = old.edge.size();
+			cross_vert.assign(ne, INVALID_LOCAL_ID);
+			plane_verts.clear();
+			plane_verts.reserve(16);
+
+			const auto del = static_cast<uint8_t>(VertexSide::Delete);
+
+			for (size_t hi = 0; hi < ne; ++hi) {
+				if (cross_vert[hi] != INVALID_LOCAL_ID) continue;
+
+				const HalfEdge& h = old.edge.data()[hi];
+				const size_t o_li = old.vert.index_of(h.origin_vertex_id);
+				const size_t n_li = old.vert.index_of(
+					old.edge.get_by_id(h.next_edge_id).origin_vertex_id);
+
+				if (state[o_li] == del) continue;
+				if (state[n_li] != del) continue;
+
+				const PointType& pa = old.vert.data()[o_li].pos;
+				const PointType& pb = old.vert.data()[n_li].pos;
+				const InternalFloatType sa = plane.side(pa);
+				const InternalFloatType sb = plane.side(pb);
+				const InternalFloatType t = sa / (sa - sb);
+				const PointType P = pa + (pb - pa) * t;
+
+				const LocalId vid = fresh.add_vertex(P, cell_center);
+				cross_vert[hi] = vid;
+				plane_verts.push_back(vid);
+
+				const LocalId twin = h.twin_edge_id;
+				if (twin != INVALID_LOCAL_ID) {
+					const size_t twin_li = old.edge.index_of(twin);
+					cross_vert[twin_li] = vid;
 				}
 			}
 		}
 
-		/// @brief Find neighbor interactions from bonds
-		/// @param bonds List of bonds with shift codes
-		/// @return Vector of neighbor lists for each point
-		///
-		/// For each cell, creates a list of (neighbor_id, shiftcode, distance?) tuples.
-		std::vector<PointsSorted> find_interactions(const std::vector<SpatialGrid::BondWithShift>& bonds) noexcept {
-			std::vector<PointsSorted> ret(flags_.size());
-			for (auto& bond : bonds) {
-				// Skip incorrect bonds (self-bonds)
-				if (bond.first == bond.second)
-					continue;
+		// ==================================================================
+		//  clip_by_plane — step 4
+		//
+		//  Rebuild every surviving face. For each face, walk its old
+		//  half-edge cycle and emit a fresh one:
+		//    - KEEP / ON_PLANE vertices are copied through vmap;
+		//    - at each KEEP <-> DELETE transition, the precomputed
+		//      intersection vertex is inserted.
+		//
+		//  Faces entirely on the DELETE side are dropped.
+		//
+		//  Scratch buffers are reused across faces to avoid per-face
+		//  allocations on the hot path.
+		// ==================================================================
+		static void rebuild_surviving_faces(const PolyhedronData& old,
+											const std::vector<uint8_t>& state,
+											const std::vector<LocalId>& vmap,
+											const std::vector<LocalId>& cross_vert,
+											PolyhedronData& fresh,
+											WorkerScratch& scratch)
+		{
+			auto& he_li = scratch.he_li;
+			auto& v_li = scratch.v_li;
+			auto& new_cycle = scratch.new_cycle;
 
-				// Add neighbor to first atom's list
-				if (flags_[bond.first] == true) {
-					ret[bond.first].emplace_back(bond.second, bond.shiftcode, FloatingPointType(0.0));
-				}
-				// Add neighbor to second atom's list (with inverse shift)
-				if (flags_[bond.second] == true) {
-					ret[bond.second].emplace_back(bond.first, geometry::ShiftCode::inverse(bond.shiftcode), FloatingPointType(0.0));
-				}
-			}
-			return ret;
-		}
+			const auto del = static_cast<uint8_t>(VertexSide::Delete);
 
-		/// @brief Calculate distances and sort neighbors for each cell
-		/// @param vec Neighbor lists (modified in-place)
-		/// @param points_in_unit01 Atomic positions
-		/// @param FtoC Fractional to Cartesian transformation
-		///
-		/// Computes squared distances to neighbors in Cartesian space and sorts
-		/// neighbors by increasing distance for each cell.
-		void calculate_and_sort(std::vector<PointsSorted>& vec, const PointVector& points_in_unit01, const Matrix& FtoC) {
-			auto vec_s = static_cast<uint32_t>(vec.size());
-			for (uint32_t i = 0; i < vec_s; i++)
-			{
-				// 1. Calculate distances
-				if (flags_[i] == false)
-					continue;
-				for (auto& [second, code, lengthsq] : vec[i])
+			for (size_t fi = 0; fi < old.face.size(); ++fi) {
+				const Polygon& old_f = old.face.data()[fi];
+
+				he_li.clear();
 				{
-					lengthsq = (FtoC * (points_in_unit01[i] -
-										points_in_unit01[second] -
-										code.get_shift())).rSq();
+					LocalId cur = old_f.first_edge_id;
+					do {
+						he_li.push_back(old.edge.index_of(cur));
+						cur = old.edge.data()[he_li.back()].next_edge_id;
+					} while (cur != old_f.first_edge_id);
 				}
 
-				// 2. Sort by distance
-				std::sort(vec[i].begin(), vec[i].end(),
-						  [](const typename PointsSorted::value_type& a,
-							 const typename PointsSorted::value_type& b) {
-								 return std::get<2>(a) < std::get<2>(b);
-						  });
+				v_li.resize(he_li.size());
+				for (size_t k = 0; k < he_li.size(); ++k)
+					v_li[k] = old.vert.index_of(
+						old.edge.data()[he_li[k]].origin_vertex_id);
+
+				bool any_survivor = false;
+				for (size_t v:v_li)
+					if (state[v] != del) {
+						any_survivor = true; break;
+					}
+				if (!any_survivor) continue;
+
+				const size_t n = v_li.size();
+				new_cycle.clear();
+				new_cycle.reserve(n + 2);
+
+				for (size_t k = 0; k < n; ++k) {
+					const size_t v_here = v_li[k];
+					const size_t v_prev = v_li[(k + n - 1) % n];
+					const size_t v_next = v_li[(k + 1) % n];
+
+					if (state[v_here] == del) continue;
+
+					if (state[v_prev] == del) {
+						const size_t he_prev = he_li[(k + n - 1) % n];
+						const LocalId cv = cross_vert[he_prev];
+						if (cv != INVALID_LOCAL_ID) new_cycle.push_back(cv);
+					}
+
+					new_cycle.push_back(vmap[v_here]);
+
+					if (state[v_next] == del) {
+						const LocalId cv = cross_vert[he_li[k]];
+						if (cv != INVALID_LOCAL_ID) new_cycle.push_back(cv);
+					}
+				}
+
+				if (new_cycle.size() < 3) continue;
+				add_face_cycle(fresh, old_f.other_cell, old_f.other_shift,
+							   new_cycle, scratch.he_ids);
 			}
 		}
 
-		/// @brief Construct a single Voronoi cell by clipping
-		/// @param cell Cell to modify
-		/// @param vec Sorted neighbor list
-		/// @param points_in_unit01 Atomic positions
-		/// @param FtoC Fractional to Cartesian transformation
-		///
-		/// Iteratively clips the cell by planes perpendicular to neighbors (sorted by distance).
-		/// Uses early exit optimization: stops when the nearest unprocessed neighbor is farther
-		/// than twice the distance to the farthest vertex of the current cell.
-		void manager(VoronCell& cell, const PointsSorted& vec, const PointVector& points_in_unit01, const geometry::Cell<FloatingPointType>& unitcell) const {
-			const Vertex* maxVert = cell.update_vertices_distances(unitcell.fracToCart());
-			auto maxVertDoubleDistanceSq = maxVert->distance * 4; // Squared double distance
+		// ==================================================================
+		//  clip_by_plane — step 5
+		//
+		//  Add the cutting face itself. Its vertices are the intersection
+		//  points collected in step 3; they are sorted by polar angle
+		//  around the reversed plane normal so the face is traversed CCW
+		//  as seen from outside the cell (valid for the convex cross-section).
+		//
+		//  The vertices of the cutting face are owned by the same fresh
+		//  topology that already holds them — plane_verts is a list of
+		//  references, not a copy.
+		// ==================================================================
+		static void add_cutting_face(PolyhedronData& fresh,
+									 const geometry::Plane<InternalFloatType>& plane,
+									 const PointType& cell_center,
+									 std::vector<LocalId>& plane_verts,
+									 AtomId other_cell,
+									 ShiftCode other_shift,
+									 WorkerScratch& scratch)
+		{
+			if (plane_verts.size() < 3) return;
 
-			for (auto& [second, code, lengthsq] : vec) {
-				// Update max vertex if it was deleted
-				if (maxVert->get_state() == State::DELETE) {
-					maxVert = cell.update_vertices_distances(unitcell.fracToCart());
-					maxVertDoubleDistanceSq = maxVert->distance * 4;
-				}
+			PointType centroid(0, 0, 0);
+			for (LocalId v:plane_verts)
+				centroid = centroid + fresh.vert.get_by_id(v).pos;
+			centroid = centroid / static_cast<InternalFloatType>(plane_verts.size());
 
-				// Early exit: neighbor is too far to affect the cell
-				if (lengthsq > maxVertDoubleDistanceSq) {
-					return;
-				}
+			PointType nrm(-plane.a[0], -plane.a[1], -plane.a[2]);
+			const InternalFloatType nl = nrm.r();
+			if (nl > 1e-12) nrm = nrm / nl;
 
-				// Calculate clipping plane
-				auto sumsecond = points_in_unit01[second] + code.get_shift();
+			PointType up(0, 0, 1);
+			if (std::abs(nrm[2]) > InternalFloatType(0.9)) up = PointType(1, 0, 0);
+			PointType ex = PointType::Vector(up, nrm);
+			const InternalFloatType exl = ex.r();
+			if (exl > 1e-12) ex = ex / exl;
+			const PointType ey = PointType::Vector(nrm, ex);
 
-				auto cartA = unitcell.fracToCart() * cell.center;
-				auto cartB = unitcell.fracToCart() * sumsecond;
-
-				auto normal_cart = cartA - cartB;
-
-				auto inter_frac = (cell.center + sumsecond) * FloatingPointType(0.5); // Midpoint
-				auto hkl = unitcell.fracToCart().TransposeMultiply(normal_cart);
-
-				PlaneType plane(inter_frac, hkl);
-
-
-				auto inter_cart = (cartA + cartB) * FloatingPointType(0.5);
-
-				PlaneType plane_cart(inter_cart, normal_cart);
-
-				PointType b = inter_cart;
-				PointType c = inter_cart;
-
-				auto nx = plane_cart.a[0];
-				auto ny = plane_cart.a[1];
-				auto nz = plane_cart.a[2];
-
-				if (std::abs(nx) > EPSILON) {
-					b[1] += 1.0;
-					b[0] -= ny / nx;
-
-					c[2] += 1.0;
-					c[0] -= nz / nx;
-				} else if (std::abs(ny) > 1e-9) {
-					b[0] += 1.0;
-
-					c[2] += 1.0;
-					c[1] -= nz / ny;
-				} else {
-					b[0] += 1.0;
-					c[1] += 1.0;
-				}
-
-				PlaneType plane_other(inter_frac, unitcell.cartToFrac() * b, unitcell.cartToFrac() * c);
-				if (plane_other.side(cell.center) < 0) {
-					plane_other.a[0] = -plane_other.a[0];
-					plane_other.a[1] = -plane_other.a[1];
-					plane_other.a[2] = -plane_other.a[2];
-					plane_other.a[3] = -plane_other.a[3];
-				}
-
-				cell.clipByPlaneAndAddNewFace(plane_other, second, code);
-			}
-		}
-	};
-
-	/// @brief Fused Voronoi structure for merged/unified cells
-	///
-	/// VoronoiFused takes a collection of Voronoi cells and merges coincident vertices,
-	/// edges, and faces to create a unified polyhedral structure. This is useful for
-	/// visualization and further analysis of the Voronoi tessellation.
-	class VoronoiFused {
-	public:
-		/// @brief Floating-point type
-		using FloatingPointType = basic_types::FloatingPointType;
-		/// @brief 3D point type
-		using PointType = geometry::Point<FloatingPointType>;
-
-		/// @brief Polygon (face) in the fused structure
-		struct PolygonIn {
-			geometry::ShiftCode::ShiftPoint second_shift; ///< Shift point of the second atom
-			FloatingPointType area;                       ///< Area of Polygon
-			FloatingPointType solidangle;                 ///< Solid angle of Polygon
-			::std::vector<uint32_t>   vert_ids;           ///< Vertex indexes forming the polygon
-			::std::vector<uint32_t>   edge_ids;           ///< Edge indexes forming the polygon
-			::std::array<uint32_t, 2> atom_ids;           ///< IDs of the two atoms separated by this face
-		};
-
-		/// @brief Edge in the fused structure
-		struct EdgeIn {
-			::std::array<uint32_t, 2> vert_ids;   ///< Vertex indexes at endpoints
-		};
-
-		/// @brief Polyhedron (cell) in the fused structure
-		struct Polyhedron {
-			FloatingPointType volume;
-			::std::vector<uint32_t>   vert_ids;   ///< Vertex indexes in this polyhedron
-			::std::vector<uint32_t>   edge_ids;   ///< Edge indexes in this polyhedron
-			::std::vector<uint32_t>   poly_ids;   ///< Polygon indexes in this polyhedron
-			PointType center;
-		};
-
-		/// @brief Helper structure for sorting and merging vertices
-		struct SortEntry {
-			bool is_merged;                  ///< Whether this vertex was merged with others
-			std::vector<uint32_t> cIdx;      ///< Cell indexes this vertex belongs to
-			FloatingPointType key;           ///< Sort key (sum of coordinates)
-			Vertex* ptr;                     ///< Pointer to original vertex
-		};
-
-	public:
-		//Data
-		/// @brief Unified vertex positions
-		::std::vector<PointType> vertices;
-		/// @brief Unified edges
-		::std::vector<EdgeIn> edges;
-		/// @brief Unified polygons (faces)
-		::std::vector<PolygonIn> polygons;
-		/// @brief Polyhedra (cells)
-		::std::vector<Polyhedron> polyhedra;
-
-	public:
-		/// @brief Construct a fused Voronoi structure from cells
-		/// @param cells Vector of Voronoi cells to merge
-		///
-		/// Performs the following operations:
-		/// 
-		/// 1. Merges coincident vertices across cells
-		/// 
-		/// 2. Merges duplicate edges
-		/// 
-		/// 3. Merges duplicate faces (polygons)
-		/// 
-		/// 4. Builds unified polyhedra (cells) referencing the merged geometry
-		explicit VoronoiFused(::std::vector<voronoi::Cell>& cells, const geometry::Matrix<FloatingPointType>& FtoC) {
-			uint32_t count_vertices = 0;
-			polyhedra.resize(cells.size());
-			for (uint32_t i = 0; i < cells.size(); i++) {
-				polyhedra[i].center = cells[i].center;
-			}
-
-			for (const auto& cell : cells) {
-				count_vertices += cell.vertices.size();
-			}
-
-
-			std::vector<SortEntry> sortentries;
-			sortentries.reserve(count_vertices);
-
-			// Collect all living vertices
-			for (const auto& cell : cells) {
-				for (const auto& vert : cell.vertices) {
-					if (vert->get_state() == State::DELETE)
-						continue;
-					sortentries.emplace_back(false,
-											 std::vector<uint32_t>(1, cell.id),
-											 vert->point[0] + vert->point[1] + vert->point[2],
-											 vert.get());
-					sortentries.back().cIdx.reserve(cells.size());
-				}
-			}
-
-			// Sort by coordinate sum (for efficient proximity search)
-			std::sort(sortentries.begin(), sortentries.end(), [](auto& a, auto& b) {
-				return a.key < b.key;
+			std::sort(plane_verts.begin(), plane_verts.end(),
+					  [&](LocalId a, LocalId b) {
+						  const PointType da = fresh.vert.get_by_id(a).pos - centroid;
+						  const PointType db = fresh.vert.get_by_id(b).pos - centroid;
+						  const InternalFloatType aa = std::atan2(
+							  PointType::Scalar(da, ey), PointType::Scalar(da, ex));
+						  const InternalFloatType ab = std::atan2(
+							  PointType::Scalar(db, ey), PointType::Scalar(db, ex));
+						  return aa < ab;
 					  });
 
-					  // Merge coincident vertices using two-pointer technique
-			count_vertices = static_cast<uint32_t>(sortentries.size());
-			uint32_t right = 0;
-			for (uint32_t left = 0; left < count_vertices; left++) {
-				if (sortentries[left].ptr == nullptr)
-					continue;
-				// Advance right pointer to include all vertices within EPSILON of left
-				for (; right < count_vertices; right++) {
-					if (sortentries[right].key - sortentries[left].key >= EPSILON)
-						break;
-				}
-				// Check for exact matches within the window
-				for (uint32_t iter = left + 1; iter < right; iter++) {
-					if (sortentries[iter].ptr == nullptr)
-						continue;
-					if (PointType::isSame(sortentries[left].ptr->point, sortentries[iter].ptr->point, EPSILON)) {
-						// Merge iter into left
-						unite_vertices(sortentries[left].ptr, sortentries[iter].ptr);
-						sortentries[iter].ptr = nullptr;
-						sortentries[left].is_merged = true;
-						sortentries[left].cIdx.insert(sortentries[left].cIdx.end(),
-													  sortentries[iter].cIdx.begin(),
-													  sortentries[iter].cIdx.end());
-						sortentries[iter].cIdx.clear();
-					}
-				}
-			}
-
-			// Remove deleted entries and finalize vertices
-			std::erase_if(sortentries, [](const auto& entry) {
-				return entry.ptr == nullptr;
-						  });
-			count_vertices = static_cast<uint32_t>(sortentries.size());
-			vertices.reserve(sortentries.size());
-			for (uint32_t i = 0; i < count_vertices; ++i) {
-				sortentries[i].ptr->set_id(i);
-				vertices.emplace_back(sortentries[i].ptr->point);
-				std::sort(sortentries[i].cIdx.begin(), sortentries[i].cIdx.end());
-				for (auto& c : sortentries[i].cIdx) {
-					polyhedra[c].vert_ids.push_back(i);
-				}
-			}
-
-			// Merge edges (find and unite duplicates)
-			uint32_t count_edges = 0;
-			for (uint32_t i = 0; i < count_vertices; i++)
-			{
-				if (sortentries[i].is_merged == true) {
-					count_edges += find_dublicate_and_count_edges(sortentries[i].ptr);
-				} else {
-					count_edges += sortentries[i].ptr->edges.size();
-				}
-			}
-			count_edges >>= 1; // Divide by 2 (each edge counted twice)
-			edges.reserve(count_edges);
-
-			// Finalize edges
-			for (const auto& cell : cells) {
-				for (const auto& edge : cell.edges) {
-					if (edge->get_state() == State::DELETE)
-						continue;
-					edge->set_id(edges.size());
-					auto v1 = *(edge->vertices.begin());
-					auto v2 = edge->get_second_vertex(v1);
-					add_edge_to_polyhedra(v1->get_id(), v2->get_id(), edges.size(), sortentries);
-					edges.emplace_back(EdgeIn{{v1->get_id(), v2->get_id()}});
-				}
-			}
-
-			// Merge polygons (faces)
-			for (const auto& cell : cells) {
-				for (const auto& face : cell.faces) {
-					if (face->get_state() == State::DELETE)
-						continue;
-					// Skip duplicate internal faces (keep only one copy)
-					if (cells[face->other_id].vertices.empty() == false &&
-						face->other_shiftcode.get_code() == 13 &&
-						face->owner_id > face->other_id) {
-						continue;
-					}
-
-					// Create polygon entry
-					polyhedra[face->owner_id].poly_ids.push_back(polygons.size());
-					if (cells[face->other_id].vertices.empty() == false &&
-						face->other_shiftcode.get_code() == 13) {
-						polyhedra[face->other_id].poly_ids.push_back(polygons.size());
-					}
-					polygons.emplace_back();
-					auto& cur_poly = polygons.back();
-					cur_poly.vert_ids.resize(face->vertices.size());
-					cur_poly.edge_ids.reserve(face->edges.size());
-					cur_poly.atom_ids = {face->owner_id, face->other_id};
-					for (const auto& edge : face->edges) {
-						cur_poly.edge_ids.push_back(edge->get_id());
-					}
-					reorder_vertices_and_edges_in_polygon(cur_poly);
-					cur_poly.second_shift = face->other_shiftcode.get_shift();
-
-					// Calculate area and solid angle
-					cur_poly.area = calculate_area(cur_poly, FtoC);
-					cur_poly.solidangle = calculate_solid_angle(cur_poly, FtoC);
-				}
-			}
-			// Calculate volumes
-			for (auto& p : polyhedra) {
-				p.volume = calculate_volume(p, FtoC);
-			}
+			add_face_cycle(fresh, other_cell, other_shift,
+						   plane_verts, scratch.he_ids);
 		}
 
-		/// @brief Merge two vertices into one
-		/// @param a Target vertex (will contain merged data)
-		/// @param b Source vertex (will be invalidated)
-		///
-		/// Updates all edges and faces referencing b to reference a instead,
-		/// then copies all connectivity information from b to a.
-		void unite_vertices(Vertex* a, Vertex* b) const {
-			// Check container type dependency
-			static_assert(std::is_same_v<cpplib::voronoi::Container<Vertex*>, std::unordered_set<Vertex*>>,
-						  "Method was written for case when Container == unordered_set. Rewrite method elsewhere.");
-			if (a == b) {
-				assert(false); // Should be unreachable
-				return;
+		// ==================================================================
+		//  seed_box
+		//
+		//  Initial polyhedron: an axis-aligned cube centered on the atom,
+		//  six faces oriented CCW viewed from outside. Each shared edge
+		//  appears in opposite directions in the two faces that share it —
+		//  verified by the table below.
+		//
+		//  Half-size must be >= cutoff so the box contains the final
+		//  Voronoi cell. Face shift codes are placeholders — every face
+		//  is expected to be cut at least once by a real bisector plane.
+		// ==================================================================
+		void seed_box(VoronoiCell& cell, InternalFloatType half_size,
+					  WorkerScratch& scratch) const
+		{
+			const PointType c = cell.meta.center;
+			const InternalFloatType h = half_size;
+
+			const PointType pts[8] = {
+				c + PointType(-h, -h, -h),  // 0
+				c + PointType(+h, -h, -h),  // 1
+				c + PointType(+h, +h, -h),  // 2
+				c + PointType(-h, +h, -h),  // 3
+				c + PointType(-h, -h, +h),  // 4
+				c + PointType(+h, -h, +h),  // 5
+				c + PointType(+h, +h, +h),  // 6
+				c + PointType(-h, +h, +h)   // 7
+			};
+
+			LocalId vids[8];
+			for (int i = 0; i < 8; ++i)
+				vids[i] = cell.topo.add_vertex(pts[i], c);
+
+			static constexpr int face_verts[6][4] = {
+				{1, 5, 6, 2}, {0, 3, 7, 4}, {2, 6, 7, 3},
+				{0, 4, 5, 1}, {4, 7, 6, 5}, {0, 1, 2, 3}
+			};
+			static constexpr uint8_t face_shifts[6] = {14, 12, 16, 10, 22, 4};
+
+			std::vector<LocalId> cycle(4);
+			for (int f = 0; f < 6; ++f) {
+				cycle[0] = vids[face_verts[f][0]];
+				cycle[1] = vids[face_verts[f][1]];
+				cycle[2] = vids[face_verts[f][2]];
+				cycle[3] = vids[face_verts[f][3]];
+				add_face_cycle(cell.topo, /*other_cell*/ 0,
+							   ShiftCode(face_shifts[f]), cycle, scratch.he_ids);
 			}
 
-			// Update refs in edges
-			for (auto& edge : b->edges) {
-				edge->vertices.erase(b);
-				edge->vertices.insert(a);
-			}
-			// Update refs in faces
-			for (auto& face : b->faces) {
-				face->vertices.erase(b);
-				face->vertices.insert(a);
-			}
-			// Copy connectivity from b to a
-			a->edges.insert(b->edges.cbegin(), b->edges.cend());
-			a->faces.insert(b->faces.cbegin(), b->faces.cend());
+			rebuild_twins(cell.topo, scratch);
 		}
 
-		/// @brief Merge two edges into one
-		/// @param a Target edge (will contain merged data)
-		/// @param b Source edge (will be marked for deletion)
-		///
-		/// Updates all faces referencing b to reference a instead,
-		/// then copies face connectivity from b to a. Vertex merging is not needed.
-		void unite_edges(Edge* a, Edge* b) const {
-			// Check container type dependency
-			static_assert(std::is_same_v<cpplib::voronoi::Container<Vertex*>, std::unordered_set<Vertex*>>,
-						  "Method was written for case when Container == unordered_set. Rewrite method elsewhere.");
-			if (a == b) {
-				assert(false); // Should be unreachable
-				return;
-			}
-			// Vertex copying is not necessary (vertices already merged)
+		// ==================================================================
+		//  max_vertex_dist_sq
+		//
+		//  Maximum squared distance from the cell center to any vertex.
+		//  Drives the early-exit bound in build_single_cell.
+		//
+		//  Reads the cached dist_sq from each Vertex instead of recomputing
+		//  (pos - center).rSq(): the scan becomes a 4-byte-per-element
+		//  comparison against a flat array, roughly 6x less memory traffic
+		//  and 10x fewer arithmetic ops than the recomputing version.
+		// ==================================================================
+		float max_vertex_dist_sq(const VoronoiCell& cell) const {
+			const Vertex* vd = cell.topo.vert.data();
+			const size_t  nv = cell.topo.vert.size();
 
-			// Update refs in faces
-			for (auto& face : b->faces) {
-				face->edges.erase(b);
-				face->edges.insert(a);
-			}
-			a->faces.insert(b->faces.cbegin(), b->faces.cend());
-			b->set_state(State::DELETE);
+			float best = 0.0f;
+			for (size_t i = 0; i < nv; ++i)
+				if (vd[i].dist_sq > best) best = vd[i].dist_sq;
+			return best;
 		}
 
-		/// @brief Find and merge duplicate edges connected to a vertex
-		/// @param v Vertex to check
-		/// @return Count of unique edges after merging
-		///
-		/// Searches for edges connected to v that have the same endpoints
-		/// (i.e., duplicate edges) and merges them.
-		uint32_t find_dublicate_and_count_edges(const Vertex* v) const {
-			uint32_t count = v->edges.size();
-			auto left = v->edges.cbegin();
-			auto end = v->edges.cend();
-			for (; left != end; left++) {
-				auto cur_left = *left;
-				if (cur_left->get_state() == State::DELETE) {
-					continue;
-				}
-				auto second1 = cur_left->get_second_vertex(v)->get_id();
-				// Check all remaining edges
-				auto right = left;
-				right++;
-				for (; right != end; right++) {
-					auto cur_right = *right;
-					if (cur_right->get_state() == State::DELETE) {
-						continue;
-					}
-					auto second2 = cur_right->get_second_vertex(v)->get_id();
-					if (second1 == second2) {
-						// Found duplicate - merge them
-						unite_edges(*left, *right);
-						count--;
-					}
-				}
-			}
-			return count;
+		// ==================================================================
+		//  Helpers — half-edge primitives
+		// ==================================================================
+
+		// ------------------------------------------------------------------
+		//  add_face_cycle
+		//
+		//  Emit a closed polygon cycle. next_edge_id and polygon_id are
+		//  set for every half-edge. twin_edge_id stays INVALID —
+		//  rebuild_twins() fixes the twin links once the whole topology
+		//  is stable.
+		// ------------------------------------------------------------------
+		static LocalId add_face_cycle(PolyhedronData& topo,
+									  AtomId other_cell,
+									  ShiftCode shift,
+									  const std::vector<LocalId>& verts,
+									  std::vector<LocalId>& he_ids_scratch)
+		{
+			const size_t n = verts.size();
+			assert(n >= 3);
+
+			he_ids_scratch.resize(n);
+			for (size_t i = 0; i < n; ++i)
+				he_ids_scratch[i] = topo.add_halfedge(verts[i], /*poly*/ 0,
+													  /*next*/ 0, INVALID_LOCAL_ID);
+
+			for (size_t i = 0; i < n; ++i)
+				topo.edge.get_by_id(he_ids_scratch[i]).next_edge_id =
+				he_ids_scratch[(i + 1) % n];
+
+			const LocalId face_id = topo.add_face(he_ids_scratch[0], other_cell, shift);
+			for (LocalId h:he_ids_scratch)
+				topo.edge.get_by_id(h).polygon_id = face_id;
+
+			return face_id;
 		}
 
+		// ------------------------------------------------------------------
+		//  rebuild_twins
+		//
+		//  Pair every half-edge (a -> b) with its twin (b -> a). Linear
+		//  O(E^2) scan: for E in the 40-400 range (one Voronoi cell),
+		//  this beats sort + binary search — no sort, no allocation for
+		//  scratch, no unpredictable branches inside lower_bound.
+		// ------------------------------------------------------------------
+		static void rebuild_twins(PolyhedronData& topo, WorkerScratch& scratch) {
+			const size_t ne = topo.edge.size();
+			if (ne == 0) return;
 
-		void add_edge_to_polyhedra(uint32_t a, uint32_t b, uint32_t edge, const std::vector<SortEntry>& sort_entries) {
-			uint32_t i1 = 0;
-			uint32_t i2 = 0;
-			uint32_t s1 = sort_entries[a].cIdx.size();
-			uint32_t s2 = sort_entries[b].cIdx.size();
+			auto& ep_a = scratch.twin_a;
+			auto& ep_b = scratch.twin_b;
+			ep_a.resize(ne);
+			ep_b.resize(ne);
 
-			while (i1 < s1 && i2 < s2) {
-				auto v1 = sort_entries[a].cIdx[i1];
-				auto v2 = sort_entries[b].cIdx[i2];
-				if (v1 == v2) {
-					polyhedra[v1].edge_ids.push_back(edge);
-					i1++;
-					i2++;
-				} else if (v1 < v2) {
-					i1++;
-				} else {
-					i2++;
-				}
+			for (size_t i = 0; i < ne; ++i) {
+				const HalfEdge& h = topo.edge.data()[i];
+				ep_a[i] = h.origin_vertex_id;
+				ep_b[i] = topo.edge.get_by_id(h.next_edge_id).origin_vertex_id;
 			}
-		}
 
-	private:
-		void reorder_vertices_and_edges_in_polygon(PolygonIn& p) {
-			assert(p.edge_ids.size() >= 3);
-			assert(p.edge_ids.size() == p.vert_ids.size());
+			for (size_t i = 0; i < ne; ++i)
+				topo.edge.data()[i].twin_edge_id = INVALID_LOCAL_ID;
 
-			auto current_edge = (edges[p.edge_ids[0]].vert_ids);
-			const auto base_vertex = current_edge[0];
-			auto next_vertex = current_edge[1];
-			const auto s = static_cast<uint32_t>(p.edge_ids.size());
-			const auto s1 = s - 1;
+			for (size_t i = 0; i < ne; ++i) {
+				HalfEdge& hi = topo.edge.data()[i];
+				if (hi.twin_edge_id != INVALID_LOCAL_ID) continue;
 
-			p.vert_ids[0] = base_vertex;
-			for (uint32_t i = 1; i < s1; i++)
-			{
-				assert(next_vertex != base_vertex);
+				const LocalId a = ep_a[i];
+				const LocalId b = ep_b[i];
 
-				p.vert_ids[i] = next_vertex;
+				for (size_t j = i + 1; j < ne; ++j) {
+					if (ep_a[j] != b || ep_b[j] != a) continue;
+					HalfEdge& hj = topo.edge.data()[j];
+					if (hj.twin_edge_id != INVALID_LOCAL_ID) continue;
 
-				for (uint32_t j = i; j < s; j++) {
-					auto v1 = edges[p.edge_ids[j]].vert_ids[0];
-					auto v2 = edges[p.edge_ids[j]].vert_ids[1];
-					if (v1 != next_vertex && v2 != next_vertex) {
-						continue;
-					}
-					if (v1 == next_vertex) {
-						next_vertex = v2;
-					} else {
-						next_vertex = v1;
-					}
-					std::swap(p.edge_ids[i], p.edge_ids[j]);
+					hi.twin_edge_id = topo.edge.get_id(static_cast<LocalIdx>(j));
+					hj.twin_edge_id = topo.edge.get_id(static_cast<LocalIdx>(i));
 					break;
 				}
 			}
-			p.vert_ids[s1] = next_vertex;
-		}
-
-		// Requires correct order of vertices in polygon
-		FloatingPointType calculate_area(const PolygonIn& p, const geometry::Matrix<FloatingPointType>& FtoC) const {
-			PointType center(0, 0, 0);
-
-			for (auto v : p.vert_ids) {
-				center += vertices[v];
-			}
-			center /= p.vert_ids.size();
-
-			std::vector<PointType> cart_verts;
-			cart_verts.reserve(p.vert_ids.size());
-
-			for (auto v : p.vert_ids) {
-				cart_verts.emplace_back(FtoC * (vertices[v] - center));
-			}
-
-			FloatingPointType area = PointType::Vector(cart_verts.front(), cart_verts.back()).r();
-			for (uint32_t i = 1; i < p.vert_ids.size(); i++) {
-				area += PointType::Vector(cart_verts[i], cart_verts[i - 1]).r();
-			}
-
-			return area * FloatingPointType(0.5);
-		}
-
-		// Requires correct order of vertices in polygon
-		FloatingPointType calculate_solid_angle(const PolygonIn& p, const geometry::Matrix<FloatingPointType>& FtoC) const {
-
-			const auto& realO = polyhedra[p.atom_ids[0]].center;
-
-			std::vector<PointType> cart_verts;
-			std::vector<FloatingPointType> cart_verts_r;
-			const auto cart_size = p.vert_ids.size();
-			cart_verts.reserve(cart_size);
-			cart_verts_r.reserve(cart_size);
-
-			for (uint32_t i = 0; i < cart_size; i++) {
-				cart_verts.emplace_back(FtoC * (vertices[p.vert_ids[i]] - realO));
-				cart_verts_r.emplace_back(cart_verts.back().r());
-			}
-
-			FloatingPointType angle = 0;
-			for (uint32_t i = 2; i < cart_size; i++) {
-				angle += atan2(abs(PointType::Scalar(cart_verts[0], PointType::Vector(cart_verts[i - 1], cart_verts[i]))),
-							   cart_verts_r[0] * cart_verts_r[i - 1] * cart_verts_r[i] +
-							   PointType::Scalar(cart_verts[0], cart_verts[i - 1]) * cart_verts_r[i] +
-							   PointType::Scalar(cart_verts[0], cart_verts[i]) * cart_verts_r[i - 1] +
-							   PointType::Scalar(cart_verts[i - 1], cart_verts[i]) * cart_verts_r[0]);
-			}
-
-			return angle * 2;
-		}
-
-		// Requires area to be calculated in polygons
-		FloatingPointType calculate_volume(const Polyhedron& p, const geometry::Matrix<FloatingPointType>& FtoC) const {
-			FloatingPointType volume = 0;
-
-			for (auto poly : p.poly_ids) {
-				auto i1 = polygons[poly].vert_ids[0];
-				auto i2 = polygons[poly].vert_ids[1];
-				auto i3 = polygons[poly].vert_ids[2];
-				geometry::Plane plane(FtoC * vertices[i1], FtoC * vertices[i2], FtoC * vertices[i3]);
-				volume += plane.distance(FtoC * p.center) * polygons[poly].area * FloatingPointType(1. / 3);
-			}
-
-			return volume;
 		}
 	};
-}
+
+} // namespace cpplib::voronoi
+
+// ============================================================================
+//  VoronoiFused — flattened mesh built from all per-cell topologies.
+//
+//  Layout is fully CSR: no nested vectors inside POD records, no maps.
+//  The build is decomposed into five top-level steps, each of which is
+//  further split into small single-purpose helpers.
+//
+//  Twin faces: numerical drift during clipping may give two records of
+//  the same physical face slightly different vertex sets (a vertex
+//  survives in one cell but is clipped in the other). Records are grouped
+//  by the exact canonical key (min_atom, max_atom, shift) and their
+//  vertex sets are merged within tolerance in fractional space.
+// ============================================================================
+
+namespace cpplib::voronoi {
+
+	class VoronoiFused {
+	public:
+		struct EdgeFused {
+			uint32_t v0 = 0;   // global vertex ID, v0 < v1
+			uint32_t v1 = 0;
+		};
+
+		struct PolygonFused {
+			uint32_t          vert_offset;
+			uint16_t          vert_count;
+			uint32_t          edge_offset;
+			uint16_t          edge_count;
+			AtomId            owner_atom = INVALID_ATOM_ID;
+			AtomId            other_atom = INVALID_ATOM_ID;
+			ShiftCode         other_shift;
+			InternalFloatType area = 0;
+			InternalFloatType solid_angle = 0;
+		};
+
+		struct PolyhedronFused {
+			PointType         center;
+			InternalFloatType volume = 0;
+			uint32_t vert_offset; uint16_t vert_count;
+			uint32_t edge_offset; uint16_t edge_count;
+			uint32_t poly_offset; uint16_t poly_count;
+		};
+
+		std::vector<PointType>       vertices;
+		std::vector<EdgeFused>       edges;
+		std::vector<PolygonFused>    polygons;
+		std::vector<PolyhedronFused> polyhedra;
+
+		// Flat buffers referenced by the CSR offsets above.
+		std::vector<uint32_t> poly_verts;
+		std::vector<uint32_t> poly_edges;
+		std::vector<uint32_t> ph_verts;
+		std::vector<uint32_t> ph_edges;
+		std::vector<uint32_t> ph_polys;
+
+		struct ValidationReport {
+			size_t cells = 0;
+			size_t face_records = 0;
+			size_t physical_faces = 0;
+			size_t twin_pairs = 0;
+			size_t self_faces = 0;
+			size_t vertex_count_bad = 0;
+			size_t vertex_set_bad = 0;
+			size_t atom_pair_bad = 0;
+			size_t shift_bad = 0;
+			size_t twin_missing = 0;
+			std::vector<std::string> messages;
+
+			bool ok() const noexcept {
+				return vertex_count_bad == 0
+					&& vertex_set_bad == 0
+					&& atom_pair_bad == 0
+					&& shift_bad == 0
+					&& twin_missing == 0;
+			}
+		};
+		ValidationReport report;
+
+		// ------------------------------------------------------------------
+		//  Public entry point — pipeline driver.
+		// ------------------------------------------------------------------
+		static VoronoiFused build(const VoronoiContext& ctx);
+
+	private:
+		// ==================================================================
+		//  Internal data records
+		// ==================================================================
+
+		struct FaceRec {
+			AtomId   a;           // canonical min atom ID
+			AtomId   b;           // canonical max atom ID
+			uint8_t  s;           // canonical shift (a -> b)
+			AtomId   src_cell;    // which cell this record came from
+			LocalIdx src_local;   // local face index inside src_cell
+		};
+
+		struct MergedVert {
+			PointType pos_cart;
+			PointType pos_frac;   // wrapped to [0, 1)
+			uint32_t  gid;        // global vertex ID
+		};
+
+		// ==================================================================
+		//  Step 1 — merge vertices
+		//
+		//  Fractional coordinates are computed once per vertex and reused
+		//  for both the sort key and the merge test. The merge test uses
+		//  the minimum-image metric, so boundary vertices living near
+		//  opposite ends of an axis still match.
+		// ==================================================================
+		static void merge_vertices(
+			const VoronoiContext& ctx,
+			const MatrixType& CtoF,
+			std::vector<PointType>& out_vertices,
+			std::vector<std::vector<uint32_t>>& cell_vert_gid);
+
+		// ==================================================================
+		//  Step 2 — merge edges
+		//
+		//  Flat array of (v0, v1, cell, local) with v0 < v1, sorted by
+		//  (v0, v1). A two-pointer sweep assigns global IDs; the global
+		//  edge array ends up sorted by (v0, v1).
+		// ==================================================================
+		static void merge_edges(
+			const VoronoiContext& ctx,
+			const std::vector<std::vector<uint32_t>>& cell_vert_gid,
+			std::vector<EdgeFused>& out_edges,
+			std::vector<std::vector<uint32_t>>& cell_edge_gid);
+
+		// ==================================================================
+		//  Step 3 — merge faces
+		//
+		//  Collect all face records, sort by canonical key (a, b, s), and
+		//  emit one polygon per physical face. Per-group work is delegated
+		//  to emit_face_group().
+		// ==================================================================
+		static void merge_faces(
+			const VoronoiContext& ctx,
+			const MatrixType& CtoF,
+			const std::vector<std::vector<uint32_t>>& cell_vert_gid,
+			const std::vector<std::vector<uint32_t>>& cell_edge_gid,
+			VoronoiFused& out,
+			std::vector<std::vector<uint32_t>>& cell_face_gid);
+
+		// ==================================================================
+		//  Step 3a — collect one FaceRec per (cell, face) pair.
+		// ==================================================================
+		static std::vector<FaceRec> collect_face_records(
+			const VoronoiContext& ctx,
+			std::vector<std::vector<uint32_t>>& cell_face_gid);
+
+		// ==================================================================
+		//  Step 3b — group scan: find the end of the (a, b, s) run.
+		// ==================================================================
+		static size_t find_group_end(const std::vector<FaceRec>& recs, size_t i);
+
+		// ==================================================================
+		//  Step 3c — emit one canonical polygon for a group of records that
+		//  all share the same (a, b, s) key.
+		//
+		//  This is itself a small pipeline:
+		//    1. Merge the group's vertex sets with tolerance.
+		//    2. Order the merged set by polar angle around the centroid.
+		//    3. Emit vertices, edges, metadata, metrics.
+		//    4. Register the polygon with every source record.
+		//    5. Validate group consistency.
+		// ==================================================================
+		static void emit_face_group(
+			const VoronoiContext& ctx,
+			const MatrixType& CtoF,
+			const std::vector<std::vector<uint32_t>>& cell_vert_gid,
+			const std::vector<std::vector<uint32_t>>& cell_edge_gid,
+			VoronoiFused& out,
+			std::vector<std::vector<uint32_t>>& cell_face_gid,
+			const std::vector<FaceRec>& recs,
+			size_t i, size_t j);
+
+		// ==================================================================
+		//  Step 3c.i — collect merged vertex set across the group.
+		//
+		//  Deduplication is by fractional-position matching within
+		//  merge_eps, using the minimum-image metric. min_single_count /
+		//  max_single_count capture the spread in per-record vertex counts
+		//  for validation.
+		// ==================================================================
+		static void merge_group_vertices(
+			const VoronoiContext& ctx,
+			const MatrixType& CtoF,
+			const std::vector<std::vector<uint32_t>>& cell_vert_gid,
+			const std::vector<PointType>& global_vertices,
+			const std::vector<FaceRec>& recs,
+			size_t i, size_t j,
+			std::vector<MergedVert>& merged,
+			size_t& min_single_count,
+			size_t& max_single_count);
+
+		// ==================================================================
+		//  Step 3c.ii — polar sort of the merged vertex set.
+		//
+		//  Voronoi faces are convex, so the polar order around the
+		//  centroid equals the boundary order. The face normal is
+		//  computed via Newell's method over the unordered set.
+		// ==================================================================
+		static void order_by_polar_angle(std::vector<MergedVert>& merged);
+
+		// ==================================================================
+		//  Step 3c.iii — emit edges for a face group.
+		//
+		//  Edges are taken from the record with the largest vertex count.
+		//  If drift dropped one vertex in the twin record, the larger
+		//  record still carries every edge of the merged face.
+		// ==================================================================
+		static void emit_polygon_edges(
+			const VoronoiContext& ctx,
+			const std::vector<std::vector<uint32_t>>& cell_edge_gid,
+			const std::vector<FaceRec>& recs,
+			size_t i, size_t j,
+			PolygonFused& pg,
+			std::vector<uint32_t>& poly_edges);
+
+		// ==================================================================
+		//  Step 3c.iv — emit owner/other/shift canonical metadata.
+		//
+		//  The (a, b, s) key already encodes a < b, so the polygon always
+		//  stores the pair in that order.
+		// ==================================================================
+		static void emit_polygon_metadata(
+			const VoronoiContext& ctx,
+			const std::vector<FaceRec>& recs,
+			size_t i,
+			PolygonFused& pg);
+
+		// ==================================================================
+		//  Step 3c.v — face metrics.
+		// ==================================================================
+		static InternalFloatType compute_face_area(
+			const std::vector<MergedVert>& merged);
+
+		static InternalFloatType compute_face_solid_angle(
+			const std::vector<MergedVert>& merged,
+			const PointType& origin);
+
+		// ==================================================================
+		//  Step 3c.vi — group validation.
+		//
+		//  Records all anomalies in out.report without aborting the build.
+		// ==================================================================
+		static void validate_face_group(
+			const VoronoiContext& ctx,
+			const std::vector<FaceRec>& recs,
+			size_t i, size_t j,
+			const std::vector<MergedVert>& merged,
+			size_t min_single_count,
+			size_t max_single_count,
+			uint32_t gp,
+			VoronoiFused& out);
+
+		// ==================================================================
+		//  Step 4 — assemble per-cell polyhedra (CSR).
+		// ==================================================================
+		static void assemble_polyhedra(
+			const VoronoiContext& ctx,
+			const std::vector<std::vector<uint32_t>>& cell_vert_gid,
+			const std::vector<std::vector<uint32_t>>& cell_edge_gid,
+			const std::vector<std::vector<uint32_t>>& cell_face_gid,
+			VoronoiFused& out);
+
+		// ==================================================================
+		//  Step 5 — volumes via the pyramid formula.
+		//     V = (1/3) * sum_f A_f * h_f
+		//  h_f is the perpendicular distance from the polyhedron centre
+		//  to the plane of face f. No sign convention needed.
+		// ==================================================================
+		static void compute_volumes(VoronoiFused& out);
+
+		// ==================================================================
+		//  PBC-aware comparison of two fractional positions.
+		// ==================================================================
+		static inline bool same_frac_pbc(const PointType& a,
+										 const PointType& b,
+										 InternalFloatType eps) noexcept {
+			for (int k = 0; k < 3; ++k) {
+				InternalFloatType d = std::abs(a[k] - b[k]);
+				d -= std::floor(d);
+				d = std::min(d, InternalFloatType(1) - d);
+				if (d > eps) return false;
+			}
+			return true;
+		}
+	};
+
+
+	// ===========================================================================
+	//  VoronoiFused — implementation
+	// ===========================================================================
+
+	inline VoronoiFused VoronoiFused::build(const VoronoiContext& ctx) {
+		VoronoiFused out;
+
+		const size_t n_cells = ctx.n_cells();
+		out.report.cells = n_cells;
+
+		const MatrixType& CtoF = ctx.grid.cart_to_frac();
+
+		// Per-cell local -> global index maps, one entry per local element.
+		std::vector<std::vector<uint32_t>> cell_vert_gid;
+		std::vector<std::vector<uint32_t>> cell_edge_gid;
+		std::vector<std::vector<uint32_t>> cell_face_gid;
+
+		// Pipeline: five independent steps, each one self-contained.
+		merge_vertices(ctx, CtoF, out.vertices, cell_vert_gid);
+		merge_edges(ctx, cell_vert_gid, out.edges, cell_edge_gid);
+		merge_faces(ctx, CtoF, cell_vert_gid, cell_edge_gid, out, cell_face_gid);
+		assemble_polyhedra(ctx, cell_vert_gid, cell_edge_gid, cell_face_gid, out);
+		compute_volumes(out);
+
+		return out;
+	}
+
+	// ---------------------------------------------------------------------------
+	//  Step 1 — merge vertices
+	//
+	//  Two-phase approach:
+	//
+	//    Phase A (sliding window): sort all vertex entries by the wrapped
+	//    fractional coordinate sum, then collapse adjacent entries within a
+	//    tolerance. This assigns an initial global vertex ID to every entry.
+	//
+	//    Phase B (boundary wrap-up): entries near key ~ 0 and entries near
+	//    key ~ 3 may describe the same physical vertex across a periodic
+	//    boundary, but the sliding window misses those pairs. Instead of
+	//    merging them by erasing out_vertices (O(N) per match, quadratic in
+	//    the worst case), we collect the matches and resolve them with a
+	//    union-find over the global IDs. The final compaction of
+	//    out_vertices is a single O(N) pass.
+	//
+	//  Complexity: O(N log N) for the sort + O(N * alpha(N)) for the
+	//  union-find, versus O(N * K) for the erase-based version, where K is
+	//  the number of boundary matches.
+	// ---------------------------------------------------------------------------
+	inline void VoronoiFused::merge_vertices(
+		const VoronoiContext& ctx,
+		const MatrixType& CtoF,
+		std::vector<PointType>& out_vertices,
+		std::vector<std::vector<uint32_t>>& cell_vert_gid)
+	{
+		// Tolerance for matching vertices across cells, in fractional units.
+		// 1e-8 is ~1e-6 A for a 100 A cell: large enough to absorb numerical
+		// drift, small enough that distinct physical vertices never collide.
+		const InternalFloatType merge_eps = InternalFloatType(1e-8);
+
+		struct VEntry {
+			AtomId            cell;
+			LocalIdx          local;
+			PointType         pos_cart;
+			PointType         pos_frac;   // wrapped to [0, 1)
+			InternalFloatType key;        // pos_frac[0] + pos_frac[1] + pos_frac[2]
+		};
+
+		const size_t n_cells = ctx.n_cells();
+
+		// ---- Collect all entries ------------------------------------------
+		size_t total_v = 0;
+		for (const auto& c : ctx.cells) total_v += c.topo.vert.size();
+
+		std::vector<VEntry> v;
+		v.reserve(total_v);
+		cell_vert_gid.assign(n_cells, {});
+
+		for (AtomId ci = 0; ci < n_cells; ++ci) {
+			const auto& topo = ctx.cells[ci].topo;
+			const Vertex* vd = topo.vert.data();
+			const size_t  nv = topo.vert.size();
+			cell_vert_gid[ci].assign(nv, std::numeric_limits<uint32_t>::max());
+
+			for (size_t li = 0; li < nv; ++li) {
+				const PointType& pc = vd[li].pos;
+				PointType pf = CtoF * pc;
+				pf[0] -= std::floor(pf[0]);
+				pf[1] -= std::floor(pf[1]);
+				pf[2] -= std::floor(pf[2]);
+
+				v.push_back({ci, static_cast<LocalIdx>(li), pc, pf,
+							  pf[0] + pf[1] + pf[2]});
+			}
+		}
+
+		std::sort(v.begin(), v.end(),
+				  [](const VEntry& a, const VEntry& b) { return a.key < b.key; });
+
+		// ---- Phase A: sliding window to assign initial global IDs ---------
+		constexpr uint32_t NO_ID = std::numeric_limits<uint32_t>::max();
+
+		std::vector<uint32_t> assigned(v.size(), NO_ID);
+		uint32_t num_globals = 0;
+
+		for (size_t i = 0; i < v.size(); ++i) {
+			if (assigned[i] != NO_ID) continue;
+
+			const uint32_t gid = num_globals++;
+			out_vertices.push_back(v[i].pos_cart);
+			assigned[i] = gid;
+
+			for (size_t j = i + 1; j < v.size(); ++j) {
+				if (v[j].key - v[i].key > 3 * merge_eps) break;
+				if (assigned[j] != NO_ID) continue;
+				if (same_frac_pbc(v[j].pos_frac, v[i].pos_frac, merge_eps))
+					assigned[j] = gid;
+			}
+		}
+
+		// ---- Phase B: boundary wrap-up via union-find --------------------
+		//
+		//  The sliding window cannot see pairs that straddle the wrap
+		//  boundary: entries near key ~ 0 and entries near key ~ 3. Scan
+		//  those two short ranges and record every match as a union.
+		//
+		//  Nothing is erased or shifted during the scan; the union-find
+		//  resolves all chains of merges at once, and a single compaction
+		//  pass rebuilds out_vertices.
+		{
+			// Left edge: entries with key close to 0.
+			size_t lo_end = 0;
+			while (lo_end < v.size() && v[lo_end].key < 3 * merge_eps) ++lo_end;
+
+			// Right edge: entries with key close to 3.
+			size_t hi_beg = v.size();
+			while (hi_beg > 0 && v[hi_beg - 1].key > 3 - 3 * merge_eps) --hi_beg;
+
+			// Union-find over global IDs. Path halving for cheap lookup.
+			std::vector<uint32_t> parent(num_globals);
+			std::iota(parent.begin(), parent.end(), 0u);
+
+			auto find_root = [&parent](uint32_t x) noexcept {
+				while (parent[x] != x) {
+					parent[x] = parent[parent[x]];   // path halving
+					x = parent[x];
+				}
+				return x;
+				};
+
+			for (size_t i = 0; i < lo_end; ++i) {
+				for (size_t j = hi_beg; j < v.size(); ++j) {
+					const uint32_t gi = assigned[i];
+					const uint32_t gj = assigned[j];
+					if (gi == NO_ID || gj == NO_ID || gi == gj) continue;
+
+					if (same_frac_pbc(v[i].pos_frac, v[j].pos_frac, merge_eps)) {
+						const uint32_t ri = find_root(gi);
+						const uint32_t rj = find_root(gj);
+						if (ri != rj) {
+							// Always attach the larger root to the smaller one.
+							// This keeps the smallest global ID as the
+							// representative, which preserves insertion order
+							// in the compacted array.
+							const uint32_t lo = std::min(ri, rj);
+							const uint32_t hi = std::max(ri, rj);
+							parent[hi] = lo;
+						}
+					}
+				}
+			}
+
+			// ---- Compact out_vertices in a single pass -------------------
+			//
+			//  Build new_id[old_global] -> new_global. Only roots survive;
+			//  their positions in out_vertices become contiguous indices in
+			//  the compacted array.
+			std::vector<uint32_t> new_id(num_globals, NO_ID);
+			uint32_t next_id = 0;
+			for (uint32_t gid = 0; gid < num_globals; ++gid) {
+				if (find_root(gid) == gid)
+					new_id[gid] = next_id++;
+			}
+			for (uint32_t gid = 0; gid < num_globals; ++gid) {
+				if (new_id[gid] == NO_ID)
+					new_id[gid] = new_id[find_root(gid)];
+			}
+
+			// Move surviving vertices into a fresh buffer. Non-roots are
+			// dropped; their position is not needed by anyone.
+			std::vector<PointType> compacted(next_id);
+			for (uint32_t gid = 0; gid < num_globals; ++gid) {
+				if (find_root(gid) == gid)
+					compacted[new_id[gid]] = out_vertices[gid];
+			}
+			out_vertices = std::move(compacted);
+
+			// Remap every assigned entry through new_id.
+			for (auto& a : assigned) {
+				if (a != NO_ID) a = new_id[a];
+			}
+		}
+
+		// ---- Store global IDs into per-cell maps --------------------------
+		for (size_t e = 0; e < v.size(); ++e)
+			cell_vert_gid[v[e].cell][v[e].local] = assigned[e];
+	}
+
+	// ---------------------------------------------------------------------------
+	//  Step 2 — merge edges
+	// ---------------------------------------------------------------------------
+	inline void VoronoiFused::merge_edges(
+		const VoronoiContext& ctx,
+		const std::vector<std::vector<uint32_t>>& cell_vert_gid,
+		std::vector<EdgeFused>& out_edges,
+		std::vector<std::vector<uint32_t>>& cell_edge_gid)
+	{
+		struct EEntry {
+			uint32_t v0, v1;
+			AtomId   cell;
+			LocalIdx local;
+		};
+
+		const size_t n_cells = ctx.n_cells();
+
+		size_t total_e = 0;
+		for (const auto& c : ctx.cells) total_e += c.topo.edge.size();
+
+		std::vector<EEntry> e;
+		e.reserve(total_e);
+		cell_edge_gid.assign(n_cells, {});
+
+		for (AtomId ci = 0; ci < n_cells; ++ci) {
+			const auto& topo = ctx.cells[ci].topo;
+			const HalfEdge* ed = topo.edge.data();
+			const size_t    ne = topo.edge.size();
+			cell_edge_gid[ci].assign(ne, std::numeric_limits<uint32_t>::max());
+
+			for (size_t li = 0; li < ne; ++li) {
+				const HalfEdge& he = ed[li];
+				const HalfEdge& nxt = topo.edge.get_by_id(he.next_edge_id);
+
+				const LocalIdx lv0 = topo.vert.index_of(he.origin_vertex_id);
+				const LocalIdx lv1 = topo.vert.index_of(nxt.origin_vertex_id);
+
+				const uint32_t gv0 = cell_vert_gid[ci][lv0];
+				const uint32_t gv1 = cell_vert_gid[ci][lv1];
+
+				e.push_back({std::min(gv0, gv1), std::max(gv0, gv1),
+							  ci, static_cast<LocalIdx>(li)});
+			}
+		}
+
+		std::sort(e.begin(), e.end(), [](const EEntry& a, const EEntry& b) {
+			if (a.v0 != b.v0) return a.v0 < b.v0;
+			return a.v1 < b.v1;
+				  });
+
+		for (size_t i = 0; i < e.size(); ) {
+			const uint32_t gid = static_cast<uint32_t>(out_edges.size());
+			out_edges.push_back(EdgeFused{e[i].v0, e[i].v1});
+			size_t j = i;
+			while (j < e.size() && e[j].v0 == e[i].v0 && e[j].v1 == e[i].v1) {
+				cell_edge_gid[e[j].cell][e[j].local] = gid;
+				++j;
+			}
+			i = j;
+		}
+	}
+
+	// ---------------------------------------------------------------------------
+	//  Step 3 — merge faces
+	// ---------------------------------------------------------------------------
+	inline void VoronoiFused::merge_faces(
+		const VoronoiContext& ctx,
+		const MatrixType& CtoF,
+		const std::vector<std::vector<uint32_t>>& cell_vert_gid,
+		const std::vector<std::vector<uint32_t>>& cell_edge_gid,
+		VoronoiFused& out,
+		std::vector<std::vector<uint32_t>>& cell_face_gid)
+	{
+		std::vector<FaceRec> recs = collect_face_records(ctx, cell_face_gid);
+
+		std::sort(recs.begin(), recs.end(),
+				  [](const FaceRec& x, const FaceRec& y) {
+					  if (x.a != y.a) return x.a < y.a;
+					  if (x.b != y.b) return x.b < y.b;
+					  return x.s < y.s;
+				  });
+
+		out.report.face_records = recs.size();
+
+		size_t i = 0;
+		while (i < recs.size()) {
+			const size_t j = find_group_end(recs, i);
+			emit_face_group(ctx, CtoF, cell_vert_gid, cell_edge_gid,
+							out, cell_face_gid, recs, i, j);
+			i = j;
+		}
+	}
+
+	// ---------------------------------------------------------------------------
+	//  Step 3a — collect one FaceRec per (cell, face) pair.
+	// ---------------------------------------------------------------------------
+	inline std::vector<VoronoiFused::FaceRec> VoronoiFused::collect_face_records(
+		const VoronoiContext& ctx,
+		std::vector<std::vector<uint32_t>>& cell_face_gid)
+	{
+		const size_t n_cells = ctx.n_cells();
+
+		size_t total_f = 0;
+		for (const auto& c : ctx.cells) total_f += c.topo.face.size();
+
+		std::vector<FaceRec> recs;
+		recs.reserve(total_f);
+		cell_face_gid.assign(n_cells, {});
+
+		for (AtomId ci = 0; ci < n_cells; ++ci) {
+			const auto& topo = ctx.cells[ci].topo;
+			const Polygon* fd = topo.face.data();
+			const size_t   nf = topo.face.size();
+			cell_face_gid[ci].assign(nf, std::numeric_limits<uint32_t>::max());
+
+			for (size_t li = 0; li < nf; ++li) {
+				const AtomId  oa = fd[li].other_cell;
+				const AtomId  ow = ci;
+				const uint8_t sc = fd[li].other_shift.get_code();
+
+				// Canonical orientation: (a, b, s) with a < b and s the
+				// shift from a to b. If the record already has owner <
+				// other, keep it as-is; otherwise invert both.
+				AtomId  ca, cb;
+				uint8_t cs;
+				if (ow <= oa) {
+					ca = ow; cb = oa; cs = sc;
+				} else {
+					ca = oa; cb = ow;
+					cs = ShiftCode::inverse(static_cast<uint8_t>(sc));
+				}
+				recs.push_back({ca, cb, cs, ci, static_cast<LocalIdx>(li)});
+			}
+		}
+		return recs;
+	}
+
+	// ---------------------------------------------------------------------------
+	//  Step 3b — group scan: end index of the run with the same (a, b, s).
+	// ---------------------------------------------------------------------------
+	inline size_t VoronoiFused::find_group_end(const std::vector<FaceRec>& recs,
+											   size_t i)
+	{
+		size_t j = i + 1;
+		while (j < recs.size() &&
+			   recs[j].a == recs[i].a &&
+			   recs[j].b == recs[i].b &&
+			   recs[j].s == recs[i].s) ++j;
+		return j;
+	}
+
+	// ---------------------------------------------------------------------------
+	//  Step 3c — emit one canonical polygon for a group.
+	// ---------------------------------------------------------------------------
+	inline void VoronoiFused::emit_face_group(
+		const VoronoiContext& ctx,
+		const MatrixType& CtoF,
+		const std::vector<std::vector<uint32_t>>& cell_vert_gid,
+		const std::vector<std::vector<uint32_t>>& cell_edge_gid,
+		VoronoiFused& out,
+		std::vector<std::vector<uint32_t>>& cell_face_gid,
+		const std::vector<FaceRec>& recs,
+		size_t i, size_t j)
+	{
+		const size_t group_size = j - i;
+
+		// (1) Merge vertex sets of every record in the group.
+		std::vector<MergedVert> merged;
+		size_t min_single_count = 0, max_single_count = 0;
+
+		merge_group_vertices(ctx, CtoF, cell_vert_gid, out.vertices,
+							 recs, i, j, merged,
+							 min_single_count, max_single_count);
+
+		if (group_size > 2) {
+			out.report.vertex_set_bad += group_size - 2;
+			out.report.messages.emplace_back(
+				"duplicate records for face ("
+				+ std::to_string(recs[i].a) + ","
+				+ std::to_string(recs[i].b) + ",s="
+				+ std::to_string(recs[i].s) + ")");
+		}
+
+		if (merged.size() < 3) {
+			++out.report.vertex_set_bad;
+			return;
+		}
+
+		// (2) Order the merged set by polar angle around the centroid.
+		order_by_polar_angle(merged);
+
+		// (3) Emit the canonical polygon.
+		const uint32_t gp = static_cast<uint32_t>(out.polygons.size());
+		out.polygons.push_back(PolygonFused{});
+		PolygonFused& pg = out.polygons.back();
+
+		// Vertices — cyclic order.
+		pg.vert_offset = static_cast<uint32_t>(out.poly_verts.size());
+		pg.vert_count = static_cast<uint16_t>(merged.size());
+		for (const auto& m : merged)
+			out.poly_verts.push_back(m.gid);
+
+		// Edges — taken from the most complete source record.
+		emit_polygon_edges(ctx, cell_edge_gid, recs, i, j, pg, out.poly_edges);
+
+		// Owner / other / shift — canonical metadata.
+		emit_polygon_metadata(ctx, recs, i, pg);
+
+		// Metrics.
+		pg.area = compute_face_area(merged);
+		pg.solid_angle = compute_face_solid_angle(merged,
+												  ctx.cells[pg.owner_atom].meta.center);
+
+											  // (4) Register the polygon with every source record.
+		for (size_t k = i; k < j; ++k)
+			cell_face_gid[recs[k].src_cell][recs[k].src_local] = gp;
+
+		// (5) Validation.
+		validate_face_group(ctx, recs, i, j, merged,
+							min_single_count, max_single_count, gp, out);
+
+		++out.report.physical_faces;
+	}
+
+	// ---------------------------------------------------------------------------
+	//  Step 3c.i — collect merged vertex set across the group.
+	// ---------------------------------------------------------------------------
+	inline void VoronoiFused::merge_group_vertices(
+		const VoronoiContext& ctx,
+		const MatrixType& CtoF,
+		const std::vector<std::vector<uint32_t>>& cell_vert_gid,
+		const std::vector<PointType>& global_vertices,
+		const std::vector<FaceRec>& recs,
+		size_t i, size_t j,
+		std::vector<MergedVert>& merged,
+		size_t& min_single_count,
+		size_t& max_single_count)
+	{
+		const InternalFloatType merge_eps = InternalFloatType(1e-8);
+
+		merged.clear();
+		max_single_count = 0;
+		min_single_count = std::numeric_limits<size_t>::max();
+
+		for (size_t k = i; k < j; ++k) {
+			const auto& topo = ctx.cells[recs[k].src_cell].topo;
+			const Polygon& poly = topo.face.data()[recs[k].src_local];
+
+			size_t cnt = 0;
+			LocalId cur = poly.first_edge_id;
+			do {
+				const HalfEdge& he = topo.edge.get_by_id(cur);
+				const LocalIdx  lv = topo.vert.index_of(he.origin_vertex_id);
+				const uint32_t  gid = cell_vert_gid[recs[k].src_cell][lv];
+
+				const PointType& pc = global_vertices[gid];
+				PointType pf = CtoF * pc;
+				pf[0] -= std::floor(pf[0]);
+				pf[1] -= std::floor(pf[1]);
+				pf[2] -= std::floor(pf[2]);
+
+				// Deduplicate against already-collected vertices.
+				bool dup = false;
+				for (const auto& m : merged) {
+					if (same_frac_pbc(m.pos_frac, pf, merge_eps)) {
+						dup = true;
+						break;
+					}
+				}
+				if (!dup) merged.push_back({pc, pf, gid});
+
+				++cnt;
+				cur = he.next_edge_id;
+			} while (cur != poly.first_edge_id);
+
+			max_single_count = std::max(max_single_count, cnt);
+			min_single_count = std::min(min_single_count, cnt);
+		}
+	}
+
+	// ---------------------------------------------------------------------------
+	//  Step 3c.ii — polar sort of the merged vertex set.
+	// ---------------------------------------------------------------------------
+	inline void VoronoiFused::order_by_polar_angle(std::vector<MergedVert>& merged) {
+		// Centroid — origin for polar sorting.
+		PointType centroid(0, 0, 0);
+		for (const auto& m : merged) centroid = centroid + m.pos_cart;
+		centroid = centroid / static_cast<InternalFloatType>(merged.size());
+
+		// Face normal via Newell's method over the unordered set.
+		InternalFloatType nx = 0, ny = 0, nz = 0;
+		for (size_t k = 0; k < merged.size(); ++k) {
+			const PointType& a = merged[k].pos_cart;
+			const PointType& b = merged[(k + 1) % merged.size()].pos_cart;
+			nx += (a[1] - b[1]) * (a[2] + b[2]);
+			ny += (a[2] - b[2]) * (a[0] + b[0]);
+			nz += (a[0] - b[0]) * (a[1] + b[1]);
+		}
+		PointType nrm(nx, ny, nz);
+		const InternalFloatType nlen = nrm.r();
+		if (nlen > 1e-12) nrm = nrm / nlen;
+
+		// In-plane orthonormal basis.
+		PointType up(0, 0, 1);
+		if (std::abs(nrm[2]) > InternalFloatType(0.9)) up = PointType(1, 0, 0);
+		PointType ex = PointType::Vector(up, nrm);
+		const InternalFloatType exlen = ex.r();
+		if (exlen > 1e-12) ex = ex / exlen;
+		const PointType ey = PointType::Vector(nrm, ex);
+
+		std::sort(merged.begin(), merged.end(),
+				  [&](const MergedVert& A, const MergedVert& B) {
+					  const PointType da = A.pos_cart - centroid;
+					  const PointType db = B.pos_cart - centroid;
+					  const InternalFloatType aa = std::atan2(
+						  PointType::Scalar(da, ey), PointType::Scalar(da, ex));
+					  const InternalFloatType ab = std::atan2(
+						  PointType::Scalar(db, ey), PointType::Scalar(db, ex));
+					  return aa < ab;
+				  });
+	}
+
+	// ---------------------------------------------------------------------------
+	//  Step 3c.iii — emit edges for a face group.
+	//
+	//  Take them from the record with the largest vertex count. If drift
+	//  dropped one vertex in the twin record, the larger record still
+	//  carries every edge of the merged face.
+	// ---------------------------------------------------------------------------
+	inline void VoronoiFused::emit_polygon_edges(
+		const VoronoiContext& ctx,
+		const std::vector<std::vector<uint32_t>>& cell_edge_gid,
+		const std::vector<FaceRec>& recs,
+		size_t i, size_t j,
+		PolygonFused& pg,
+		std::vector<uint32_t>& poly_edges)
+	{
+		// Pick the record with the most edges.
+		size_t best_k = i;
+		size_t best_cnt = 0;
+		for (size_t k = i; k < j; ++k) {
+			const auto& topo = ctx.cells[recs[k].src_cell].topo;
+			const Polygon& poly = topo.face.data()[recs[k].src_local];
+			size_t cnt = 0;
+			LocalId cur = poly.first_edge_id;
+			do {
+				++cnt;
+				cur = topo.edge.get_by_id(cur).next_edge_id;
+			} while (cur != poly.first_edge_id);
+			if (cnt > best_cnt) {
+				best_cnt = cnt; best_k = k;
+			}
+		}
+
+		// Emit that record's edges as global IDs.
+		const auto& src_topo = ctx.cells[recs[best_k].src_cell].topo;
+		const Polygon& src_poly = src_topo.face.data()[recs[best_k].src_local];
+
+		pg.edge_offset = static_cast<uint32_t>(poly_edges.size());
+		pg.edge_count = 0;
+
+		LocalId cur = src_poly.first_edge_id;
+		do {
+			const HalfEdge& he = src_topo.edge.get_by_id(cur);
+			const LocalIdx  le = src_topo.edge.index_of(cur);
+			poly_edges.push_back(cell_edge_gid[recs[best_k].src_cell][le]);
+			++pg.edge_count;
+			cur = he.next_edge_id;
+		} while (cur != src_poly.first_edge_id);
+	}
+
+	// ---------------------------------------------------------------------------
+	//  Step 3c.iv — emit canonical owner / other / shift metadata.
+	// ---------------------------------------------------------------------------
+	inline void VoronoiFused::emit_polygon_metadata(
+		const VoronoiContext& ctx,
+		const std::vector<FaceRec>& recs,
+		size_t i,
+		PolygonFused& pg)
+	{
+		const auto& src_topo = ctx.cells[recs[i].src_cell].topo;
+		const Polygon& src_poly = src_topo.face.data()[recs[i].src_local];
+
+		AtomId    owner = recs[i].src_cell;
+		AtomId    other = src_poly.other_cell;
+		ShiftCode shift = src_poly.other_shift;
+
+		// Canonical orientation: owner < other, shift points owner -> other.
+		if (owner > other) {
+			std::swap(owner, other);
+			shift = ShiftCode::inverse(shift.get_code());
+		}
+		pg.owner_atom = owner;
+		pg.other_atom = other;
+		pg.other_shift = shift;
+	}
+
+	// ---------------------------------------------------------------------------
+	//  Step 3c.v — face metrics.
+	// ---------------------------------------------------------------------------
+	inline InternalFloatType VoronoiFused::compute_face_area(
+		const std::vector<MergedVert>& merged)
+	{
+		if (merged.size() < 3) return InternalFloatType(0);
+
+		InternalFloatType area = 0;
+		const PointType p0 = merged[0].pos_cart;
+		PointType v1 = merged[1].pos_cart - p0;
+		for (size_t k = 2; k < merged.size(); ++k) {
+			const PointType v2 = merged[k].pos_cart - p0;
+			area += MathEngine::triangle_area(v1, v2);
+			v1 = v2;
+		}
+		return area;
+	}
+
+	inline InternalFloatType VoronoiFused::compute_face_solid_angle(
+		const std::vector<MergedVert>& merged,
+		const PointType& origin)
+	{
+		if (merged.size() < 3) return InternalFloatType(0);
+
+		const PointType v0 = merged[0].pos_cart - origin;
+		const InternalFloatType r0 = v0.r();
+		PointType         v_prev = merged[1].pos_cart - origin;
+		InternalFloatType r_prev = v_prev.r();
+		InternalFloatType dot0_prev = PointType::Scalar(v0, v_prev);
+
+		InternalFloatType solid = 0;
+		for (size_t k = 2; k < merged.size(); ++k) {
+			const PointType v_curr = merged[k].pos_cart - origin;
+			const InternalFloatType r_curr = v_curr.r();
+			const InternalFloatType dot0_curr = PointType::Scalar(v0, v_curr);
+
+			const InternalFloatType cross = std::abs(
+				PointType::Scalar(v0, PointType::Vector(v_prev, v_curr)));
+			const InternalFloatType denom =
+				r0 * r_prev * r_curr
+				+ dot0_prev * r_curr
+				+ dot0_curr * r_prev
+				+ PointType::Scalar(v_prev, v_curr) * r0;
+			if (cross > MathEngine::EPS)
+				solid += std::atan2(cross, denom);
+
+			v_prev = v_curr;
+			r_prev = r_curr;
+			dot0_prev = dot0_curr;
+		}
+		return solid * InternalFloatType(2);
+	}
+
+	// ---------------------------------------------------------------------------
+	//  Step 3c.vi — group validation. Records anomalies without aborting.
+	// ---------------------------------------------------------------------------
+	inline void VoronoiFused::validate_face_group(
+		const VoronoiContext& ctx,
+		const std::vector<FaceRec>& recs,
+		size_t i, size_t j,
+		const std::vector<MergedVert>& merged,
+		size_t min_single_count,
+		size_t max_single_count,
+		uint32_t gp,
+		VoronoiFused& out)
+	{
+		const size_t group_size = j - i;
+
+		// Per-record vertex count drift.
+		if (group_size > 1 && max_single_count != min_single_count) {
+			++out.report.vertex_count_bad;
+			out.report.messages.emplace_back(
+				"vertex count drift on face ("
+				+ std::to_string(recs[i].a) + ","
+				+ std::to_string(recs[i].b) + ",s="
+				+ std::to_string(recs[i].s) + "): records ["
+				+ std::to_string(min_single_count) + ".."
+				+ std::to_string(max_single_count) + "], merged "
+				+ std::to_string(merged.size()));
+		}
+
+		if (group_size == 1) {
+			const auto& src_topo = ctx.cells[recs[i].src_cell].topo;
+			const Polygon& src_poly = src_topo.face.data()[recs[i].src_local];
+			if (src_poly.other_cell == recs[i].src_cell
+				&& src_poly.other_shift.get_code() != 13)
+				++out.report.self_faces;
+			else
+				++out.report.twin_missing;
+			return;
+		}
+
+		if (group_size == 2) {
+			++out.report.twin_pairs;
+
+			const auto& A = recs[i];
+			const auto& B = recs[i + 1];
+
+			const bool atom_ok =
+				A.src_cell != B.src_cell &&
+				ctx.cells[A.src_cell].topo.face.data()[A.src_local].other_cell
+				== B.src_cell &&
+				ctx.cells[B.src_cell].topo.face.data()[B.src_local].other_cell
+				== A.src_cell;
+			if (!atom_ok) {
+				++out.report.atom_pair_bad;
+				out.report.messages.emplace_back(
+					"atom pair mismatch on face " + std::to_string(gp));
+			}
+			const uint8_t inv_a = ShiftCode::inverse(
+				ctx.cells[A.src_cell].topo.face.data()[A.src_local]
+				.other_shift.get_code());
+			const uint8_t sb =
+				ctx.cells[B.src_cell].topo.face.data()[B.src_local]
+				.other_shift.get_code();
+			if (sb != inv_a) {
+				++out.report.shift_bad;
+				out.report.messages.emplace_back(
+					"shift mismatch on face " + std::to_string(gp));
+			}
+		}
+	}
+
+	// ---------------------------------------------------------------------------
+	//  Step 4 — assemble per-cell polyhedra (CSR).
+	// ---------------------------------------------------------------------------
+	inline void VoronoiFused::assemble_polyhedra(
+		const VoronoiContext& ctx,
+		const std::vector<std::vector<uint32_t>>& cell_vert_gid,
+		const std::vector<std::vector<uint32_t>>& cell_edge_gid,
+		const std::vector<std::vector<uint32_t>>& cell_face_gid,
+		VoronoiFused& out)
+	{
+		const size_t n_cells = ctx.n_cells();
+		out.polyhedra.resize(n_cells);
+
+		// Reserve the flat buffers up front.
+		size_t tot_v = 0, tot_e = 0, tot_p = 0;
+		for (AtomId ci = 0; ci < n_cells; ++ci) {
+			tot_v += ctx.cells[ci].topo.vert.size();
+			tot_e += ctx.cells[ci].topo.edge.size();
+			tot_p += ctx.cells[ci].topo.face.size();
+		}
+		out.ph_verts.reserve(tot_v);
+		out.ph_edges.reserve(tot_e);
+		out.ph_polys.reserve(tot_p);
+
+		for (AtomId ci = 0; ci < n_cells; ++ci) {
+			const auto& src = ctx.cells[ci];
+			auto& dst = out.polyhedra[ci];
+			dst.center = src.meta.center;
+
+			dst.vert_offset = static_cast<uint32_t>(out.ph_verts.size());
+			dst.vert_count = static_cast<uint16_t>(src.topo.vert.size());
+			for (size_t li = 0; li < src.topo.vert.size(); ++li)
+				out.ph_verts.push_back(cell_vert_gid[ci][li]);
+
+			dst.edge_offset = static_cast<uint32_t>(out.ph_edges.size());
+			dst.edge_count = static_cast<uint16_t>(src.topo.edge.size());
+			for (size_t li = 0; li < src.topo.edge.size(); ++li)
+				out.ph_edges.push_back(cell_edge_gid[ci][li]);
+
+			dst.poly_offset = static_cast<uint32_t>(out.ph_polys.size());
+			dst.poly_count = static_cast<uint16_t>(src.topo.face.size());
+			for (size_t li = 0; li < src.topo.face.size(); ++li)
+				out.ph_polys.push_back(cell_face_gid[ci][li]);
+		}
+	}
+
+	// ---------------------------------------------------------------------------
+	//  Step 5 — volumes via the pyramid formula.
+	// ---------------------------------------------------------------------------
+	inline void VoronoiFused::compute_volumes(VoronoiFused& out) {
+		for (auto& ph : out.polyhedra) {
+			InternalFloatType vol = 0;
+
+			for (uint16_t k = 0; k < ph.poly_count; ++k) {
+				const uint32_t pid = out.ph_polys[ph.poly_offset + k];
+				const PolygonFused& poly = out.polygons[pid];
+				if (poly.vert_count < 3) continue;
+
+				const PointType& p0 = out.vertices[out.poly_verts[poly.vert_offset + 0]];
+				const PointType& p1 = out.vertices[out.poly_verts[poly.vert_offset + 1]];
+				const PointType& p2 = out.vertices[out.poly_verts[poly.vert_offset + 2]];
+
+				geometry::Plane<InternalFloatType> plane(p0, p1, p2);
+				const InternalFloatType h = std::abs(plane.distance(ph.center));
+				vol += poly.area * h;
+			}
+			ph.volume = vol / InternalFloatType(3);
+		}
+	}
+
+	// ---------------------------------------------------------------------------
+	//  VoronoiPipeline::fuse — convenience wrapper.
+	// ---------------------------------------------------------------------------
+	inline VoronoiFused VoronoiPipeline::fuse() const {
+		return VoronoiFused::build(context);
+	}
+
+} // namespace cpplib::voronoi

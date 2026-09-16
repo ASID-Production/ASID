@@ -1,4 +1,4 @@
-// Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
+﻿// Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
 // This file is part of ASID - Atomistic Simulation Instruments and Database
 // For more information see <https://github.com/ASID-Production/ASID>
 //
@@ -117,21 +117,21 @@ namespace cpplib {
 		}
 
 		template<typename Func>
-		std::vector<geometry::SpatialGrid<FloatingPointType>::BondWithShift> filter_bond_list(
-			const std::vector<geometry::SpatialGrid<FloatingPointType>::BondWithShift>& bondlist,
+		std::vector<geometry::SG<FloatingPointType>::BondWithShift> filter_bond_list(
+			const std::vector<geometry::SG<FloatingPointType>::BondWithShift>& bondlist,
 			const ::std::vector<AtomTypeBase>& types,
 			const ::std::vector<PointType>& points,
 			Func dist) const noexcept 
 		{
 			auto iter = ::std::begin(bondlist);
 
-			std::vector<geometry::SpatialGrid<FloatingPointType>::BondWithShift> ret;
-			ret.reserve(bondlist.size());
+			std::vector<geometry::SG<FloatingPointType>::BondWithShift> ret;
+			ret.reserve(points.size() << 3);
 
 			while (iter != ::std::end(bondlist)) {
 				const auto l1 = iter->first;
 				const auto l2 = iter->second;
-				const auto shiftcode = iter->shiftcode;
+				const auto shiftcode = iter->shift;
 
 				PointType moved_point2 = points[l2];
 				if (shiftcode.get_code() != 13) {
