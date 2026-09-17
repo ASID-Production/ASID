@@ -94,17 +94,45 @@ namespace cpplib {
 		constexpr char isBond(AtomTypeBase i, AtomTypeBase j, FloatingPointType length) const noexcept {
 			assert(i <= MAX_TYPE && j <= MAX_TYPE);
 			assert(i > 0 && j > 0);
+			assert(length >= 0);
+
 			const auto& [min, max] = data_[i][j];
-			if (length < max) {
-				if (min < length) {
-					return 1;
-				} else {
-					return -1;
-				}
-			} else {
+
+			if (length > max) {
 				return 0;
 			}
+			if (length < min) {
+				return -1;
+			}
+			return 1;
 		}
+
+		/// <summary>
+		/// Check if the distance is in the bond range
+		/// </summary>
+		/// <param name="i">Atom type of first atom</param>
+		/// <param name="j">Atom type of second atom</param>
+		/// <param name="lengthSq">Square of distance between atoms</param>
+		/// <returns> 0  if r() more than max, 1  if r() is betweet min and max, -1 if r() less than min </returns>
+		constexpr char isBondSq(AtomTypeBase i, AtomTypeBase j, FloatingPointType lengthSq) const noexcept {
+			assert(i <= MAX_TYPE && j <= MAX_TYPE);
+			assert(i > 0 && j > 0);
+			assert(lengthSq >= 0);
+
+			const auto& [min, max] = data_[i][j];
+
+			double max_sq = max * max;
+			double min_sq = min * min;
+
+			if (lengthSq > max_sq) {
+				return 0;
+			}
+			if (lengthSq < min_sq) {
+				return -1;
+			}
+			return 1;
+		}
+
 		inline FloatingPointType minDistance(AtomTypeBase a1, AtomTypeBase a2) const noexcept {
 			assert(a1 <= MAX_TYPE && a2 <= MAX_TYPE);
 			assert(a1 > 0 && a2 > 0);
@@ -116,22 +144,43 @@ namespace cpplib {
 			return data_[a1][a2][1];
 		}
 
-		template<typename Func>
 		std::vector<geometry::SG<FloatingPointType>::BondWithShift> filter_bond_list(
 			const std::vector<geometry::SG<FloatingPointType>::BondWithShift>& bondlist,
+			const ::std::vector<AtomTypeBase>& types,
+			const ::std::vector<PointType>& points) const
+		{
+			std::vector<geometry::SG<FloatingPointType>::BondWithShift> ret;
+			ret.reserve(points.size() << 3);
+
+			for (const auto& bond : bondlist){
+				const auto l1 = bond.first;
+				const auto l2 = bond.second;
+
+				char is_real_bond = isBond(types[l1], types[l2], sqrt(bond.dist_sq));
+
+				if (is_real_bond != 0) {
+					ret.push_back(bond);
+				}
+			}
+			return ret;
+		}
+
+		template<typename Func>
+		std::vector<geometry::SpatialGrid<FloatingPointType>::BondWithShift> filter_bond_list(
+			const std::vector<geometry::SpatialGrid<FloatingPointType>::BondWithShift>& bondlist,
 			const ::std::vector<AtomTypeBase>& types,
 			const ::std::vector<PointType>& points,
 			Func dist) const noexcept 
 		{
 			auto iter = ::std::begin(bondlist);
 
-			std::vector<geometry::SG<FloatingPointType>::BondWithShift> ret;
+			std::vector<geometry::SpatialGrid<FloatingPointType>::BondWithShift> ret;
 			ret.reserve(points.size() << 3);
 
 			while (iter != ::std::end(bondlist)) {
 				const auto l1 = iter->first;
 				const auto l2 = iter->second;
-				const auto shiftcode = iter->shift;
+				const auto shiftcode = iter->shiftcode;
 
 				PointType moved_point2 = points[l2];
 				if (shiftcode.get_code() != 13) {

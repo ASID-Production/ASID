@@ -1541,14 +1541,14 @@ namespace cpplib::geometry {
 		// ---- Output records ----------------------------------------------------
 		struct Neighbor {
 			LocalIdx      idx;
-			ShiftCode     shift;
+			ShiftCode     shiftcode;
 			FloatingPoint dist_sq;
 		};
 
 		struct BondWithShift {
 			LocalIdx      first;
 			LocalIdx      second;
-			ShiftCode     shift;
+			ShiftCode     shiftcode;
 			FloatingPoint dist_sq;
 		};
 
@@ -1605,9 +1605,7 @@ namespace cpplib::geometry {
 			geom_.lat_len[2] = cell.lat_dir(2);
 
 			for (int c = 0; c < 27; ++c) {
-				const ShiftPoint sp = ShiftCode::shiftTable[c];
-				geom_.shift_cart[c] = geom_.fracToCart * PointType(
-					static_cast<T>(sp[0]), static_cast<T>(sp[1]), static_cast<T>(sp[2]));
+				geom_.shift_cart[c] = geom_.fracToCart * (ShiftCode::shiftTable[c]);
 			}
 		}
 
@@ -1698,8 +1696,13 @@ namespace cpplib::geometry {
 			const T* __restrict cza = cell_pos_.cz.data();
 			const LocalIdx* __restrict ida = csr_.data.data();
 
-			const int lo = cfg_.use_pbc?-1:0;
-			const int hi = cfg_.use_pbc?+1:0;
+
+			// TODO: Bug : dont use use_pbc==false
+			//const int lo = cfg_.use_pbc?-1:0;
+			//const int hi = cfg_.use_pbc?+1:0;
+			const int lo = -1;
+			const int hi = +1;
+			// End of Bug
 
 			for (int dz = lo; dz <= hi; ++dz) {
 				const int32_t rawz = cz0 + dz;
@@ -1722,11 +1725,11 @@ namespace cpplib::geometry {
 						const uint32_t end = csr_.offsets[ci + 1];
 						if (beg == end) continue;
 
-						const int       code = shift_code(sx, sy, sz);
+						const uint32_t code = shift_code(sx, sy, sz);
 						const PointType sc = geom_.shift_cart[code];
-						const T qsx = qx + sc[0];
-						const T qsy = qy + sc[1];
-						const T qsz = qz + sc[2];
+						const T qsx = qx - sc[0];
+						const T qsy = qy - sc[1];
+						const T qsz = qz - sc[2];
 
 						// Scalar inner loop. SIMD hook: cxa/cya/cza are
 						// contiguous in [beg, end) — load 8 lanes (AVX2) or
@@ -1734,7 +1737,11 @@ namespace cpplib::geometry {
 						// compare-mask, movemask+tzcnt to extract matches.
 						for (uint32_t k = beg; k < end; ++k) {
 							const LocalIdx j = ida[k];
-							if (j == self) continue;
+							//if (j == self) continue;
+
+							const T cx = cxa[k];
+							const T cy = cya[k];
+							const T cz = cza[k];
 
 							const T dx_ = qsx - cxa[k];
 							const T dy_ = qsy - cya[k];
@@ -1754,10 +1761,12 @@ namespace cpplib::geometry {
 			const LocalIdx n = static_cast<LocalIdx>(size());
 			for (LocalIdx i = 0; i < n; ++i) {
 				for_each_neighbor(i, [&](const Neighbor& nb) {
-					if (nb.idx > i)
-						fn(BondWithShift{i, nb.idx, nb.shift, nb.dist_sq});
-					else if (nb.idx == i && nb.shift.get_code() != 13)
-						fn(BondWithShift{i, nb.idx, nb.shift, nb.dist_sq});
+					if (nb.idx > i) {
+						auto s = nb.shiftcode.get_shift();
+						fn(BondWithShift{i, nb.idx, nb.shiftcode, nb.dist_sq});
+					}
+					else if (nb.idx == i && nb.shiftcode.get_code() != 13)
+						fn(BondWithShift{i, nb.idx, nb.shiftcode, nb.dist_sq});
 								  });
 			}
 		}
@@ -1874,8 +1883,8 @@ namespace cpplib::geometry {
 		}
 
 		static inline int shift_dir(int32_t raw, int32_t m) noexcept {
-			if (raw < 0)  return +1;
-			if (raw >= m) return -1;
+			if (raw < 0)  return -1;
+			if (raw >= m) return +1;
 			return 0;
 		}
 

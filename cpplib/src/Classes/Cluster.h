@@ -340,18 +340,21 @@ namespace cpplib::cluster_detail {
 			auto atom_s = atoms_01.size();
 
 
+			//geometry::SpatialGrid<FloatingPointType> sg;
+			//sg.build(atoms_01.points, cell, 6.0);
+			//auto bonds = sg.get_bonds(false);
+
+
 			geometry::SG<FloatingPointType> sg(cell, true, 6.0);
 			sg.updateOnlyPoints(atoms_01.points);
 			auto bonds = sg.findAllContacts();
+
+
 			auto filtered_bonds = dist.filter_bond_list(bonds,
 														atoms_01.types,
-														atoms_01.points,
-														[this](const PointType& a, const PointType& b)
-														{
-															return (cell.fracToCart() * (a - b)).r();
-														});
+														atoms_01.points);
 
-								  // Based on union-find separation
+			// Based on union-find separation
 			result.molecules.resize(atom_s);
 			for (int i = 0; i < atom_s; i++)
 			{
@@ -396,11 +399,12 @@ namespace cpplib::cluster_detail {
 			return result;
 		}
 
-		void unite(const BondWithShift& bond, std::vector<Molecule>& m, std::vector<AtomIndex>& a_to_m) const {
+		template <typename BWS>
+		void unite(const BWS& bond, std::vector<Molecule>& m, std::vector<AtomIndex>& a_to_m) const {
 
 			Molecule& mol_a = m[a_to_m[bond.first]];
 			Molecule& mol_b = m[a_to_m[bond.second]];
-			const auto bondshift = bond.shift.get_shift();
+			const auto bondshift = bond.shiftcode.get_shift();
 
 			// Check mol_a and mol_b are the same molecules
 			if (&mol_a == &mol_b) {

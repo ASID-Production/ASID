@@ -49,12 +49,20 @@ file(GLOB_RECURSE TEST_SRC
     "*.cpp"
 )
 
-add_executable(${PROJECT_NAME} ${TEST_SRC})
+add_executable(${PROJECT_NAME} ${TEST_SRC} ${PROJECT_SOURCE_DIR}/../src/Functions/Functions.cpp)
+
+# Include dirs
+target_include_directories(${PROJECT_NAME} 
+    PUBLIC 
+        ${PROJECT_SOURCE_DIR}/../src/BaseHeaders
+        ${PROJECT_SOURCE_DIR}/../src/Classes
+        ${PROJECT_SOURCE_DIR}/../src/Functions
+        ${PROJECT_SOURCE_DIR}/../src/Platform
+)
 
 target_link_libraries( ${PROJECT_NAME} 
     PRIVATE  
         GTest::gtest_main
-        $<TARGET_OBJECTS:cpplib_objects>
         optimizations
 )
 

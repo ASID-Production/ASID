@@ -1,4 +1,4 @@
-// Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
+﻿// Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
 // This file is part of ASID - Atomistic Simulation Instruments and Database
 // For more information see <https://github.com/ASID-Production/ASID>
 //
@@ -33,12 +33,11 @@
 
 #include <array>
 #include <concepts>
+#include <cstdint>
 #include <list>
 #include <utility>
 #include <vector>
 
-#include "../Functions/Functions.h"
-#include "../BaseHeaders/BaseTypes.h"
 #include "../Classes/Bond.h"
 #include "../Classes/Cluster.h"
 #include "../Classes/Geometry.h"
@@ -47,7 +46,8 @@
 namespace py_util {
 
 	template<std::integral I> inline PyObject* convert(I v);
-	inline PyObject* convert(cpplib::basic_types::FloatingPointType v);
+
+	template<std::floating_point F> inline PyObject* convert(F v);
 	inline PyObject* convert(const std::string& v);
 
 	template<typename T> PyObject* convert(const std::vector<T>& vec);
@@ -60,9 +60,20 @@ namespace py_util {
 
 	inline PyObject* convert(const cpplib::cluster_detail::ClusterData& cd);
 
-	inline PyObject* convert(const cpplib::voronoi::VoronoiFused::EdgeIn& e);
-	inline PyObject* convert(const cpplib::voronoi::VoronoiFused::PolygonIn& p);
-	inline PyObject* convert(const cpplib::voronoi::VoronoiFused::Polyhedron& p);
+	template <typename Container, typename Fn> PyObject* convert_list(const Container&, Fn&&);
+
+// ============================================================================
+//  VoronoiFused converters
+// ============================================================================
+
+	inline PyObject* convert(const cpplib::voronoi::VoronoiFused::EdgeFused& e);
+
+	inline PyObject* convert(const cpplib::voronoi::VoronoiFused::PolygonFused& p,
+							 const cpplib::voronoi::VoronoiFused& vf);
+
+	inline PyObject* convert(const cpplib::voronoi::VoronoiFused::PolyhedronFused& p,
+							 const cpplib::voronoi::VoronoiFused& vf);
+
 	inline PyObject* convert(const cpplib::voronoi::VoronoiFused& vf);
 
 	inline bool add_to_dict(const char* key, PyObject* val, PyObject* dict) {
@@ -75,7 +86,7 @@ namespace py_util {
 		return true;
 	}
 
-	inline PyObject* convert(cpplib::basic_types::FloatingPointType v) {
+	template<std::floating_point F> inline PyObject* convert(F v) {
 		return PyFloat_FromDouble(static_cast<double>(v));
 	}
 	inline PyObject* convert(const std::string& v) {
@@ -124,7 +135,7 @@ namespace py_util {
 		for (Py_ssize_t i = 0; i < n; ++i) {
 			PyObject* item = convert(vec[i]);
 			if (!item) [[unlikely]] {
-				Py_DECREF(list); 
+				Py_DECREF(list);
 				return nullptr;
 			}
 			if (PyList_SetItem(list, i, item) != 0) [[unlikely]] {
@@ -218,43 +229,223 @@ namespace py_util {
 		return list;
 	}
 
-	// (VoronoiFused::EdgeIn -> Dict)
-	inline PyObject* convert(const cpplib::voronoi::VoronoiFused::EdgeIn& e) {
-		return convert(e.vert_ids);
+	// ---------------------------------------------------------------------------
+	//  Internal helpers for VoronoiFused
+	// ---------------------------------------------------------------------------
+
+	// Slice of uint32_t IDs -> Python list of ints.
+	inline PyObject* convert_u32_slice(const std::vector<uint32_t>& data,
+									   uint32_t offset,
+									   uint16_t count) {
+		PyObject* list = PyList_New(static_cast<Py_ssize_t>(count));
+		if (!list) return nullptr;
+
+		for (uint16_t i = 0; i < count; ++i) {
+			PyObject* item = convert(data[offset + i]);
+			if (!item) [[unlikely]] {
+				Py_DECREF(list);
+				return nullptr;
+			}
+
+			if (PyList_SetItem(list, static_cast<Py_ssize_t>(i), item) != 0) [[unlikely]] {
+				Py_DECREF(item);
+				Py_DECREF(list);
+				return nullptr;
+			}
+		}
+		return list;
 	}
-	// (VoronoiFused::PolygonIn -> Dict)
-	inline PyObject* convert(const cpplib::voronoi::VoronoiFused::PolygonIn& p) {
+
+	// Slice of global vertex IDs -> Python list of 3D points.
+	inline PyObject* convert_vertex_slice(
+		const cpplib::voronoi::VoronoiFused& vf,
+		const std::vector<uint32_t>& ids,
+		uint32_t offset,
+		uint16_t count)
+	{
+		PyObject* list = PyList_New(static_cast<Py_ssize_t>(count));
+		if (!list) return nullptr;
+
+		for (uint16_t i = 0; i < count; ++i) {
+			const uint32_t gid = ids[offset + i];
+			PyObject* item = convert(vf.vertices[gid]);
+			if (!item) [[unlikely]] {
+				Py_DECREF(list);
+				return nullptr;
+			}
+
+			if (PyList_SetItem(list, static_cast<Py_ssize_t>(i), item) != 0) [[unlikely]] {
+				Py_DECREF(item);
+				Py_DECREF(list);
+				return nullptr;
+			}
+		}
+		return list;
+	}
+
+	// Functional helper: Container -> List[ Fn(obj[i]) ]
+	template <typename Container, typename Fn>
+	PyObject* convert_list(const Container& c, Fn&& fn) {
+		PyObject* list = PyList_New(static_cast<Py_ssize_t>(c.size()));
+		if (!list) return nullptr;
+
+		for (size_t i = 0; i < c.size(); ++i) {
+			PyObject* item = fn(c[i]);
+			if (!item) [[unlikely]] {
+				Py_DECREF(list);
+				return nullptr;
+			}
+			if (PyList_SetItem(list, static_cast<Py_ssize_t>(i), item) != 0) [[unlikely]] {
+				Py_DECREF(list);
+				return nullptr;
+			}
+		}
+		return list;
+	}
+
+
+
+	// ---------------------------------------------------------------------------
+	//  EdgeFused -> [v0, v1]
+	// ---------------------------------------------------------------------------
+	inline PyObject* convert(const cpplib::voronoi::VoronoiFused::EdgeFused& e) {
+		PyObject* list = PyList_New(2);
+		if (!list) return nullptr;
+
+		PyObject* v0 = convert(e.v0);
+		if (!v0) [[unlikely]] {
+			Py_DECREF(list);
+			return nullptr;
+		}
+
+		if (PyList_SetItem(list, 0, v0) != 0) [[unlikely]] {
+			Py_DECREF(v0);
+			Py_DECREF(list);
+			return nullptr;
+		}
+
+		PyObject* v1 = convert(e.v1);
+		if (!v1) [[unlikely]] {
+			Py_DECREF(list);
+			return nullptr;
+		}
+
+		if (PyList_SetItem(list, 1, v1) != 0) [[unlikely]] {
+			Py_DECREF(v1);
+			Py_DECREF(list);
+			return nullptr;
+		}
+
+		return list;
+	}
+
+	// ---------------------------------------------------------------------------
+	//  PolygonFused (CSR-aware) -> dict
+	// ---------------------------------------------------------------------------
+	inline PyObject* convert(const cpplib::voronoi::VoronoiFused::PolygonFused& p,
+							 const cpplib::voronoi::VoronoiFused& vf)
+	{
 		PyObject* dict = PyDict_New();
-		if (!dict) [[unlikely]] {
+		if (!dict) [[unlikely]] return nullptr;
+
+		PyObject* vertices = convert_vertex_slice(
+			vf, vf.poly_verts, p.vert_offset, p.vert_count);
+
+		if (!vertices || !add_to_dict("vertices", vertices, dict)) [[unlikely]] {
 			Py_DECREF(dict);
 			return nullptr;
 		}
 
-		if (!add_to_dict("area",        convert(p.area), dict) ||
-			!add_to_dict("vertices",    convert(p.vert_ids), dict) ||
-			!add_to_dict("shift",       convert(p.second_shift), dict) ||
-			!add_to_dict("edges",       convert(p.edge_ids), dict) ||
-			!add_to_dict("solid_angle", convert(p.solidangle), dict) ||
-			!add_to_dict("atoms",       convert(p.atom_ids), dict)) [[unlikely]] {
+		PyObject* edges = convert_u32_slice(
+			vf.poly_edges, p.edge_offset, p.edge_count);
+
+		if (!edges || !add_to_dict("edges", edges, dict)) [[unlikely]] {
+			Py_DECREF(dict);
+			return nullptr;
+		}
+
+		PyObject* atoms = PyList_New(2);
+		if (!atoms) [[unlikely]] {
+			Py_DECREF(dict);
+			return nullptr;
+		}
+
+		PyObject* owner = convert(p.owner_atom);
+		if (!owner) [[unlikely]] {
+			Py_DECREF(atoms);
+			Py_DECREF(dict);
+			return nullptr;
+		}
+
+		if (PyList_SetItem(atoms, 0, owner) != 0) [[unlikely]] {
+			Py_DECREF(owner);
+			Py_DECREF(atoms);
+			Py_DECREF(dict);
+			return nullptr;
+		}
+
+		PyObject* other = convert(p.other_atom);
+		if (!other) [[unlikely]] {
+			Py_DECREF(atoms);
+			Py_DECREF(dict);
+			return nullptr;
+		}
+
+		if (PyList_SetItem(atoms, 1, other) != 0) [[unlikely]] {
+			Py_DECREF(other);
+			Py_DECREF(atoms);
+			Py_DECREF(dict);
+			return nullptr;
+		}
+
+		if (!add_to_dict("atoms", atoms, dict) ||
+			!add_to_dict("shift", convert(p.other_shift.get_code()), dict) ||
+			!add_to_dict("area", convert(p.area), dict) ||
+			!add_to_dict("solid_angle", convert(p.solid_angle), dict)) [[unlikely]]
+		{
 			Py_DECREF(dict);
 			return nullptr;
 		}
 
 		return dict;
 	}
-	// (VoronoiFused::Polyhedron -> Dict)
-	inline PyObject* convert(const cpplib::voronoi::VoronoiFused::Polyhedron& p) {
+
+	// ---------------------------------------------------------------------------
+	//  PolyhedronFused (CSR-aware) -> dict
+	// ---------------------------------------------------------------------------
+	inline PyObject* convert(const cpplib::voronoi::VoronoiFused::PolyhedronFused& p,
+							 const cpplib::voronoi::VoronoiFused& vf)
+	{
 		PyObject* dict = PyDict_New();
-		if (!dict) [[unlikely]] {
+		if (!dict) [[unlikely]] return nullptr;
+
+		PyObject* vertices = convert_vertex_slice(
+			vf, vf.ph_verts, p.vert_offset, p.vert_count);
+
+		if (!vertices || !add_to_dict("vertices", vertices, dict)) [[unlikely]] {
 			Py_DECREF(dict);
 			return nullptr;
 		}
 
-		if (!add_to_dict("vertices", convert(p.vert_ids), dict) ||
-			!add_to_dict("center",   convert(p.center), dict) ||
-			!add_to_dict("edges",    convert(p.edge_ids), dict) ||
-			!add_to_dict("volume",   convert(p.volume), dict) ||
-			!add_to_dict("polygons", convert(p.poly_ids), dict)) [[unlikely]] {
+		PyObject* edges = convert_u32_slice(
+			vf.ph_edges, p.edge_offset, p.edge_count);
+
+		if (!edges || !add_to_dict("edges", edges, dict)) [[unlikely]] {
+			Py_DECREF(dict);
+			return nullptr;
+		}
+
+		PyObject* polygons = convert_u32_slice(
+			vf.ph_polys, p.poly_offset, p.poly_count);
+
+		if (!polygons || !add_to_dict("polygons", polygons, dict)) [[unlikely]] {
+			Py_DECREF(dict);
+			return nullptr;
+		}
+
+		if (!add_to_dict("center", convert(p.center), dict) ||
+			!add_to_dict("volume", convert(p.volume), dict)) [[unlikely]]
+		{
 			Py_DECREF(dict);
 			return nullptr;
 		}
@@ -262,22 +453,36 @@ namespace py_util {
 		return dict;
 	}
 
-	// (VoronoiFused)
+	// ---------------------------------------------------------------------------
+	//  VoronoiFused -> dict
+	// ---------------------------------------------------------------------------
 	inline PyObject* convert(const cpplib::voronoi::VoronoiFused& vf) {
 		PyObject* dict = PyDict_New();
-		if (!dict) [[unlikely]] {
+		if (!dict) [[unlikely]] return nullptr;
+
+		PyObject* polygons = convert_list(vf.polygons,
+										  [&](const auto& p) { return convert(p, vf); });
+
+		PyObject* polyhedra = convert_list(vf.polyhedra,
+										   [&](const auto& p) { return convert(p, vf); });
+
+		if (!polygons || !polyhedra) [[unlikely]] {
+			Py_XDECREF(polygons);
+			Py_XDECREF(polyhedra);
 			Py_DECREF(dict);
 			return nullptr;
 		}
 
-		if (!add_to_dict("vertices",  convert(vf.vertices), dict) ||
-			!add_to_dict("edges",     convert(vf.edges), dict) ||
-			!add_to_dict("polygons",  convert(vf.polygons), dict) ||
-			!add_to_dict("polyhedra", convert(vf.polyhedra), dict)) [[unlikely]] {
+		if (!add_to_dict("vertices", convert(vf.vertices), dict) ||
+			!add_to_dict("edges", convert(vf.edges), dict) ||
+			!add_to_dict("polygons", polygons, dict) ||
+			!add_to_dict("polyhedra", polyhedra, dict)) [[unlikely]]
+		{
 			Py_DECREF(dict);
 			return nullptr;
 		}
 
 		return dict;
 	}
-}
+
+} // namespace py_util

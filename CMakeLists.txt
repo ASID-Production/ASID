@@ -1,4 +1,4 @@
-# Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
+﻿# Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
 # This file is part of ASID - Atomistic Simulation Instruments and Database
 # For more information see <https://github.com/ASID-Production/ASID>
 #
@@ -27,6 +27,10 @@
 # ******************************************************************************************
 
 cmake_minimum_required(VERSION 3.12)
+
+if(MSVC)
+  set(CMAKE_CL_SHOWINCLUDES_PREFIX "Note: including file: " CACHE INTERNAL "Fix for non-English MSVC output")
+endif()
 
 # ============================================================================
 # Project and basic options
@@ -162,37 +166,17 @@ foreach(file ${DATA_FILES})
 endforeach()
 
 # ============================================================================
-# OBJECT library
-# ============================================================================
-add_library(cpplib_objects OBJECT ${CPPLIB_SOURCES})
-
-target_include_directories(cpplib_objects 
-    PUBLIC 
-        ${PROJECT_SOURCE_DIR}/cpplib/src/BaseHeaders
-        ${PROJECT_SOURCE_DIR}/cpplib/src/Classes
-        ${PROJECT_SOURCE_DIR}/cpplib/src/Platform
-)
-set_target_properties(cpplib_objects PROPERTIES
-    PREFIX ""
-    OUTPUT_NAME "cpplib_objects"
-    LINKER_LANGUAGE C
-    POSITION_INDEPENDENT_CODE ON
-)
-target_link_libraries(cpplib_objects PRIVATE optimizations)
-
-
-
-# ============================================================================
 # CPPLIB creates only in Release
 # ============================================================================
 if(CMAKE_BUILD_TYPE MATCHES Release OR CMAKE_CONFIGURATION_TYPES)
-    add_library(cpplib SHARED ${CPPLIB_PY_SOURCES})
+    add_library(cpplib SHARED ${CPPLIB_PY_SOURCES} ${CPPLIB_SOURCES})
     
     # Include dirs
     target_include_directories(cpplib 
         PUBLIC 
             ${PROJECT_SOURCE_DIR}/cpplib/src/BaseHeaders
             ${PROJECT_SOURCE_DIR}/cpplib/src/Classes
+            ${PROJECT_SOURCE_DIR}/cpplib/src/Functions
             ${PROJECT_SOURCE_DIR}/cpplib/src/Platform
         PRIVATE
             ${Python_INCLUDE_DIRS}
@@ -205,7 +189,7 @@ if(CMAKE_BUILD_TYPE MATCHES Release OR CMAKE_CONFIGURATION_TYPES)
         POSITION_INDEPENDENT_CODE ON
     )
     
-    target_link_libraries(cpplib PRIVATE cpplib_objects optimizations)
+    target_link_libraries(cpplib PRIVATE optimizations)
     # ============================================================================
     # Link with Python (Stable ABI / Limited API)
     # ============================================================================

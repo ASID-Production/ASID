@@ -1,4 +1,4 @@
-// Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
+﻿// Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
 // This file is part of ASID - Atomistic Simulation Instruments and Database
 // For more information see <https://github.com/ASID-Production/ASID>
 //
@@ -28,6 +28,7 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <concepts>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -117,13 +118,30 @@ static std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basi
 template <char times>
 static std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>, times> FindATParamsParse(PyObject* oparams, char& d) {
 	std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>, times> value;
-	for (char i = 0; i < times; i++, d += 2) 
-{
+	for (char i = 0; i < times; i++, d += 2)
+	{
 		value[i].first = static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(oparams, d)));
 		value[i].second = static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(oparams, d + 1)));
 	}
 	return value;
 }
+template<std::integral I>
+inline static ErrorState pyListToVectorInt(PyObject* plist, std::vector<I>* pret) {
+	const Py_ssize_t s = PyList_Size(plist);
+	std::vector<I>& ret = *pret;
+	ret.resize(s);
+	if constexpr (sizeof(I) <= 4) {
+		for (Py_ssize_t i = 0; i < s; i++) {
+			ret[i] = static_cast<I>(PyLong_AsLong(PyList_GetItem(plist, i)));
+		}
+	} else {
+		for (Py_ssize_t i = 0; i < s; i++) {
+			ret[i] = static_cast<I>(PyLong_AsLongLong(PyList_GetItem(plist, i)));
+		}
+	}
+	return ErrorState::OK;
+}
+
 extern "C" {
 
 	inline static ErrorState pyListToVectorFloat(PyObject* plist, std::vector<cpplib::basic_types::FloatingPointType>* pret) {
@@ -146,15 +164,7 @@ extern "C" {
 		}
 		return ErrorState::OK;
 	}
-	inline static ErrorState pyListToVectorInt(PyObject* plist, std::vector<int>* pret) {
-		const Py_ssize_t s = PyList_Size(plist);
-		std::vector<int>& ret = *pret;
-		ret.resize(s);
-		for (Py_ssize_t i = 0; i < s; i++) {
-			ret[i] = static_cast<int>(PyLong_AsLong(PyList_GetItem(plist, i)));
-		}
-		return ErrorState::OK;
-	}
+
 	inline static ErrorState pyListToVectorCharP(PyObject* plist, std::vector<const char*>* pret) {
 
 		std::vector<const char*>& ret = *pret;
@@ -186,7 +196,7 @@ extern "C" {
 		if (p_distances != nullptr) {
 			return;
 		}
-		Py_ssize_t us; 
+		Py_ssize_t us;
 		PyObject* file_obj = PyObject_GetAttrString(self, "__file__");
 		std::string full(PyUnicode_AsUTF8AndSize(file_obj, &us));
 		Py_DECREF(file_obj);
@@ -247,8 +257,7 @@ extern "C" {
 		}
 		if (CompareGraph(s1, s2, (b != 0))) {
 			Py_RETURN_TRUE;
-		}
-		else {
+		} else {
 			Py_RETURN_FALSE;
 		}
 	}
@@ -681,8 +690,7 @@ extern "C" {
 		bool simplehimp = PyFloat_CheckExact(o_himp);
 		if (simplehimp) {
 			himp.resize(cpplib::constants::mend_size, static_cast<FloatingPointType>(PyFloat_AsDouble(o_himp)));
-		}
-		else {
+		} else {
 			pyListToVectorFloat(o_himp, &himp);
 		}
 		const auto himp_s = himp.size();
@@ -729,8 +737,7 @@ extern "C" {
 		graph.prepareToSearch();
 		if (graph.startFullSearch(false)) {
 			Py_RETURN_TRUE;
-		}
-		else {
+		} else {
 			Py_RETURN_FALSE;
 		}
 	}
@@ -798,33 +805,29 @@ extern "C" {
 
 	/// Args: [cell, symm, tuples, bools<int>, cutoff]
 	static PyObject* cpplib_Voronoi(PyObject* self, PyObject* args) {
-		using Diagram = cpplib::voronoi::VoronoiDiagram;
 
 		PyObject* ocell = NULL;
 		PyObject* osymm = NULL;
 		PyObject* otuples = NULL;
 		PyObject* obools = NULL;
-		float cutoff = 6.0;
-		if (!PyArg_ParseTuple(args, "OOOOf", &ocell, &osymm, &otuples, &obools, &cutoff)) {
+		float cutoff_temp = 6.0;
+		if (!PyArg_ParseTuple(args, "OOOOf", &ocell, &osymm, &otuples, &obools, &cutoff_temp)) {
 			Py_RETURN_NONE;
 		}
 
 		LOG_INTERFACE_GUARD("cpplib_Voronoi");
 
+		FloatingPointType cutoff = static_cast<FloatingPointType>(cutoff_temp);
+
 		Prepare_IC all(ocell, osymm, otuples);
 		auto ps = all.points.size();
-		std::vector<int> intbools;
+		std::vector<uint8_t> intbools;
 		intbools.reserve(ps);
 		pyListToVectorInt(obools, &intbools);
-		std::vector<bool> bools(ps);
-
-		for (int i = 0; i < ps; i++) {
-			bools[i] = intbools[i] != 0;
-		}
 
 		geometry::Cell cell(all.cell);
 
-		bools.resize(all.points.size(), false);
+		intbools.resize(all.points.size(), 0);
 
 		std::vector<geometry::Symm<FloatingPointType>> symmvec;
 		symmvec.reserve(all.symm.size());
@@ -837,18 +840,10 @@ extern "C" {
 		auto buildresult = ucb.build(all.points, all.types);
 
 
-		geometry::SpatialGrid<FloatingPointType> space;
-		space.build(buildresult.atoms.points, cell, cutoff);
-		auto bonds = WITH_LOG_M(space, get_bonds, false);
+		voronoi::VoronoiPipeline pipe;
+		pipe.build(buildresult.atoms.points, cell, cutoff, true, &intbools);
 
-		// Flags intentionally correspond only to the asymmetric-unit inputs; 
-		// VoronoiDiagram resizes the flag vector and treats symmetry-expanded sites as false.
-		Diagram diag(buildresult.atoms.points,bonds, cell, bools);
-
-		auto ce = diag.extractCells();
-				
-		cpplib::voronoi::VoronoiFused vf(ce, cell.fracToCart());
-		vf.polyhedra.resize(all.points.size());
+		auto vf = pipe.fuse();
 
 		// Build return value
 		return Py_BuildValue("{s:N,s:N}",
@@ -857,16 +852,17 @@ extern "C" {
 	}
 
 	static PyObject* cpplib_FindCP(PyObject* self, PyObject* args) {
-		using Diagram = cpplib::voronoi::VoronoiDiagram;
 		using BaderOperator = cpplib::BaderOperator;
 
 		PyObject* ocell = NULL;
 		PyObject* osymm = NULL;
 		PyObject* otuples = NULL;
-		float cutoff = 6.0;
-		if (!PyArg_ParseTuple(args, "OOOOf", &ocell, &osymm, &otuples, &cutoff)) {
+		float cutoff_tmp = 6.0;
+		if (!PyArg_ParseTuple(args, "OOOOf", &ocell, &osymm, &otuples, &cutoff_tmp)) {
 			Py_RETURN_NONE;
 		}
+
+		FloatingPointType cutoff = static_cast<FloatingPointType>(cutoff_tmp);
 
 		LOG_INTERFACE_GUARD("cpplib_FindCP");
 
@@ -883,21 +879,16 @@ extern "C" {
 		cluster_detail::UnitCellBuilder ucb(symmvec);
 		auto buildresult = ucb.build(all.points, all.types);
 
-		geometry::SpatialGrid<FloatingPointType> space;
-		space.build(buildresult.atoms.points, cell, cutoff);
-		auto bonds = WITH_LOG_M(space, get_bonds, false);
+		voronoi::VoronoiPipeline pipe;
+		pipe.build(buildresult.atoms.points, cell, cutoff, true);
 
-		Diagram diag(buildresult.atoms.points, bonds, cell, bools);
-		auto ce = diag.extractCells();
+		auto vf = pipe.fuse();
 
-		cpplib::voronoi::VoronoiFused vf(ce, cell.fracToCart());
-		vf.polyhedra.resize(all.points.size());
-
-		auto critical_points = cpplib::BaderOperator::GenerateInitialCriticalPoints(vf,cell.fracToCart());
+		auto critical_points = cpplib::BaderOperator::GenerateInitialCriticalPoints(vf, cell.fracToCart());
 
 		// Expand Point Net
 		// 1. Calculate theoretical radius.
-		
+
 		const auto ED_cutoff = cpplib::BaderOperator::GetOptimalRadius(3.0, 1.0E-6, ElectronDensitySplines, buildresult.atoms.types);
 		const size_t max_type = cpplib::ElectronDensitySplines.size();
 		const size_t initial_type_size = buildresult.atoms.types.size();
