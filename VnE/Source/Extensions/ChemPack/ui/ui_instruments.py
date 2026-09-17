@@ -69,6 +69,6 @@ class Ui_Dialog(object):
         self.pushButton.setText(QCoreApplication.translate("Dialog", u"Translate", None))
         self.pushButton_4.setText(QCoreApplication.translate("Dialog", u"Select molecule", None))
         self.pushButton_2.setText(QCoreApplication.translate("Dialog", u"Translate label", None))
-        self.pushButton_3.setText(QCoreApplication.translate("Dialog", u"Delete atoms", None))
+        self.pushButton_3.setText(QCoreApplication.translate("Dialog", u"Delete", None))
     # retranslateUi
 

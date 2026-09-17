@@ -135,10 +135,10 @@ class OpenGlWidget(QOpenGLWidget):
 
         SINGLE_OBSERVER = Observers.SingleObserver(self.facade, self.scene)
         QtModels.SINGLE_OBSERVER = SINGLE_OBSERVER
-        self.label_observer = SINGLE_OBSERVER.getObserver(Observers.LabelObserver)
-        self.label_observer.set_wh([self.width(), self.height()])
-        pipeline = self.label_observer.getPipeline()
-        self.facade.changePipelineUniforms(pipeline, 'const_scale', ctypes.c_float(150.0))
+        #self.label_observer = SINGLE_OBSERVER.getObserver(Observers.LabelObserver)
+        #self.label_observer.set_wh([self.width(), self.height()])
+        #pipeline = self.label_observer.getPipeline()
+        #self.facade.changePipelineUniforms(pipeline, 'const_scale', ctypes.c_float(150.0))
         self.uniforms_id = self.facade.addUniformBufferToScene(self.scene, uniform_buffer_cls=UniformBuffers.SceneUniformBuffer)
         self.uniforms = self.getUniforms()
         if self.uniformWidget is not None:

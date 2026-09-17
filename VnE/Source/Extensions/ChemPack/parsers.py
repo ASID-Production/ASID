@@ -528,7 +528,7 @@ class FileParser:
             mol_list = point_class.PointsList(parent=root, name=mol_sys.name)
             mol.assignPoint(mol_list)
             MOLECULE_SYSTEMS[mol_list] = mol_sys
-            atom_list = point_class.PointsList(parent=mol_list, rad=0.15, name='Atoms', el_rad=0.5)
+            atom_list = point_class.PointsList(parent=mol_list, rad=0.15, name='Atoms', el_rad=0.5, label_size=6)
             i = 1
             for atom in mol.children:
                 point = point_func(atom_list, atom)
@@ -1121,13 +1121,13 @@ class FileParser:
         coord = atom.coord.copy()
         add_data = atom.sup_data_dict
         if add_data is None:
-            point = point_class.Point(parent=atom_list, coord=coord, rad=atom_list, el_rad=atom_list,
+            point = point_class.Point(parent=atom_list, coord=coord, rad=atom_list, el_rad=atom_list, label_size=atom_list,
                                       color=PALETTE.point_dict[PALETTE.getName(atom.atom_type)],
                                       atom_type=atom.atom_type,
                                       name=atom.name,
                                       label=atom.name.replace(' ', '_'))
         else:
-            point = point_class.Point(parent=atom_list, coord=coord, rad=atom_list, el_rad=atom_list,
+            point = point_class.Point(parent=atom_list, coord=coord, rad=atom_list, el_rad=atom_list, label_size=atom_list,
                                       color=PALETTE.point_dict[PALETTE.getName(atom.atom_type)],
                                       atom_type=atom.atom_type,
                                       name=atom.name,
