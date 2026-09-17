@@ -30,9 +30,9 @@
 #include <algorithm>
 #include <vector>
 
-#include <BaseTypes.h>
-#include "Engine.h"
-#include "Bond.h"
+#include "../src/BaseHeaders/BaseTypes.h"
+#include "../src/Classes/Engine.h"
+#include "../src/Classes/Bond.h"
 
 using namespace cpplib;
 

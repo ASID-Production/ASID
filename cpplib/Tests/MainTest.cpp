@@ -1,4 +1,4 @@
-// Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
+﻿// Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
 // This file is part of ASID - Atomistic Simulation Instruments and Database
 // For more information see <https://github.com/ASID-Production/ASID>
 //
@@ -34,15 +34,19 @@
 #include <tuple>
 #include <utility>
 #include <vector>
+#include <fstream>
+#include <format>
 
-#include <BaseTypes.h>
-#include <Currents.h>
-#include <DebugMes.h>
-#include <Cluster.h>
-#include <Distances.h>
-#include <FindMolecules.h>
-#include <MoleculeGraph.h>
-#include <SearchGraph.h>
+#include "../src/BaseHeaders/BaseTypes.h"
+#include "../src/BaseHeaders/Currents.h"
+#include "../src/BaseHeaders/DebugMes.h"
+
+#include "../src/Classes/BaderOperator.h"
+#include "../src/Classes/Cluster.h"
+#include "../src/Classes/Distances.h"
+#include "../src/Classes/FindMolecules.h"
+#include "../src/Classes/MoleculeGraph.h"
+#include "../src/Classes/SearchGraph.h"
 
 #include "../src/Functions/Functions.h"
 
@@ -89,29 +93,13 @@ struct FMIC_TS {
 		for (size_t i = 0; i < s; i++) {
 			anch.emplace_back(PointType(p[4 * i], p[4 * i + 1], p[4 * i + 2]), p[4 * i + 3]);
 		}
-		return ClusterCreate(cell, symm, types, points, anch, r2, b);
+
+		std::vector<AtomTypeBase> copy_types(types);
+		std::vector<PointType> copy_points(points);
+
+		return ClusterCreate(cell, symm, copy_types, copy_points, anch, r2, b);
 	}
 };
-
-TEST(CreateClusterTest, SingleNegative) {
-	p_distances = &testdistances;
-	std::array<cpplib::basic_types::FloatingPointType, 6> cell{10.0, 10.0, 10.0, 90.0, 90.0, 90.0};
-	std::vector<const char*> symm{
-		"x, y, z"
-	};
-
-	std::vector<AtomTypeBase> types{10};
-	std::vector<cpplib::basic_types::FloatingPointType> xyz{
-		-0.1, -0.1, -0.1
-	};
-
-	bool hasPoly = false;
-	FMIC_TS ts(cell, symm, types, xyz);
-	std::vector<FloatingPointType> anchors{-0.1, -2.1, -1.3, 2.9};
-	auto res = ts.cluster(anchors, 10.0, hasPoly);
-	EXPECT_EQ(res.size(), 1);
-	EXPECT_FALSE(hasPoly);
-}
 
 TEST(CreateClusterTest, Benzene) {
 	p_distances = &testdistances;
@@ -129,12 +117,12 @@ TEST(CreateClusterTest, Benzene) {
 
 	std::vector<AtomTypeBase> types{6, 6, 6, 1, 1, 1};
 	std::vector<cpplib::basic_types::FloatingPointType> xyz{
-        -0.06070, 0.13930, -0.00690,
-        -0.13770, 0.04470,  0.12600,
-         0.07700, 0.09580, -0.13250,
-        -0.10460, 0.25020, -0.01230,
-        -0.24580, 0.07810,  0.22410,
-         0.13710, 0.16810, -0.23600};
+		-0.06070, 0.13930, -0.00690,
+		-0.13770, 0.04470,  0.12600,
+		 0.07700, 0.09580, -0.13250,
+		-0.10460, 0.25020, -0.01230,
+		-0.24580, 0.07810,  0.22410,
+		 0.13710, 0.16810, -0.23600};
 
 	bool hasPoly = false;
 	FMIC_TS ts(cell, symm, types, xyz);
@@ -143,6 +131,48 @@ TEST(CreateClusterTest, Benzene) {
 	EXPECT_EQ(res.size(), 36);
 	EXPECT_FALSE(hasPoly);
 }
+
+TEST(CreateClusterTest, polyError) {
+	p_distances = &testdistances;
+	std::array<cpplib::basic_types::FloatingPointType, 6> cell{8.466, 8.352, 13.31, 90.0, 94.76, 90.0};
+	std::vector<const char*> symm{"x,y,z", "-x+1/2,y+1/2,-z+1/2", "-x,-y,-z", "x-1/2,-y-1/2,z-1/2"};
+	std::vector<AtomTypeBase> types{92, 8, 6, 92, 8, 6, 1, 1, 8, 6, 1, 1, 1, 8, 6, 8, 6, 1, 1, 8, 6, 1, 1, 1};
+	std::vector<cpplib::basic_types::FloatingPointType> xyz{0.5, 0.5, 0.5, 0.4636, 0.3568, 0.40393, 0.7044, 0.2688, 0.6084, 1.0, 0.5, 0.5, 1.0169, 0.3116, 0.44259, 0.8087, 0.1367, 0.6491, 0.855486, 0.167231, 0.717074, 0.896753, 0.123382, 0.605313, 0.5573, 0.2669, 0.61203, 0.7241, -0.0224, 0.6565, 0.644725, -0.013849, 0.705751, 0.801262, -0.105578, 0.677981, 0.671723, -0.050488, 0.590406, 0.7644, 0.3918, 0.56656, 0.7865, 0.5824, 0.3261, 0.7331, 0.5657, 0.41369, 0.6769, 0.5814, 0.2336, 0.624258, 0.687156, 0.226523, 0.593622, 0.500134, 0.241248, 0.9338, 0.5934, 0.32488, 0.7562, 0.546, 0.138, 0.834714, 0.62931, 0.127549, 0.676121, 0.544249, 0.080431, 0.808974, 0.44165, 0.144184};
+	std::vector<FloatingPointType> anchors{0.5, 0.5, 0.5, 5.0, 0.4636, 0.3568, 0.40393, 5.0, 0.7044, 0.2688, 0.6084, 5.0, 1.0, 0.5, 0.5, 5.0, 1.0169, 0.3116, 0.44259, 5.0, 0.8087, 0.1367, 0.6491, 5.0, 0.855486, 0.167231, 0.717074, 5.0, 0.896753, 0.123382, 0.605313, 5.0, 0.5573, 0.2669, 0.61203, 5.0, 0.7241, -0.0224, 0.6565, 5.0, 0.644725, -0.013849, 0.705751, 5.0, 0.801262, -0.105578, 0.677981, 5.0, 0.671723, -0.050488, 0.590406, 5.0, 0.7644, 0.3918, 0.56656, 5.0, 0.7865, 0.5824, 0.3261, 5.0, 0.7331, 0.5657, 0.41369, 5.0, 0.6769, 0.5814, 0.2336, 5.0, 0.624258, 0.687156, 0.226523, 5.0, 0.593622, 0.500134, 0.241248, 5.0, 0.9338, 0.5934, 0.32488, 5.0, 0.7562, 0.546, 0.138, 5.0, 0.834714, 0.62931, 0.127549, 5.0, 0.676121, 0.544249, 0.080431, 5.0, 0.808974, 0.44165, 0.144184, 5.0};
+
+	bool hasPoly = false;
+	FMIC_TS ts(cell, symm, types, xyz);
+	auto res = ts.cluster(anchors, 0.5, hasPoly);
+	EXPECT_EQ(res.size(), 24);
+	EXPECT_TRUE(hasPoly);
+}
+
+TEST(CreateClusterTest, SingleNegative) {
+	p_distances = &testdistances;
+	std::array<cpplib::basic_types::FloatingPointType, 6> cell{1.5, 1.5, 1.5, 90.0, 90.0, 90.0};
+	std::vector<const char*> symm{
+		"x, y, z"
+	};
+
+	std::vector<AtomTypeBase> types{6};
+	std::vector<cpplib::basic_types::FloatingPointType> xyz{
+		0, 0, 0
+	};
+
+
+
+
+
+
+	bool hasPoly = false;
+	FMIC_TS ts(cell, symm, types, xyz);
+	std::vector<FloatingPointType> anchors{0, 0, 0, 20.0};
+	auto res1 = ts.cluster(anchors, 3.0, hasPoly);
+	auto res2 = ts.cluster(anchors, 20.0, hasPoly);
+	EXPECT_GT(res2.size(), res1.size());
+	EXPECT_TRUE(hasPoly);
+}
+
 
 
 TEST(CreateClusterTest, Next) {

@@ -34,9 +34,9 @@
 #include "../BaseHeaders/Concepts.h"
 
 namespace cpplib {
-	/// @brief Represents a bond between two atoms identified by their indices
+	/// @brief Represents a bond between two atoms identified by their indexes
 	///
-	/// A Bond stores two atom indices in canonical form (first <= second after validate()).
+	/// A Bond stores two atom indexes in canonical form (first <= second after validate()).
 	/// Bonds are comparable and support validation to ensure consistent ordering.
 	/// This is the base class for bond representations in the cpplib library.
 	struct Bond {
@@ -49,10 +49,10 @@ namespace cpplib {
 		/// @brief Index of the second atom in the bond
 		AtomIndex second = 0;
 
-		/// @brief Default constructor, initializes both indices to 0
+		/// @brief Default constructor, initializes both indexes to 0
 		constexpr Bond() noexcept = default;
 
-		/// @brief Construct a bond from two atom indices
+		/// @brief Construct a bond from two atom indexes
 		/// @param a1 First atom index
 		/// @param a2 Second atom index
 		constexpr Bond(const AtomIndex a1, const AtomIndex a2) noexcept : first(a1), second(a2) {};
@@ -66,7 +66,7 @@ namespace cpplib {
 		/// @brief Validates and normalizes bond ordering (ensures first <= second)
 		///
 		/// This function should be called after construction or modification to ensure
-		/// the bond indices are in canonical form.
+		/// the bond indexes are in canonical form.
 		constexpr void validate() noexcept {
 			if (first > second) ::std::swap(first, second);
 		}
@@ -88,7 +88,7 @@ namespace cpplib {
 	///
 	/// BondEx extends Bond by adding a length field to store the physical distance
 	/// between bonded atoms. Inherits validation and ordering from Bond.
-	/// The equality operator compares only the base Bond (atom indices), while the
+	/// The equality operator compares only the base Bond (atom indexes), while the
 	/// three-way comparison includes the length for complete ordering.
 	struct BondEx : public Bond {
 	public:
@@ -107,7 +107,7 @@ namespace cpplib {
 		constexpr BondEx() = default;
 
 		/// @brief Construct from base Bond and length
-		/// @param bond Base bond with atom indices
+		/// @param bond Base bond with atom indexes
 		/// @param len Bond length
 		///
 		/// Always uses Bond::validate() to ensure canonical ordering.
@@ -120,7 +120,7 @@ namespace cpplib {
 		/// @param a2 Second atom index
 		/// @param l Bond length
 		///
-		/// Automatically orders indices to ensure canonical form (smaller index first).
+		/// Automatically orders indexes to ensure canonical form (smaller index first).
 		constexpr BondEx(AtomIndex a1, AtomIndex a2, LengthType l) noexcept
 			: length(l) {
 			if (a1 < a2) {
@@ -139,7 +139,7 @@ namespace cpplib {
 
 		/// @brief Equality comparison (compares only base Bond, not length)
 		/// @param other BondEx to compare with
-		/// @return True if base bonds (atom indices) are equal
+		/// @return True if base bonds (atom indexes) are equal
 		///
 		/// Note: This comparison ignores the length field for equality testing.
 		constexpr bool operator==(const BondEx& other) const noexcept {
@@ -151,7 +151,7 @@ namespace cpplib {
 		/// @return Comparison result
 		///
 		/// Compares in order:
-		/// 1. Base bond (atom indices)
+		/// 1. Base bond (atom indexes)
 		/// 2. Length (if base bonds are equal)
 		constexpr auto operator<=>(const BondEx& other) const noexcept = default;
 
@@ -202,9 +202,9 @@ namespace cpplib {
 		// Operators
 		/// @brief Equality comparison
 		/// @param other BondWithPoint to compare with
-		/// @return True if both bond indices are equal (ignores shift)
+		/// @return True if both bond indexes are equal (ignores shift)
 		///
-		/// Note: Only compares the base Bond (atom indices), not the shift.
+		/// Note: Only compares the base Bond (atom indexes), not the shift.
 		constexpr bool operator==(const BondWithPoint& other) const noexcept {
 			return Bond::operator==(other);
 		}
