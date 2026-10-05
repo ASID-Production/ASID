@@ -31,6 +31,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstdint>
+#include <filesystem>
 #include <iterator>
 #include <utility>
 #include <vector>
@@ -45,8 +46,66 @@
 
 namespace cpplib {
 
-	// Global vector of RadialSplines of Electron Density
-	inline const auto ElectronDensitySplines = DensityParser::parse_file(".\\ED.txt");
+	/// <summary>
+	/// Singleton holder for the Electron Density (ED) radial splines loaded from ED.txt.
+	/// The only instance is created lazily via ElectronDensity::instance(filename).
+	/// Thread-safe lazy initialization is guaranteed by C++11 magic statics.
+	/// </summary>
+	class ElectronDensity {
+	public:
+		using SplineContainerType = ::std::vector<RadialSpline>;
+
+		ElectronDensity() = delete;
+		ElectronDensity(const ElectronDensity&) = delete;
+		ElectronDensity(ElectronDensity&&) = delete;
+		ElectronDensity& operator=(const ElectronDensity&) = delete;
+		ElectronDensity& operator=(ElectronDensity&&) = delete;
+
+		/// <summary>
+		/// Access to the single global instance.
+		/// </summary>
+		/// <param name="filename">Path to the ED file. Used only on the very first call.</param>
+		static ElectronDensity& instance(const std::filesystem::path& filename = ".\\ED.txt") {
+			static ElectronDensity inst(filename);
+			return inst;
+		}
+
+		/// <summary>
+		/// Check whether the singleton has already been constructed.
+		/// </summary>
+		static bool exists() noexcept {
+			return s_created;
+		}
+
+		const SplineContainerType& splines() const noexcept {
+			return splines_;
+		}
+
+		size_t size() const noexcept {
+			return splines_.size();
+		}
+
+		const RadialSpline& operator[](size_t i) const noexcept {
+			return splines_[i];
+		}
+
+		auto begin() const noexcept { return splines_.begin(); }
+		auto end() const noexcept { return splines_.end(); }
+
+	private:
+		static inline bool s_created = false; // set to true once the singleton is constructed
+
+		explicit ElectronDensity(const std::filesystem::path& filename) : splines_(DensityParser::parse_file(filename)) {
+			s_created = true;
+		}
+
+		SplineContainerType splines_;
+	};
+
+	// Backward-compatible alias: reference to the ED splines owned by the ElectronDensity singleton.
+	// NOTE: touching this variable triggers lazy creation of the singleton (previously it was
+	// created eagerly at program startup as an inline variable).
+	inline const ElectronDensity::SplineContainerType& ElectronDensitySplines = ElectronDensity::instance().splines();
 
 	template <typename T, size_t N = 2>
 	struct PointsSoA {
