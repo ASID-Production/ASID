@@ -29,14 +29,22 @@
 #include <array>
 #include <cassert>
 #include <cstdint>
+#include <filesystem>
 #include <fstream>
+#include <mutex>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 #include "../BaseHeaders/BaseTypes.h"
 #include "../Classes/Geometry.h"
 
 namespace cpplib {
+	/// <summary>
+	/// Singleton holder for bond length limits loaded from BondLength.ini.
+	/// The only instance is created lazily via Distances::instance(filename).
+	/// Copy/move construction and assignment are deleted to guarantee uniqueness.
+	/// </summary>
 	class Distances {
 		// Order of values
 		// 1/1,1/2,1/3,1/4,1/5, 5/5, 2/2,2/3,2/4,2/5, 4/4,4/5, 3/3,3/4,3/5
@@ -55,14 +63,15 @@ namespace cpplib {
 		using AI = basic_types::AtomIndex;
 	private:
 
+		static inline bool s_created = false; // set to true once the singleton is constructed
+
 		DataArray data_{}; // [i][j][0] = min, [i][j][1] = max
 		bool isReady_ = false;
-	public:
-		Distances() = delete;
-		Distances(Distances&&) = delete;
-		Distances(const Distances&) = delete;
+		::std::string filename_;
 
-		explicit Distances(const ::std::string& filename) {
+		// Only Distances::instance() may create the object
+		explicit Distances(const ::std::string& filename) : filename_(filename) {
+			s_created = true;
 			::std::ifstream in(filename);
 			int mt_temp;
 			if (!(in >> mt_temp))
@@ -80,6 +89,37 @@ namespace cpplib {
 			}
 			isReady_ = true;
 		}
+
+	public:
+		Distances() = delete;
+		Distances(Distances&&) = delete;
+		Distances(const Distances&) = delete;
+		Distances& operator=(const Distances&) = delete;
+		Distances& operator=(Distances&&) = delete;
+
+		/// <summary>
+		/// Access to the single global instance (Meyers' singleton).
+		/// Thread-safe initialization is guaranteed by C++11 magic statics.
+		/// </summary>
+		/// <param name="filename">Path to BondLength.ini. Used only on the very first call.</param>
+		/// <returns>Reference to the unique Distances object.</returns>
+		static Distances& instance(const ::std::string& filename = "BondLength.ini") {
+			static Distances inst(filename);
+			return inst;
+		}
+
+		/// <summary>
+		/// Check whether the singleton has already been constructed.
+		/// Useful to avoid throwing from places that must not initialize the data.
+		/// </summary>
+		static bool exists() noexcept {
+			return s_created;
+		}
+
+		const ::std::string& filename() const noexcept {
+			return filename_;
+		}
+
 		inline bool isReady() const {
 			return isReady_;
 		}
