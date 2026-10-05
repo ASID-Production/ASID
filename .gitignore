@@ -1,1 +1,25 @@
-(empty)
+﻿# cpplib ignores
+/.vs
+/out
+/cpplib/.vs
+/cpplib/Tests/.vs
+/module/test.py
+*.datt
+
+# api_database ignores
+/api_database/__pycache__
+*.log
+*.sqlite
+*.sqlite3
+*.sqlite3-journal
+/api_database/env
+.env
+.idea
+*.cif
+/api_database/django_project/data/
+/api_database/django_project/media/
+/api_database/django_project/static/
+migrations/
+
+# general
+/venv
