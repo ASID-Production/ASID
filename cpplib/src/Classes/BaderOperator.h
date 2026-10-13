@@ -41,15 +41,19 @@
 #include <iostream>
 
 
+#include "../Classes/Distances.h"   // get_module_file()/get_module_directory() - module-relative data paths
 #include "../Classes/Reader.h"
 #include "../Classes/Splines.h"
 
 namespace cpplib {
 
 	/// <summary>
-	/// Singleton holder for the Electron Density (ED) radial splines loaded from ED.txt.
-	/// The only instance is created lazily via ElectronDensity::instance(filename).
-	/// Thread-safe lazy initialization is guaranteed by C++11 magic statics.
+	/// Static singleton holder for the Electron Density (ED) radial splines loaded from ED.txt.
+	/// The single instance is created lazily on the first ElectronDensity::instance() call and
+	/// is never constructed eagerly at program startup (the former inline global object was
+	/// removed for this reason). Thread-safe lazy initialization is guaranteed by C++11 magic
+	/// statics. Without an explicit filename the file is looked up next to the starting module,
+	/// exactly the way Distances::instance() resolves BondLength.ini (get_module_file()).
 	/// </summary>
 	class ElectronDensity {
 	public:
@@ -62,11 +66,15 @@ namespace cpplib {
 		ElectronDensity& operator=(ElectronDensity&&) = delete;
 
 		/// <summary>
-		/// Access to the single global instance.
+		/// Access to the single static instance (Meyers' singleton).
+		/// Created lazily on this call, never at program startup.
 		/// </summary>
-		/// <param name="filename">Path to the ED file. Used only on the very first call.</param>
-		static ElectronDensity& instance(const std::filesystem::path& filename = ".\\ED.txt") {
-			static ElectronDensity inst(filename);
+		/// <param name="relpath">Relative path to the ED file, resolved against the
+		/// starting module directory (get_module_directory()), e.g. "module/ED.txt".
+		/// Used only on the very first call (e.g. when the data file lives elsewhere);
+		/// subsequent calls return the already created instance.</param>
+		static ElectronDensity& instance(const std::filesystem::path& relpath = "ED.txt") {
+			static ElectronDensity inst(get_module_file(relpath.string()));
 			return inst;
 		}
 
@@ -102,10 +110,6 @@ namespace cpplib {
 		SplineContainerType splines_;
 	};
 
-	// Backward-compatible alias: reference to the ED splines owned by the ElectronDensity singleton.
-	// NOTE: touching this variable triggers lazy creation of the singleton (previously it was
-	// created eagerly at program startup as an inline variable).
-	inline const ElectronDensity::SplineContainerType& ElectronDensitySplines = ElectronDensity::instance().splines();
 
 	template <typename T, size_t N = 2>
 	struct PointsSoA {
@@ -835,6 +839,9 @@ namespace cpplib {
 		}
 
 		static void OptimizePoint(CriticalPoint& cp, const PointsSoA<value_type>& psoa, value_type end_sq) {
+			// Lazy access to the ED singleton: the splines are loaded on demand,
+			// from the file located next to the starting module.
+			const auto& ElectronDensitySplines = ElectronDensity::instance().splines();
 
 			constexpr value_type SHRINK_FACTOR = 0.7071067811865475;
 			constexpr value_type GROW_FACTOR = 1.15;

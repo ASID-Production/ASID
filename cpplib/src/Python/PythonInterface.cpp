@@ -1,4 +1,4 @@
-﻿// Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
+// Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
 // This file is part of ASID - Atomistic Simulation Instruments and Database
 // For more information see <https://github.com/ASID-Production/ASID>
 //
@@ -29,6 +29,7 @@
 #include <cmath>
 #include <cstddef>
 #include <concepts>
+#include <filesystem>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -48,7 +49,6 @@
 #include "../Classes/Voronoi.h"
 #include "../Python/PythonInterface.h"
 
-extern const cpplib::Distances* p_distances;
 
 using namespace cpplib;
 using namespace cpplib::currents;
@@ -92,9 +92,12 @@ struct Prepare_IC : public Prepare_WC {
 	}
 };
 
-extern "C" {
-	inline static void useDistances(PyObject* self);
-}
+// Lazy singleton accessors: the data files are located next to the starting
+// module (cpplib); instance() resolves the given RELATIVE path against the
+// module directory (platform independent, see cpplib::get_module_directory()).
+constexpr const char* MODULE_DATA_DIR;
+inline static const Distances& useDistances();
+inline static const ElectronDensity& useElectronDensity();
 
 template <char times>
 static std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>, times> FindDParamsParse(PyObject* self, PyObject* oparams, const std::array<int, times + 1> type, char& d) {
@@ -103,14 +106,15 @@ static std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basi
 		value[i].first = static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(oparams, d)));
 		value[i].second = static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(oparams, d + 1)));
 
-		if (value[i].first == 0) {
-			useDistances(self);
-			value[i].first = p_distances->minDistance(static_cast<cpplib::basic_types::AtomTypeBase>(type[i]), static_cast<cpplib::basic_types::AtomTypeBase>(type[i + 1]));
-		}
+		if (value[i].first == 0 || value[i].second == 0) {
+			const auto& distances = useDistances();
+			if (value[i].first == 0) {
+				value[i].first = distances.minDistance(static_cast<cpplib::basic_types::AtomTypeBase>(type[i]), static_cast<cpplib::basic_types::AtomTypeBase>(type[i + 1]));
+			}
 
-		if (value[i].second == 0) {
-			useDistances(self);
-			value[i].second = p_distances->maxDistance(static_cast<cpplib::basic_types::AtomTypeBase>(type[i]), static_cast<cpplib::basic_types::AtomTypeBase>(type[i + 1]));
+			if (value[i].second == 0) {
+				value[i].second = distances.maxDistance(static_cast<cpplib::basic_types::AtomTypeBase>(type[i]), static_cast<cpplib::basic_types::AtomTypeBase>(type[i + 1]));
+			}
 		}
 	}
 	return value;
@@ -192,26 +196,28 @@ extern "C" {
 		}
 		return ErrorState::OK;
 	}
-	inline static void useDistances(PyObject* self) {
-		if (p_distances != nullptr) {
-			return;
-		}
-		Py_ssize_t us;
-		PyObject* file_obj = PyObject_GetAttrString(self, "__file__");
-		std::string full(PyUnicode_AsUTF8AndSize(file_obj, &us));
-		Py_DECREF(file_obj);
+	// Relative location of the data files inside the starting module directory,
+	// e.g. .../site-packages/cpplib/module/BondLength.ini. The absolute path is
+	// resolved by the singletons themselves (cpplib::get_module_directory()),
+	// which is platform independent - no WinAPI involved.
+	inline constexpr const char* MODULE_DATA_DIR = "module";
 
-		auto found = full.find_last_of("\\/");
-		auto bond_filename = full.substr(0, found + 1) + "BondLength.ini";
+	// Lazily create the cpplib::Distances singleton from BondLength.ini located next to
+	// the starting module. Subsequent calls return the same instance without re-loading.
+	inline static const Distances& useDistances() {
+		return Distances::instance(std::filesystem::path(MODULE_DATA_DIR) / "BondLength.ini");
+	}
 
-		static Distances dist(bond_filename);
-		p_distances = &dist;
+	// Lazily create the cpplib::ElectronDensity singleton from ED.txt located next to
+	// the starting module. Subsequent calls return the same instance without re-loading.
+	inline static const ElectronDensity& useElectronDensity() {
+		return ElectronDensity::instance(std::filesystem::path(MODULE_DATA_DIR) / "ED.txt");
 	}
 
 	// Python section
 	static PyObject* cpplib_GenBonds(PyObject* self, PyObject* arg) {
-		useDistances(self);
-		auto& distances = *p_distances;
+		useDistances();
+		auto& distances = useDistances();
 		Prepare_WC all(arg);
 
 		FAM_Struct famstr(std::move(all.types), std::move(all.points));
@@ -223,8 +229,8 @@ extern "C" {
 							 "bonds", lst);
 	}
 	static PyObject* cpplib_GenBondsEx(PyObject* self, PyObject* arg) {
-		useDistances(self);
-		auto& distances = *p_distances;
+		useDistances();
+		auto& distances = useDistances();
 		Prepare_WC all(arg);
 		FAM_Struct famstr(std::move(all.types), std::move(all.points));
 		std::string errM;
@@ -264,7 +270,7 @@ extern "C" {
 
 	static PyObject* cpplib_FindMoleculesInCell(PyObject* self, PyObject* args) {
 		// TODO: Repair memory leaks!
-		useDistances(self);
+		useDistances();
 		PyObject* ocell = NULL;
 		PyObject* osymm = NULL;
 		PyObject* otuple = NULL;
@@ -305,7 +311,7 @@ extern "C" {
 	}
 	static PyObject* cpplib_FindMoleculesWithoutCell(PyObject* self, PyObject* otuple) {
 		// TODO: Repair memory leaks!
-		useDistances(self);
+		useDistances();
 
 		Prepare_WC all(otuple);
 
@@ -750,7 +756,7 @@ extern "C" {
 		if (!PyArg_ParseTuple(args, "OOO", &ocell, &osymm, &otuple)) {
 			Py_RETURN_NONE;
 		}
-		useDistances(self);
+		useDistances();
 
 		Prepare_IC all(ocell, osymm, otuple);
 
@@ -777,7 +783,7 @@ extern "C" {
 		if (!PyArg_ParseTuple(args, "OOOOd", &ocell, &osymm, &otuples, &ocoords, &over_radius)) {
 			Py_RETURN_NONE;
 		}
-		useDistances(self);
+		useDistances();
 
 		LOG_INTERFACE_GUARD("cpplib_Cluster");
 		Prepare_IC all(ocell, osymm, otuples);
@@ -889,8 +895,10 @@ extern "C" {
 		// Expand Point Net
 		// 1. Calculate theoretical radius.
 
-		const auto ED_cutoff = cpplib::BaderOperator::GetOptimalRadius(3.0, 1.0E-6, ElectronDensitySplines, buildresult.atoms.types);
-		const size_t max_type = cpplib::ElectronDensitySplines.size();
+		// Load (once, lazily) the ED singleton from ED.txt located next to the starting module.
+		const auto& ed = useElectronDensity();
+		const auto ED_cutoff = cpplib::BaderOperator::GetOptimalRadius(3.0, 1.0E-6, ed.splines(), buildresult.atoms.types);
+		const size_t max_type = ed.size();
 		const size_t initial_type_size = buildresult.atoms.types.size();
 
 		// 2. Use cutoff for prepare PointsSoA
@@ -901,7 +909,7 @@ extern "C" {
 		std::array<double, 1> array_of_eps{{1.0e-12}};
 		for (auto& cp : critical_points) {
 
-			auto val = CriticalPoint::CalculateEDinPoint(cp.pos_, psoa, cpplib::ElectronDensitySplines);
+			auto val = CriticalPoint::CalculateEDinPoint(cp.pos_, psoa, ed.splines());
 			cp.UpdateVal(val);
 
 			for (double eps:array_of_eps) {
@@ -917,7 +925,7 @@ extern "C" {
 		for (const auto& cp : critical_points) {
 			if (cp.type_ != CriticalPoint::TYPE::B)
 				continue;
-			auto [p1, p2] = cp.CalculatePaths<step>(psoa, cpplib::ElectronDensitySplines);
+			auto [p1, p2] = cp.CalculatePaths<step>(psoa, ed.splines());
 			paths.push_back(p1);
 			paths.push_back(p2);
 		}
