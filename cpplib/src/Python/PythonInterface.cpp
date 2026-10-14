@@ -1,4 +1,4 @@
-// Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
+﻿// Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
 // This file is part of ASID - Atomistic Simulation Instruments and Database
 // For more information see <https://github.com/ASID-Production/ASID>
 //
@@ -92,12 +92,10 @@ struct Prepare_IC : public Prepare_WC {
 	}
 };
 
-// Lazy singleton accessors: the data files are located next to the starting
-// module (cpplib); instance() resolves the given RELATIVE path against the
-// module directory (platform independent, see cpplib::get_module_directory()).
-constexpr const char* MODULE_DATA_DIR;
-inline static const Distances& useDistances();
-inline static const ElectronDensity& useElectronDensity();
+// Lazy singleton accessors are defined below, next to the first use. The data
+// files live in the "module" subdirectory of the starting module; instance()
+// resolves this RELATIVE path against the module directory itself
+// (platform independent, see cpplib::get_module_directory() in Singleton.h).
 
 template <char times>
 static std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>, times> FindDParamsParse(PyObject* self, PyObject* oparams, const std::array<int, times + 1> type, char& d) {
@@ -196,22 +194,18 @@ extern "C" {
 		}
 		return ErrorState::OK;
 	}
-	// Relative location of the data files inside the starting module directory,
-	// e.g. .../site-packages/cpplib/module/BondLength.ini. The absolute path is
-	// resolved by the singletons themselves (cpplib::get_module_directory()),
-	// which is platform independent - no WinAPI involved.
-	inline constexpr const char* MODULE_DATA_DIR = "module";
-
-	// Lazily create the cpplib::Distances singleton from BondLength.ini located next to
-	// the starting module. Subsequent calls return the same instance without re-loading.
+	// Standardized cpplib singletons (SingletonBase): the default RELATIVE path
+	// ("module/BondLength.ini", "module/ED.txt") is part of the singleton interface
+	// itself and is resolved against the starting module directory (platform
+	// independent, cpplib::get_module_directory()). No per-caller path constants:
+	// these accessors just give the Python layer a stable typed reference and
+	// trigger lazy creation on first use; subsequent calls reuse the instance.
 	inline static const Distances& useDistances() {
-		return Distances::instance(std::filesystem::path(MODULE_DATA_DIR) / "BondLength.ini");
+		return Distances::instance();
 	}
 
-	// Lazily create the cpplib::ElectronDensity singleton from ED.txt located next to
-	// the starting module. Subsequent calls return the same instance without re-loading.
 	inline static const ElectronDensity& useElectronDensity() {
-		return ElectronDensity::instance(std::filesystem::path(MODULE_DATA_DIR) / "ED.txt");
+		return ElectronDensity::instance();
 	}
 
 	// Python section

@@ -49,41 +49,18 @@ namespace cpplib {
 
 	/// <summary>
 	/// Static singleton holder for the Electron Density (ED) radial splines loaded from ED.txt.
-	/// The single instance is created lazily on the first ElectronDensity::instance() call and
-	/// is never constructed eagerly at program startup (the former inline global object was
-	/// removed for this reason). Thread-safe lazy initialization is guaranteed by C++11 magic
-	/// statics. Without an explicit filename the file is looked up next to the starting module,
-	/// exactly the way Distances::instance() resolves BondLength.ini (get_module_file()).
+	/// Implements the standardized cpplib singleton interface (SingletonBase): the single
+	/// instance is created lazily on the first ElectronDensity::instance/try_call(relpath)
+	/// call and is never constructed eagerly at program startup (the former inline global
+	/// object was removed for this reason). The RELATIVE path is resolved against the
+	/// starting module directory, exactly the way Distances does; every later call ignores
+	/// the argument and returns the previously loaded version. Loading failures are
+	/// reported through STATE (FILE_NOT_FOUND / BAD_SIZE / ...) instead of exceptions.
+	/// After a successful load the object is immutable — all accessors are const-only.
 	/// </summary>
-	class ElectronDensity {
+	class ElectronDensity : public SingletonBase<ElectronDensity> {
 	public:
 		using SplineContainerType = ::std::vector<RadialSpline>;
-
-		ElectronDensity() = delete;
-		ElectronDensity(const ElectronDensity&) = delete;
-		ElectronDensity(ElectronDensity&&) = delete;
-		ElectronDensity& operator=(const ElectronDensity&) = delete;
-		ElectronDensity& operator=(ElectronDensity&&) = delete;
-
-		/// <summary>
-		/// Access to the single static instance (Meyers' singleton).
-		/// Created lazily on this call, never at program startup.
-		/// </summary>
-		/// <param name="relpath">Relative path to the ED file, resolved against the
-		/// starting module directory (get_module_directory()), e.g. "module/ED.txt".
-		/// Used only on the very first call (e.g. when the data file lives elsewhere);
-		/// subsequent calls return the already created instance.</param>
-		static ElectronDensity& instance(const std::filesystem::path& relpath = "ED.txt") {
-			static ElectronDensity inst(get_module_file(relpath.string()));
-			return inst;
-		}
-
-		/// <summary>
-		/// Check whether the singleton has already been constructed.
-		/// </summary>
-		static bool exists() noexcept {
-			return s_created;
-		}
 
 		const SplineContainerType& splines() const noexcept {
 			return splines_;
@@ -101,14 +78,51 @@ namespace cpplib {
 		auto end() const noexcept { return splines_.end(); }
 
 	private:
-		static inline bool s_created = false; // set to true once the singleton is constructed
+		SplineContainerType splines_;
+		bool isReady_ = false;
 
-		explicit ElectronDensity(const std::filesystem::path& filename) : splines_(DensityParser::parse_file(filename)) {
-			s_created = true;
+		// Reference to the STATE owned by SingletonBase (see Distances for details).
+		::std::reference_wrapper<::std::atomic<STATE>> state_;
+		// Self-contained target for the fallback empty instance (never updated).
+		::std::atomic<STATE> state_holder_{STATE::INVALID_ARGUMENT};
+
+		// Only the standardized singleton interface (SingletonBase<ElectronDensity>)
+		// may create the loaded object. The constructor never throws out: loading
+		// problems are translated into the output STATE code.
+		ElectronDensity(const std::filesystem::path& filename, STATE& state)
+			: SingletonBase(filename), splines_{}, state_(::std::ref(state)) {
+			state_.get() = STATE::OK;
+			try {
+				splines_ = DensityParser::parse_file(filename);
+			} catch (const ::std::exception& e) {
+				state_.get() = state_from_exception(e);
+				splines_.clear();
+				return;
+			}
+			isReady_ = true;
 		}
 
-		SplineContainerType splines_;
+		// Internal plumbing of the standardized singleton interface: rebinds the
+		// object's STATE reference (bound to a scratch variable during
+		// construction) to the long-lived shared atomic. Called by SingletonBase
+		// right after the object is created / reloaded.
+		friend class SingletonBase<ElectronDensity>;
+		void swap_state_target(::std::atomic<STATE>& target) noexcept {
+			state_ = target; // rebinds the reference_wrapper itself
+		}
+
+	public:
+		// Default-constructed EMPTY instance: no data are read. Used only as the
+		// safe fallback by the singleton base when no data could ever be loaded.
+		ElectronDensity() : SingletonBase(std::filesystem::path{}), splines_{}, isReady_(false), state_(state_holder_) {}
+
+		inline bool isReady() const {
+			return isReady_;
+		}
 	};
+
+	// Standardized interface parameter: default relative data path for this singleton.
+	template <> inline constexpr std::string_view default_relpath<ElectronDensity> = "module/ED.txt";
 
 
 	template <typename T, size_t N = 2>
