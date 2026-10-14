@@ -29,23 +29,33 @@
 #include <array>
 #include <cassert>
 #include <cstdint>
+#include <filesystem>
 #include <fstream>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
+
 #include "../BaseHeaders/BaseTypes.h"
 #include "../Classes/Geometry.h"
+#include "../Classes/Singleton.h"
 
 namespace cpplib {
-	class Distances {
+
+	/// <summary>
+	/// Singleton holder for bond length limits loaded from BondLength.ini.
+	/// Implements the standardized cpplib singleton interface (SingletonBase):
+	/// the only instance is created lazily via Distances::instance(relpath),
+	/// never eagerly at program startup; the RELATIVE path is resolved against
+	/// the starting module directory (get_module_directory()).
+	/// Copy/move construction and assignment are deleted (inherited from
+	/// SingletonBase) to guarantee uniqueness.
+	/// </summary>
+	class Distances : public SingletonBase<Distances> {
 		// Order of values
 		// 1/1,1/2,1/3,1/4,1/5, 5/5, 2/2,2/3,2/4,2/5, 4/4,4/5, 3/3,3/4,3/5
 	public:
 		static constexpr size_t MAX_TYPE = cpplib::constants::mend_size - 1;
-
-		struct DistancesException : public ::std::runtime_error {
-			using ::std::runtime_error::runtime_error;
-		};
 
 		using FloatingPointType = basic_types::FloatingPointType;
 		using size_type = int_fast8_t;
@@ -53,37 +63,69 @@ namespace cpplib {
 		using PointType = geometry::Point<FloatingPointType>;
 		using DataArray = ::std::array<::std::array<::std::array<FloatingPointType, 2>, MAX_TYPE + 1>, MAX_TYPE + 1>;
 		using AI = basic_types::AtomIndex;
-	private:
 
+	private:
 		DataArray data_{}; // [i][j][0] = min, [i][j][1] = max
 		bool isReady_ = false;
-	public:
-		Distances() = delete;
-		Distances(Distances&&) = delete;
-		Distances(const Distances&) = delete;
 
-		explicit Distances(const ::std::string& filename) {
+		// Only the standardized singleton interface (SingletonBase<Distances>) may
+		// create the object. The constructor never throws: it reports the outcome
+		// through the output STATE reference (OK / FILE_NOT_FOUND / BAD_SIZE / ...).
+		Distances(const std::filesystem::path& filename, STATE& state)
+			: SingletonBase(filename), data_{} {
+			state = STATE::OK;
 			::std::ifstream in(filename);
+			if (!in.is_open()) {
+				state = STATE::FILE_NOT_FOUND;
+				return;
+			}
 			int mt_temp;
-			if (!(in >> mt_temp))
-				throw DistancesException("Error while reading file " + filename);
-			if (mt_temp > MAX_TYPE) throw DistancesException("MAX_TYPE is greater than " + ::std::to_string(MAX_TYPE));
+			if (!(in >> mt_temp)) {
+				state = in.eof() ? STATE::BAD_SIZE : STATE::IO_ERROR;
+				return;
+			}
+			if (mt_temp < 1 || mt_temp > static_cast<int>(MAX_TYPE)) {
+				state = STATE::BAD_SIZE;
+				return;
+			}
 			int i = 0;
 			int j = 0;
 			FloatingPointType lmin = 0.0f;
 			FloatingPointType lmax = 0.0f;
-			while (in >> i >> j >> lmin >> lmax) {
-				if (i < 1 || j < 1 || i > MAX_TYPE || j > MAX_TYPE)
-					throw DistancesException("File contains incorrect data.");
+			while (in >> std::ws && !in.eof()) {
+				if (!(in >> i >> j >> lmin >> lmax)) {
+					state = STATE::BAD_SIZE;
+					data_ = {};
+					return;
+				}
+				if (i < 1 || j < 1 || i > static_cast<int>(MAX_TYPE) || j > static_cast<int>(MAX_TYPE)) {
+					state = STATE::BAD_CONTENT;
+					data_ = {};
+					return;
+				}
 				data_[i][j] = {lmin, lmax};
 				data_[j][i] = {lmin, lmax}; // symmetric storage
 			}
+			if (!in.eof()) { // partial record at the end of the file
+				state = STATE::BAD_SIZE;
+				data_ = {};
+				return;
+			}
 			isReady_ = true;
 		}
+
+		friend class SingletonBase<Distances>;
+
+	public:
+		// Default-constructed EMPTY instance: value-initializes all data members,
+		// reads nothing. Used only as the safe fallback by the singleton base when
+		// no data could ever be loaded (INVALID_ARGUMENT). Regular users go through
+		// Distances::instance()/try_call() — direct creation stays impossible.
+		Distances() : SingletonBase(std::filesystem::path{}), data_{}, isReady_(false) {}
+
 		inline bool isReady() const {
 			return isReady_;
 		}
-
 		/// <summary>
 		/// Check if the distance is in the bond range
 		/// </summary>
@@ -198,4 +240,7 @@ namespace cpplib {
 			return ret;
 		}
 	};
+
+// Standardized interface parameter: default relative data path for this singleton.
+template <> inline constexpr std::string_view default_relpath<Distances> = "module/BondLength.ini";
 }

@@ -64,6 +64,7 @@ target_link_libraries( ${PROJECT_NAME}
     PRIVATE  
         GTest::gtest_main
         optimizations
+        ${CMAKE_DL_LIBS}
 )
 
 set_target_properties(${PROJECT_NAME} PROPERTIES

@@ -63,7 +63,16 @@ static void ChildThreadFunc(const SearchGraph::RequestGraphType& input, const Se
 static cpplib::DATTuple& ConvertDATTuple(cpplib::DATTuple& dat, const cpplib::FAM_Struct& fs);
 
 
-const Distances* p_distances = nullptr;
+// Bond length data is now provided by the cpplib::Distances singleton
+// (see Distances::instance()). The old global pointer p_distances was removed.
+
+static const Distances* tryDistances() noexcept {
+	try {
+		return &Distances::instance();
+	} catch (...) {
+		return nullptr;
+	}
+}
 
 bool CompareGraph(const char* search1, const char* search2, const bool exact) {
 	SearchGraph graph;
@@ -104,11 +113,12 @@ std::tuple<std::string, std::string, FindMolecules::RightType> FindMoleculesInCe
 																		 std::vector<const char*>& symm,
 																		 cpplib::FAM_Struct::AtomContainerType& types,
 																		 cpplib::FAM_Struct::PointConteinerType& points) {
-	auto& distances = *p_distances;
-	if (p_distances->isReady() == false) {
+	const auto* loaded = tryDistances();
+	if (!loaded) {
 		return std::make_tuple(std::string(), std::string("Error! Could not open BondLength.ini"),
-							  FindMolecules::RightType());
+							FindMolecules::RightType());
 	}
+	const auto& distances = *loaded;
 	FAM_Struct fs;
 	FAM_Cell fc(geometry::Cell(unit_cell, true));
 	ParseData(fs, fc, symm, std::move(types), std::move(points));
@@ -151,12 +161,12 @@ std::tuple<std::string, std::string, FindMolecules::RightType> FindMoleculesInCe
 }
 std::tuple<std::string, std::string, FindMolecules::RightType>  FindMoleculesWithoutCell(cpplib::FAM_Struct::AtomContainerType& types,
 																			  cpplib::FAM_Struct::PointConteinerType& points) {
-	auto& distances = *p_distances;
-
-	if (p_distances->isReady() == false) {
+	const auto* loaded = tryDistances();
+	if (!loaded) {
 		return std::make_tuple(std::string(), std::string("Error! Could not open BondLength.ini"),
-							   FindMolecules::RightType());
+							FindMolecules::RightType());
 	}
+	const auto& distances = *loaded;
 
 	FAM_Struct fs;
 	ParseData(fs, std::move(types), std::move(points));
@@ -307,6 +317,10 @@ cpplib::DATTuple FindDAT_IC(const std::array<cpplib::basic_types::FloatingPointT
 							std::vector<const char*>& symm,
 							cpplib::FAM_Struct::AtomContainerType& types,
 							cpplib::FAM_Struct::PointConteinerType& points) {
+	const auto* distances = tryDistances();
+	if (!distances)
+		return {};
+
 	FAM_Struct fs;
 	FAM_Cell fc(FAM_Cell::base(unit_cell, true));
 	ParseData(fs, fc, symm, std::move(types), std::move(points));
@@ -319,16 +333,20 @@ cpplib::DATTuple FindDAT_IC(const std::array<cpplib::basic_types::FloatingPointT
 	}
 
 	FindGeometry fg(fs);
-	auto Moldat = fg.findMolDAT_Rad(*p_distances);
+	auto Moldat = fg.findMolDAT_Rad(*distances);
 	return ConvertDATTuple(Moldat, fs);
 }
 
 cpplib::DATTuple FindDAT_WC(cpplib::FAM_Struct::AtomContainerType& types,
 							cpplib::FAM_Struct::PointConteinerType& points) {
+	const auto* distances = tryDistances();
+	if (!distances)
+		return {};
+
 	FAM_Struct fs;
 	ParseData(fs, std::move(types), std::move(points));
 	FindGeometry fg(fs);
-	auto Moldat = fg.findMolDAT_Rad(*p_distances);
+	auto Moldat = fg.findMolDAT_Rad(*distances);
 	return ConvertDATTuple(Moldat, fs);
 }
 
@@ -438,10 +456,11 @@ std::tuple<std::vector<cpplib::geometry::Point<FloatingPointType>>, std::list<st
 												const std::vector<const char*>& symm,
 												cpplib::FAM_Struct::AtomContainerType& types,
 												cpplib::FAM_Struct::PointConteinerType& points) {
-	auto& distances = *p_distances;
-	if (p_distances->isReady() == false) {
+	const auto* loaded = tryDistances();
+	if (!loaded) {
 		return std::make_tuple(std::vector<cpplib::geometry::Point<FloatingPointType>>(), std::list<std::string>(1, "Error!Could not open BondLength.ini"));
 	}
+	const auto& distances = *loaded;
 	FAM_Struct fs;
 	FAM_Cell fc(FAM_Cell::base(unit_cell, true));
 	ParseData(fs, fc, symm, std::move(types), std::move(points), false);
@@ -468,10 +487,11 @@ Cluster::ClusterData ClusterCreate(const std::array<cpplib::basic_types::Floatin
 
 	using ShiftType = Cluster::ShiftType;
 
-	if ((p_distances == nullptr) || p_distances->isReady() == false) {
+	const auto* loaded = tryDistances();
+	if (!loaded) {
 		return {};
 	}
-	auto& distances = *p_distances;
+	const auto& distances = *loaded;
 
 	cpplib::geometry::Cell cell(unit_cell);
 	std::vector<geometry::Symm<FloatingPointType>> symms;

@@ -31,6 +31,7 @@
 #include <cassert>
 #include <cmath>
 #include <cstdint>
+#include <filesystem>
 #include <iterator>
 #include <utility>
 #include <vector>
@@ -40,13 +41,77 @@
 #include <iostream>
 
 
+#include "../Classes/Distances.h"   // get_module_file()/get_module_directory() - module-relative data paths
 #include "../Classes/Reader.h"
 #include "../Classes/Splines.h"
 
 namespace cpplib {
 
-	// Global vector of RadialSplines of Electron Density
-	inline const auto ElectronDensitySplines = DensityParser::parse_file(".\\ED.txt");
+	/// <summary>
+	/// Static singleton holder for the Electron Density (ED) radial splines loaded from ED.txt.
+	/// Implements the standardized cpplib singleton interface (SingletonBase): the single
+	/// instance is created lazily on the first ElectronDensity::instance/try_call(relpath)
+	/// call and is never constructed eagerly at program startup (the former inline global
+	/// object was removed for this reason). The RELATIVE path is resolved against the
+	/// loaded module directory, exactly the way Distances does; later calls must
+	/// resolve to the same data file. Loading failures are
+	/// reported through STATE by try_call(), or as exceptions by instance().
+	/// After a successful load the object is immutable — all accessors are const-only.
+	/// </summary>
+	class ElectronDensity : public SingletonBase<ElectronDensity> {
+	public:
+		using SplineContainerType = ::std::vector<RadialSpline>;
+
+		const SplineContainerType& splines() const noexcept {
+			return splines_;
+		}
+
+		size_t size() const noexcept {
+			return splines_.size();
+		}
+
+		const RadialSpline& operator[](size_t i) const noexcept {
+			return splines_[i];
+		}
+
+		auto begin() const noexcept { return splines_.begin(); }
+		auto end() const noexcept { return splines_.end(); }
+
+	private:
+		SplineContainerType splines_;
+		bool isReady_ = false;
+
+		// Only the standardized singleton interface (SingletonBase<ElectronDensity>)
+		// may create the loaded object. The constructor never throws out: loading
+		// problems are translated into the output STATE code.
+		ElectronDensity(const std::filesystem::path& filename, STATE& state)
+			: SingletonBase(filename), splines_{} {
+			state = STATE::OK;
+			try {
+				splines_ = DensityParser::parse_file(filename);
+			} catch (const ::std::exception& e) {
+				state = state_from_exception(e);
+				splines_.clear();
+				return;
+			}
+			isReady_ = true;
+		}
+
+		friend class SingletonBase<ElectronDensity>;
+
+	public:
+		// Default-constructed EMPTY instance: no data are read. Used only as the
+		// safe fallback by the singleton base when no data could ever be loaded.
+		ElectronDensity() : SingletonBase(std::filesystem::path{}), splines_{}, isReady_(false) {}
+
+		inline bool isReady() const {
+			return isReady_;
+		}
+	};
+
+	// Standardized interface parameter: default relative data path for this singleton.
+	template <> inline constexpr std::string_view default_relpath<ElectronDensity> = "module/ED.txt";
+
 
 	template <typename T, size_t N = 2>
 	struct PointsSoA {
@@ -776,6 +841,9 @@ namespace cpplib {
 		}
 
 		static void OptimizePoint(CriticalPoint& cp, const PointsSoA<value_type>& psoa, value_type end_sq) {
+			// Lazy access to the ED singleton: the splines are loaded on demand,
+			// from the file located next to the starting module.
+			const auto& ElectronDensitySplines = ElectronDensity::instance().splines();
 
 			constexpr value_type SHRINK_FACTOR = 0.7071067811865475;
 			constexpr value_type GROW_FACTOR = 1.15;
