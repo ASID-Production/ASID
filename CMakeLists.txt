@@ -71,8 +71,6 @@ add_library(optimizations INTERFACE)
                 -flto
                 -funroll-loops
                 -fprefetch-loop-arrays
-                -fno-exceptions
-                -D_HAS_EXCEPTIONS=0
                 -fno-rtti
                 -ffast-math
             >
@@ -98,10 +96,7 @@ add_library(optimizations INTERFACE)
                 /DNDEBUG
                 /arch:AVX2
                 /fp:fast
-                /D_HAS_EXCEPTIONS=0
-                /EHс-
-                /EHsс-
-                /EHs-
+                /EHsc
                 /GR-
             >
         )
@@ -189,7 +184,7 @@ if(CMAKE_BUILD_TYPE MATCHES Release OR CMAKE_CONFIGURATION_TYPES)
         POSITION_INDEPENDENT_CODE ON
     )
     
-    target_link_libraries(cpplib PRIVATE optimizations)
+    target_link_libraries(cpplib PRIVATE optimizations ${CMAKE_DL_LIBS})
     # ============================================================================
     # Link with Python (Stable ABI / Limited API)
     # ============================================================================

@@ -68,40 +68,38 @@ namespace cpplib {
 		DataArray data_{}; // [i][j][0] = min, [i][j][1] = max
 		bool isReady_ = false;
 
-		// Reference to the STATE owned by SingletonBase (atomic there). Bound in the
-		// ctor init list BEFORE any read of it below — safe for reload(), which
-		// rebinds the reference to its own local variable.
-		::std::reference_wrapper<::std::atomic<STATE>> state_;
-		// Self-contained target for the fallback empty instance (never updated).
-		::std::atomic<STATE> state_holder_{STATE::INVALID_ARGUMENT};
-
 		// Only the standardized singleton interface (SingletonBase<Distances>) may
 		// create the object. The constructor never throws: it reports the outcome
 		// through the output STATE reference (OK / FILE_NOT_FOUND / BAD_SIZE / ...).
 		Distances(const std::filesystem::path& filename, STATE& state)
-			: SingletonBase(filename), data_{}, state_(::std::ref(state)) {
-			state_.get() = STATE::OK;
+			: SingletonBase(filename), data_{} {
+			state = STATE::OK;
 			::std::ifstream in(filename);
 			if (!in.is_open()) {
-				state_.get() = STATE::FILE_NOT_FOUND;
+				state = STATE::FILE_NOT_FOUND;
 				return;
 			}
 			int mt_temp;
 			if (!(in >> mt_temp)) {
-				state_.get() = in.eof() ? STATE::BAD_SIZE : STATE::IO_ERROR;
+				state = in.eof() ? STATE::BAD_SIZE : STATE::IO_ERROR;
 				return;
 			}
-			if (mt_temp > static_cast<int>(MAX_TYPE)) {
-				state_.get() = STATE::BAD_SIZE;
+			if (mt_temp < 1 || mt_temp > static_cast<int>(MAX_TYPE)) {
+				state = STATE::BAD_SIZE;
 				return;
 			}
 			int i = 0;
 			int j = 0;
 			FloatingPointType lmin = 0.0f;
 			FloatingPointType lmax = 0.0f;
-			while (in >> i >> j >> lmin >> lmax) {
+			while (in >> std::ws && !in.eof()) {
+				if (!(in >> i >> j >> lmin >> lmax)) {
+					state = STATE::BAD_SIZE;
+					data_ = {};
+					return;
+				}
 				if (i < 1 || j < 1 || i > static_cast<int>(MAX_TYPE) || j > static_cast<int>(MAX_TYPE)) {
-					state_.get() = STATE::BAD_CONTENT;
+					state = STATE::BAD_CONTENT;
 					data_ = {};
 					return;
 				}
@@ -109,28 +107,21 @@ namespace cpplib {
 				data_[j][i] = {lmin, lmax}; // symmetric storage
 			}
 			if (!in.eof()) { // partial record at the end of the file
-				state_.get() = STATE::BAD_SIZE;
+				state = STATE::BAD_SIZE;
 				data_ = {};
 				return;
 			}
 			isReady_ = true;
 		}
 
-		// Internal plumbing of the standardized singleton interface: rebinds the
-		// object's STATE reference (bound to a scratch variable during
-		// construction) to the long-lived shared atomic. Called by SingletonBase
-		// right after the object is created / reloaded.
 		friend class SingletonBase<Distances>;
-		void swap_state_target(::std::atomic<STATE>& target) noexcept {
-			state_ = target; // rebinds the reference_wrapper itself
-		}
 
 	public:
 		// Default-constructed EMPTY instance: value-initializes all data members,
 		// reads nothing. Used only as the safe fallback by the singleton base when
 		// no data could ever be loaded (INVALID_ARGUMENT). Regular users go through
 		// Distances::instance()/try_call() — direct creation stays impossible.
-		Distances() : SingletonBase(std::filesystem::path{}), data_{}, isReady_(false), state_(state_holder_) {}
+		Distances() : SingletonBase(std::filesystem::path{}), data_{}, isReady_(false) {}
 
 		inline bool isReady() const {
 			return isReady_;

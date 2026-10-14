@@ -28,12 +28,21 @@
 #include <exception>
 #include <filesystem>
 #include <mutex>
-#include <optional>
-#include <source_location>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#else
+#include <dlfcn.h>
+#endif
 
 namespace cpplib {
 
@@ -116,36 +125,51 @@ namespace cpplib {
 	}
 
 	/// <summary>
-	/// Platform-independent location of the starting module (executable / shared
-	/// library) that hosts cpplib code, e.g. .../site-packages/cpplib.
-	/// Uses the C++20 standard reflection std::source_location::current(): it yields
-	/// the path of this very header at compile time - no WinAPI, dladdr or
-	/// compiler-specific intrinsics involved. Data files shipped next to the module
-	/// (module/BondLength.ini, module/ED.txt) are resolved relative to it, not to
-	/// the process CWD. If the location cannot be determined, falls back to the
-	/// current working directory ("."). Computed once on first use (thread-safe
-	/// magic static).
+	/// Absolute directory of the loaded executable or shared library hosting
+	/// cpplib. Uses the native loader at runtime, never a source path or a CWD
+	/// fallback. Failure to locate the module is reported as an exception.
 	/// </summary>
 	inline const std::filesystem::path& get_module_directory() {
 		static const std::filesystem::path dir = [] {
-			const auto refl = std::source_location::current();
-			const std::filesystem::path self(refl.file_name());
-			// Absolute path to this very header proves the module location is known.
-			if (self.is_absolute()) {
-				// <module_dir>/src/Classes/Singleton.h -> <module_dir>
-				return self.parent_path().parent_path().parent_path();
+			static const int anchor = 0;
+#ifdef _WIN32
+			HMODULE module = nullptr;
+			if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+				GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+				reinterpret_cast<LPCWSTR>(&anchor), &module)) {
+				throw std::runtime_error("Could not locate cpplib module");
 			}
-			return std::filesystem::path(".");
+			std::vector<wchar_t> buffer(256);
+			for (;;) {
+				const auto size = GetModuleFileNameW(module, buffer.data(), static_cast<DWORD>(buffer.size()));
+				if (size == 0)
+					throw std::runtime_error("Could not locate cpplib module");
+				if (size < buffer.size())
+					return std::filesystem::path(std::wstring(buffer.data(), size)).parent_path();
+				buffer.resize(buffer.size() * 2);
+			}
+#else
+			Dl_info info{};
+			if (!dladdr(&anchor, &info) || !info.dli_fname || !*info.dli_fname)
+				throw std::runtime_error("Could not locate cpplib module");
+			return std::filesystem::canonical(info.dli_fname).parent_path();
+#endif
 		}();
 		return dir;
 	}
 
 	/// <summary>
-	/// Resolve a relative data-file path against the starting module directory,
-	/// exactly the way SingletonBase::instance() does.
+	/// Resolve data next to the loaded module. The canonical distribution paths
+	/// module/BondLength.ini and module/ED.txt name files in that directory (the
+	/// extension itself is installed in module/). Absolute paths are used as-is.
 	/// </summary>
 	inline std::filesystem::path get_module_file(const std::filesystem::path& relpath) {
-		return get_module_directory() / relpath;
+		if (relpath.empty())
+			return {};
+		if (relpath.is_absolute())
+			return std::filesystem::weakly_canonical(relpath);
+		const auto local = *relpath.begin() == "module" ? relpath.lexically_relative("module") : relpath;
+		return std::filesystem::weakly_canonical(get_module_directory() / local);
 	}
 
 	/// <summary>
@@ -168,20 +192,20 @@ namespace cpplib {
 	///       on the FIRST call only (never eagerly at program startup); the
 	///       RELATIVE path is resolved against the starting module directory
 	///       (get_module_file()) exactly like Distances did before. Every
-	///       subsequent call IGNORES the argument and returns the previously
-	///       loaded version together with its stored state. If loading fails, the
+	///       subsequent call must resolve to the same file, otherwise it returns
+	///       INVALID_ARGUMENT. If loading fails, the
 	///       state is FILE_NOT_FOUND / BAD_SIZE / BAD_CONTENT / IO_ERROR instead
 	///       of an exception being thrown. Thread-safe (mutex-guarded).
 	///   - Derived::instance(relpath = ...) -> const Derived&
 	///       Convenience accessor: same semantics, returns the reference only;
-	///       when the load failed the returned object simply holds no data
-	///       (state() reports why). Use try_call() when the status is needed.
+	///       throws if loading fails or a different path is requested.
+	///       Use try_call() to receive loading errors as STATE values.
 	///   - Derived::state()
 	///       Current STATE of the singleton: OK after a successful load,
 	///       NOT_INITIALIZED before the very first call ("несобран"), or the
 	///       concrete failure code recorded during initialization.
 	///   - Derived::exists()
-	///       true if the instance has already been constructed; never triggers
+	///       true if the instance has been successfully loaded; never triggers
 	///       initialization.
 	///   - Derived::reload(new_relpath) -> STATE
 	///       Test/diagnostic hook: forces the singleton to re-read the data from
@@ -222,36 +246,36 @@ namespace cpplib {
 		/// See the class documentation above for the full contract.
 		/// </summary>
 		/// <param name="relpath">Relative path to the data file, resolved against
-		/// the starting module directory (get_module_directory()). Significant
-		/// only for the very first call.</param>
+		/// the loaded module directory (get_module_directory()). The path
+		/// must match the loaded file on later calls.</param>
 		/// <returns>Reference to the (immutable) singleton and the STATE describing
 		/// whether the data are loaded (OK) or what prevented initialization.</returns>
 		static ::std::pair<const Derived&, STATE> try_call(
 			const std::filesystem::path& relpath = std::filesystem::path(default_relpath<Derived>)) {
-			ensure_(relpath);
-			if (!storage_().has_value()) // INVALID_ARGUMENT: nothing could be loaded
-				return {Empty_<>(), state_()};
-			return {*storage_(), state_()};
+			std::lock_guard lk(mutex_());
+			const auto st = ensure_(relpath);
+			if (st != STATE::OK)
+				return {Empty_(), st};
+			return {*storage_(), st};
 		}
 
 		/// <summary>
-		/// Convenience wrapper over try_call(): returns the reference to the
-		/// immutable singleton. The argument matters only on the first call;
-		/// every later call ignores it and yields the previously loaded version.
-		/// Check state() (or use try_call()) if the load status matters.
+		/// Return the immutable singleton; report load errors and conflicting
+		/// paths as exceptions. Failed initialization can be retried.
 		/// </summary>
 		static const Derived& instance(
 			const std::filesystem::path& relpath = std::filesystem::path(default_relpath<Derived>)) {
-			ensure_(relpath);
-			if (!storage_().has_value())
-				return Empty_<>();
-			return *storage_();
+			auto [object, st] = try_call(relpath);
+			if (st != STATE::OK)
+				throw std::runtime_error(std::string("Could not load singleton data: ") + to_string(st));
+			return object;
 		}
 
 		/// <summary>
 		/// Current state of the singleton: OK after a successful load,
 		/// NOT_INITIALIZED before the first call, or the failure code recorded
-		/// during the last (re)load attempt. Never triggers initialization.
+		/// during initialization. A failed reload preserves an existing OK state.
+		/// Never triggers initialization.
 		/// </summary>
 		static STATE state() noexcept {
 			return state_().load(::std::memory_order_acquire);
@@ -262,7 +286,7 @@ namespace cpplib {
 		/// triggering initialization.
 		/// </summary>
 		static bool exists() noexcept {
-			return state_().load(::std::memory_order_acquire) != STATE::NOT_INITIALIZED;
+			return state_().load(::std::memory_order_acquire) == STATE::OK;
 		}
 
 		/// <summary>
@@ -272,29 +296,8 @@ namespace cpplib {
 		/// state; on failure the previously loaded data remain untouched.
 		/// </summary>
 		static STATE reload(const std::filesystem::path& new_relpath) {
-			const std::filesystem::path absfile = get_module_file(new_relpath);
-			if (absfile.empty())
-				return STATE::INVALID_ARGUMENT;
-			// Scratch state filled in by the fresh object's constructor. It is
-			// copied into the shared atomic while still alive, because the derived
-			// ctor keeps a reference to it only for the duration of construction.
-			STATE st = STATE::ERROR;
-			::std::lock_guard lk(mutex_());
-			try {
-				storage_().emplace(absfile, ::std::ref(st));
-				storage_()->swap_state_target(state_());
-			} catch (...) {
-				// Failed reload must not destroy the previously loaded data:
-				// ensure_() recreates the old instance from the default location
-				// if emplace() left the storage empty.
-				st = state_from_current_exception();
-				ensure_(default_relpath<Derived>);
-				return state_().load(::std::memory_order_acquire);
-			}
-			if (st == STATE::NOT_INITIALIZED)
-				st = STATE::OK; // defensive: ctor forgot to report
-			state_().store(st, ::std::memory_order_release);
-			return st;
+			std::lock_guard lk(mutex_());
+			return load_(new_relpath);
 		}
 
 		/// <summary>
@@ -312,8 +315,8 @@ namespace cpplib {
 
 	private:
 		// One storage + one state + one mutex per Derived instantiation.
-		static ::std::optional<Derived>& storage_() {
-			static ::std::optional<Derived> obj;
+		static ::std::unique_ptr<const Derived>& storage_() {
+			static ::std::unique_ptr<const Derived> obj;
 			return obj;
 		}
 		static ::std::atomic<STATE>& state_() {
@@ -326,8 +329,8 @@ namespace cpplib {
 		}
 
 		/// <summary>
-		/// Fallback object handed out by instance()/try_call() when no data could
-		/// ever be loaded (e.g. INVALID_ARGUMENT with an empty path). A valid
+		/// Fallback object handed out by try_call() when no data could
+		/// be loaded (e.g. INVALID_ARGUMENT with an empty path). A valid
 		/// reference is kept alive for the whole process, so callers that ignore
 		/// the STATE never hit a dangling reference; properly written callers
 		/// check the returned state instead. The derived type must expose a
@@ -342,36 +345,38 @@ namespace cpplib {
 			return holder.value;
 		}
 
-		static void ensure_(const std::filesystem::path& relpath) {
-			// Fast path: already initialized (success OR recorded failure) —
-			// subsequent calls ignore the argument and reuse the loaded version.
-			if (state_().load(::std::memory_order_acquire) != STATE::NOT_INITIALIZED)
-				return;
-			::std::lock_guard lk(mutex_());
-			if (state_().load(::std::memory_order_relaxed) != STATE::NOT_INITIALIZED)
-				return; // another thread won the race
+		// Called under mutex_(). Publish only a fully parsed object; failures
+		// leave an existing object intact and permit a later initialization retry.
+		static STATE load_(const std::filesystem::path& relpath) {
 			STATE st = STATE::ERROR;
-			const std::filesystem::path absfile = relpath.empty() ? std::filesystem::path{}
-			                                                      : get_module_file(relpath);
-			if (absfile.empty()) {
-				st = STATE::INVALID_ARGUMENT;
-			} else {
-				// Scratch state filled in by the constructor; copied into the
-				// shared atomic while still alive (the derived ctor keeps only a
-				// reference to it for the duration of construction).
-				try {
-					storage_().emplace(absfile, ::std::ref(st));
-					// Rebind the object's internal reference from the dead local
-					// scratch to the long-lived shared atomic.
-					storage_()->swap_state_target(state_());
-					if (st == STATE::NOT_INITIALIZED)
-						st = STATE::OK; // defensive: ctor forgot to report
-				} catch (...) {
-					st = state_from_current_exception();
-					storage_().reset();
+			try {
+				const auto absfile = get_module_file(relpath);
+				if (absfile.empty()) {
+					st = STATE::INVALID_ARGUMENT;
+				} else {
+					std::unique_ptr<const Derived> fresh(new Derived(absfile, st));
+					if (st == STATE::OK)
+						storage_() = std::move(fresh);
 				}
+			} catch (...) {
+				st = state_from_current_exception();
 			}
-			state_().store(st, ::std::memory_order_release);
+			if (!storage_())
+				state_().store(st, std::memory_order_release);
+			else
+				state_().store(STATE::OK, std::memory_order_release);
+			return st;
+		}
+
+		static STATE ensure_(const std::filesystem::path& relpath) {
+			if (!storage_())
+				return load_(relpath);
+			try {
+				return get_module_file(relpath) == storage_()->filename()
+					? STATE::OK : STATE::INVALID_ARGUMENT;
+			} catch (...) {
+				return state_from_current_exception();
+			}
 		}
 
 		std::filesystem::path filename_;

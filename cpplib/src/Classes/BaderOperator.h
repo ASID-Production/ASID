@@ -53,9 +53,9 @@ namespace cpplib {
 	/// instance is created lazily on the first ElectronDensity::instance/try_call(relpath)
 	/// call and is never constructed eagerly at program startup (the former inline global
 	/// object was removed for this reason). The RELATIVE path is resolved against the
-	/// starting module directory, exactly the way Distances does; every later call ignores
-	/// the argument and returns the previously loaded version. Loading failures are
-	/// reported through STATE (FILE_NOT_FOUND / BAD_SIZE / ...) instead of exceptions.
+	/// loaded module directory, exactly the way Distances does; later calls must
+	/// resolve to the same data file. Loading failures are
+	/// reported through STATE by try_call(), or as exceptions by instance().
 	/// After a successful load the object is immutable — all accessors are const-only.
 	/// </summary>
 	class ElectronDensity : public SingletonBase<ElectronDensity> {
@@ -81,40 +81,28 @@ namespace cpplib {
 		SplineContainerType splines_;
 		bool isReady_ = false;
 
-		// Reference to the STATE owned by SingletonBase (see Distances for details).
-		::std::reference_wrapper<::std::atomic<STATE>> state_;
-		// Self-contained target for the fallback empty instance (never updated).
-		::std::atomic<STATE> state_holder_{STATE::INVALID_ARGUMENT};
-
 		// Only the standardized singleton interface (SingletonBase<ElectronDensity>)
 		// may create the loaded object. The constructor never throws out: loading
 		// problems are translated into the output STATE code.
 		ElectronDensity(const std::filesystem::path& filename, STATE& state)
-			: SingletonBase(filename), splines_{}, state_(::std::ref(state)) {
-			state_.get() = STATE::OK;
+			: SingletonBase(filename), splines_{} {
+			state = STATE::OK;
 			try {
 				splines_ = DensityParser::parse_file(filename);
 			} catch (const ::std::exception& e) {
-				state_.get() = state_from_exception(e);
+				state = state_from_exception(e);
 				splines_.clear();
 				return;
 			}
 			isReady_ = true;
 		}
 
-		// Internal plumbing of the standardized singleton interface: rebinds the
-		// object's STATE reference (bound to a scratch variable during
-		// construction) to the long-lived shared atomic. Called by SingletonBase
-		// right after the object is created / reloaded.
 		friend class SingletonBase<ElectronDensity>;
-		void swap_state_target(::std::atomic<STATE>& target) noexcept {
-			state_ = target; // rebinds the reference_wrapper itself
-		}
 
 	public:
 		// Default-constructed EMPTY instance: no data are read. Used only as the
 		// safe fallback by the singleton base when no data could ever be loaded.
-		ElectronDensity() : SingletonBase(std::filesystem::path{}), splines_{}, isReady_(false), state_(state_holder_) {}
+		ElectronDensity() : SingletonBase(std::filesystem::path{}), splines_{}, isReady_(false) {}
 
 		inline bool isReady() const {
 			return isReady_;
