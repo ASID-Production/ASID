@@ -594,7 +594,7 @@ class MainWindow(QtWidgets.QMainWindow):
             for i, v in enumerate(l):
                 if isinstance(v, np.ndarray):
                     l[i] = rec(v)
-                elif isinstance(v, np.int32) or isinstance(v, np.intc):
+                elif isinstance(v, np.int32) or isinstance(v, np.intc) or isinstance(v, np.int64):
                     l[i] = int(v)
                 elif isinstance(v, np.float32):
                     l[i] = float(v)
@@ -603,7 +603,7 @@ class MainWindow(QtWidgets.QMainWindow):
         for k in scene_state:
             if isinstance(scene_state[k], np.ndarray):
                 scene_state[k] = scene_state[k].tolist()
-            elif isinstance(scene_state[k], np.int32) or isinstance(scene_state[k], np.intc):
+            if isinstance(scene_state[k], np.int32) or isinstance(scene_state[k], np.intc) or isinstance(scene_state[k], np.int64):
                 scene_state[k] = int(scene_state[k])
             elif isinstance(scene_state[k], np.float32):
                 scene_state[k] = float(scene_state[k])

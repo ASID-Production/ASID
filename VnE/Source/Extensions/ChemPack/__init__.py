@@ -65,8 +65,9 @@ def loadMolSys(molsys, points_lists):
                     atoms_index = model.index(0, 0, by_point=points_lists[1])
                     model.attachObserver(atoms_index, 'Sphere')
                 if points_lists[2] is not None:
-                    bonds_index = model.index(0, 0, by_point=points_lists[2])
-                    model.attachObserver(bonds_index, 'Bond')
+                    for l in points_lists[2].children:
+                        bonds_index = model.index(0, 0, by_point=l)
+                        model.attachObserver(bonds_index, 'Bond')
 
 
 def pars(file, bond=True, root=None):

@@ -13,11 +13,13 @@ for l in selected:
     if isinstance(l, PointsList):
         for p in l.children:
             if p.atom_type and p.atom_type:
+                p.rad = p.parent
                 for obs in p.observers:
                     detach(p, obs.NAME)
         attach(l, 'Sphere')
     else:
         p = l
         if p.atom_type and p.atom_type in isot_types:
+            p.rad = p.parent
             for obs in p.observers:
                 detach(p, obs.NAME)
