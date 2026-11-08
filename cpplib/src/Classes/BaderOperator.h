@@ -41,15 +41,19 @@
 #include <iostream>
 
 
+#include "../Classes/Distances.h"   // get_module_file()/get_module_directory() - module-relative data paths
 #include "../Classes/Reader.h"
 #include "../Classes/Splines.h"
 
 namespace cpplib {
 
 	/// <summary>
-	/// Singleton holder for the Electron Density (ED) radial splines loaded from ED.txt.
-	/// The only instance is created lazily via ElectronDensity::instance(filename).
-	/// Thread-safe lazy initialization is guaranteed by C++11 magic statics.
+	/// Static singleton holder for the Electron Density (ED) radial splines loaded from ED.txt.
+	/// The single instance is created lazily on the first ElectronDensity::instance() call and
+	/// is never constructed eagerly at program startup (the former inline global object was
+	/// removed for this reason). Thread-safe lazy initialization is guaranteed by C++11 magic
+	/// statics. Without an explicit filename the file is looked up next to the starting module,
+	/// exactly the way Distances::instance() resolves BondLength.ini (get_module_file()).
 	/// </summary>
 	class ElectronDensity {
 	public:
@@ -62,11 +66,15 @@ namespace cpplib {
 		ElectronDensity& operator=(ElectronDensity&&) = delete;
 
 		/// <summary>
-		/// Access to the single global instance.
+		/// Access to the single static instance (Meyers' singleton).
+		/// Created lazily on this call, never at program startup.
 		/// </summary>
-		/// <param name="filename">Path to the ED file. Used only on the very first call.</param>
-		static ElectronDensity& instance(const std::filesystem::path& filename = ".\\ED.txt") {
-			static ElectronDensity inst(filename);
+		/// <param name="relpath">Relative path to the ED file, resolved against the
+		/// starting module directory (get_module_directory()), e.g. "module/ED.txt".
+		/// Used only on the very first call (e.g. when the data file lives elsewhere);
+		/// subsequent calls return the already created instance.</param>
+		static ElectronDensity& instance(const std::filesystem::path& relpath = "ED.txt") {
+			static ElectronDensity inst(get_module_file(relpath.string()));
 			return inst;
 		}
 
@@ -89,8 +97,12 @@ namespace cpplib {
 			return splines_[i];
 		}
 
-		auto begin() const noexcept { return splines_.begin(); }
-		auto end() const noexcept { return splines_.end(); }
+		auto begin() const noexcept {
+			return splines_.begin();
+		}
+		auto end() const noexcept {
+			return splines_.end();
+		}
 
 	private:
 		static inline bool s_created = false; // set to true once the singleton is constructed
@@ -102,10 +114,6 @@ namespace cpplib {
 		SplineContainerType splines_;
 	};
 
-	// Backward-compatible alias: reference to the ED splines owned by the ElectronDensity singleton.
-	// NOTE: touching this variable triggers lazy creation of the singleton (previously it was
-	// created eagerly at program startup as an inline variable).
-	inline const ElectronDensity::SplineContainerType& ElectronDensitySplines = ElectronDensity::instance().splines();
 
 	template <typename T, size_t N = 2>
 	struct PointsSoA {
@@ -316,7 +324,7 @@ namespace cpplib {
 				}
 			}
 
-			calculateSpatialIndexes(NEAR/cutoff);
+			calculateSpatialIndexes(NEAR / cutoff);
 			computeRuntimeFlatShifts();
 		}
 
@@ -431,19 +439,19 @@ namespace cpplib {
 		inline PointType FindNextPosition() const {
 			switch (type_) {
 				using enum TYPE;
-				case N:
-					return PartitionedRFO<0>();
-				case B:
-					return PartitionedRFO<1>();
-				case R:
-					return PartitionedRFO<2>();
-				case C:
-					return PartitionedRFO<3>();
+			case N:
+				return PartitionedRFO<0>();
+			case B:
+				return PartitionedRFO<1>();
+			case R:
+				return PartitionedRFO<2>();
+			case C:
+				return PartitionedRFO<3>();
 			}
 			return pos_;
 		}
 		static TripleDouble CalculateEDinPoint(PointType point, const PointsSoA<value_type>& psoa,
-										const std::vector<RadialSpline>& splines) {
+											   const std::vector<RadialSpline>& splines) {
 			TripleDouble result;
 
 			const uint32_t home_cell = psoa.getCellIndexForPoint(point);
@@ -495,7 +503,7 @@ namespace cpplib {
 		template<value_type step_length>
 		std::pair<std::vector<PointType>, std::vector<PointType>> CalculatePaths(
 			const PointsSoA<value_type>& psoa,
-			const std::vector<RadialSpline>& splines) const 
+			const std::vector<RadialSpline>& splines) const
 		{
 			auto shift_pos = GradientPathInitVector(step_length);
 			PointType next_pos = pos_ + shift_pos;
@@ -728,7 +736,7 @@ namespace cpplib {
 				value_type denom = eta - lam[i];
 				if (std::abs(denom) < 1e-10) denom = (denom >= 0)?1e-10:-1e-10;
 
-				value_type c = f[i] / denom; 
+				value_type c = f[i] / denom;
 				dx[0] += c * vecs[i][0];
 				dx[1] += c * vecs[i][1];
 				dx[2] += c * vecs[i][2];
@@ -748,8 +756,8 @@ namespace cpplib {
 		PointType pos_{};
 		TripleDouble value_{};
 	private:
-		mutable std::array<PointType, 3> prev_max_vecs_;   
-		mutable bool mode_following_init_ = false;         
+		mutable std::array<PointType, 3> prev_max_vecs_;
+		mutable bool mode_following_init_ = false;
 	};
 
 	class BaderOperator {
@@ -804,7 +812,7 @@ namespace cpplib {
 
 			// 1. Type B (Bond)
 			for (const auto& poly : vf.polygons) {
-				
+
 				PointType center = (vf.polyhedra[poly.owner_atom].center +
 									vf.polyhedra[poly.other_atom].center +
 									poly.other_shift.get_shift()) * 0.5;
@@ -835,6 +843,9 @@ namespace cpplib {
 		}
 
 		static void OptimizePoint(CriticalPoint& cp, const PointsSoA<value_type>& psoa, value_type end_sq) {
+			// Lazy access to the ED singleton: the splines are loaded on demand,
+			// from the file located next to the starting module.
+			const auto& ElectronDensitySplines = ElectronDensity::instance().splines();
 
 			constexpr value_type SHRINK_FACTOR = 0.7071067811865475;
 			constexpr value_type GROW_FACTOR = 1.15;
@@ -885,7 +896,7 @@ namespace cpplib {
 			}
 			return;
 		}
-		static std::string criticalPointsToPDB_fast(const std::vector<CriticalPoint>&cps) {
+		static std::string criticalPointsToPDB_fast(const std::vector<CriticalPoint>& cps) {
 			static constexpr std::array<const char*, 4> typeToElem = {
 				"C", // N
 				"N", // B
@@ -933,7 +944,7 @@ namespace cpplib {
 		}
 		static void deleteAllDublicates(std::vector<CriticalPoint>& cps, value_type eps) {
 			value_type eps_sq = eps * eps;
-			std::sort(cps.begin(), cps.end(), 
+			std::sort(cps.begin(), cps.end(),
 					  [](const CriticalPoint& a, const CriticalPoint& b) {
 						  return a.pos_[0] < b.pos_[0];
 					  });
@@ -949,7 +960,7 @@ namespace cpplib {
 						break;
 					}
 				}
-			};
+				};
 			for (size_t i = 0; i < cps_s; i++)
 			{
 				if (is_active[i] == false) continue;
