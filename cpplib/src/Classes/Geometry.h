@@ -1697,12 +1697,9 @@ namespace cpplib::geometry {
 			const LocalIdx* __restrict ida = csr_.data.data();
 
 
-			// TODO: Bug : dont use use_pbc==false
-			//const int lo = cfg_.use_pbc?-1:0;
-			//const int hi = cfg_.use_pbc?+1:0;
-			const int lo = -1;
-			const int hi = +1;
-			// End of Bug
+		// Handle PBC flag correctly
+		const int lo = cfg_.use_pbc ? -1 : 0;
+		const int hi = cfg_.use_pbc ? +1 : 0;
 
 			for (int dz = lo; dz <= hi; ++dz) {
 				const int32_t rawz = cz0 + dz;
@@ -1727,9 +1724,9 @@ namespace cpplib::geometry {
 
 						const uint32_t code = shift_code(sx, sy, sz);
 						const PointType sc = geom_.shift_cart[code];
-						const T qsx = qx - sc[0];
-						const T qsy = qy - sc[1];
-						const T qsz = qz - sc[2];
+						const T qsx = qx + sc[0];
+						const T qsy = qy + sc[1];
+						const T qsz = qz + sc[2];
 
 						// Scalar inner loop. SIMD hook: cxa/cya/cza are
 						// contiguous in [beg, end) — load 8 lanes (AVX2) or
@@ -1883,8 +1880,8 @@ namespace cpplib::geometry {
 		}
 
 		static inline int shift_dir(int32_t raw, int32_t m) noexcept {
-			if (raw < 0)  return -1;
-			if (raw >= m) return +1;
+			if (raw < 0)  return +1; // wrap forward
+			if (raw >= m) return -1; // wrap backward
 			return 0;
 		}
 
