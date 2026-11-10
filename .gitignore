@@ -1,10 +1,11 @@
-# cpplib ignores
+﻿# cpplib ignores
 /.vs
 /out
 /cpplib/.vs
 /cpplib/Tests/.vs
 /module/test.py
 *.datt
+__pycache__/
 
 # api_database ignores
 /api_database/__pycache__
