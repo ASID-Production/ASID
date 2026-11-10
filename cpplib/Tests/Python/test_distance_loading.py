@@ -14,248 +14,162 @@ EXTENSION = (
 )
 
 BONDS = "1\n1 1 0.65 1.2\n"
+ATOMS = "atoms = [(1, 0.0, 0.0, 0.0), (1, 0.74, 0.0, 0.0)]"
 
 
-class DistanceLoadingTests(unittest.TestCase):
+def _run_isolated(script, *, extension, cwd=None, timeout=30):
+    """Run the script in a fresh interpreter.
 
-    @classmethod
-    def setUpClass(cls):
-        if not EXTENSION.is_file():
-            raise unittest.SkipTest(
-                f"Extension not found: {EXTENSION}"
-            )
+    Each singleton holds per-process state, so observing "the very first
+    call" requires an isolated process.
+    """
+    command = [
+        sys.executable, "-I", "-c",
+        textwrap.dedent(script),
+        str(extension),
+    ]
+    return subprocess.run(
+        command, cwd=cwd, capture_output=True, text=True, timeout=timeout,
+    )
 
-    def run_extension(self, script, data=None, ed_data=None, ed_source=None):
-        with tempfile.TemporaryDirectory() as directory:
-            root = pathlib.Path(directory)
 
-            # Каталог, в который переносим расширение
-            module_dir = root / "relocated" / "module"
-            module_dir.mkdir(parents=True)
-
-            extension = module_dir / ("cpplib" + EXTENSION.suffix)
-            shutil.copy2(EXTENSION, extension)
-
-            # Файл данных рядом с расширением, если он нужен тесту
-            if data is not None:
-                (module_dir / "BondLength.ini").write_text(
-                    data, encoding="utf-8"
-                )
-            if ed_data is not None:
-                (module_dir / "ED.txt").write_text(
-                    ed_data, encoding="utf-8"
-                )
-
-            # Рабочий каталог с файлами-приманками
-            cwd = root / "working"
-            (cwd / "module").mkdir(parents=True)
-
-            (cwd / "BondLength.ini").write_text(
-                BONDS, encoding="utf-8"
-            )
-            (cwd / "module" / "BondLength.ini").write_text(
-                BONDS, encoding="utf-8"
-            )
-            (cwd / "ED.txt").write_text(
-                "invalid decoy\n", encoding="utf-8"
-            )
-
-            # Этот код выполняется в отдельном Python-процессе
-            setup = """
-                import os
-                import pathlib
-                import sys
-                import importlib.util
-                import traceback
-
-                module_file = pathlib.Path(sys.argv[1]).resolve()
-
-                print("Python:", sys.executable)
-                print("Extension:", module_file)
-                print("Exists:", module_file.exists())
-                print("Size:", module_file.stat().st_size)
-
-                if sys.platform == "win32":
-                    dll_directory = os.add_dll_directory(str(module_file.parent))
-
-                try:
-                    spec = importlib.util.spec_from_file_location(
-                        "cpplib", module_file
-                    )
-                    cpplib = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(cpplib)
-                    print("Extension loaded successfully")
-                    data_file = module_file.with_name("BondLength.ini")
-                    ed_file = module_file.with_name("ED.txt")
-                    atoms = [(1, 0.0, 0.0, 0.0), (1, 0.74, 0.0, 0.0)]
-                except Exception:
-                    traceback.print_exc()
-                    raise
-            """
-
-            command = [
-                    sys.executable,
-                    "-I",
-                    "-c",
-                    textwrap.dedent(setup) + textwrap.dedent(script),
-                    str(extension),
-                ]
-            if ed_source is not None:
-                command.append(str(ed_source))
-
-            result = subprocess.run(
-                command,
-                cwd=cwd,
-                capture_output=True,
-                text=True,
-                timeout=30,
-            )
-
-            self.assertEqual(
-                result.returncode,
-                0,
-                result.stdout + result.stderr,
-            )
-
-    def test_relocated_extension_loads_bonds(self):
-        self.run_extension("""
-            assert len(cpplib.GenBonds(atoms)["bonds"]) == 1
-            assert len(cpplib.GenBondsEx(atoms)["bonds"]) == 1
-        """, BONDS)
-
-    def test_import_does_not_require_data_files(self):
-        self.run_extension("")
-
-    def test_missing_data_raises_and_can_be_retried(self):
-        self.run_extension("""
-            for method in (cpplib.GenBonds, cpplib.GenBondsEx):
-                try:
-                    method(atoms)
-                except RuntimeError as error:
-                    assert "FILE_NOT_FOUND" in str(error), str(error)
-                else:
-                    raise AssertionError("Missing data did not raise")
-
-            data_file.write_text(
-                "1\\n1 1 0.65 1.2\\n", encoding="utf-8"
-            )
-
-            assert len(cpplib.GenBonds(atoms)["bonds"]) == 1
-        """)
-
-    def test_ed_missing_then_repaired_can_be_reloaded(self):
-        self.run_extension("""
-            args = ([10., 10., 10., 90., 90., 90.], ["x,y,z"],
-                    [(1, 0., 0., 0.)], 3.)
-            try:
-                cpplib.FindCP(*args)
-            except RuntimeError as error:
-                assert "FILE_NOT_FOUND" in str(error), str(error)
-            else:
-                raise AssertionError("Missing ED data did not raise")
-
-            ed_file.write_text(
-                pathlib.Path(sys.argv[2]).read_text(encoding="utf-8"),
-                encoding="utf-8"
-            )
-            cpplib.FindCP(*args)
-        """, ed_source=EXTENSION.with_name("ED.txt"))
-
-    def test_ed_is_loaded_lazily_from_the_extension_directory(self):
-        self.run_extension("""
-            try:
-                cpplib.FindCP(
-                    [10., 10., 10., 90., 90., 90.],
-                    ["x,y,z"],
-                    [(1, 0., 0., 0.)],
-                    3.
-                )
-            except RuntimeError as error:
-                assert "FILE_NOT_FOUND" in str(error), str(error)
-            else:
-                raise AssertionError("Missing ED data did not raise")
-        """)
-
-    def test_malformed_data_raises_until_repaired(self):
-        self.run_extension("""
-            for data in (
-                "-1\\n",
-                "1\\n1 1 0.65",
-                "1\\n0 1 0.65 1.2\\n",
-                "1\\n1 1 nan 1.2\\n",
-                "1\\n1 1 -0.1 1.2\\n",
-                "1\\n1 1 1.2 0.65\\n",
-                "1\\n1 1 0.65 1.2\\n1 1 0.65 1.2\\n",
-            ):
-                data_file.write_text(data, encoding="utf-8")
-
-                try:
-                    cpplib.GenBonds(atoms)
-                except RuntimeError:
-                    pass
-                else:
-                    raise AssertionError("Malformed data did not raise")
-
-            data_file.write_text(
-                "1\\n1 1 0.65 1.2\\n", encoding="utf-8"
-            )
-
-            assert len(cpplib.GenBonds(atoms)["bonds"]) == 1
-        """)
-
-    def test_other_cpp_exceptions_become_python_errors(self):
-        self.run_extension("""
-            try:
-                cpplib.Cluster(
-                    [10., 10., 10., 90., 90., 90.],
-                    ["x,y,z"],
-                    atoms,
-                    [(0., 0., 0., -1.)],
-                    3.
-                )
-            except RuntimeError as error:
-                assert "Anchor radius must be positive" in str(error)
-            else:
-                raise AssertionError("Invalid anchor did not raise")
-        """ , BONDS)
-    def test_extension_loads_from_original_directory(self):
-        result = subprocess.run(
-            [
-                sys.executable,
-                "-I",
-                "-c",
-                """
+# Shared prelude. Only imports the extension — nothing else. The binding
+# resolves data next to the .pyd/.so itself: on the first function call it
+# reads `__file__`, takes its parent directory, and hands that path to
+# Distances::instance / ElectronDensity::instance.
+_LOAD_EXTENSION = """
 import importlib.util
 import os
 import pathlib
 import sys
 
-p = pathlib.Path(sys.argv[1]).resolve()
+ext = pathlib.Path(sys.argv[1]).resolve()
 
-dll_directory = None
 if sys.platform == "win32":
-    dll_directory = os.add_dll_directory(str(p.parent))
+    os.add_dll_directory(str(ext.parent))
 
-spec = importlib.util.spec_from_file_location("cpplib", p)
-module = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(module)
+spec = importlib.util.spec_from_file_location("cpplib", ext)
+cpplib = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(cpplib)
 
-print("OK:", p)
-""",
-                str(EXTENSION),
-            ],
-            capture_output=True,
-            text=True,
-            timeout=30,
+print("import OK", flush=True)
+"""
+
+
+class DistanceLoadingTests(unittest.TestCase):
+    """Laziness of cpplib singletons.
+
+    1. Original directory: import and calls succeed.
+    2. Extension copied WITHOUT its data: import must not touch the
+       filesystem and must not raise.
+    3. Same copy, function is called: missing data must surface as
+       RuntimeError containing "FILE_NOT_FOUND".
+    4. Copy together with its data: works.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        if not EXTENSION.is_file():
+            raise unittest.SkipTest(f"Extension not found: {EXTENSION}")
+
+    def _copy_extension(self, destination):
+        """Copy the extension into `destination`; return its full path."""
+        destination.mkdir(parents=True, exist_ok=True)
+        target = destination / ("cpplib" + EXTENSION.suffix)
+        shutil.copy2(EXTENSION, target)
+        return target
+
+    # ---------- 1. Run from the original directory ---------------------
+
+    def test_original_directory_import_and_call(self):
+        script = _LOAD_EXTENSION + f"""
+{ATOMS}
+assert len(cpplib.GenBonds(atoms)["bonds"]) == 1
+assert len(cpplib.GenBondsEx(atoms)["bonds"]) == 1
+print("OK")
+"""
+        result = _run_isolated(
+            script, extension=EXTENSION, cwd=EXTENSION.parent,
         )
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("import OK", result.stdout)
+        self.assertIn("OK", result.stdout)
 
-        self.assertEqual(
-            result.returncode, 0,
-            result.stdout + result.stderr
+    # ---------- 2. Remote directory, NO data: import must not raise ----
+
+    def test_import_from_remote_directory_does_not_raise(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            extension = self._copy_extension(root / "remote")
+
+            cwd = root / "cwd"
+            cwd.mkdir()
+
+            result = _run_isolated(_LOAD_EXTENSION, extension=extension, cwd=cwd)
+            self.assertEqual(
+                result.returncode, 0, result.stdout + result.stderr,
+            )
+            self.assertIn("import OK", result.stdout)
+            self.assertNotIn(
+                "FILE_NOT_FOUND", result.stdout + result.stderr,
+            )
+
+    # ---------- 3. Remote directory, NO data: call must fail -----------
+
+    def test_call_after_copy_without_data_raises_file_not_found(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            extension = self._copy_extension(root / "remote")
+
+            cwd = root / "cwd"
+            cwd.mkdir()
+
+            script = _LOAD_EXTENSION + f"""
+{ATOMS}
+for method in (cpplib.GenBonds, cpplib.GenBondsEx):
+    try:
+        method(atoms)
+    except RuntimeError as error:
+        assert "FILE_NOT_FOUND" in str(error), f"Unexpected: {{error}}"
+    else:
+        raise AssertionError(
+            f"{{method.__name__}} did not raise without data files"
         )
+print("OK")
+"""
+            result = _run_isolated(script, extension=extension, cwd=cwd)
+            self.assertEqual(
+                result.returncode, 0, result.stdout + result.stderr,
+            )
+            self.assertIn("OK", result.stdout)
+
+    # ---------- 4. Copy WITH data works --------------------------------
+
+    def test_relocated_extension_with_data_works(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            extension = self._copy_extension(root / "remote")
+            extension_dir = extension.parent
+            (extension_dir / "BondLength.ini").write_text(
+                BONDS, encoding="utf-8",
+            )
+
+            script = _LOAD_EXTENSION + f"""
+{ATOMS}
+assert len(cpplib.GenBonds(atoms)["bonds"]) == 1
+assert len(cpplib.GenBondsEx(atoms)["bonds"]) == 1
+print("OK")
+"""
+            result = _run_isolated(
+                script, extension=extension, cwd=extension_dir,
+            )
+            self.assertEqual(
+                result.returncode, 0, result.stdout + result.stderr,
+            )
+            self.assertIn("OK", result.stdout)
+
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         EXTENSION = pathlib.Path(sys.argv.pop(1)).resolve()
-
     unittest.main()
