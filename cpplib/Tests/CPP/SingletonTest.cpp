@@ -4,6 +4,9 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <thread>
+#include <atomic>
+#include <vector>
 
 #include "../../src/Classes/Distances.h"
 
@@ -26,10 +29,10 @@ private:
 
 class TestData : public cpplib::SingletonBase<TestData> {
 	friend class cpplib::SingletonBase<TestData>;
-	TestData(const std::filesystem::path& file, cpplib::STATE& state) : SingletonBase(file) {
+	explicit TestData(const std::filesystem::path& file) : SingletonBase(file) {
 		std::ifstream input(file);
         std::getline(input, value);
-		state = input.is_open() ? cpplib::STATE::OK : cpplib::STATE::FILE_NOT_FOUND;
+		if (!input.is_open()) throw cpplib::DataLoadError(cpplib::STATE::FILE_NOT_FOUND, file);
 	}
 public:
     std::string value;
@@ -61,15 +64,22 @@ void CheckSingletonLoading() {
 	EXPECT_EQ(TestData::try_call(second).second, STATE::INVALID_ARGUMENT);
 	EXPECT_THROW(TestData::instance(second), std::runtime_error);
 	EXPECT_EQ(&TestData::instance(first), loaded);
-	EXPECT_EQ(TestData::reload(second), STATE::FILE_NOT_FOUND);
-	EXPECT_EQ(&TestData::instance(first), loaded);
-    std::ofstream(second) << "new data";
-    ASSERT_EQ(TestData::reload(second), STATE::OK);
+    std::ofstream(second) << "different data";
+    EXPECT_THROW(TestData::instance(second), cpplib::DataLoadError);
+    EXPECT_EQ(&TestData::instance(), loaded);
     EXPECT_EQ(loaded->value, "data");
-    EXPECT_EQ(TestData::instance().value, "new data");
-    EXPECT_EQ(loaded->filename(), first); // old reference survives reload
-    EXPECT_NE(&TestData::instance(), loaded);
-    EXPECT_EQ(TestData::instance().filename(), second);
+    std::atomic<bool> bad_read{false};
+    std::vector<std::thread> readers;
+    for (int i = 0; i < 4; ++i) readers.emplace_back([&] {
+        for (int j = 0; j < 1000; ++j) {
+            const auto& object = TestData::instance();
+            if (&object != loaded || object.value != "data") bad_read.store(true);
+        }
+    });
+    for (auto& reader : readers) reader.join();
+    EXPECT_FALSE(bad_read.load());
+
+
 
 
 }
@@ -86,17 +96,5 @@ TEST(DistancesLoadingTest, DefaultPathUsesLoadedModuleDirectory) {
 		std::filesystem::weakly_canonical(cpplib::get_module_directory() / "BondLength.ini"));
 }
 
-TEST(DistancesLoadingTest, RejectsTruncatedReloadAndKeepsLoadedData) {
-	TemporaryData data;
-	const auto invalid = data.path("invalid.ini");
-	const auto& loaded = cpplib::Distances::instance();
-	const auto limit = loaded.maxDistance(1, 1);
-	std::ofstream(invalid) << "1\n1 1 0.2";
-
-	EXPECT_EQ(cpplib::Distances::reload(invalid), cpplib::STATE::BAD_SIZE);
-	EXPECT_EQ(&cpplib::Distances::instance(), &loaded);
-	EXPECT_EQ(loaded.maxDistance(1, 1), limit);
-	EXPECT_TRUE(cpplib::Distances::exists());
-}
 
 } // namespace

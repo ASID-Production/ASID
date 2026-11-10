@@ -98,6 +98,37 @@ print("OK")
         self.assertIn("import OK", result.stdout)
         self.assertIn("OK", result.stdout)
 
+    def test_initialized_calls_do_not_resolve_module_path_again(self):
+        script = _LOAD_EXTENSION + f"""
+{ATOMS}
+cpplib.GenBonds(atoms)
+del cpplib.__file__
+os.chdir(ext.parent.parent)
+assert len(cpplib.GenBonds(atoms)['bonds']) == 1
+assert len(cpplib.GenBondsEx(atoms)['bonds']) == 1
+"""
+        result = _run_isolated(script, extension=EXTENSION)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_failed_initialization_can_retry_after_fixing_data(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            directory = pathlib.Path(tmp)
+            extension = self._copy_extension(directory / "remote")
+            (extension.parent / 'BondLength.ini').write_text('1\n1 1 0.2')
+            script = _LOAD_EXTENSION + f"""
+{ATOMS}
+try:
+    cpplib.GenBonds(atoms)
+except RuntimeError as error:
+    assert 'BAD_SIZE' in str(error)
+else:
+    raise AssertionError('truncated table accepted')
+(ext.parent / 'BondLength.ini').write_text({BONDS!r})
+assert len(cpplib.GenBonds(atoms)['bonds']) == 1
+"""
+            result = _run_isolated(script, extension=extension)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     # ---------- 2. Remote directory, NO data: import must not raise ----
 
     def test_import_from_remote_directory_does_not_raise(self):

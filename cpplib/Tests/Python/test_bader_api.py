@@ -74,6 +74,8 @@ else:
 cpplib.FindCP([4.,4.,4.,90.,90.,90.], ['x,y,z'], [(1,.25,.25,.25)], 6.)
 assert pathlib.Path('CPs.pdb').is_file()
 assert pathlib.Path('paths.pdb').is_file()
+del cpplib.__file__
+cpplib.FindCP([4.,4.,4.,90.,90.,90.], ['x,y,z'], [(1,.25,.25,.25)], 6.)
 print('FindCP OK')
 """
             result = _run_isolated(script, extension=EXTENSION, cwd=tmp, timeout=60)

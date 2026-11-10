@@ -75,7 +75,7 @@ namespace cpplib {
     public:
         [[nodiscard]] static std::vector<RadialSpline> parse_file(const std::filesystem::path& filepath) {
             if (!std::filesystem::is_regular_file(filepath)) {
-                throw std::runtime_error("File not found: " + filepath.string());
+                throw std::runtime_error("File not found");
             }
 
             // 1. Block Binary IO: Determine file size
@@ -88,7 +88,7 @@ namespace cpplib {
             // Open strictly in binary mode to prevent cross-platform issues with \r\n on Windows
             std::ifstream file(filepath, std::ios::binary);
             if (!file.is_open()) {
-                throw std::runtime_error("Failed to open file: " + filepath.string());
+                throw std::runtime_error("Failed to open file");
             }
 
             // Single system call to read the entire file into memory
@@ -134,11 +134,17 @@ namespace cpplib {
                     throw std::runtime_error("Invalid element_no: " + std::to_string(atom.element) + " (expected 1-" + std::to_string(max_element) + ")");
                 }
 
+                if (!std::isfinite(atom.r_min) || !std::isfinite(atom.r_max) ||
+                    !(atom.r_min > 0) || !(atom.r_max > atom.r_min))
+                    throw std::invalid_argument("DensityParser: invalid radii");
+
                 // Read the values array (N_KNOTS elements)
                 const size_t total_values = atom.n_knots;
                 atom.values.resize(atom.n_knots + 1);
                 for (size_t i = 0; i < total_values; ++i) {
                     ptr = parse_value(ptr, end, atom.values[i]);
+                    if (!std::isfinite(atom.values[i]))
+                        throw std::invalid_argument("DensityParser: nonfinite density");
                 }
                 atom.values.back() = 0;
                 if (rs_ret[atom.element].spline.radius() != 0)

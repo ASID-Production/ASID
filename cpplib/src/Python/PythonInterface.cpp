@@ -73,32 +73,52 @@ static double finite_python_number(PyObject* object) {
 struct Prepare_WC {
     std::vector<cpplib::basic_types::AtomTypeBase> types;
     std::vector<cpplib::geometry::Point<FloatingPointType>> points;
-    explicit Prepare_WC(PyObject* tuples) {
-        if (!PyList_Check(tuples)) invalid_python_input(PyExc_TypeError, "atoms must be a list of (type, x, y, z) tuples");
+    explicit Prepare_WC(PyObject* tuples) { parse<false>(tuples); }
+    Prepare_WC(PyObject* tuples, std::true_type) { parse<true>(tuples); }
+private:
+    template <bool Validate>
+    void parse(PyObject* tuples) {
+        // Stable ABI accessors perform their own type/index checks. The fast path
+        // assumes the documented shape and checks only the final conversion error.
+        if constexpr (Validate) {
+            if (!PyList_Check(tuples)) invalid_python_input(PyExc_TypeError, "atoms must be a list");
+        }
         const auto count = PyList_Size(tuples);
-        if (count < 0) invalid_python_input(PyExc_TypeError, "Invalid atom list");
+        if (count < 0) invalid_python_input(PyExc_TypeError, "atoms must be a list");
         types.reserve(static_cast<size_t>(count)); points.reserve(static_cast<size_t>(count));
         for (Py_ssize_t i = 0; i < count; ++i) {
             PyObject* atom = PyList_GetItem(tuples,i);
-            if (!atom || !PyTuple_Check(atom) || PyTuple_Size(atom) != 4)
-                invalid_python_input(PyExc_TypeError, "Each atom must be a (type, x, y, z) tuple");
+            if constexpr (Validate) {
+                if (!atom || !PyTuple_Check(atom) || PyTuple_Size(atom) != 4)
+                    invalid_python_input(PyExc_TypeError, "Each atom must be a (type, x, y, z) tuple");
+            }
             const long type = PyLong_AsLong(PyTuple_GetItem(atom,0));
-            if (PyErr_Occurred()) invalid_python_input(PyExc_TypeError, "Atom type must be an integer");
-            if (type <= 0 || type > static_cast<long>(Distances::MAX_TYPE))
-                invalid_python_input(PyExc_ValueError, "Atom type is outside the supported range");
+            if constexpr (Validate) {
+                if (PyErr_Occurred()) invalid_python_input(PyExc_TypeError, "Atom type must be an integer");
+                if (type <= 0 || type > static_cast<long>(Distances::MAX_TYPE))
+                    invalid_python_input(PyExc_ValueError, "Atom type is outside the supported range");
+            }
             types.push_back(static_cast<AtomTypeBase>(type));
-            const auto x=finite_python_number(PyTuple_GetItem(atom,1));
-            const auto y=finite_python_number(PyTuple_GetItem(atom,2));
-            const auto z=finite_python_number(PyTuple_GetItem(atom,3));
-            points.emplace_back(x,y,z);
+            if constexpr (Validate) {
+                const auto x=finite_python_number(PyTuple_GetItem(atom,1));
+                const auto y=finite_python_number(PyTuple_GetItem(atom,2));
+                const auto z=finite_python_number(PyTuple_GetItem(atom,3));
+                points.emplace_back(x,y,z);
+            } else {
+                const auto x=PyFloat_AsDouble(PyTuple_GetItem(atom,1));
+                const auto y=PyFloat_AsDouble(PyTuple_GetItem(atom,2));
+                const auto z=PyFloat_AsDouble(PyTuple_GetItem(atom,3));
+                points.emplace_back(x,y,z);
+            }
         }
+        if (PyErr_Occurred()) invalid_python_input(PyExc_TypeError, "Invalid atom values");
     }
 };
 struct Prepare_IC : public Prepare_WC {
     std::array<cpplib::basic_types::FloatingPointType,6> cell;
     std::vector<const char*> symm;
     std::vector<std::string> symm_storage;
-    Prepare_IC(PyObject* ocell, PyObject* osymm, PyObject* tuples) : Prepare_WC(tuples) {
+    Prepare_IC(PyObject* ocell, PyObject* osymm, PyObject* tuples) : Prepare_WC(tuples, std::true_type{}) {
         if (!PyList_Check(ocell) || PyList_Size(ocell) != 6)
             invalid_python_input(PyExc_TypeError, "cell must be a list of six numbers");
         for (Py_ssize_t i=0;i<6;++i) cell[i]=finite_python_number(PyList_GetItem(ocell,i));
@@ -155,12 +175,14 @@ static std::filesystem::path python_module_directory(PyObject* self) {
 }
 
 inline static const Distances& useDistances(PyObject* self) {
+    if (Distances::exists()) return Distances::instance();
 	const auto module_directory = python_module_directory(self);
 	set_module_directory(module_directory);
 	return Distances::instance(module_directory / "BondLength.ini");
 }
 
 inline static const ElectronDensity& useElectronDensity(PyObject* self) {
+    if (ElectronDensity::exists()) return ElectronDensity::instance();
 	const auto module_directory = python_module_directory(self);
 	set_module_directory(module_directory);
 	return ElectronDensity::instance(module_directory / "ED.txt");

@@ -33,7 +33,6 @@
 #include <string>
 #include <string_view>
 #include <utility>
-#include <vector>
 
 namespace cpplib {
 	template <typename T>
@@ -77,6 +76,20 @@ namespace cpplib {
 		return "UNKNOWN";
 	}
 
+    class DataLoadError : public std::runtime_error {
+    public:
+        DataLoadError(STATE code, const std::filesystem::path& file, const std::string& detail = {})
+            : std::runtime_error(std::string("Could not load singleton data: ") + to_string(code) +
+                " [" + path_text(file) + "]" + (detail.empty() ? "" : ": " + detail)), code_(code) {}
+        STATE code() const noexcept { return code_; }
+    private:
+        static std::string path_text(const std::filesystem::path& file) {
+            const auto text = file.u8string();
+            return {reinterpret_cast<const char*>(text.data()), text.size()};
+        }
+        STATE code_;
+    };
+
 	inline constexpr bool succeeded(STATE s) noexcept { return s == STATE::OK; }
 
 	/// <summary>
@@ -85,7 +98,8 @@ namespace cpplib {
 	/// of the singleton interface).
 	/// </summary>
 	[[nodiscard]] inline STATE state_from_exception(const std::exception& e) noexcept {
-		const std::string_view what = e.what();
+		if (const auto* error = dynamic_cast<const DataLoadError*>(&e)) return error->code();
+        const std::string_view what = e.what();
 		// DensityParser / ifstream messages produced by cpplib readers:
         if (what.find("read failure") != std::string_view::npos) return STATE::IO_ERROR;
 		if (what.find("File not found") != std::string_view::npos ||
@@ -174,137 +188,47 @@ namespace cpplib {
 		return std::filesystem::weakly_canonical(get_module_directory() / local);
 	}
 
-	/// <summary>
-	/// Standardized interface (CRTP) for every lazy static singleton in cpplib
-	/// that owns read-only data loaded from a file (Distances, ElectronDensity, ...).
-	///
-	/// Contract provided to all derived singletons:
-	///   - Derived::try_call(relpath = default_relpath) -> std::pair<const Derived&, STATE>
-	///       THE primary entry point: exception-free. Creates the instance lazily
-	///       on the FIRST call only (never eagerly at program startup); the
-	///       RELATIVE path is resolved against the starting module directory
-	///       (get_module_file()) exactly like Distances did before. Every
-	///       subsequent call must resolve to the same file, otherwise it returns
-	///       INVALID_ARGUMENT. If loading fails, the
-	///       state is FILE_NOT_FOUND / BAD_SIZE / BAD_CONTENT / IO_ERROR instead
-	///       of an exception being thrown. Thread-safe (mutex-guarded).
-	///   - Derived::instance(relpath = ...) -> const Derived&
-	///       Convenience accessor: same semantics, returns the reference only;
-	///       throws if loading fails or a different path is requested.
-	///       Use try_call() to receive loading errors as STATE values.
-	///   - Derived::state()
-	///       Current STATE of the singleton: OK after a successful load,
-	///       NOT_INITIALIZED before the very first call ("несобран"), or the
-	///       concrete failure code recorded during initialization.
-	///   - Derived::exists()
-	///       true if the instance has been successfully loaded; never triggers
-	///       initialization.
-	///   - Derived::reload(new_relpath) -> STATE
-	///       Test/diagnostic hook: forces the singleton to re-read the data from
-	///       a NEW location (resolved the same way as the initial relpath) and
-	///       updates the stored STATE. Returns the resulting state. On failure
-	///       the previously loaded data stay intact.
-	///   - filename()
-	///       absolute path the data were actually loaded from.
-	///
-	/// Objects are IMMUTABLE after loading: the instance is stored as const and
-	/// all accessors hand out const references only — Distances and ED data are
-	/// read-only by design.
-	///
-	/// Uniqueness guarantees: default construction, copy and move are deleted in
-	/// this base, so the ONLY way to construct the object is via this interface
-	/// (the protected constructor is reachable from Derived alone).
-	///
-	/// How to add a new data singleton:
-	///   class Foo : public cpplib::SingletonBase<Foo> {
-	///       explicit Foo(std::filesystem::path absfile, STATE& st); // loads data,
-	///           // sets st = OK / FILE_NOT_FOUND / BAD_SIZE / ... (must not throw)
-	///       ...data members and CONST accessors...
-	///   };
-	///   template <> inline constexpr std::string_view cpplib::default_relpath<Foo>
-	///       = "module/foo.txt";
-	/// </summary>
-	template <typename Derived>
-	class SingletonBase {
-	public:
-		SingletonBase() = delete;
-		SingletonBase(const SingletonBase&) = delete;
-		SingletonBase(SingletonBase&&) = delete;
-		SingletonBase& operator=(const SingletonBase&) = delete;
-		SingletonBase& operator=(SingletonBase&&) = delete;
+    // Immutable, lazily loaded data. Production access throws on
+    // critical loading failures. try_call is a compatibility/status adapter.
+    // Published once per process lifetime. Initialized access is one acquire
+    // load, and the immutable object lives until process shutdown.
+    template <typename Derived>
+    class SingletonBase {
+    public:
+        SingletonBase() = delete;
+        SingletonBase(const SingletonBase&) = delete;
+        SingletonBase(SingletonBase&&) = delete;
+        SingletonBase& operator=(const SingletonBase&) = delete;
+        SingletonBase& operator=(SingletonBase&&) = delete;
 
-		/// <summary>
-		/// Exception-free standardized access to the unique static instance.
-		/// See the class documentation above for the full contract.
-		/// </summary>
-		/// <param name="relpath">Relative path to the data file, resolved against
-		/// the loaded module directory (get_module_directory()). The path
-		/// must match the loaded file on later calls.</param>
-		/// <returns>Reference to the (immutable) singleton and the STATE describing
-		/// whether the data are loaded (OK) or what prevented initialization.</returns>
-		static ::std::pair<const Derived&, STATE> try_call(
-			const std::filesystem::path& relpath) {
-			std::lock_guard lk(mutex_());
-			const auto st = ensure_(relpath);
-			if (st != STATE::OK)
-				return {Empty_(), st};
-			return {*storage_(), st};
-		}
-
-        // An omitted path means the current data, independent of cwd changes.
-        static std::pair<const Derived&, STATE> try_call() {
-            std::lock_guard lk(mutex_());
-            if (storage_()) return {*storage_(), STATE::OK};
-            const auto st = load_(std::filesystem::path(default_relpath<Derived>));
-            return {st == STATE::OK ? *storage_() : Empty_(), st};
-        }
         static const Derived& instance() {
-            auto [object, st] = try_call();
-            if (st != STATE::OK)
-                throw std::runtime_error(std::string("Could not load singleton data: ") + to_string(st));
-            return object;
+            if (const auto* object = published_().load(std::memory_order_acquire)) return *object;
+            std::lock_guard lock(mutex_());
+            if (!storage_()) load_(std::filesystem::path(default_relpath<Derived>));
+            return *storage_();
         }
+        static const Derived& instance(const std::filesystem::path& relpath) {
+            std::lock_guard lock(mutex_());
+            if (!storage_()) load_(relpath);
+            else {
+                const auto request = normalized_(relpath);
+                if (relpath.empty() || (request != request_key_() &&
+                    (module_key_() / request).lexically_normal() != storage_()->filename()))
+                    throw DataLoadError(STATE::INVALID_ARGUMENT, relpath);
+            }
+            return *storage_();
+        }
+        static std::pair<const Derived&, STATE> try_call() {
+            try { return {instance(), STATE::OK}; }
+            catch (...) { return {Empty_(), state_from_current_exception()}; }
+        }
+        static std::pair<const Derived&, STATE> try_call(const std::filesystem::path& relpath) {
+            try { return {instance(relpath), STATE::OK}; }
+            catch (...) { return {Empty_(), state_from_current_exception()}; }
+        }
+        static STATE state() noexcept { return state_().load(std::memory_order_acquire); }
+        static bool exists() noexcept { return published_().load(std::memory_order_acquire) != nullptr; }
 
-		/// <summary>
-		/// Return the immutable singleton; report load errors and conflicting
-		/// paths as exceptions. Failed initialization can be retried.
-		/// </summary>
-		static const Derived& instance(
-			const std::filesystem::path& relpath) {
-			auto [object, st] = try_call(relpath);
-			if (st != STATE::OK)
-				throw std::runtime_error(std::string("Could not load singleton data: ") + to_string(st));
-			return object;
-		}
-
-		/// <summary>
-		/// Current state of the singleton: OK after a successful load,
-		/// NOT_INITIALIZED before the first call, or the failure code recorded
-		/// during initialization. A failed reload preserves an existing OK state.
-		/// Never triggers initialization.
-		/// </summary>
-		static STATE state() noexcept {
-			return state_().load(::std::memory_order_acquire);
-		}
-
-		/// <summary>
-		/// Check whether the singleton has already been constructed, without
-		/// triggering initialization.
-		/// </summary>
-		static bool exists() noexcept {
-			return state_().load(::std::memory_order_acquire) == STATE::OK;
-		}
-
-		/// <summary>
-		/// Test/diagnostic helper: force the singleton to re-read its data from a
-		/// NEW relative location (resolved against the module directory like the
-		/// initial path does) and refresh the stored STATE. Returns the resulting
-		/// state; on failure the previously loaded data remain untouched.
-		/// </summary>
-		static STATE reload(const std::filesystem::path& new_relpath) {
-			std::lock_guard lk(mutex_());
-			return load_(new_relpath);
-		}
 
 		/// <summary>
 		/// Absolute path of the data file the singleton was created from.
@@ -314,9 +238,7 @@ namespace cpplib {
 		}
 
 	protected:
-		// The derived constructor receives the resolved absolute file path and an
-		// output STATE reference it must fill in (OK on success, otherwise the
-		// concrete failure code). It must not throw for expected failures.
+		// Derived loads the resolved absolute file, throwing on critical failures.
 		explicit SingletonBase(std::filesystem::path absfile) : filename_(::std::move(absfile)) {}
 
 	private:
@@ -325,12 +247,6 @@ namespace cpplib {
 			static ::std::unique_ptr<const Derived> obj;
 			return obj;
 		}
-        // Raw references escape the API: no bounded safe reclamation period exists.
-        // Keep previous immutable generations alive until process shutdown.
-        static std::vector<std::unique_ptr<const Derived>>& retired_() {
-            static std::vector<std::unique_ptr<const Derived>> objects;
-            return objects;
-        }
         static std::filesystem::path& module_key_() {
             static std::filesystem::path directory;
             return directory;
@@ -344,6 +260,11 @@ namespace cpplib {
             if (!local.empty() && *local.begin() == "module")
                 local = local.lexically_relative("module");
             return local;
+        }
+
+        static std::atomic<const Derived*>& published_() {
+            static std::atomic<const Derived*> object{nullptr};
+            return object;
         }
 
 		static ::std::atomic<STATE>& state_() {
@@ -372,53 +293,29 @@ namespace cpplib {
 			return holder.value;
 		}
 
-		// Called under mutex_(). Publish only a fully parsed object; failures
-		// leave an existing object intact and permit a later initialization retry.
-		static STATE load_(const std::filesystem::path& relpath) {
-            if (relpath.empty()) {
-                if (!storage_()) state_().store(STATE::INVALID_ARGUMENT, std::memory_order_release);
-                return STATE::INVALID_ARGUMENT;
-            }
-			STATE st = STATE::ERROR_STATE;
-			try {
-				auto directory = get_module_directory();
+        // Called under mutex_(), only until the first successful load. Failures
+        // leave no object published and can be retried on the next call.
+        static void load_(const std::filesystem::path& relpath) {
+            try {
+                if (relpath.empty()) throw DataLoadError(STATE::INVALID_ARGUMENT, relpath);
+                auto directory = get_module_directory();
                 auto request = normalized_(relpath);
-                const auto absfile = relpath.empty() ? std::filesystem::path{} :
-                    std::filesystem::weakly_canonical(directory / request);
-				if (absfile.empty()) {
-					st = STATE::INVALID_ARGUMENT;
-				} else {
-					std::unique_ptr<const Derived> fresh(new Derived(absfile, st));
-					if (st == STATE::OK) {
-                        if (storage_()) retired_().push_back(std::move(storage_()));
-                        module_key_().swap(directory);
-                        request_key_().swap(request);
-                        storage_() = std::move(fresh);
-                    }
-				}
-			} catch (...) {
-				st = state_from_current_exception();
-			}
-			if (!storage_())
-				state_().store(st, std::memory_order_release);
-			else
-				state_().store(STATE::OK, std::memory_order_release);
-			return st;
-		}
-
-		static STATE ensure_(const std::filesystem::path& relpath) {
-			if (!storage_())
-				return load_(relpath);
-			try {
-				if (relpath.empty()) return STATE::INVALID_ARGUMENT;
-                const auto request = normalized_(relpath);
-                return (request == request_key_() ||
-                    (module_key_() / request).lexically_normal() == storage_()->filename())
-					? STATE::OK : STATE::INVALID_ARGUMENT;
-			} catch (...) {
-				return state_from_current_exception();
-			}
-		}
+                const auto absfile = std::filesystem::weakly_canonical(directory / request);
+                std::unique_ptr<const Derived> fresh(new Derived(absfile));
+                module_key_().swap(directory);
+                request_key_().swap(request);
+                storage_() = std::move(fresh);
+                state_().store(STATE::OK, std::memory_order_release);
+                published_().store(storage_().get(), std::memory_order_release);
+            } catch (const DataLoadError& error) {
+                if (!published_().load(std::memory_order_relaxed)) state_().store(error.code(), std::memory_order_release);
+                throw;
+            } catch (const std::exception& error) {
+                const auto code = state_from_exception(error);
+                if (!published_().load(std::memory_order_relaxed)) state_().store(code, std::memory_order_release);
+                throw DataLoadError(code, relpath, error.what());
+            }
+        }
 
 		std::filesystem::path filename_;
 	};

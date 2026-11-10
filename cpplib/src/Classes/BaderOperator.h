@@ -94,21 +94,8 @@ namespace cpplib {
 		SplineContainerType splines_;
 		bool isReady_ = false;
 
-		// Only the standardized singleton interface (SingletonBase<ElectronDensity>)
-		// may create the loaded object. The constructor never throws out: loading
-		// problems are translated into the output STATE code.
-		ElectronDensity(const std::filesystem::path& filename, STATE& state)
-			: SingletonBase(filename), splines_{} {
-			state = STATE::OK;
-			try {
-				splines_ = DensityParser::parse_file(filename);
-			} catch (const ::std::exception& e) {
-				state = state_from_exception(e);
-				splines_.clear();
-				return;
-			}
-			isReady_ = true;
-		}
+        explicit ElectronDensity(const std::filesystem::path& filename)
+            : SingletonBase(filename), splines_(DensityParser::parse_file(filename)), isReady_(true) {}
 
 		friend class SingletonBase<ElectronDensity>;
 		ElectronDensity() : SingletonBase(std::filesystem::path{}), splines_{}, isReady_(false) {}

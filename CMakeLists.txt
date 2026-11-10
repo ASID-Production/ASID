@@ -26,7 +26,7 @@
 #
 # ******************************************************************************************
 
-cmake_minimum_required(VERSION 3.12)
+cmake_minimum_required(VERSION 3.18)
 
 # ============================================================================
 # Project and basic options
@@ -46,9 +46,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # ============================================================================
 # Politics
 # ============================================================================
-if(CMAKE_VERSION VERSION_LESS 3.15)
-    message(STATUS "CMake version 3.15+ recommended")
-endif()
 if(POLICY CMP0141)
     cmake_policy(SET CMP0141 NEW)
     set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT
@@ -63,7 +60,7 @@ add_library(optimizations INTERFACE)
 option(CPPLIB_NATIVE_CPU "Optimize Release builds for the local CPU" OFF)
 option(CPPLIB_ENABLE_IPO "Enable interprocedural optimization when supported" OFF)
 if(MSVC)
-    target_compile_options(optimizations INTERFACE /fp:precise
+    target_compile_options(optimizations INTERFACE /fp:precise /EHsc
         $<$<CONFIG:Release>:/O2>)
     if(CPPLIB_NATIVE_CPU)
         target_compile_options(optimizations INTERFACE $<$<CONFIG:Release>:/arch:AVX2>)
@@ -89,9 +86,9 @@ message(STATUS "cpplib: precise floating point; native CPU=${CPPLIB_NATIVE_CPU};
 # Python options
 # ============================================================================
 if(WIN32)
-    find_package(Python COMPONENTS Interpreter Development EXACT 3.10 REQUIRED)
+    find_package(Python 3.10 EXACT COMPONENTS Interpreter Development REQUIRED)
 else()
-    find_package(Python COMPONENTS Interpreter Development REQUIRED)
+    find_package(Python 3.10 COMPONENTS Interpreter Development.Module REQUIRED)
 endif()
 
 message(STATUS "Python version: ${Python_VERSION}")
@@ -162,7 +159,10 @@ if(WIN32)
     # Stable ABI targets the selected release interpreter in every C++ config.
     target_link_libraries(cpplib PRIVATE ${PYTHON_SABI_LIBRARY_RELEASE})
 else()
-    target_link_libraries(cpplib PRIVATE ${Python_LIBRARIES})
+    # Extension symbols resolve against the hosting interpreter. Linking an
+    # embedding libpython3.x here would pin a nominally Stable ABI module to x.
+    # Python::Module also supplies macOS dynamic_lookup linker options.
+    target_link_libraries(cpplib PRIVATE Python::Module)
 endif()
 
 # ============================================================================

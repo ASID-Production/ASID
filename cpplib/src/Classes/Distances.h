@@ -70,61 +70,31 @@ namespace cpplib {
 		DataArray data_{}; // [i][j][0] = min, [i][j][1] = max
 		bool isReady_ = false;
 
-		// Only the standardized singleton interface (SingletonBase<Distances>) may
-		// create the object. The constructor never throws: it reports the outcome
-		// through the output STATE reference (OK / FILE_NOT_FOUND / BAD_SIZE / ...).
-		Distances(const std::filesystem::path& filename, STATE& state)
-			: SingletonBase(filename), data_{} {
-			state = STATE::OK;
-			::std::ifstream in(filename);
-			if (!in.is_open()) {
-				state = STATE::FILE_NOT_FOUND;
-				return;
-			}
-			int mt_temp;
-			if (!(in >> mt_temp)) {
-				state = in.eof() ? STATE::BAD_SIZE : STATE::IO_ERROR;
-				return;
-			}
-			if (mt_temp < 1 || mt_temp > static_cast<int>(MAX_TYPE)) {
-				state = STATE::BAD_SIZE;
-				return;
-			}
-			int i = 0;
-			int j = 0;
-			FloatingPointType lmin = 0.0f;
-			FloatingPointType lmax = 0.0f;
-		std::array<std::array<bool, MAX_TYPE + 1>, MAX_TYPE + 1> seen{};
-			while (in >> std::ws && !in.eof()) {
-				if (!(in >> i >> j >> lmin >> lmax)) {
-				state = in.bad() ? STATE::IO_ERROR : (in.eof() ? STATE::BAD_SIZE : STATE::BAD_CONTENT);
-					data_ = {};
-					return;
-				}
-			if (i < 1 || j < 1 || i > mt_temp || j > mt_temp ||
-				!std::isfinite(lmin) || !std::isfinite(lmax) || lmin < 0 || lmax < lmin ||
-				seen[i][j] || seen[j][i]) {
-					state = STATE::BAD_CONTENT;
-					data_ = {};
-					return;
-				}
-			seen[i][j] = true;
-			seen[j][i] = true;
-				data_[i][j] = {lmin, lmax};
-				data_[j][i] = {lmin, lmax}; // symmetric storage
-			}
-		if (in.bad()) {
-			state = STATE::IO_ERROR;
-			data_ = {};
-			return;
-		}
-			if (!in.eof()) { // partial record at the end of the file
-				state = STATE::BAD_SIZE;
-				data_ = {};
-				return;
-			}
-			isReady_ = true;
-		}
+        // Data files are validated once, before publishing immutable bond limits.
+        explicit Distances(const std::filesystem::path& filename)
+            : SingletonBase(filename), data_{} {
+            std::ifstream in(filename);
+            if (!in.is_open()) throw DataLoadError(STATE::FILE_NOT_FOUND, filename);
+            int count = 0;
+            if (!(in >> count)) throw DataLoadError(in.eof() ? STATE::BAD_SIZE : STATE::IO_ERROR, filename);
+            if (count < 1 || count > static_cast<int>(MAX_TYPE)) throw DataLoadError(STATE::BAD_SIZE, filename);
+            int i = 0, j = 0;
+            FloatingPointType minimum = 0, maximum = 0;
+            std::array<std::array<bool, MAX_TYPE + 1>, MAX_TYPE + 1> seen{};
+            while (in >> std::ws && !in.eof()) {
+                if (!(in >> i >> j >> minimum >> maximum))
+                    throw DataLoadError(in.bad() ? STATE::IO_ERROR : (in.eof() ? STATE::BAD_SIZE : STATE::BAD_CONTENT), filename);
+                if (i < 1 || j < 1 || i > count || j > count ||
+                    !std::isfinite(minimum) || !std::isfinite(maximum) || minimum < 0 || maximum < minimum || seen[i][j])
+                    throw DataLoadError(STATE::BAD_CONTENT, filename);
+                seen[i][j] = seen[j][i] = true;
+                data_[i][j] = data_[j][i] = {minimum, maximum};
+            }
+            if (in.bad()) throw DataLoadError(STATE::IO_ERROR, filename);
+            if (!in.eof()) throw DataLoadError(STATE::BAD_SIZE, filename);
+            isReady_ = true;
+        }
+
 		Distances() : SingletonBase(std::filesystem::path{}), data_{}, isReady_(false) {}
 
 	public:
@@ -196,10 +166,13 @@ namespace cpplib {
 			return data_[a1][a2][1];
 		}
 
+        enum class BondFilter { BondsOnly, Contacts };
+
 		std::vector<geometry::SG<FloatingPointType>::BondWithShift> filter_bond_list(
 			const std::vector<geometry::SG<FloatingPointType>::BondWithShift>& bondlist,
 			const ::std::vector<AtomTypeBase>& types,
-			const ::std::vector<PointType>& points) const
+			const ::std::vector<PointType>& points,
+            BondFilter mode = BondFilter::BondsOnly) const
 		{
 			std::vector<geometry::SG<FloatingPointType>::BondWithShift> ret;
 			ret.reserve(points.size() << 3);
@@ -210,7 +183,7 @@ namespace cpplib {
 
 				char is_real_bond = isBond(types[l1], types[l2], sqrt(bond.dist_sq));
 
-				if (is_real_bond == 1) {
+				if (mode == BondFilter::Contacts ? is_real_bond != 0 : is_real_bond == 1) {
 					ret.push_back(bond);
 				}
 			}
@@ -222,7 +195,7 @@ namespace cpplib {
 			const std::vector<geometry::SpatialGrid<FloatingPointType>::BondWithShift>& bondlist,
 			const ::std::vector<AtomTypeBase>& types,
 			const ::std::vector<PointType>& points,
-			Func dist) const noexcept 
+			Func dist, BondFilter mode = BondFilter::BondsOnly) const
 		{
 			auto iter = ::std::begin(bondlist);
 
@@ -241,7 +214,7 @@ namespace cpplib {
 
 				char is_real_bond = isBond(types[l1], types[l2], dist(points[l1], moved_point2));
 
-				if (is_real_bond == 1) {
+				if (mode == BondFilter::Contacts ? is_real_bond != 0 : is_real_bond == 1) {
 					ret.push_back(*iter);
 				}
 

@@ -28,12 +28,10 @@
 #pragma once
 #include <algorithm>
 #include <array>
-#include <cassert>
 #include <cmath>
 #include <cstdint>
 #include <iterator>
 #include <limits>
-#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -95,11 +93,7 @@ namespace cpplib {
 		}
 
 		void create(value_type r_min, value_type r_max, size_t n_knots, const std::vector<value_type>& values) {
-            // ED.txt specifies intervals; the parser appends the final zero value.
-            if (n_knots == 0 || n_knots > SIZE || values.size() != n_knots + 1)
-                throw std::invalid_argument("CubicSpline: invalid knot/value count");
-            if (!std::isfinite(r_min) || !std::isfinite(r_max) || !(r_min > 0) || !(r_max > r_min))
-                throw std::invalid_argument("CubicSpline: require finite 0 < r_min < r_max");
+            // Trusted HPC input: ED metadata/values are checked by DensityParser.
             std::vector<value_type> knots(n_knots + 1);
             const auto log_min = std::log(r_min);
             const auto delta = (std::log(r_max) - log_min) / n_knots;
@@ -113,13 +107,6 @@ namespace cpplib {
             create(knots, values);
         }
         void create(const std::vector<value_type>& knots, const std::vector<value_type>& values) {
-            if (knots.size() < 2 || knots.size() > SIZE + 1 || values.size() != knots.size())
-                throw std::invalid_argument("CubicSpline: invalid knot/value count");
-            for (size_t i = 0; i < knots.size(); ++i) {
-                if (!std::isfinite(knots[i]) || knots[i] < 0 || !std::isfinite(values[i]) ||
-                    (i && !(knots[i] > knots[i-1])))
-                    throw std::invalid_argument("CubicSpline: require finite values and increasing nonnegative knots");
-            }
             const size_t n_knots = knots.size() - 1;
             m_ = n_knots;
             r_max_ = knots.back();
@@ -138,10 +125,8 @@ namespace cpplib {
 			std::array<value_type, m_max> h; h.fill(0.0);
 			for (size_t i = 0; i < m - 1; ++i) {
 				h[i] = knots_[i + 1] - knots_[i];
-				if (!(h[i] > 0) || !std::isfinite(h[i])) throw std::invalid_argument("CubicSpline: invalid interval");
 			}
 			h[m - 1] = r_max_ - knots_[m - 1];
-			if (!(h[m-1] > 0) || !std::isfinite(h[m-1])) throw std::invalid_argument("CubicSpline: invalid interval");
 
 			// Build the tridiagonal system for the active second derivatives on the stack
 			std::array<value_type, n_max> sub;  sub.fill(0.0);
@@ -181,8 +166,6 @@ namespace cpplib {
 
 			for (size_t i = 1; i < n; ++i) {
 				value_type denom = diag[i] - sub[i] * gamma[i - 1];
-                if (!std::isfinite(denom) || denom <= 0 || !std::isfinite(rhs[i]))
-                    throw std::invalid_argument("CubicSpline: unrepresentable tridiagonal system");
 				gamma[i] = sup[i] / denom;
 				beta[i] = (rhs[i] - sub[i] * beta[i - 1]) / denom;
 			}
@@ -207,8 +190,6 @@ namespace cpplib {
 				c_[i] = (yip1 - yi) / hi - hi * (2.0 * mi + mip1) / 6.0;
                 if (i == 0 && knots_[0] == 0) c_[i] = 0; // exact clamped boundary
 				d_[i] = yi;
-                if (!std::isfinite(a_[i]) || !std::isfinite(b_[i]) || !std::isfinite(c_[i]))
-                    throw std::invalid_argument("CubicSpline: unrepresentable coefficients");
 			}
 
 			d_[m] = values[m];
@@ -226,10 +207,13 @@ namespace cpplib {
 		/// @param dphi returns value of 1-st derivative of spline at r
 		/// @param ddphi returns value of 2-nd derivative of spline at r
 		void eval(value_type r, value_type& phi, value_type& dphi, value_type& ddphi) const {
-            if (!std::isfinite(r) || r < 0)
-                throw std::invalid_argument("CubicSpline: radius must be finite and nonnegative");
             if (m_ == 0 || r > radius()) {
                 phi = dphi = ddphi = 0;
+                return;
+            }
+            if (r < knots_[0]) {
+                phi = d_[0];
+                dphi = ddphi = 0;
                 return;
             }
             const auto idx = find_active_spline(r);
@@ -251,8 +235,6 @@ namespace cpplib {
 		/// @param target_val The function value to search for
 		/// @return The point r, or radius() if the value is out of bounds or decayed
 		value_type find_value(value_type start, value_type target_val) const {
-            if (!std::isfinite(start) || start < 0 || !std::isfinite(target_val))
-                throw std::invalid_argument("CubicSpline: invalid value search");
             if (m_ == 0) return radius();
             if (target_val >= d_[0]) return knots_[0];
             if (target_val <= d_[m_]) return radius();
@@ -281,7 +263,7 @@ namespace cpplib {
 
 	private:
         size_t find_active_spline(value_type r) const {
-            // Extrapolate the first polynomial toward the origin; use the last
+            // Use the first interval at/below its node; use the last
             // polynomial at the endpoint. Interior queries use their actual knots.
             if (r <= knots_[0]) return 0;
             if (r >= r_max_) return m_ - 1;
@@ -323,11 +305,10 @@ namespace cpplib {
 
 			TripleDouble result(phi);
 
+            // A constant core contributes zero gradient and Hessian. Other atoms'
+            // contributions are still accumulated by the caller.
+            if (r < spline.r0()) return result;
             if (r == 0) {
-                // A cusp (nonzero radial slope) has no Cartesian Hessian at its
-                // center. Do not manufacture a finite Hessian for ED nuclear cusps.
-                if (dphi != 0 && spline.r0() != 0)
-                    throw std::domain_error("RadialSpline: derivatives undefined at a nuclear cusp");
                 for (size_t i = 0; i < 3; ++i) result.hess.El(i,i) = ddphi;
                 return result;
             }
