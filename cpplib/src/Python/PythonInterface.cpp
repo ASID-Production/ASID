@@ -92,13 +92,37 @@ struct Prepare_IC : public Prepare_WC {
 	}
 };
 
-// Data paths are resolved next to the loaded extension by SingletonBase.
-inline static const Distances& useDistances() {
-	return Distances::instance();
+static std::filesystem::path python_module_directory(PyObject* self) {
+	PyObject* file = PyObject_GetAttrString(self, "__file__");
+	if (!file)
+		throw std::runtime_error("Cannot determine cpplib Python module path");
+	if (!PyUnicode_Check(file)) {
+		Py_DECREF(file);
+		throw std::runtime_error("cpplib Python module __file__ is not a string");
+	}
+	Py_ssize_t filename_size = 0;
+	const char* filename = PyUnicode_AsUTF8AndSize(file, &filename_size);
+	if (!filename) {
+		Py_DECREF(file);
+		throw std::runtime_error("Cannot read cpplib Python module path");
+	}
+	const std::filesystem::path module_file(std::string(filename, static_cast<size_t>(filename_size)));
+	Py_DECREF(file);
+	if (module_file.empty())
+		throw std::runtime_error("cpplib Python module path is empty");
+	return std::filesystem::absolute(module_file).parent_path();
 }
 
-inline static const ElectronDensity& useElectronDensity() {
-	return ElectronDensity::instance();
+inline static const Distances& useDistances(PyObject* self) {
+	const auto module_directory = python_module_directory(self);
+	set_module_directory(module_directory);
+	return Distances::instance(module_directory / "BondLength.ini");
+}
+
+inline static const ElectronDensity& useElectronDensity(PyObject* self) {
+	const auto module_directory = python_module_directory(self);
+	set_module_directory(module_directory);
+	return ElectronDensity::instance(module_directory / "ED.txt");
 }
 
 template <PyObject* (*Entry)(PyObject*, PyObject*)>
@@ -121,7 +145,7 @@ static std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basi
 		value[i].second = static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(oparams, d + 1)));
 
 		if (value[i].first == 0 || value[i].second == 0) {
-			const auto& distances = useDistances();
+			const auto& distances = useDistances(self);
 			if (value[i].first == 0) {
 				value[i].first = distances.minDistance(static_cast<cpplib::basic_types::AtomTypeBase>(type[i]), static_cast<cpplib::basic_types::AtomTypeBase>(type[i + 1]));
 			}
@@ -210,27 +234,9 @@ extern "C" {
 		}
 		return ErrorState::OK;
 	}
-	// Relative location of the data files inside the starting module directory,
-	// e.g. .../site-packages/cpplib/module/BondLength.ini. The absolute path is
-	// resolved by the singletons themselves (cpplib::get_module_directory()),
-	// which is platform independent - no WinAPI involved.
-	inline constexpr const char* MODULE_DATA_DIR = "module";
-
-	// Lazily create the cpplib::Distances singleton from BondLength.ini located next to
-	// the starting module. Subsequent calls return the same instance without re-loading.
-	inline static const Distances& useDistances() {
-		return Distances::instance(std::filesystem::path(MODULE_DATA_DIR) / "BondLength.ini");
-	}
-
-	// Lazily create the cpplib::ElectronDensity singleton from ED.txt located next to
-	// the starting module. Subsequent calls return the same instance without re-loading.
-	inline static const ElectronDensity& useElectronDensity() {
-		return ElectronDensity::instance(std::filesystem::path(MODULE_DATA_DIR) / "ED.txt");
-	}
-
 	// Python section
 	static PyObject* cpplib_GenBonds(PyObject* self, PyObject* arg) {
-		const auto& distances = useDistances();
+		const auto& distances = useDistances(self);
 		Prepare_WC all(arg);
 
 		FAM_Struct famstr(std::move(all.types), std::move(all.points));
@@ -242,7 +248,7 @@ extern "C" {
 							 "bonds", lst);
 	}
 	static PyObject* cpplib_GenBondsEx(PyObject* self, PyObject* arg) {
-		const auto& distances = useDistances();
+		const auto& distances = useDistances(self);
 		Prepare_WC all(arg);
 		FAM_Struct famstr(std::move(all.types), std::move(all.points));
 		std::string errM;
@@ -282,7 +288,7 @@ extern "C" {
 
 	static PyObject* cpplib_FindMoleculesInCell(PyObject* self, PyObject* args) {
 		// TODO: Repair memory leaks!
-		useDistances();
+		useDistances(self);
 		PyObject* ocell = NULL;
 		PyObject* osymm = NULL;
 		PyObject* otuple = NULL;
@@ -323,7 +329,7 @@ extern "C" {
 	}
 	static PyObject* cpplib_FindMoleculesWithoutCell(PyObject* self, PyObject* otuple) {
 		// TODO: Repair memory leaks!
-		useDistances();
+		useDistances(self);
 
 		Prepare_WC all(otuple);
 
@@ -609,6 +615,7 @@ extern "C" {
 		if (!PyArg_ParseTuple(args, "OOO", &ocell, &osymm, &otuples)) {
 			Py_RETURN_NONE;
 		}
+		useDistances(self);
 		Prepare_IC all(ocell, osymm, otuples);
 
 		auto dat = FindDAT_IC(all.cell, all.symm, all.types, all.points);
@@ -650,6 +657,7 @@ extern "C" {
 		return ret;
 	}
 	static PyObject* cpplib_FindDAT_WC(PyObject* self, PyObject* otuples) {
+		useDistances(self);
 
 		Prepare_WC all(otuples);
 
@@ -768,7 +776,7 @@ extern "C" {
 		if (!PyArg_ParseTuple(args, "OOO", &ocell, &osymm, &otuple)) {
 			Py_RETURN_NONE;
 		}
-		useDistances();
+		useDistances(self);
 
 		Prepare_IC all(ocell, osymm, otuple);
 
@@ -795,7 +803,7 @@ extern "C" {
 		if (!PyArg_ParseTuple(args, "OOOOd", &ocell, &osymm, &otuples, &ocoords, &over_radius)) {
 			Py_RETURN_NONE;
 		}
-		useDistances();
+		useDistances(self);
 
 		LOG_INTERFACE_GUARD("cpplib_Cluster");
 		Prepare_IC all(ocell, osymm, otuples);
@@ -908,7 +916,7 @@ extern "C" {
 		// 1. Calculate theoretical radius.
 
 		// Load (once, lazily) the ED singleton from ED.txt located next to the starting module.
-		const auto& ed = useElectronDensity();
+		const auto& ed = useElectronDensity(self);
 		const auto ED_cutoff = cpplib::BaderOperator::GetOptimalRadius(3.0, 1.0E-6, ed.splines(), buildresult.atoms.types);
 		const size_t max_type = ed.size();
 		const size_t initial_type_size = buildresult.atoms.types.size();

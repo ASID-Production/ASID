@@ -28,13 +28,14 @@
 #pragma once
 #include <array>
 #include <cassert>
+#include <cmath>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <mutex>
-#include <source_location>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -42,58 +43,13 @@
 #include "../Classes/Geometry.h"
 #include "../Classes/Singleton.h"
 
-// Friend class allowed to call the private Distances constructor.
-// Production code never constructs Distances directly (instance() only);
-// test translation units may redefine this macro before including the header.
-#ifndef CPPLIB_TEST_ACCESS
-#define CPPLIB_TEST_ACCESS ::cpplib::detail::DistancesFactory
-#endif
-
 namespace cpplib {
-	namespace detail {
-		struct DistancesFactory {}; // placeholder friend, replaced in tests via CPPLIB_TEST_ACCESS
-	}
-
-	/// <summary>
-	/// Platform-independent location of the starting module (executable / shared
-	/// library) that hosts cpplib code, e.g. .../site-packages/cpplib.
-	/// Uses the C++20 standard reflection std::source_location::current(): when
-	/// called from a function defined in a cpplib translation unit at program
-	/// startup (before main), it yields the path of the starting module itself -
-	/// no WinAPI, dladdr or compiler-specific intrinsics involved.
-	/// Data files shipped next to the module (BondLength.ini, ED.txt) are resolved
-	/// relative to it, not to the process CWD. If the location cannot be determined,
-	/// falls back to the current working directory (".").
-	/// Computed once on first use (thread-safe magic static).
-	/// </summary>
-	inline const std::filesystem::path& get_module_directory() {
-		static const std::filesystem::path dir = [] {
-			const auto refl = std::source_location::current();
-			const std::filesystem::path self(refl.file_name());
-			// Absolute path to this very header proves the module location is known.
-			if (self.is_absolute()) {
-				// <module_dir>/src/Classes/Distances.h -> <module_dir>
-				return self.parent_path().parent_path().parent_path();
-			}
-			return std::filesystem::path(".");
-		}();
-		return dir;
-	}
-
-	/// <summary>
-	/// Resolve a data file name relative to the starting module directory,
-	/// exactly the way Distances::instance() does by default.
-	/// </summary>
-	inline std::filesystem::path get_module_file(const std::string& filename) {
-		return get_module_directory() / filename;
-	}
+	class Distances;
+	template <> inline constexpr std::string_view default_relpath<Distances> = "module/BondLength.ini";
 
 	/// <summary>
 	/// Singleton holder for bond length limits loaded from BondLength.ini.
-	/// The only instance is created lazily via Distances::instance(filename),
-	/// never eagerly at program startup. Without an explicit filename the file is
-	/// looked up next to the starting module (see get_module_directory()).
-	/// Copy/move construction and assignment are deleted to guarantee uniqueness.
+	/// Data is loaded lazily through SingletonBase on first access.
 	/// </summary>
 	class Distances : public SingletonBase<Distances> {
 		// Order of values
@@ -109,6 +65,8 @@ namespace cpplib {
 		using AI = basic_types::AtomIndex;
 
 	private:
+		friend class SingletonBase<Distances>;
+
 		DataArray data_{}; // [i][j][0] = min, [i][j][1] = max
 		bool isReady_ = false;
 
@@ -136,20 +94,30 @@ namespace cpplib {
 			int j = 0;
 			FloatingPointType lmin = 0.0f;
 			FloatingPointType lmax = 0.0f;
+		std::array<std::array<bool, MAX_TYPE + 1>, MAX_TYPE + 1> seen{};
 			while (in >> std::ws && !in.eof()) {
 				if (!(in >> i >> j >> lmin >> lmax)) {
-					state = STATE::BAD_SIZE;
+				state = in.bad() ? STATE::IO_ERROR : (in.eof() ? STATE::BAD_SIZE : STATE::BAD_CONTENT);
 					data_ = {};
 					return;
 				}
-				if (i < 1 || j < 1 || i > static_cast<int>(MAX_TYPE) || j > static_cast<int>(MAX_TYPE)) {
+			if (i < 1 || j < 1 || i > mt_temp || j > mt_temp ||
+				!std::isfinite(lmin) || !std::isfinite(lmax) || lmin < 0 || lmax < lmin ||
+				seen[i][j] || seen[j][i]) {
 					state = STATE::BAD_CONTENT;
 					data_ = {};
 					return;
 				}
+			seen[i][j] = true;
+			seen[j][i] = true;
 				data_[i][j] = {lmin, lmax};
 				data_[j][i] = {lmin, lmax}; // symmetric storage
 			}
+		if (in.bad()) {
+			state = STATE::IO_ERROR;
+			data_ = {};
+			return;
+		}
 			if (!in.eof()) { // partial record at the end of the file
 				state = STATE::BAD_SIZE;
 				data_ = {};
@@ -157,42 +125,13 @@ namespace cpplib {
 			}
 			isReady_ = true;
 		}
+		Distances() : SingletonBase(std::filesystem::path{}), data_{}, isReady_(false) {}
 
 	public:
-		Distances() = delete;
 		Distances(Distances&&) = delete;
 		Distances(const Distances&) = delete;
 		Distances& operator=(const Distances&) = delete;
 		Distances& operator=(Distances&&) = delete;
-
-		/// <summary>
-		/// Access to the single global instance (Meyers' singleton).
-		/// Thread-safe initialization is guaranteed by C++11 magic statics.
-		/// </summary>
-		/// <param name="relpath">Relative path to BondLength.ini, resolved against the
-		/// starting module directory (get_module_directory()), e.g. "module/BondLength.ini".
-		/// Used only on the very first call (e.g. from tests or when the data file lives
-		/// elsewhere); subsequent calls return the already created instance.</param>
-		/// <returns>Reference to the unique Distances object.</returns>
-		static Distances& instance(const std::filesystem::path& relpath = "BondLength.ini") {
-			static Distances inst(get_module_file(relpath.string()));
-			return inst;
-		}
-
-		/// <summary>
-		/// Check whether the singleton has already been constructed.
-		/// Useful to avoid throwing from places that must not initialize the data.
-		/// </summary>
-		static bool exists() noexcept {
-			return s_created;
-		}
-
-	public:
-		// Default-constructed EMPTY instance: value-initializes all data members,
-		// reads nothing. Used only as the safe fallback by the singleton base when
-		// no data could ever be loaded (INVALID_ARGUMENT). Regular users go through
-		// Distances::instance()/try_call() — direct creation stays impossible.
-		Distances() : SingletonBase(std::filesystem::path{}), data_{}, isReady_(false) {}
 
 		inline bool isReady() const {
 			return isReady_;
@@ -312,6 +251,4 @@ namespace cpplib {
 		}
 	};
 
-// Standardized interface parameter: default relative data path for this singleton.
-template <> inline constexpr std::string_view default_relpath<Distances> = "module/BondLength.ini";
 }

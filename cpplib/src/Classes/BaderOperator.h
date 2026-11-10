@@ -37,6 +37,7 @@
 #include <vector>
 
 #include <string>
+#include <string_view>
 #include <format>
 #include <iostream>
 
@@ -46,6 +47,8 @@
 #include "../Classes/Splines.h"
 
 namespace cpplib {
+	class ElectronDensity;
+	template <> inline constexpr std::string_view default_relpath<ElectronDensity> = "module/ED.txt";
 
 	/// <summary>
 	/// Static singleton holder for the Electron Density (ED) radial splines loaded from ED.txt.
@@ -62,31 +65,10 @@ namespace cpplib {
 	public:
 		using SplineContainerType = ::std::vector<RadialSpline>;
 
-		ElectronDensity() = delete;
 		ElectronDensity(const ElectronDensity&) = delete;
 		ElectronDensity(ElectronDensity&&) = delete;
 		ElectronDensity& operator=(const ElectronDensity&) = delete;
 		ElectronDensity& operator=(ElectronDensity&&) = delete;
-
-		/// <summary>
-		/// Access to the single static instance (Meyers' singleton).
-		/// Created lazily on this call, never at program startup.
-		/// </summary>
-		/// <param name="relpath">Relative path to the ED file, resolved against the
-		/// starting module directory (get_module_directory()), e.g. "module/ED.txt".
-		/// Used only on the very first call (e.g. when the data file lives elsewhere);
-		/// subsequent calls return the already created instance.</param>
-		static ElectronDensity& instance(const std::filesystem::path& relpath = "ED.txt") {
-			static ElectronDensity inst(get_module_file(relpath.string()));
-			return inst;
-		}
-
-		/// <summary>
-		/// Check whether the singleton has already been constructed.
-		/// </summary>
-		static bool exists() noexcept {
-			return s_created;
-		}
 
 		const SplineContainerType& splines() const noexcept {
 			return splines_;
@@ -128,20 +110,13 @@ namespace cpplib {
 		}
 
 		friend class SingletonBase<ElectronDensity>;
-
-	public:
-		// Default-constructed EMPTY instance: no data are read. Used only as the
-		// safe fallback by the singleton base when no data could ever be loaded.
 		ElectronDensity() : SingletonBase(std::filesystem::path{}), splines_{}, isReady_(false) {}
 
+	public:
 		inline bool isReady() const {
 			return isReady_;
 		}
 	};
-
-	inline const ElectronDensity::SplineContainerType& ElectronDensitySplines = ElectronDensity::instance().splines();
-	inline const ElectronDensity::SplineContainerType& ElectronDensitySplines = ElectronDensity::instance().splines();
-	inline const ElectronDensity::SplineContainerType& ElectronDensitySplines = ElectronDensity::instance().splines();
 
 	template <typename T, size_t N = 2>
 	struct PointsSoA {
@@ -169,8 +144,8 @@ namespace cpplib {
 
 		using PointType = geometry::Point<T>;
 
-		static constexpr size_t NEAR = N;
-		static constexpr size_t DIM = NEAR * 2 + 1;
+		static constexpr size_t NEIGHBORHOOD_RADIUS = N;
+		static constexpr size_t DIM = NEIGHBORHOOD_RADIUS * 2 + 1;
 		static constexpr size_t TOTAL_SHIFTS = DIM * DIM * DIM;
 
 		template<typename I>
@@ -184,9 +159,9 @@ namespace cpplib {
 					const size_t jdim = j * DIM;
 					for (int k = 0; k < DIM; k++) {
 						result[idim2 + jdim + k] =
-							LocalPointType(i - static_cast<int>(NEAR),
-										   j - static_cast<int>(NEAR),
-										   k - static_cast<int>(NEAR));
+							LocalPointType(i - static_cast<int>(NEIGHBORHOOD_RADIUS),
+											   j - static_cast<int>(NEIGHBORHOOD_RADIUS),
+											   k - static_cast<int>(NEIGHBORHOOD_RADIUS));
 					}
 				}
 			}
@@ -352,7 +327,7 @@ namespace cpplib {
 				}
 			}
 
-			calculateSpatialIndexes(NEAR / cutoff);
+			calculateSpatialIndexes(NEIGHBORHOOD_RADIUS / cutoff);
 			computeRuntimeFlatShifts();
 		}
 
@@ -402,8 +377,8 @@ namespace cpplib {
 
 			size_t i = 0;
 
-			constexpr int32_t pos_n = static_cast<int32_t>(NEAR);
-			constexpr int32_t neg_n = -static_cast<int32_t>(NEAR);
+			constexpr int32_t pos_n = static_cast<int32_t>(NEIGHBORHOOD_RADIUS);
+			constexpr int32_t neg_n = -static_cast<int32_t>(NEIGHBORHOOD_RADIUS);
 
 			for (int32_t dz = neg_n; dz <= pos_n; ++dz) {
 				int32_t offset_z = dz * s_z;

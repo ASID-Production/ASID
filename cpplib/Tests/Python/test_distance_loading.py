@@ -25,7 +25,7 @@ class DistanceLoadingTests(unittest.TestCase):
                 f"Extension not found: {EXTENSION}"
             )
 
-    def run_extension(self, script, data=None):
+    def run_extension(self, script, data=None, ed_data=None, ed_source=None):
         with tempfile.TemporaryDirectory() as directory:
             root = pathlib.Path(directory)
 
@@ -40,6 +40,10 @@ class DistanceLoadingTests(unittest.TestCase):
             if data is not None:
                 (module_dir / "BondLength.ini").write_text(
                     data, encoding="utf-8"
+                )
+            if ed_data is not None:
+                (module_dir / "ED.txt").write_text(
+                    ed_data, encoding="utf-8"
                 )
 
             # Рабочий каталог с файлами-приманками
@@ -57,7 +61,7 @@ class DistanceLoadingTests(unittest.TestCase):
             )
 
             # Этот код выполняется в отдельном Python-процессе
-            setup = setup = """
+            setup = """
                 import os
                 import pathlib
                 import sys
@@ -71,7 +75,8 @@ class DistanceLoadingTests(unittest.TestCase):
                 print("Exists:", module_file.exists())
                 print("Size:", module_file.stat().st_size)
 
-                dll_directory = os.add_dll_directory(str(module_file.parent))
+                if sys.platform == "win32":
+                    dll_directory = os.add_dll_directory(str(module_file.parent))
 
                 try:
                     spec = importlib.util.spec_from_file_location(
@@ -80,19 +85,26 @@ class DistanceLoadingTests(unittest.TestCase):
                     cpplib = importlib.util.module_from_spec(spec)
                     spec.loader.exec_module(cpplib)
                     print("Extension loaded successfully")
+                    data_file = module_file.with_name("BondLength.ini")
+                    ed_file = module_file.with_name("ED.txt")
+                    atoms = [(1, 0.0, 0.0, 0.0), (1, 0.74, 0.0, 0.0)]
                 except Exception:
                     traceback.print_exc()
                     raise
             """
 
-            result = subprocess.run(
-                [
+            command = [
                     sys.executable,
                     "-I",
                     "-c",
                     textwrap.dedent(setup) + textwrap.dedent(script),
                     str(extension),
-                ],
+                ]
+            if ed_source is not None:
+                command.append(str(ed_source))
+
+            result = subprocess.run(
+                command,
                 cwd=cwd,
                 capture_output=True,
                 text=True,
@@ -111,6 +123,9 @@ class DistanceLoadingTests(unittest.TestCase):
             assert len(cpplib.GenBondsEx(atoms)["bonds"]) == 1
         """, BONDS)
 
+    def test_import_does_not_require_data_files(self):
+        self.run_extension("")
+
     def test_missing_data_raises_and_can_be_retried(self):
         self.run_extension("""
             for method in (cpplib.GenBonds, cpplib.GenBondsEx):
@@ -127,6 +142,24 @@ class DistanceLoadingTests(unittest.TestCase):
 
             assert len(cpplib.GenBonds(atoms)["bonds"]) == 1
         """)
+
+    def test_ed_missing_then_repaired_can_be_reloaded(self):
+        self.run_extension("""
+            args = ([10., 10., 10., 90., 90., 90.], ["x,y,z"],
+                    [(1, 0., 0., 0.)], 3.)
+            try:
+                cpplib.FindCP(*args)
+            except RuntimeError as error:
+                assert "FILE_NOT_FOUND" in str(error), str(error)
+            else:
+                raise AssertionError("Missing ED data did not raise")
+
+            ed_file.write_text(
+                pathlib.Path(sys.argv[2]).read_text(encoding="utf-8"),
+                encoding="utf-8"
+            )
+            cpplib.FindCP(*args)
+        """, ed_source=EXTENSION.with_name("ED.txt"))
 
     def test_ed_is_loaded_lazily_from_the_extension_directory(self):
         self.run_extension("""
@@ -148,7 +181,11 @@ class DistanceLoadingTests(unittest.TestCase):
             for data in (
                 "-1\\n",
                 "1\\n1 1 0.65",
-                "1\\n0 1 0.65 1.2\\n"
+                "1\\n0 1 0.65 1.2\\n",
+                "1\\n1 1 nan 1.2\\n",
+                "1\\n1 1 -0.1 1.2\\n",
+                "1\\n1 1 1.2 0.65\\n",
+                "1\\n1 1 0.65 1.2\\n1 1 0.65 1.2\\n",
             ):
                 data_file.write_text(data, encoding="utf-8")
 

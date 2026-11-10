@@ -1,4 +1,4 @@
-// Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
+﻿// Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
 // This file is part of ASID - Atomistic Simulation Instruments and Database
 // For more information see <https://github.com/ASID-Production/ASID>
 //
@@ -33,18 +33,10 @@
 #include <string>
 #include <string_view>
 #include <utility>
-#include <vector>
-
-#ifdef _WIN32
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#else
-#include <dlfcn.h>
-#endif
 
 namespace cpplib {
+	template <typename T>
+	inline constexpr std::string_view default_relpath{};
 
 	/// <summary>
 	/// Program-wide result/state code of cpplib operations. Shared by ALL classes
@@ -61,7 +53,7 @@ namespace cpplib {
 		BAD_CONTENT,        ///< File exists with plausible size but contains invalid values / parse errors.
 		IO_ERROR,           ///< Underlying stream reported a failure that is not covered above.
 		INVALID_ARGUMENT,   ///< Caller passed an unusable argument (e.g. empty path).
-		ERROR,              ///< Any other unspecified failure.
+		ERROR_STATE,              ///< Any other unspecified failure.
 	};
 
 	// ---- Aliases for other program-wide error codes: existing consumers may
@@ -79,7 +71,7 @@ namespace cpplib {
 			case STATE::BAD_CONTENT:     return "BAD_CONTENT";
 			case STATE::IO_ERROR:        return "IO_ERROR";
 			case STATE::INVALID_ARGUMENT: return "INVALID_ARGUMENT";
-			case STATE::ERROR:           return "ERROR";
+			case STATE::ERROR_STATE:           return "ERROR_STATE";
 		}
 		return "UNKNOWN";
 	}
@@ -107,7 +99,7 @@ namespace cpplib {
 		    what.find("incorrect data") != std::string_view::npos) {
 			return STATE::BAD_CONTENT;
 		}
-		return STATE::ERROR;
+		return STATE::ERROR_STATE;
 	}
 
 	/// <summary>
@@ -120,42 +112,49 @@ namespace cpplib {
 		} catch (const std::exception& e) {
 			return state_from_exception(e);
 		} catch (...) {
-			return STATE::ERROR;
+			return STATE::ERROR_STATE;
 		}
 	}
 
+	struct ModuleDirectoryState {
+		std::mutex mutex;
+		std::filesystem::path directory;
+		bool initialized = false;
+	};
+
+	inline ModuleDirectoryState& module_directory_state() {
+		static ModuleDirectoryState state;
+		return state;
+	}
+
 	/// <summary>
-	/// Absolute directory of the loaded executable or shared library hosting
-	/// cpplib. Uses the native loader at runtime, never a source path or a CWD
-	/// fallback. Failure to locate the module is reported as an exception.
+	/// Use the directory reported by Python for its imported extension module.
+	/// It must be configured before singleton paths are first resolved.
 	/// </summary>
-	inline const std::filesystem::path& get_module_directory() {
-		static const std::filesystem::path dir = [] {
-			static const int anchor = 0;
-#ifdef _WIN32
-			HMODULE module = nullptr;
-			if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
-				GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-				reinterpret_cast<LPCWSTR>(&anchor), &module)) {
-				throw std::runtime_error("Could not locate cpplib module");
-			}
-			std::vector<wchar_t> buffer(256);
-			for (;;) {
-				const auto size = GetModuleFileNameW(module, buffer.data(), static_cast<DWORD>(buffer.size()));
-				if (size == 0)
-					throw std::runtime_error("Could not locate cpplib module");
-				if (size < buffer.size())
-					return std::filesystem::path(std::wstring(buffer.data(), size)).parent_path();
-				buffer.resize(buffer.size() * 2);
-			}
-#else
-			Dl_info info{};
-			if (!dladdr(&anchor, &info) || !info.dli_fname || !*info.dli_fname)
-				throw std::runtime_error("Could not locate cpplib module");
-			return std::filesystem::canonical(info.dli_fname).parent_path();
-#endif
-		}();
-		return dir;
+	inline void set_module_directory(std::filesystem::path directory) {
+		if (directory.empty())
+			throw std::invalid_argument("Python module directory is empty");
+		directory = std::filesystem::weakly_canonical(std::filesystem::absolute(directory));
+
+		auto& state = module_directory_state();
+		std::lock_guard lock(state.mutex);
+		if (state.initialized) {
+			if (state.directory != directory)
+				throw std::logic_error("cpplib module directory is already in use");
+			return;
+		}
+		state.directory = std::move(directory);
+		state.initialized = true;
+	}
+
+	/// <summary>
+	/// Return the configured Python module directory, or an uncached current
+	/// working directory for standalone C++ use.
+	/// </summary>
+	inline std::filesystem::path get_module_directory() {
+		auto& state = module_directory_state();
+		std::lock_guard lock(state.mutex);
+		return state.initialized ? state.directory : std::filesystem::current_path();
 	}
 
 	/// <summary>
@@ -171,16 +170,6 @@ namespace cpplib {
 		const auto local = *relpath.begin() == "module" ? relpath.lexically_relative("module") : relpath;
 		return std::filesystem::weakly_canonical(get_module_directory() / local);
 	}
-
-	/// <summary>
-	/// Per-singleton default relative data path. Each concrete singleton provides
-	/// its own explicit specialization (see Distances / ElectronDensity), e.g.:
-	///   template <> inline constexpr std::string_view default_relpath<Distances>
-	///       = "module/BondLength.ini";
-	/// The fallback keeps the standardized interface usable even without one.
-	/// </summary>
-	template <typename Derived>
-	inline constexpr std::string_view default_relpath = "BondLength.ini";
 
 	/// <summary>
 	/// Standardized interface (CRTP) for every lazy static singleton in cpplib
@@ -348,7 +337,7 @@ namespace cpplib {
 		// Called under mutex_(). Publish only a fully parsed object; failures
 		// leave an existing object intact and permit a later initialization retry.
 		static STATE load_(const std::filesystem::path& relpath) {
-			STATE st = STATE::ERROR;
+			STATE st = STATE::ERROR_STATE;
 			try {
 				const auto absfile = get_module_file(relpath);
 				if (absfile.empty()) {
