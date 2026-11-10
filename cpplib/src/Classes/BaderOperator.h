@@ -42,6 +42,7 @@
 
 #include "../Classes/Reader.h"
 #include "../Classes/Splines.h"
+#include "../Classes/Voronoi.h"
 
 namespace cpplib {
 

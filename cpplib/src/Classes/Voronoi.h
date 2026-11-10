@@ -43,7 +43,6 @@
 #include <vector>
 
 #include "../BaseHeaders/BaseTypes.h"
-#include "../Classes/Bond.h"
 #include "../Classes/Geometry.h"
 
 // ============================================================================
