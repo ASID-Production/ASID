@@ -1,4 +1,4 @@
-// Copyright 2026 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
+﻿// Copyright 2026 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
 // This file is part of ASID - Atomistic Simulation Instruments and Database
 // For more information see <https://github.com/ASID-Production/ASID>
 //
@@ -36,7 +36,6 @@
 #include <vector>
 
 #include "../Classes/Geometry.h"
-#include "../Classes/Voronoi.h"
 
 namespace cpplib {
 

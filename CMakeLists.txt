@@ -236,6 +236,8 @@ endif()
 # ============================================================================
 # Tests
 # ============================================================================
+enable_testing()
+
 if(EXISTS ${CMAKE_SOURCE_DIR}/cpplib/Tests AND WIN32)
     add_subdirectory(cpplib/Tests)
     message(STATUS "Tests enabled for Windows build")
