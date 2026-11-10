@@ -1724,9 +1724,9 @@ namespace cpplib::geometry {
 
 						const uint32_t code = shift_code(sx, sy, sz);
 						const PointType sc = geom_.shift_cart[code];
-						const T qsx = qx + sc[0];
-						const T qsy = qy + sc[1];
-						const T qsz = qz + sc[2];
+						const T qsx = qx - sc[0];
+						const T qsy = qy - sc[1];
+						const T qsz = qz - sc[2];
 
 						// Scalar inner loop. SIMD hook: cxa/cya/cza are
 						// contiguous in [beg, end) — load 8 lanes (AVX2) or
@@ -1880,8 +1880,8 @@ namespace cpplib::geometry {
 		}
 
 		static inline int shift_dir(int32_t raw, int32_t m) noexcept {
-			if (raw < 0)  return +1; // wrap forward
-			if (raw >= m) return -1; // wrap backward
+			if (raw < 0)  return -1;
+			if (raw >= m) return +1;
 			return 0;
 		}
 

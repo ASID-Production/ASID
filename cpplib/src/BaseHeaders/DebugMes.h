@@ -1,5 +1,8 @@
 ﻿#pragma once
 
+#define DEBUG_CONCAT_HIDDEN(a, b) a##b
+#define DEBUG_CONCAT(a, b) DEBUG_CONCAT_HIDDEN(a, b)
+
 #ifdef DEBUG_MESS_ON
 #include <concepts>
 #include <iostream>
@@ -48,15 +51,13 @@ namespace debug {
     }
 }
 
-#define DEBUG_CONCAT_HIDDEN(a, b) a##b
-#define DEBUG_CONCAT(a, b) DEBUG_CONCAT_HIDDEN(a, b)
-
 #define WITH_LOG(func, ...) debug::execute(#func, func __VA_OPT__(,) __VA_ARGS__)
 #define LOG_INTERFACE_GUARD(name) debug::InterfaceGuard DEBUG_CONCAT(guard_, __LINE__)(name)
 #define WITH_LOG_M(obj, method, ...) \
     debug::execute_method(#method, obj, &std::remove_pointer_t<decltype(&obj)>::method __VA_OPT__(,) __VA_ARGS__)
 
 #else
+
 #define WITH_LOG(func, ...) func(__VA_ARGS__)
 #define WITH_LOG_M(obj, method, ...) (obj.method(__VA_ARGS__))
 #define LOG_INTERFACE_GUARD(name) [[maybe_unused]] int DEBUG_CONCAT(dummy_, __LINE__) = 0
