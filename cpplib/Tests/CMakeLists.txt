@@ -25,60 +25,94 @@
 #  ORCID:       0009-0003-5298-6836
 #
 # ******************************************************************************************
-project(MyTests LANGUAGES CXX)
-
 cmake_minimum_required(VERSION 3.14)
 
-if (POLICY CMP0135)
-    cmake_policy(SET CMP0135 NEW) 
+project(MyTests LANGUAGES CXX)
+
+# ============================================================================
+# Google Test
+# ============================================================================
+
+if(POLICY CMP0135)
+    cmake_policy(SET CMP0135 NEW)
 endif()
 
 include(FetchContent)
 
 FetchContent_Declare(
-  googletest  
-  URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
+    googletest
+    URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
 )
-# For Windows: Prevent overriding the parent project's compiler/linker settings
+
+# For Windows: Prevent overriding parent project's compiler/linker settings
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+
 FetchContent_MakeAvailable(googletest)
 
-enable_testing()
+# ============================================================================
+# Test sources
+# ============================================================================
 
-file(GLOB_RECURSE TEST_SRC
-    "*.cpp"
+file(GLOB_RECURSE TEST_SRC CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp"
 )
 
-add_executable(${PROJECT_NAME} ${TEST_SRC} ${PROJECT_SOURCE_DIR}/../src/Functions/Functions.cpp)
-
-# Include dirs
-target_include_directories(${PROJECT_NAME} 
-    PUBLIC 
-        ${PROJECT_SOURCE_DIR}/../src/BaseHeaders
-        ${PROJECT_SOURCE_DIR}/../src/Classes
-        ${PROJECT_SOURCE_DIR}/../src/Functions
-        ${PROJECT_SOURCE_DIR}/../src/Platform
+add_executable(${PROJECT_NAME}
+    ${TEST_SRC}
+    "${CMAKE_CURRENT_SOURCE_DIR}/../src/Functions/Functions.cpp"
 )
 
-target_link_libraries( ${PROJECT_NAME} 
-    PRIVATE  
+# ============================================================================
+# Include directories
+# ============================================================================
+
+target_include_directories(${PROJECT_NAME}
+    PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/../src/BaseHeaders"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../src/Classes"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../src/Functions"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../src/Platform"
+)
+
+# ============================================================================
+# C++ standard
+# ============================================================================
+
+target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_20)
+
+# ============================================================================
+# Linking
+# ============================================================================
+
+target_link_libraries(${PROJECT_NAME}
+    PRIVATE
         GTest::gtest_main
         optimizations
         ${CMAKE_DL_LIBS}
 )
 
-set_target_properties(${PROJECT_NAME} PROPERTIES
-    CXX_STANDARD 20
-    CXX_STANDARD_REQUIRED ON
-)
+# ============================================================================
+# Copy DATA files
+# ============================================================================
 
-add_custom_command(
-    TARGET MyTests POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        ${DATA_FULL_PATHS}
-        $<TARGET_FILE_DIR:${PROJECT_NAME}>
-    COMMENT "Copy DATA-files into test dirrectory"
-)
+if(DATA_FULL_PATHS)
+    add_custom_command(
+        TARGET ${PROJECT_NAME}
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${DATA_FULL_PATHS}
+            "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+        COMMENT "Copying DATA files into test directory"
+        VERBATIM
+    )
+endif()
+
+# ============================================================================
+# Google Test discovery
+# ============================================================================
 
 include(GoogleTest)
-gtest_discover_tests(${PROJECT_NAME})
+
+gtest_discover_tests(${PROJECT_NAME}
+    DISCOVERY_MODE POST_BUILD
+)

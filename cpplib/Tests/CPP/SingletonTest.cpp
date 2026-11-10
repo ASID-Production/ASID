@@ -1,11 +1,11 @@
-#include "gtest/gtest.h"
+﻿#include "gtest/gtest.h"
 
 #include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <string>
 
-#include "../src/Classes/Distances.h"
+#include "../../src/Classes/Distances.h"
 
 namespace {
 

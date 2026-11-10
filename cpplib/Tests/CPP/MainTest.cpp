@@ -37,18 +37,18 @@
 #include <fstream>
 #include <format>
 
-#include "../src/BaseHeaders/BaseTypes.h"
-#include "../src/BaseHeaders/Currents.h"
-#include "../src/BaseHeaders/DebugMes.h"
+#include "../../src/BaseHeaders/BaseTypes.h"
+#include "../../src/BaseHeaders/Currents.h"
+#include "../../src/BaseHeaders/DebugMes.h"
 
-#include "../src/Classes/BaderOperator.h"
-#include "../src/Classes/Cluster.h"
-#include "../src/Classes/Distances.h"
-#include "../src/Classes/FindMolecules.h"
-#include "../src/Classes/MoleculeGraph.h"
-#include "../src/Classes/SearchGraph.h"
+#include "../../src/Classes/BaderOperator.h"
+#include "../../src/Classes/Cluster.h"
+#include "../../src/Classes/Distances.h"
+#include "../../src/Classes/FindMolecules.h"
+#include "../../src/Classes/MoleculeGraph.h"
+#include "../../src/Classes/SearchGraph.h"
 
-#include "../src/Functions/Functions.h"
+#include "../../src/Functions/Functions.h"
 
 #pragma warning( disable : 4305 )
 #pragma warning( disable : 4244 )

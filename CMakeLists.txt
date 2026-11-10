@@ -185,6 +185,11 @@ if(CMAKE_BUILD_TYPE MATCHES Release OR CMAKE_CONFIGURATION_TYPES)
     )
     
     target_link_libraries(cpplib PRIVATE optimizations ${CMAKE_DL_LIBS})
+
+    if(MSVC)
+        target_compile_options(cpplib PRIVATE $<$<CONFIG:Release>:/MD>)
+    endif()
+
     # ============================================================================
     # Link with Python (Stable ABI / Limited API)
     # ============================================================================
@@ -231,11 +236,61 @@ endif()
 # ============================================================================
 # Tests
 # ============================================================================
-if(EXISTS ${CMAKE_SOURCE_DIR}/cpplib/Tests AND WIN32)
-    add_subdirectory(cpplib/Tests)
-    message(STATUS "Tests enabled for Windows build")
-elseif(EXISTS ${CMAKE_SOURCE_DIR}/cpplib/Tests)
-    message(STATUS "Tests directory exists but disabled (requires Windows)")
+
+
+include(CTest)
+
+if(BUILD_TESTING)
+
+    # ------------------------------------------------------------------------
+    # C++ tests (Google Test)
+    # ------------------------------------------------------------------------
+    if(EXISTS "${CMAKE_SOURCE_DIR}/cpplib/Tests" AND WIN32)
+        add_subdirectory(cpplib/Tests)
+        message(STATUS "Google Test enabled")
+    endif()
+
+    # ------------------------------------------------------------------------
+    # Python tests (pytest)
+    # ------------------------------------------------------------------------
+    set(PYTHON_TEST_DIR "${CMAKE_SOURCE_DIR}/cpplib/Tests/Python")
+
+    if(EXISTS "${PYTHON_TEST_DIR}")
+
+        execute_process(
+            COMMAND ${Python_EXECUTABLE} -m pytest --version
+            RESULT_VARIABLE PYTEST_RESULT
+            OUTPUT_QUIET
+            ERROR_QUIET
+        )
+
+        if(PYTEST_RESULT EQUAL 0)
+
+            add_test(
+                NAME PythonTests
+                COMMAND
+                    ${Python_EXECUTABLE}
+                    -m pytest
+                    -v
+                    ${PYTHON_TEST_DIR}
+            )
+
+            # Allows Python tests to import cpplib from module/
+            set_tests_properties(PythonTests PROPERTIES
+                WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/module"
+            )
+
+            message(STATUS "Python pytest enabled")
+
+        else()
+            message(WARNING
+                "pytest not found. Install it using: "
+                "${Python_EXECUTABLE} -m pip install pytest"
+            )
+        endif()
+
+    endif()
+
 endif()
 
 # add_compile_definitions(DEBUG_MESS_ON)

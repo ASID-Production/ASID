@@ -34,10 +34,10 @@
 #include <utility>
 
 
-#include "../src/BaseHeaders/BaseTypes.h"
-#include "../src/Classes/Cluster.h"
-#include "../src/Classes/Geometry.h"
-#include "../src/Classes/Voronoi.h"
+#include "../../src/BaseHeaders/BaseTypes.h"
+#include "../../src/Classes/Cluster.h"
+#include "../../src/Classes/Geometry.h"
+#include "../../src/Classes/Voronoi.h"
 
 using namespace std;
 using namespace cpplib;
