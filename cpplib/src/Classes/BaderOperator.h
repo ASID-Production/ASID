@@ -31,23 +31,93 @@
 #include <cassert>
 #include <cmath>
 #include <cstdint>
+#include <filesystem>
 #include <iterator>
 #include <utility>
 #include <vector>
 
 #include <string>
+#include <string_view>
 #include <format>
 #include <iostream>
 
 
+#include "../Classes/Distances.h"   // get_module_file()/get_module_directory() - module-relative data paths
 #include "../Classes/Reader.h"
 #include "../Classes/Splines.h"
 #include "../Classes/Voronoi.h"
 
 namespace cpplib {
+	class ElectronDensity;
+	template <> inline constexpr std::string_view default_relpath<ElectronDensity> = "module/ED.txt";
 
-	// Global vector of RadialSplines of Electron Density
-	inline const auto ElectronDensitySplines = DensityParser::parse_file(".\\ED.txt");
+	/// <summary>
+	/// Static singleton holder for the Electron Density (ED) radial splines loaded from ED.txt.
+	/// Implements the standardized cpplib singleton interface (SingletonBase): the single
+	/// instance is created lazily on the first ElectronDensity::instance/try_call(relpath)
+	/// call and is never constructed eagerly at program startup (the former inline global
+	/// object was removed for this reason). The RELATIVE path is resolved against the
+	/// loaded module directory, exactly the way Distances does; later calls must
+	/// resolve to the same data file. Loading failures are
+	/// reported through STATE by try_call(), or as exceptions by instance().
+	/// After a successful load the object is immutable — all accessors are const-only.
+	/// </summary>
+	class ElectronDensity : public SingletonBase<ElectronDensity> {
+	public:
+		using SplineContainerType = ::std::vector<RadialSpline>;
+
+		ElectronDensity(const ElectronDensity&) = delete;
+		ElectronDensity(ElectronDensity&&) = delete;
+		ElectronDensity& operator=(const ElectronDensity&) = delete;
+		ElectronDensity& operator=(ElectronDensity&&) = delete;
+
+		const SplineContainerType& splines() const noexcept {
+			return splines_;
+		}
+
+		size_t size() const noexcept {
+			return splines_.size();
+		}
+
+		const RadialSpline& operator[](size_t i) const noexcept {
+			return splines_[i];
+		}
+
+		auto begin() const noexcept {
+			return splines_.begin();
+		}
+		auto end() const noexcept {
+			return splines_.end();
+		}
+
+	private:
+		SplineContainerType splines_;
+		bool isReady_ = false;
+
+		// Only the standardized singleton interface (SingletonBase<ElectronDensity>)
+		// may create the loaded object. The constructor never throws out: loading
+		// problems are translated into the output STATE code.
+		ElectronDensity(const std::filesystem::path& filename, STATE& state)
+			: SingletonBase(filename), splines_{} {
+			state = STATE::OK;
+			try {
+				splines_ = DensityParser::parse_file(filename);
+			} catch (const ::std::exception& e) {
+				state = state_from_exception(e);
+				splines_.clear();
+				return;
+			}
+			isReady_ = true;
+		}
+
+		friend class SingletonBase<ElectronDensity>;
+		ElectronDensity() : SingletonBase(std::filesystem::path{}), splines_{}, isReady_(false) {}
+
+	public:
+		inline bool isReady() const {
+			return isReady_;
+		}
+	};
 
 	template <typename T, size_t N = 2>
 	struct PointsSoA {
@@ -75,8 +145,8 @@ namespace cpplib {
 
 		using PointType = geometry::Point<T>;
 
-		static constexpr size_t NEAR = N;
-		static constexpr size_t DIM = NEAR * 2 + 1;
+		static constexpr size_t NEIGHBORHOOD_RADIUS = N;
+		static constexpr size_t DIM = NEIGHBORHOOD_RADIUS * 2 + 1;
 		static constexpr size_t TOTAL_SHIFTS = DIM * DIM * DIM;
 
 		template<typename I>
@@ -90,9 +160,9 @@ namespace cpplib {
 					const size_t jdim = j * DIM;
 					for (int k = 0; k < DIM; k++) {
 						result[idim2 + jdim + k] =
-							LocalPointType(i - static_cast<int>(NEAR),
-										   j - static_cast<int>(NEAR),
-										   k - static_cast<int>(NEAR));
+							LocalPointType(i - static_cast<int>(NEIGHBORHOOD_RADIUS),
+											   j - static_cast<int>(NEIGHBORHOOD_RADIUS),
+											   k - static_cast<int>(NEIGHBORHOOD_RADIUS));
 					}
 				}
 			}
@@ -258,7 +328,7 @@ namespace cpplib {
 				}
 			}
 
-			calculateSpatialIndexes(NEAR/cutoff);
+			calculateSpatialIndexes(NEIGHBORHOOD_RADIUS / cutoff);
 			computeRuntimeFlatShifts();
 		}
 
@@ -308,8 +378,8 @@ namespace cpplib {
 
 			size_t i = 0;
 
-			constexpr int32_t pos_n = static_cast<int32_t>(NEAR);
-			constexpr int32_t neg_n = -static_cast<int32_t>(NEAR);
+			constexpr int32_t pos_n = static_cast<int32_t>(NEIGHBORHOOD_RADIUS);
+			constexpr int32_t neg_n = -static_cast<int32_t>(NEIGHBORHOOD_RADIUS);
 
 			for (int32_t dz = neg_n; dz <= pos_n; ++dz) {
 				int32_t offset_z = dz * s_z;
@@ -373,19 +443,19 @@ namespace cpplib {
 		inline PointType FindNextPosition() const {
 			switch (type_) {
 				using enum TYPE;
-				case N:
-					return PartitionedRFO<0>();
-				case B:
-					return PartitionedRFO<1>();
-				case R:
-					return PartitionedRFO<2>();
-				case C:
-					return PartitionedRFO<3>();
+			case N:
+				return PartitionedRFO<0>();
+			case B:
+				return PartitionedRFO<1>();
+			case R:
+				return PartitionedRFO<2>();
+			case C:
+				return PartitionedRFO<3>();
 			}
 			return pos_;
 		}
 		static TripleDouble CalculateEDinPoint(PointType point, const PointsSoA<value_type>& psoa,
-										const std::vector<RadialSpline>& splines) {
+											   const std::vector<RadialSpline>& splines) {
 			TripleDouble result;
 
 			const uint32_t home_cell = psoa.getCellIndexForPoint(point);
@@ -437,7 +507,7 @@ namespace cpplib {
 		template<value_type step_length>
 		std::pair<std::vector<PointType>, std::vector<PointType>> CalculatePaths(
 			const PointsSoA<value_type>& psoa,
-			const std::vector<RadialSpline>& splines) const 
+			const std::vector<RadialSpline>& splines) const
 		{
 			auto shift_pos = GradientPathInitVector(step_length);
 			PointType next_pos = pos_ + shift_pos;
@@ -670,7 +740,7 @@ namespace cpplib {
 				value_type denom = eta - lam[i];
 				if (std::abs(denom) < 1e-10) denom = (denom >= 0)?1e-10:-1e-10;
 
-				value_type c = f[i] / denom; 
+				value_type c = f[i] / denom;
 				dx[0] += c * vecs[i][0];
 				dx[1] += c * vecs[i][1];
 				dx[2] += c * vecs[i][2];
@@ -690,8 +760,8 @@ namespace cpplib {
 		PointType pos_{};
 		TripleDouble value_{};
 	private:
-		mutable std::array<PointType, 3> prev_max_vecs_;   
-		mutable bool mode_following_init_ = false;         
+		mutable std::array<PointType, 3> prev_max_vecs_;
+		mutable bool mode_following_init_ = false;
 	};
 
 	class BaderOperator {
@@ -746,7 +816,7 @@ namespace cpplib {
 
 			// 1. Type B (Bond)
 			for (const auto& poly : vf.polygons) {
-				
+
 				PointType center = (vf.polyhedra[poly.owner_atom].center +
 									vf.polyhedra[poly.other_atom].center +
 									poly.other_shift.get_shift()) * 0.5;
@@ -777,6 +847,9 @@ namespace cpplib {
 		}
 
 		static void OptimizePoint(CriticalPoint& cp, const PointsSoA<value_type>& psoa, value_type end_sq) {
+			// Lazy access to the ED singleton: the splines are loaded on demand,
+			// from the file located next to the starting module.
+			const auto& ElectronDensitySplines = ElectronDensity::instance().splines();
 
 			constexpr value_type SHRINK_FACTOR = 0.7071067811865475;
 			constexpr value_type GROW_FACTOR = 1.15;
@@ -827,7 +900,7 @@ namespace cpplib {
 			}
 			return;
 		}
-		static std::string criticalPointsToPDB_fast(const std::vector<CriticalPoint>&cps) {
+		static std::string criticalPointsToPDB_fast(const std::vector<CriticalPoint>& cps) {
 			static constexpr std::array<const char*, 4> typeToElem = {
 				"C", // N
 				"N", // B
@@ -875,7 +948,7 @@ namespace cpplib {
 		}
 		static void deleteAllDublicates(std::vector<CriticalPoint>& cps, value_type eps) {
 			value_type eps_sq = eps * eps;
-			std::sort(cps.begin(), cps.end(), 
+			std::sort(cps.begin(), cps.end(),
 					  [](const CriticalPoint& a, const CriticalPoint& b) {
 						  return a.pos_[0] < b.pos_[0];
 					  });
@@ -891,7 +964,7 @@ namespace cpplib {
 						break;
 					}
 				}
-			};
+				};
 			for (size_t i = 0; i < cps_s; i++)
 			{
 				if (is_active[i] == false) continue;

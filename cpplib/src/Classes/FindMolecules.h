@@ -1,4 +1,4 @@
-// Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
+﻿// Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
 // This file is part of ASID - Atomistic Simulation Instruments and Database
 // For more information see <https://github.com/ASID-Production/ASID>
 //
@@ -614,8 +614,8 @@ namespace cpplib {
 			std::string res;
 			std::string atoms;
 			std::string bonds;
-			size_type s_net = net.size();
-			std::vector<AtomIndex> revers(s_net, AtomIndex(-1));
+			size_type net_size = net.size();
+			std::vector<AtomIndex> revers(net_size, AtomIndex(-1));
 			size_type m1s = molecules.size();
 
 			for (size_type i = 0; i < m1s; i++) {
@@ -634,7 +634,7 @@ namespace cpplib {
 				}
 			}
 			n--;
-			for (size_type i = 0; i < s_net; i++) {
+			for (size_type i = 0; i < net_size; i++) {
 				if (revers[i] == AtomIndex(-1))
 					continue;
 				auto nei_size = net[i].neighboursSize();
