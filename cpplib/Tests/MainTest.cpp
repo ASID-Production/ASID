@@ -50,10 +50,6 @@
 
 #include "../src/Functions/Functions.h"
 
-// Test-local bond data: MainTest builds its own Distances object and passes it
-
-
-
 #pragma warning( disable : 4305 )
 #pragma warning( disable : 4244 )
 
@@ -66,9 +62,19 @@ using namespace cpplib::geometry;
 using PointType = cpplib::FAM_Cell::PointType;
 using SymmType = cpplib::FAM_Cell::SymmType;
 
-// Test-local bond data via the singleton API (relative path resolved against the
-// starting module directory, exactly like in production).
-inline const Distances& testdistances = Distances::instance("module/BondLength.ini");
+class DistancesEnvironment : public ::testing::Environment {
+	void SetUp() override {
+		ASSERT_NO_THROW({
+			const auto& distances = Distances::instance();
+			ASSERT_TRUE(distances.isReady());
+		});
+	}
+};
+
+// Registration reads no data; loading happens after GoogleTest starts.
+static auto* const distances_environment =
+	::testing::AddGlobalTestEnvironment(new DistancesEnvironment);
+
 struct FMIC_TS {
 	std::array<cpplib::basic_types::FloatingPointType, 6> cell;
 	std::vector<const char*> symm;

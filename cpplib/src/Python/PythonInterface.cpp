@@ -1,4 +1,4 @@
-// Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
+﻿// Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
 // This file is part of ASID - Atomistic Simulation Instruments and Database
 // For more information see <https://github.com/ASID-Production/ASID>
 //
@@ -92,12 +92,26 @@ struct Prepare_IC : public Prepare_WC {
 	}
 };
 
-// Lazy singleton accessors: the data files are located next to the starting
-// module (cpplib); instance() resolves the given RELATIVE path against the
-// module directory (platform independent, see cpplib::get_module_directory()).
-constexpr const char* MODULE_DATA_DIR;
-inline static const Distances& useDistances();
-inline static const ElectronDensity& useElectronDensity();
+// Data paths are resolved next to the loaded extension by SingletonBase.
+inline static const Distances& useDistances() {
+	return Distances::instance();
+}
+
+inline static const ElectronDensity& useElectronDensity() {
+	return ElectronDensity::instance();
+}
+
+template <PyObject* (*Entry)(PyObject*, PyObject*)>
+static PyObject* python_entry(PyObject* self, PyObject* args) noexcept {
+	try {
+		return Entry(self, args);
+	} catch (const std::exception& e) {
+		PyErr_SetString(PyExc_RuntimeError, e.what());
+	} catch (...) {
+		PyErr_SetString(PyExc_RuntimeError, "Unknown C++ exception in cpplib");
+	}
+	return nullptr;
+}
 
 template <char times>
 static std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>, times> FindDParamsParse(PyObject* self, PyObject* oparams, const std::array<int, times + 1> type, char& d) {
@@ -216,8 +230,7 @@ extern "C" {
 
 	// Python section
 	static PyObject* cpplib_GenBonds(PyObject* self, PyObject* arg) {
-		useDistances();
-		auto& distances = useDistances();
+		const auto& distances = useDistances();
 		Prepare_WC all(arg);
 
 		FAM_Struct famstr(std::move(all.types), std::move(all.points));
@@ -229,8 +242,7 @@ extern "C" {
 							 "bonds", lst);
 	}
 	static PyObject* cpplib_GenBondsEx(PyObject* self, PyObject* arg) {
-		useDistances();
-		auto& distances = useDistances();
+		const auto& distances = useDistances();
 		Prepare_WC all(arg);
 		FAM_Struct famstr(std::move(all.types), std::move(all.points));
 		std::string errM;
@@ -964,28 +976,28 @@ extern "C" {
 	}
 
 	static struct PyMethodDef methods[] = {
-		{ "GenBonds", cpplib_GenBonds, METH_O, "Generate bond list"},
-		{ "GenBondsEx", cpplib_GenBondsEx, METH_O, "Generate bond list with length"},
-		{ "SearchMain", cpplib_SearchMain, METH_VARARGS, "Compare graph with data"},
-		{ "CompareGraph", cpplib_CompareGraph, METH_VARARGS, "Compare two graphs"},
-		{ "FindMoleculesInCell", cpplib_FindMoleculesInCell, METH_VARARGS, "Create graph from cell"},
-		{ "FindMoleculesWithoutCell", cpplib_FindMoleculesWithoutCell, METH_O, "Create graph from xyz"},
-		{ "GenSymm", cpplib_GenSymm, METH_VARARGS, "Generates symmetry by symm code"},
-		{ "FindDistanceIC", cpplib_FindDistanceIC, METH_VARARGS, "Find distances with current parameters in cell"},
-		{ "FindDistanceWC", cpplib_FindDistanceWC, METH_VARARGS, "Find distances with current parameters in xyz"},
-		{ "FindAngleIC", cpplib_FindAngleIC, METH_VARARGS, "Find angles with current parameters in cell"},
-		{ "FindAngleWC", cpplib_FindAngleWC, METH_VARARGS, "Find angles with current parameters in xyz"},
-		{ "FindTorsionIC", cpplib_FindTorsionIC, METH_VARARGS, "Find torsions with current parameters in cell"},
-		{ "FindTorsionWC", cpplib_FindTorsionWC, METH_VARARGS, "Find torsions with current parameters in xyz"},
-		{ "FindDAT_IC", cpplib_FindDAT_IC, METH_VARARGS, "Create dictionary with distances, angles and torsions in cell"},
-		{ "FindDAT_WC", cpplib_FindDAT_WC, METH_O, "Create dictionary with distances, angles and torsions in xyz"},
-		{ "himp", cpplib_himp, METH_VARARGS, "Moves hydrogens to the nearest atom"},
-		{ "SubSearch", cpplib_SubSearch, METH_VARARGS, "Compare two graphs"},
-		{ "compaq", cpplib_compaq, METH_VARARGS, "Do the same as Olex2 'compaq' function"},
-		{ "SortDatabase", cpplib_SortDatabase, METH_O, "Sort graph"},
-		{ "Cluster", cpplib_Cluster, METH_VARARGS, "Create cluster"},
-		{ "VoronoiCalculation", cpplib_Voronoi, METH_VARARGS, "Calculate Voronoi cells"},
-		{ "FindCP", cpplib_FindCP, METH_VARARGS, "Find CP in crystal"},
+		{ "GenBonds", python_entry<cpplib_GenBonds>, METH_O, "Generate bond list"},
+		{ "GenBondsEx", python_entry<cpplib_GenBondsEx>, METH_O, "Generate bond list with length"},
+		{ "SearchMain", python_entry<cpplib_SearchMain>, METH_VARARGS, "Compare graph with data"},
+		{ "CompareGraph", python_entry<cpplib_CompareGraph>, METH_VARARGS, "Compare two graphs"},
+		{ "FindMoleculesInCell", python_entry<cpplib_FindMoleculesInCell>, METH_VARARGS, "Create graph from cell"},
+		{ "FindMoleculesWithoutCell", python_entry<cpplib_FindMoleculesWithoutCell>, METH_O, "Create graph from xyz"},
+		{ "GenSymm", python_entry<cpplib_GenSymm>, METH_VARARGS, "Generates symmetry by symm code"},
+		{ "FindDistanceIC", python_entry<cpplib_FindDistanceIC>, METH_VARARGS, "Find distances with current parameters in cell"},
+		{ "FindDistanceWC", python_entry<cpplib_FindDistanceWC>, METH_VARARGS, "Find distances with current parameters in xyz"},
+		{ "FindAngleIC", python_entry<cpplib_FindAngleIC>, METH_VARARGS, "Find angles with current parameters in cell"},
+		{ "FindAngleWC", python_entry<cpplib_FindAngleWC>, METH_VARARGS, "Find angles with current parameters in xyz"},
+		{ "FindTorsionIC", python_entry<cpplib_FindTorsionIC>, METH_VARARGS, "Find torsions with current parameters in cell"},
+		{ "FindTorsionWC", python_entry<cpplib_FindTorsionWC>, METH_VARARGS, "Find torsions with current parameters in xyz"},
+		{ "FindDAT_IC", python_entry<cpplib_FindDAT_IC>, METH_VARARGS, "Create dictionary with distances, angles and torsions in cell"},
+		{ "FindDAT_WC", python_entry<cpplib_FindDAT_WC>, METH_O, "Create dictionary with distances, angles and torsions in xyz"},
+		{ "himp", python_entry<cpplib_himp>, METH_VARARGS, "Moves hydrogens to the nearest atom"},
+		{ "SubSearch", python_entry<cpplib_SubSearch>, METH_VARARGS, "Compare two graphs"},
+		{ "compaq", python_entry<cpplib_compaq>, METH_VARARGS, "Do the same as Olex2 'compaq' function"},
+		{ "SortDatabase", python_entry<cpplib_SortDatabase>, METH_O, "Sort graph"},
+		{ "Cluster", python_entry<cpplib_Cluster>, METH_VARARGS, "Create cluster"},
+		{ "VoronoiCalculation", python_entry<cpplib_Voronoi>, METH_VARARGS, "Calculate Voronoi cells"},
+		{ "FindCP", python_entry<cpplib_FindCP>, METH_VARARGS, "Find CP in crystal"},
 
 
 		{ NULL, NULL, 0, NULL }
