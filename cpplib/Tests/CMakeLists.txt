@@ -114,5 +114,6 @@ endif()
 include(GoogleTest)
 
 gtest_discover_tests(${PROJECT_NAME}
+    WORKING_DIRECTORY "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
     DISCOVERY_MODE POST_BUILD
 )

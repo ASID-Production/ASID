@@ -66,7 +66,7 @@ namespace cpplib {
 
             // std::from_chars is locale-independent, working directly with ASCII characters in memory
             auto [next_ptr, ec] = std::from_chars(ptr, end, value);
-            if (ec != std::errc{}) {
+            if (ec != std::errc{} || (next_ptr != end && *next_ptr != ' ' && *next_ptr != '\t' && *next_ptr != '\r' && *next_ptr != '\n')) {
                 throw std::runtime_error("Parser error: Failed to convert numerical value.");
             }
             return next_ptr;
@@ -82,6 +82,7 @@ namespace cpplib {
             const std::uintmax_t file_size = std::filesystem::file_size(filepath);
 
             // Allocate a contiguous buffer (2-3 MB size fits perfectly into CPU L3 cache)
+            if (file_size == 0) throw std::runtime_error("Parser error: Unexpected End of File");
             std::vector<char> buffer(file_size);
 
             // Open strictly in binary mode to prevent cross-platform issues with \r\n on Windows
@@ -91,7 +92,8 @@ namespace cpplib {
             }
 
             // Single system call to read the entire file into memory
-            file.read(buffer.data(), file_size);
+            file.read(buffer.data(), static_cast<std::streamsize>(file_size));
+            if (!file) throw std::runtime_error("DensityParser: read failure");
 
             // Setup Zero-Copy Sliding Pointers
             const char* ptr = buffer.data();
@@ -100,6 +102,9 @@ namespace cpplib {
             // 2. Parse global header
             int max_element = 0;
             ptr = parse_value(ptr, end, max_element);
+
+            if (max_element < 1 || max_element > 118)
+                throw std::runtime_error("Invalid element_no header");
 
             // Pre-allocate the top-level vector (eliminates redundant heap reallocations)
             std::vector<RadialSpline> rs_ret;
@@ -122,7 +127,7 @@ namespace cpplib {
                 ptr = parse_value(ptr, end, atom.n_knots);
 
                 // Validation against specification boundaries
-                if (atom.n_knots > RadialSpline::SIZE) {
+                if (atom.n_knots == 0 || atom.n_knots > RadialSpline::SIZE) {
                     throw std::runtime_error("Specification violated: N_KNOTS > 576 for atom ID " + std::to_string(atom.element));
                 }
                 if (atom.element < 1 || atom.element > max_element) {
@@ -136,6 +141,8 @@ namespace cpplib {
                     ptr = parse_value(ptr, end, atom.values[i]);
                 }
                 atom.values.back() = 0;
+                if (rs_ret[atom.element].spline.radius() != 0)
+                    throw std::runtime_error("Invalid element_no: duplicate density block");
                 rs_ret[atom.element] = RadialSpline(atom.r_min, atom.r_max, atom.n_knots, atom.values);
             }
 

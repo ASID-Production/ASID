@@ -32,6 +32,8 @@
 #include <cmath>
 #include <cstdint>
 #include <iterator>
+#include <limits>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -93,19 +95,36 @@ namespace cpplib {
 		}
 
 		void create(value_type r_min, value_type r_max, size_t n_knots, const std::vector<value_type>& values) {
-			// Validate that the incoming active nodes match the provided intervals count
-			assert(values.size() == n_knots + 1);
-			assert(n_knots <= SIZE); // Ensure it fits into our maximum fixed capacity
-			assert(r_min > 0.0 && r_max > r_min);
-
-			// Initialize grid transformation parameters based on the ACTIVE file data boundaries
-			ln_r0_ = std::log(r_min);
-			r_max_ = r_max;
-			m_ = n_knots; // Store active intervals count to eliminate runtime log-calculations
-
-			// inv_delta_ is the scaling factor
-			inv_delta_ = static_cast<double>(n_knots) / (std::log(r_max) - ln_r0_);
-			const value_type step_delta = 1.0 / inv_delta_;
+            // ED.txt specifies intervals; the parser appends the final zero value.
+            if (n_knots == 0 || n_knots > SIZE || values.size() != n_knots + 1)
+                throw std::invalid_argument("CubicSpline: invalid knot/value count");
+            if (!std::isfinite(r_min) || !std::isfinite(r_max) || !(r_min > 0) || !(r_max > r_min))
+                throw std::invalid_argument("CubicSpline: require finite 0 < r_min < r_max");
+            std::vector<value_type> knots(n_knots + 1);
+            const auto log_min = std::log(r_min);
+            const auto delta = (std::log(r_max) - log_min) / n_knots;
+            knots.front() = r_min;
+            for (size_t i = 1; i < n_knots; ++i)
+                knots[i] = std::exp(std::fma(static_cast<double>(i), delta, log_min));
+            knots.back() = r_max;
+            create(knots, values);
+        }
+        CubicSpline(const std::vector<value_type>& knots, const std::vector<value_type>& values) {
+            create(knots, values);
+        }
+        void create(const std::vector<value_type>& knots, const std::vector<value_type>& values) {
+            if (knots.size() < 2 || knots.size() > SIZE + 1 || values.size() != knots.size())
+                throw std::invalid_argument("CubicSpline: invalid knot/value count");
+            for (size_t i = 0; i < knots.size(); ++i) {
+                if (!std::isfinite(knots[i]) || knots[i] < 0 || !std::isfinite(values[i]) ||
+                    (i && !(knots[i] > knots[i-1])))
+                    throw std::invalid_argument("CubicSpline: require finite values and increasing nonnegative knots");
+            }
+            const size_t n_knots = knots.size() - 1;
+            m_ = n_knots;
+            r_max_ = knots.back();
+            std::copy(knots.begin(), knots.end(), knots_.begin());
+            std::fill(knots_.begin() + knots.size(), knots_.end(), 0.0);
 
 			// Fixed compile-time dimensions for stack allocations
 			constexpr size_t n_max = SIZE + 1;
@@ -115,21 +134,14 @@ namespace cpplib {
 			const size_t n = n_knots + 1; // Active matrix size
 			const size_t m = n_knots;     // Active intervals count
 
-			// 1. Generate active nodes directly into the class array
-			for (size_t i = 0; i < m; ++i) {
-				knots_[i] = std::exp(std::fma(static_cast<double>(i), step_delta, ln_r0_));
-			}
-			// Zero-out the unused capacity tail of the knots array
-			std::fill(knots_.begin() + m, knots_.end(), 0.0);
-
 			// 2. Calculate active grid steps (intervals) using fixed-size stack memory
 			std::array<value_type, m_max> h; h.fill(0.0);
 			for (size_t i = 0; i < m - 1; ++i) {
 				h[i] = knots_[i + 1] - knots_[i];
-				assert(h[i] > 0);
+				if (!(h[i] > 0) || !std::isfinite(h[i])) throw std::invalid_argument("CubicSpline: invalid interval");
 			}
 			h[m - 1] = r_max_ - knots_[m - 1];
-			assert(h[m - 1] > 0);
+			if (!(h[m-1] > 0) || !std::isfinite(h[m-1])) throw std::invalid_argument("CubicSpline: invalid interval");
 
 			// Build the tridiagonal system for the active second derivatives on the stack
 			std::array<value_type, n_max> sub;  sub.fill(0.0);
@@ -137,7 +149,13 @@ namespace cpplib {
 			std::array<value_type, n_max> sup;  sup.fill(0.0);
 			std::array<value_type, n_max> rhs;  rhs.fill(0.0);
 
-			diag[0] = 1.0; // Natural spline boundary condition (S''(x0) = 0)
+			// At an explicit zero node impose radial smoothness S'(0)=0.
+            // Positive-radius ED grids retain their natural left boundary.
+            diag[0] = knots_[0] == 0 ? 2 * h[0] : 1;
+            if (knots_[0] == 0) {
+                sup[0] = h[0];
+                rhs[0] = 6 * (values[1] - values[0]) / h[0];
+            }
 
 			for (size_t i = 1; i < m; ++i) {
 				sub[i] = h[i - 1];
@@ -152,7 +170,7 @@ namespace cpplib {
 			sub[last] = h[m - 1];
 			diag[last] = 2.0 * h[m - 1];
 			sup[last] = 0.0;
-			rhs[last] = 6.0 * values[last - 1] / h[m - 1];
+			rhs[last] = 6.0 * (values[last - 1] - values[last]) / h[m - 1];
 
 			// Solve the system using Thomas algorithm (TDMA) strictly on stack arrays
 			std::array<value_type, n_max> gamma; gamma.fill(0.0);
@@ -163,6 +181,8 @@ namespace cpplib {
 
 			for (size_t i = 1; i < n; ++i) {
 				value_type denom = diag[i] - sub[i] * gamma[i - 1];
+                if (!std::isfinite(denom) || denom <= 0 || !std::isfinite(rhs[i]))
+                    throw std::invalid_argument("CubicSpline: unrepresentable tridiagonal system");
 				gamma[i] = sup[i] / denom;
 				beta[i] = (rhs[i] - sub[i] * beta[i - 1]) / denom;
 			}
@@ -185,14 +205,19 @@ namespace cpplib {
 				a_[i] = (mip1 - mi) / (6.0 * hi);
 				b_[i] = mi / 2.0;
 				c_[i] = (yip1 - yi) / hi - hi * (2.0 * mi + mip1) / 6.0;
+                if (i == 0 && knots_[0] == 0) c_[i] = 0; // exact clamped boundary
 				d_[i] = yi;
+                if (!std::isfinite(a_[i]) || !std::isfinite(b_[i]) || !std::isfinite(c_[i]))
+                    throw std::invalid_argument("CubicSpline: unrepresentable coefficients");
 			}
+
+			d_[m] = values[m];
 
 			// 3. Safely zero-out the remaining unused capacity of the member arrays
 			std::fill(a_.begin() + m, a_.end(), value_type(0.0));
 			std::fill(b_.begin() + m, b_.end(), value_type(0.0));
 			std::fill(c_.begin() + m, c_.end(), value_type(0.0));
-			std::fill(d_.begin() + m, d_.end(), value_type(0.0));
+			std::fill(d_.begin() + m + 1, d_.end(), value_type(0.0));
 		}
 
 		/// @brief Evaluate spline value and its first two derivatives at point r
@@ -201,17 +226,13 @@ namespace cpplib {
 		/// @param dphi returns value of 1-st derivative of spline at r
 		/// @param ddphi returns value of 2-nd derivative of spline at r
 		void eval(value_type r, value_type& phi, value_type& dphi, value_type& ddphi) const {
-			if (r < knots_[0] || r >= radius()) {
-				phi = dphi = ddphi = 0.0;
-				return;
-			}
-			auto idx = find_active_spline(r);
-
-			// Safety clamp to ensure idx is within coeffs_ range
-			if (idx >= SIZE) [[unlikely]] {
-				phi = dphi = ddphi = 0.0;
-				return;
-			}
+            if (!std::isfinite(r) || r < 0)
+                throw std::invalid_argument("CubicSpline: radius must be finite and nonnegative");
+            if (m_ == 0 || r > radius()) {
+                phi = dphi = ddphi = 0;
+                return;
+            }
+            const auto idx = find_active_spline(r);
 
 			const auto a = a_[idx];
 			const auto b = b_[idx];
@@ -230,41 +251,26 @@ namespace cpplib {
 		/// @param target_val The function value to search for
 		/// @return The point r, or radius() if the value is out of bounds or decayed
 		value_type find_value(value_type start, value_type target_val) const {
-			if (target_val >= d_[0]) return knots_[0];
-			if (target_val <= 0.0)   return radius();
-
-			size_t idx = find_active_spline_hybrid(start, target_val);
-
-			const value_type r_left = knots_[idx];
-			const value_type r_right = knots_[idx + 1];
-			const value_type h_node = r_right - r_left;
-
-			const value_type f_left = d_[idx];
-			const value_type f_right = d_[idx + 1];
-
-			value_type t = (target_val - f_left) / (f_right - f_left + 1e-300);
-			t = std::clamp(t, 0.0, 1.0);
-
-			value_type dr = t * h_node;
-
-			const auto a = a_[idx];
-			const auto b = b_[idx];
-			const auto c = c_[idx];
-			const auto d = d_[idx];
-
-			for (int iter = 0; iter < 2; ++iter) {
-				value_type f_val = std::fma(std::fma(std::fma(dr, a, b), dr, c), dr, d) - target_val;
-				value_type df = std::fma(std::fma(3.0 * dr, a, 2.0 * b), dr, c);
-				if (std::abs(df) < 1e-15) [[unlikely]] {
-					break;
-				}
-
-				dr -= f_val / df;
-				dr = std::clamp(dr, 0.0, h_node);
-			}
-
-			return r_left + dr;
-		}
+            if (!std::isfinite(start) || start < 0 || !std::isfinite(target_val))
+                throw std::invalid_argument("CubicSpline: invalid value search");
+            if (m_ == 0) return radius();
+            if (target_val >= d_[0]) return knots_[0];
+            if (target_val <= d_[m_]) return radius();
+            if (start >= radius()) return radius();
+            for (size_t i = find_active_spline(start); i < m_; ++i) {
+                if (d_[i] < target_val || d_[i+1] > target_val) continue;
+                value_type left = knots_[i], right = knots_[i+1];
+                for (int iteration = 0; iteration <= std::numeric_limits<value_type>::digits; ++iteration) {
+                    const auto mid = left + (right-left) / 2;
+                    if (mid == left || mid == right) break;
+                    value_type value, first, second;
+                    eval(mid, value, first, second);
+                    if (value > target_val) left = mid; else right = mid;
+                }
+                return left + (right-left) / 2;
+            }
+            return radius();
+        }
 
 		constexpr value_type radius() const {
 			return r_max_;
@@ -274,41 +280,22 @@ namespace cpplib {
 		}
 
 	private:
-		// O(1)-optimized finder of active spline
-		size_t find_active_spline(value_type r) const {
-			return static_cast<size_t>((std::log(r) - ln_r0_) * inv_delta_);
-		}
-
-		size_t find_active_spline_hybrid(value_type start, value_type target_val) const {
-			size_t idx_start = find_active_spline(start);
-			if (idx_start >= m_ - 1) return m_ - 1;
-
-			if (target_val >= d_[idx_start]) return idx_start;
-
-			auto first = d_.begin() + idx_start;
-			auto last = d_.begin() + m_; 
-
-			auto it = std::upper_bound(first, last, target_val, std::greater<value_type>());
-
-			size_t idx = std::distance(d_.begin(), it);
-
-			if (idx > idx_start) {
-				idx--;
-			}
-
-			return std::clamp(idx, idx_start, m_ - 2);
-		}
-
+        size_t find_active_spline(value_type r) const {
+            // Extrapolate the first polynomial toward the origin; use the last
+            // polynomial at the endpoint. Interior queries use their actual knots.
+            if (r <= knots_[0]) return 0;
+            if (r >= r_max_) return m_ - 1;
+            return static_cast<size_t>(std::upper_bound(knots_.begin(), knots_.begin()+m_+1, r)
+                                       - knots_.begin() - 1);
+        }
 
 		std::array<value_type, SIZE> a_{};
 		std::array<value_type, SIZE> b_{};
 		std::array<value_type, SIZE> c_{};
-		std::array<value_type, SIZE> d_{};
-		std::array<value_type, SIZE> knots_{}; // knot_[SIZE] is r_max_
+		std::array<value_type, SIZE + 1> d_{};
+		std::array<value_type, SIZE + 1> knots_{}; // knot_[SIZE] is r_max_
 
 		value_type r_max_ = 0; // x = knot[last]
-		value_type ln_r0_ = 1; // ln(x_0)
-		value_type inv_delta_ = 1; // 1.0 / ln (x_1 / x_0)
 		size_t m_ = 0; // Precalculated active intervals count to optimize hot path
 	};
 
@@ -325,8 +312,8 @@ namespace cpplib {
 		/// @param x_minus_c is the relative vector from the center (r = x - c)
 		/// @return TripleDouble value at point x_minus_c
 		TripleDouble evaluate(const PointType& x_minus_c) const {
-			const value_type r = x_minus_c.r();
-			if ((r >= spline.radius()) || (r <= spline.r0())) {
+			const value_type r = std::hypot(x_minus_c[0], x_minus_c[1], x_minus_c[2]);
+			if (r > spline.radius()) {
 				return TripleDouble{}; // Return zero-initialized struct
 			}
 			value_type phi;
@@ -336,20 +323,24 @@ namespace cpplib {
 
 			TripleDouble result(phi);
 
-			value_type inv_r = 1.0 / r;
-			value_type inv_r2 = inv_r * inv_r;
-			value_type dphi_over_r = dphi * inv_r;
-			value_type coeff_hess = ddphi - dphi_over_r;
-			value_type coeff_hess_over_r2 = coeff_hess * inv_r2;
-
-			for (uint8_t i = 0; i < 3; ++i) {
-				result.grad[i] = dphi_over_r * x_minus_c[i];
-				value_type coeff_i = coeff_hess_over_r2 * x_minus_c[i];
-				for (uint8_t j = 0; j < 3; ++j) {
-					result.hess.El(i, j) = coeff_i * x_minus_c[j];
-				}
-				result.hess.El(i, i) += dphi_over_r;
-			}
+            if (r == 0) {
+                // A cusp (nonzero radial slope) has no Cartesian Hessian at its
+                // center. Do not manufacture a finite Hessian for ED nuclear cusps.
+                if (dphi != 0 && spline.r0() != 0)
+                    throw std::domain_error("RadialSpline: derivatives undefined at a nuclear cusp");
+                for (size_t i = 0; i < 3; ++i) result.hess.El(i,i) = ddphi;
+                return result;
+            }
+            // Unit-vector form avoids 1/r^2 overflow. There is no epsilon sphere:
+            // every positive radius uses the radial derivatives of the same spline.
+            const auto u = x_minus_c / r;
+            const auto tangential = dphi / r;
+            for (size_t i = 0; i < 3; ++i) {
+                result.grad[i] = dphi * u[i];
+                for (size_t j = 0; j < 3; ++j)
+                    result.hess.El(i,j) = (ddphi - tangential) * u[i] * u[j];
+                result.hess.El(i,i) += tangential;
+            }
 			return result;
 		}
 

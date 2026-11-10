@@ -1,4 +1,5 @@
-﻿import pathlib
+﻿import os
+import pathlib
 import shutil
 import subprocess
 import sys
@@ -7,7 +8,7 @@ import textwrap
 import unittest
 
 
-EXTENSION = (
+EXTENSION = pathlib.Path(os.environ["CPPLIB_TEST_EXTENSION"]) if "CPPLIB_TEST_EXTENSION" in os.environ else (
     pathlib.Path(__file__).resolve().parents[3]
     / "module"
     / ("cpplib.pyd" if sys.platform == "win32" else "cpplib.so")
@@ -46,7 +47,9 @@ import sys
 ext = pathlib.Path(sys.argv[1]).resolve()
 
 if sys.platform == "win32":
-    os.add_dll_directory(str(ext.parent))
+    dll_directories = [os.add_dll_directory(str(ext.parent))]
+    if os.environ.get("CPPLIB_TEST_DLL_DIR"):
+        dll_directories.append(os.add_dll_directory(os.environ["CPPLIB_TEST_DLL_DIR"]))
 
 spec = importlib.util.spec_from_file_location("cpplib", ext)
 cpplib = importlib.util.module_from_spec(spec)
@@ -100,7 +103,7 @@ print("OK")
     def test_import_from_remote_directory_does_not_raise(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)
-            extension = self._copy_extension(root / "remote")
+            extension = self._copy_extension(root / "remote-\u0434\u0430\u043d\u043d\u044b\u0435")
 
             cwd = root / "cwd"
             cwd.mkdir()
@@ -119,7 +122,7 @@ print("OK")
     def test_call_after_copy_without_data_raises_file_not_found(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)
-            extension = self._copy_extension(root / "remote")
+            extension = self._copy_extension(root / "remote-\u0434\u0430\u043d\u043d\u044b\u0435")
 
             cwd = root / "cwd"
             cwd.mkdir()
@@ -148,7 +151,7 @@ print("OK")
     def test_relocated_extension_with_data_works(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = pathlib.Path(tmp)
-            extension = self._copy_extension(root / "remote")
+            extension = self._copy_extension(root / "remote-\u0434\u0430\u043d\u043d\u044b\u0435")
             extension_dir = extension.parent
             (extension_dir / "BondLength.ini").write_text(
                 BONDS, encoding="utf-8",

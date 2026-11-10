@@ -1,8 +1,8 @@
-﻿{
+{
   "version": 6,
   "cmakeMinimumRequired": {
     "major": 3,
-    "minor": 23,
+    "minor": 25,
     "patch": 0
   },
   "configurePresets": [
@@ -19,7 +19,9 @@
       },
       "vendor": {
         "microsoft.com/VisualStudioSettings/CMake/1.0": {
-          "hostOS": [ "Linux" ],
+          "hostOS": [
+            "Linux"
+          ],
           "remoteCMakeListsRoot": "$HOME/.vs/${sourceDirName}/${presetName}/src",
           "remoteBuildRoot": "$HOME/.vs/${sourceDirName}/${presetName}/out/build",
           "remoteInstallRoot": "$HOME/.vs/${sourceDirName}/${presetName}/out/install",
@@ -27,7 +29,11 @@
           "rsyncCommandArgs": "-t --delete",
           "remoteCopyBuildOutput": false,
           "remoteCopySourcesMethod": "rsync",
-          "remoteCopySourcesExclusionList": [ ".vs", ".git", "out" ],
+          "remoteCopySourcesExclusionList": [
+            ".vs",
+            ".git",
+            "out"
+          ],
           "intelliSenseMode": "linux-gcc-x64"
         }
       }
@@ -83,6 +89,25 @@
           "intelliSenseMode": "windows-msvc-x64"
         }
       }
+    },
+    {
+      "name": "linux-gcc-debug",
+      "inherits": "linux-gcc-release",
+      "displayName": "Linux GCC Debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "macos-clang-release",
+      "displayName": "macOS Clang Release",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/out/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++"
+      }
     }
   ],
   "buildPresets": [
@@ -97,6 +122,14 @@
     {
       "name": "x64-debug",
       "configurePreset": "x64-debug"
+    },
+    {
+      "name": "linux-gcc-debug",
+      "configurePreset": "linux-gcc-debug"
+    },
+    {
+      "name": "macos-clang-release",
+      "configurePreset": "macos-clang-release"
     }
   ]
 }

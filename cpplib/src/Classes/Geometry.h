@@ -582,196 +582,55 @@ namespace cpplib::geometry {
 			}
 		}
 
-		// Analytical 3x3 eigenvalue solver using cubic equation.
-		// Optimized for speed: no dynamic allocations, minimal branching,
-		// uses double for internal computations to maintain precision.
-		[[nodiscard]] constexpr EigenType EigenvaluesAndVectors() const noexcept {
-			EigenType result{};
+        // Scaled symmetric Jacobi diagonalization. Orthogonal rotations preserve
+        // eigenspaces even for repeated eigenvalues; no absolute degeneracy cutoff.
+        [[nodiscard]] constexpr EigenType EigenvaluesAndVectors() const noexcept {
+            EigenType result{};
+            double scale = 0;
+            for (const auto value : data) {
+                if (!std::isfinite(value)) {
+                    const auto nan = std::numeric_limits<T>::quiet_NaN();
+                    result.values.fill(nan);
+                    for (auto& vector : result.vectors)
+                        for (int i=0;i<3;++i) vector[i]=nan;
+                    return result;
+                }
+                scale=std::max(scale,std::abs(static_cast<double>(value)));
+            }
+            double a[3][3]{};
+            double v[3][3]{{1,0,0},{0,1,0},{0,0,1}};
+            if (scale != 0)
+                for(int i=0;i<3;++i) for(int j=0;j<3;++j) a[i][j]=El(i,j)/scale;
+            // Largest-pivot Jacobi needs only a few sweeps for a 3x3 matrix.
+            for(int iteration=0;iteration<64;++iteration) {
+                int p=0,q=1;
+                for(int i=0;i<3;++i) for(int j=i+1;j<3;++j)
+                    if(std::abs(a[i][j])>std::abs(a[p][q])) {p=i;q=j;}
+                const double ds=std::max({std::abs(a[0][0]),std::abs(a[1][1]),std::abs(a[2][2])});
+                if(a[p][q]==0 || std::abs(a[p][q])<=std::numeric_limits<double>::epsilon()*ds) break;
+                const double tau=(a[q][q]-a[p][p])/(2*a[p][q]);
+                const double t=std::copysign(1.0,tau)/(std::abs(tau)+std::hypot(1.0,tau));
+                const double c=1/std::hypot(1.0,t), sn=t*c, off=a[p][q];
+                a[p][p]-=t*off; a[q][q]+=t*off; a[p][q]=a[q][p]=0;
+                for(int k=0;k<3;++k) {
+                    if(k!=p && k!=q) {
+                        const double kp=a[k][p],kq=a[k][q];
+                        a[k][p]=a[p][k]=c*kp-sn*kq;
+                        a[k][q]=a[q][k]=sn*kp+c*kq;
+                    }
+                    const double vp=v[k][p],vq=v[k][q];
+                    v[k][p]=c*vp-sn*vq; v[k][q]=sn*vp+c*vq;
+                }
+            }
+            std::array<int,3> order{0,1,2};
+            std::sort(order.begin(),order.end(),[&](int i,int j){return a[i][i]>a[j][j];});
+            for(int i=0;i<3;++i) {
+                result.values[i]=static_cast<T>(a[order[i]][order[i]]*scale);
+                for(int j=0;j<3;++j) result.vectors[i][j]=static_cast<T>(v[j][order[i]]);
+            }
+            return result;
+        }
 
-			// Cashing values
-			const T m00 = data[0];
-			const T m01 = data[1];
-			const T m02 = data[2];
-			const T m10 = data[3];
-			const T m11 = data[4];
-			const T m12 = data[5];
-			const T m20 = data[6];
-			const T m21 = data[7];
-			const T m22 = data[8];
-
-			// ------------------------------------------------------------------------
-			// Step 1: Compute invariants of the characteristic polynomial:
-			//   la^3 - I1*la^2 + I2*la - I3 = 0
-			// ------------------------------------------------------------------------
-			const T I1 = m00 + m11 + m22;  // trace
-
-			// I2 = sum of principal minors
-			const T I2 = (m00 * m11 - m01 * m10) +
-				(m00 * m22 - m02 * m20) +
-				(m11 * m22 - m12 * m21);
-
-			// I3 = determinant
-			const T I3 = m00 * (m11 * m22 - m12 * m21) -
-				m01 * (m10 * m22 - m12 * m20) +
-				m02 * (m10 * m21 - m11 * m20);
-
-			// ------------------------------------------------------------------------
-			// Step 2: Depress the cubic: la = mu + I1/3
-			// ------------------------------------------------------------------------
-			const T I1_div3 = I1 / 3.0;
-
-			const T p = I2 - (I1 * I1) / 3.0;
-			const T q = (I1 * I2) / 3.0 - (2.0 * I1 * I1 * I1) / 27.0 - I3;
-
-			// ------------------------------------------------------------------------
-			// Step 3: Solve depressed cubic using Cardano-Vieta trigonometric method
-			// ------------------------------------------------------------------------
-			const T p3 = p / 3.0;
-			const T q2 = q / 2.0;
-			const T D = q2 * q2 + p3 * p3 * p3;
-
-			T eigenvalues[3];
-
-			if (p3 >= -1e-12) {
-				eigenvalues[0] = I1_div3;
-				eigenvalues[1] = I1_div3;
-				eigenvalues[2] = I1_div3;
-			} else {
-				const T r = 2.0 * std::sqrt(-p3);
-
-				T arg = -q / (r * r * r / 4.0);
-
-				arg = std::max(static_cast<T>(-1.0), std::min(static_cast<T>(1.0), arg));
-
-				const T phi = std::acos(arg);
-				const T phi_div3 = phi / 3.0;
-
-				eigenvalues[0] = r * std::cos(phi_div3) + I1_div3;
-				eigenvalues[1] = r * std::cos(phi_div3 + 2.0943951023931953) + I1_div3; // +2*pi/3
-				eigenvalues[2] = r * std::cos(phi_div3 + 4.1887902047863905) + I1_div3; // +4*pi/3
-			}
-
-			std::sort(eigenvalues, eigenvalues + 3, std::greater<T>());
-
-			for (int i = 0; i < 3; ++i) {
-				result.values[i] = static_cast<T>(eigenvalues[i]);
-			}
-
-			// ------------------------------------------------------------------------
-			// Step 4: Compute eigenvectors using Gaussian elimination / Cofactors
-			// ------------------------------------------------------------------------
-			for (int eig_idx = 0; eig_idx < 3; ++eig_idx) {
-				const T lambda = eigenvalues[eig_idx];
-
-				const T M00 = m00 - lambda; const T M01 = m01;          const T M02 = m02;
-				const T M10 = m10;          const T M11 = m11 - lambda; const T M12 = m12;
-				const T M20 = m20;          const T M21 = m21;          const T M22 = m22 - lambda;
-
-				T vx0 = M01 * M12 - M02 * M11;
-				T vy0 = M02 * M10 - M00 * M12;
-				T vz0 = M00 * M11 - M01 * M10;
-
-				T vx1 = M11 * M22 - M12 * M21;
-				T vy1 = M12 * M20 - M10 * M22;
-				T vz1 = M10 * M21 - M11 * M20;
-
-				T vx2 = M21 * M02 - M22 * M01;
-				T vy2 = M22 * M00 - M20 * M02;
-				T vz2 = M20 * M01 - M21 * M00;
-
-				T n0 = vx0 * vx0 + vy0 * vy0 + vz0 * vz0;
-				T n1 = vx1 * vx1 + vy1 * vy1 + vz1 * vz1;
-				T n2 = vx2 * vx2 + vy2 * vy2 + vz2 * vz2;
-
-				T vx = vx0, vy = vy0, vz = vz0;
-				T maxNormSq = n0;
-
-				if (n1 > maxNormSq) {
-					maxNormSq = n1; vx = vx1; vy = vy1; vz = vz1;
-				}
-				if (n2 > maxNormSq) {
-					maxNormSq = n2; vx = vx2; vy = vy2; vz = vz2;
-				}
-
-				if (maxNormSq < 1e-12) {
-					T abs0 = std::abs(M00);
-					T abs1 = std::abs(M11);
-					T abs2 = std::abs(M22);
-
-					if (abs0 <= abs1 && abs0 <= abs2) {
-						vx = 1.0; vy = 0.0; vz = 0.0;
-					} else if (abs1 <= abs0 && abs1 <= abs2) {
-						vx = 0.0; vy = 1.0; vz = 0.0;
-					} else {
-						vx = 0.0; vy = 0.0; vz = 1.0;
-					}
-					maxNormSq = 1.0;
-				}
-
-				const T invNorm = 1.0 / std::sqrt(maxNormSq);
-				result.vectors[eig_idx][0] = static_cast<T>(vx * invNorm);
-				result.vectors[eig_idx][1] = static_cast<T>(vy * invNorm);
-				result.vectors[eig_idx][2] = static_cast<T>(vz * invNorm);
-			}
-
-			// ------------------------------------------------------------------------
-			// Step 5: Orthogonalize eigenvectors (Gram-Schmidt) - ROBUST VERSION
-			// ------------------------------------------------------------------------
-			for (int i = 0; i < 3; ++i) {
-				for (int j = 0; j < i; ++j) {
-					T dot = 0.0;
-					for (int k = 0; k < 3; ++k) {
-						dot += result.vectors[i][k] * result.vectors[j][k];
-					}
-					for (int k = 0; k < 3; ++k) {
-						result.vectors[i][k] -= dot * result.vectors[j][k];
-					}
-				}
-
-				T norm = 0.0;
-				for (int k = 0; k < 3; ++k) {
-					const double val = result.vectors[i][k];
-					norm += val * val;
-				}
-
-				if (norm < 1e-12) {
-					const T bases[3][3] = {{1.0, 0.0, 0.0}, {0.0, 1.0, 0.0}, {0.0, 0.0, 1.0}};
-
-					for (int b_idx = 0; b_idx < 3; ++b_idx) {
-						result.vectors[i][0] = bases[b_idx][0];
-						result.vectors[i][1] = bases[b_idx][1];
-						result.vectors[i][2] = bases[b_idx][2];
-
-						for (int j = 0; j < i; ++j) {
-							T dot = 0.0;
-							for (int k = 0; k < 3; ++k) {
-								dot += result.vectors[i][k] * result.vectors[j][k];
-							}
-							for (int k = 0; k < 3; ++k) {
-								result.vectors[i][k] -= dot * result.vectors[j][k];
-							}
-						}
-
-						norm = 0.0;
-						for (int k = 0; k < 3; ++k) {
-							const double val = result.vectors[i][k];
-							norm += val * val;
-						}
-
-						if (norm > 1e-12) {
-							break;
-						}
-					}
-				}
-
-				const double invNorm = 1.0 / std::sqrt(norm);
-				for (int k = 0; k < 3; ++k) {
-					result.vectors[i][k] = static_cast<T>(result.vectors[i][k] * invNorm);
-				}
-			}
-
-			return result;
-		}
 		template<std::integral I>
 		constexpr value_type operator[](I i) const noexcept {
 			return data[i];
@@ -1697,27 +1556,27 @@ namespace cpplib::geometry {
 			const LocalIdx* __restrict ida = csr_.data.data();
 
 
-			// TODO: Bug : dont use use_pbc==false
-			//const int lo = cfg_.use_pbc?-1:0;
-			//const int hi = cfg_.use_pbc?+1:0;
-			const int lo = -1;
-			const int hi = +1;
-			// End of Bug
+            // Nonperiodic queries still visit adjacent in-bounds grid buckets.
+            const int lo = -1;
+            const int hi = +1;
 
 			for (int dz = lo; dz <= hi; ++dz) {
 				const int32_t rawz = cz0 + dz;
-				const int32_t wz = wrap_int(rawz, dim[2]);
-				const int     sz = shift_dir(rawz, dim[2]);
+				if (!cfg_.use_pbc && (rawz < 0 || rawz >= dim[2])) continue;
+                    const int32_t wz = cfg_.use_pbc ? wrap_int(rawz, dim[2]) : rawz;
+				const int     sz = cfg_.use_pbc ? shift_dir(rawz, dim[2]) : 0;
 
 				for (int dy = lo; dy <= hi; ++dy) {
 					const int32_t rawy = cy0 + dy;
-					const int32_t wy = wrap_int(rawy, dim[1]);
-					const int     sy = shift_dir(rawy, dim[1]);
+					if (!cfg_.use_pbc && (rawy < 0 || rawy >= dim[1])) continue;
+                    const int32_t wy = cfg_.use_pbc ? wrap_int(rawy, dim[1]) : rawy;
+					const int     sy = cfg_.use_pbc ? shift_dir(rawy, dim[1]) : 0;
 
 					for (int dx = lo; dx <= hi; ++dx) {
 						const int32_t rawx = cx0 + dx;
-						const int32_t wx = wrap_int(rawx, dim[0]);
-						const int     sx = shift_dir(rawx, dim[0]);
+						if (!cfg_.use_pbc && (rawx < 0 || rawx >= dim[0])) continue;
+                    const int32_t wx = cfg_.use_pbc ? wrap_int(rawx, dim[0]) : rawx;
+						const int     sx = cfg_.use_pbc ? shift_dir(rawx, dim[0]) : 0;
 
 						const uint32_t ci = static_cast<uint32_t>(
 							(wz * dim[1] + wy) * dim[0] + wx);

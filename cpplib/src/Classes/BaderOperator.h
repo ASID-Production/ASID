@@ -444,7 +444,7 @@ namespace cpplib {
 			switch (type_) {
 				using enum TYPE;
 			case N:
-				return PartitionedRFO<0>();
+				return pos_;
 			case B:
 				return PartitionedRFO<1>();
 			case R:
@@ -533,6 +533,7 @@ namespace cpplib {
 			for (size_t i = 0; i < max_step; i++)
 			{
 				auto r = value_.grad.r();
+                if (r == 0 || !std::isfinite(r)) break;
 				auto next_point = pos_ + value_.grad * (1 / r) * step_length;
 				auto next_value = CalculateEDinPoint(next_point, psoa, splines);
 				if (PointType::Scalar(value_.grad, next_value.grad) <= 0) {
@@ -549,16 +550,19 @@ namespace cpplib {
 			const auto& g = value_.grad;
 			const auto& h = value_.hess;
 
-			value_type det = h.Det();
-			if (std::abs(det) < EPS) {
-				value_type step = 0.01;
-				return pos_ + PointType(-g[0] * step, -g[1] * step, -g[2] * step);
-			}
-
-			const auto H_inv = h.Invert();
-			value_type delta_x = -(H_inv.El(0, 0) * g[0] + H_inv.El(0, 1) * g[1] + H_inv.El(0, 2) * g[2]);
-			value_type delta_y = -(H_inv.El(1, 0) * g[0] + H_inv.El(1, 1) * g[1] + H_inv.El(1, 2) * g[2]);
-			value_type delta_z = -(H_inv.El(2, 0) * g[0] + H_inv.El(2, 1) * g[1] + H_inv.El(2, 2) * g[2]);
+            // Solve in the Hessian eigenbasis, avoiding scale-dependent determinant
+            // tests and an explicitly formed inverse. Singular systems do not move.
+            const auto eigen = h.EigenvaluesAndVectors();
+            const auto scale = std::max({std::abs(eigen.values[0]), std::abs(eigen.values[1]), std::abs(eigen.values[2])});
+            if (!std::isfinite(scale) || scale == 0) return pos_;
+            PointType delta{};
+            for (size_t i = 0; i < 3; ++i) {
+                const auto lambda = eigen.values[i];
+                if (std::abs(lambda) <= std::numeric_limits<value_type>::epsilon() * scale) return pos_;
+                const auto projection = PointType::Scalar(eigen.vectors[i], g);
+                delta -= eigen.vectors[i] * (projection / lambda);
+            }
+            value_type delta_x = delta[0], delta_y = delta[1], delta_z = delta[2];
 
 			const value_type alpha_sq = delta_x * delta_x + delta_y * delta_y + delta_z * delta_z;
 			if (alpha_sq > MAX_STEP_SQ) {
@@ -641,15 +645,16 @@ namespace cpplib {
 
 			// Разделение на подпространства
 			// Для седла 1 порядка (Target=1): первые 1 моды (минимальные) максимизируем, остальные минимизируем
-			int max_modes = Target;
+			// TYPE counts positive eigenvalues: maximize the remaining modes.
+            int max_modes = 3 - Target;
 			std::vector<int> max_indices, min_indices;
 
 			// Mode following (ведение моды)
 			if (max_modes > 0) {
 				if (!mode_following_init_) {
 					for (int i = 0; i < max_modes; ++i) {
-						max_indices.push_back(i);
-						prev_max_vecs_[i] = vecs[i];
+						max_indices.push_back(Target + i);
+						prev_max_vecs_[i] = vecs[Target + i];
 					}
 					mode_following_init_ = true;
 				} else {
@@ -692,41 +697,28 @@ namespace cpplib {
 			auto solve_p_rfo = [&](const std::vector<int>& indices, bool is_max) -> value_type {
 				if (indices.empty()) return 0.0;
 
-				// Поиск границ для метода Ньютона/Бисекции
-				value_type max_lam = -1e20, min_lam = 1e20;
-				for (int idx:indices) {
-					if (lam[idx] > max_lam) max_lam = lam[idx];
-					if (lam[idx] < min_lam) min_lam = lam[idx];
-				}
-
-				// Функция RFO: \sum { f_i^2 / (eta - lam_i) } - eta = 0
-				auto RFO_Eq = [&](value_type eta) {
-					value_type sum = -eta;
-					for (int idx:indices) {
-						sum += (f[idx] * f[idx]) / (eta - lam[idx]);
-					}
-					return sum;
-					};
-
-				value_type lo, hi;
-				if (is_max) {
-					hi = min_lam - 1e-6;
-					lo = min_lam - std::max(1.0, std::abs(min_lam) * 2.0);
-				} else {
-					lo = max_lam + 1e-6;
-					hi = max_lam + std::max(1.0, std::abs(max_lam) * 2.0);
-				}
-
-				// Простой и надежный Bisection
-				for (int iter = 0; iter < 60; ++iter) {
-					value_type mid = 0.5 * (lo + hi);
-					value_type val = RFO_Eq(mid);
-					if (std::abs(val) < 1e-11 || (hi - lo) < 1e-12) return mid;
-
-					if (val > 0) lo = mid;
-					else         hi = mid;
-				}
-				return 0.5 * (lo + hi);
+                value_type low_mode = 0, high_mode = 0, force_norm = 0;
+                for (int idx : indices) {
+                    low_mode = std::min(low_mode, lam[idx]);
+                    high_mode = std::max(high_mode, lam[idx]);
+                    force_norm = std::hypot(force_norm, f[idx]);
+                }
+                // The augmented RFO matrix has diagonal (lambda_i, 0).
+                // Its outer roots lie outside that spectrum, within ||f||_2
+                // (Weyl's bound). The secular equation is strictly decreasing.
+                const auto inf = std::numeric_limits<value_type>::infinity();
+                if (force_norm == 0) return is_max ? high_mode : low_mode;
+                value_type lo = is_max ? std::nextafter(high_mode, inf) : low_mode - force_norm;
+                value_type hi = is_max ? high_mode + force_norm : std::nextafter(low_mode, -inf);
+                if (hi < lo) return is_max ? lo : hi;
+                for (int iteration = 0; iteration < 128; ++iteration) {
+                    const auto mid = lo + (hi-lo)/2;
+                    if (mid == lo || mid == hi) return mid;
+                    value_type equation = -mid;
+                    for (int idx : indices) equation += (f[idx] / (mid-lam[idx])) * f[idx];
+                    if (equation > 0) lo = mid; else hi = mid;
+                }
+                return lo + (hi-lo)/2;
 				};
 
 			value_type eta_max = solve_p_rfo(max_indices, true);
@@ -737,8 +729,8 @@ namespace cpplib {
 				bool is_max = (std::find(max_indices.begin(), max_indices.end(), i) != max_indices.end());
 				value_type eta = is_max?eta_max:eta_min;
 
-				value_type denom = eta - lam[i];
-				if (std::abs(denom) < 1e-10) denom = (denom >= 0)?1e-10:-1e-10;
+				if (f[i] == 0) continue;
+                const value_type denom = eta - lam[i];
 
 				value_type c = f[i] / denom;
 				dx[0] += c * vecs[i][0];
@@ -781,7 +773,10 @@ namespace cpplib {
 			for (const auto& active_index : unfiltered_types) {
 				const size_t idx = static_cast<size_t>(active_index);
 
-				if (visited[idx]) {
+				if (idx >= splines.size() || splines[idx].spline.radius() == 0)
+                    throw std::invalid_argument("No electron density data for atom type");
+
+                if (visited[idx]) {
 					continue;
 				}
 				visited[idx] = true;
@@ -846,10 +841,8 @@ namespace cpplib {
 													static_cast<int>(eigen.values[2] > 0));
 		}
 
-		static void OptimizePoint(CriticalPoint& cp, const PointsSoA<value_type>& psoa, value_type end_sq) {
-			// Lazy access to the ED singleton: the splines are loaded on demand,
-			// from the file located next to the starting module.
-			const auto& ElectronDensitySplines = ElectronDensity::instance().splines();
+		static void OptimizePoint(CriticalPoint& cp, const PointsSoA<value_type>& psoa,
+                                  const std::vector<RadialSpline>& ElectronDensitySplines, value_type end_sq) {
 
 			constexpr value_type SHRINK_FACTOR = 0.7071067811865475;
 			constexpr value_type GROW_FACTOR = 1.15;
@@ -889,7 +882,8 @@ namespace cpplib {
 				cp.UpdatePos(next_point);
 				cp.UpdateVal(CriticalPoint::CalculateEDinPoint(next_point, psoa, ElectronDensitySplines));
 			}
-			while (iter-- > 0 && cp.value_.getGradSq() > 1e-12) {
+			constexpr int max_newton_iterations = 16;
+            for (int n = 0; n < max_newton_iterations && cp.value_.getGradSq() > 1e-12; ++n) {
 				PointType next_point = cp.NewtonRaphsonPredict();
 				cp.UpdatePos(next_point);
 				cp.UpdateVal(CriticalPoint::CalculateEDinPoint(next_point, psoa, ElectronDensitySplines));
@@ -900,6 +894,10 @@ namespace cpplib {
 			}
 			return;
 		}
+        static void OptimizePoint(CriticalPoint& cp, const PointsSoA<value_type>& psoa, value_type end_sq) {
+            OptimizePoint(cp, psoa, ElectronDensity::instance().splines(), end_sq);
+        }
+
 		static std::string criticalPointsToPDB_fast(const std::vector<CriticalPoint>& cps) {
 			static constexpr std::array<const char*, 4> typeToElem = {
 				"C", // N

@@ -47,11 +47,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Politics
 # ============================================================================
 if(CMAKE_VERSION VERSION_LESS 3.15)
-    message(STATUS "CMake version 3.15+ recomended")
+    message(STATUS "CMake version 3.15+ recommended")
 endif()
-if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.24)
+if(POLICY CMP0141)
     cmake_policy(SET CMP0141 NEW)
-    set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT 
+    set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT
         "$<$<CONFIG:Debug,RelWithDebInfo>:ProgramDatabase>")
 endif()
 
@@ -60,70 +60,30 @@ endif()
 # ============================================================================
 set(CMAKE_SHOW_INCLUDES OFF)
 add_library(optimizations INTERFACE)
-    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-        target_compile_options(optimizations INTERFACE 
-            $<$<CONFIG:Release>:
-                -O3
-                -DNDEBUG
-                -march=native
-                -mtune=native
-                -mfma
-                -flto
-                -funroll-loops
-                -fprefetch-loop-arrays
-                -fno-rtti
-                -ffast-math
-            >
-        )
-        message(STATUS "Linux: max performance with safe math optimizations")
-        
-    elseif(MSVC)
-        foreach(flag_var 
-                CMAKE_CXX_FLAGS CMAKE_CXX_FLAGS_RELEASE CMAKE_CXX_FLAGS_RELWITHDEBINFO)
-            string(REPLACE "/GR" "" ${flag_var} "${${flag_var}}")
-            string(REPLACE "/EHс" "" ${flag_var} "${${flag_var}}")
-            string(REPLACE "/EHsс" "" ${flag_var} "${${flag_var}}")
-        endforeach()
-
-
-        target_compile_options(optimizations INTERFACE 
-            $<$<CONFIG:Release>:
-                /O2
-                /Ot
-                /Oi
-                /Gy
-                /GL
-                /DNDEBUG
-                /arch:AVX2
-                /fp:fast
-                /EHsc
-                /GR-
-            >
-        )
-        target_link_options(optimizations INTERFACE 
-            $<$<CONFIG:Release>:
-                /LTCG
-                /OPT:REF
-                /OPT:ICF
-            >
-        )
-        message(STATUS "Windows: AVX2 + LTCG with fast FP model")
-        
-    elseif(CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang")
-        target_compile_options(optimizations INTERFACE 
-            $<$<CONFIG:Release>:
-                -O3
-                -DNDEBUG
-                -march=native
-                -mtune=native
-                -flto
-                -fno-math-errno
-                -fno-signed-zeros
-                -fno-trapping-math
-            >
-        )
-        message(STATUS "Clang/Unix: safe optimizations enabled")
+option(CPPLIB_NATIVE_CPU "Optimize Release builds for the local CPU" OFF)
+option(CPPLIB_ENABLE_IPO "Enable interprocedural optimization when supported" OFF)
+if(MSVC)
+    target_compile_options(optimizations INTERFACE /fp:precise
+        $<$<CONFIG:Release>:/O2>)
+    if(CPPLIB_NATIVE_CPU)
+        target_compile_options(optimizations INTERFACE $<$<CONFIG:Release>:/arch:AVX2>)
     endif()
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+    target_compile_options(optimizations INTERFACE $<$<CONFIG:Release>:-O3>)
+    if(CPPLIB_NATIVE_CPU)
+        target_compile_options(optimizations INTERFACE
+            "$<$<CONFIG:Release>:-march=native;-mtune=native>")
+    endif()
+endif()
+if(CPPLIB_ENABLE_IPO)
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT CPPLIB_IPO_SUPPORTED OUTPUT CPPLIB_IPO_ERROR LANGUAGES CXX)
+    if(NOT CPPLIB_IPO_SUPPORTED)
+        message(FATAL_ERROR "IPO requested but unavailable: ${CPPLIB_IPO_ERROR}")
+    endif()
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+endif()
+message(STATUS "cpplib: precise floating point; native CPU=${CPPLIB_NATIVE_CPU}; IPO=${CPPLIB_ENABLE_IPO}")
 
 # ============================================================================
 # Python options
@@ -151,7 +111,7 @@ set(CPPLIB_PY_SOURCES
     cpplib/src/Python/PythonInterface.cpp
 )
 
-set(DATA_FILES 
+set(DATA_FILES
     BondLength.ini
     ED.txt
 )
@@ -161,77 +121,71 @@ foreach(file ${DATA_FILES})
 endforeach()
 
 # ============================================================================
-# CPPLIB creates only in Release
+# CPPLIB extension (all configurations)
 # ============================================================================
-if(CMAKE_BUILD_TYPE MATCHES Release OR CMAKE_CONFIGURATION_TYPES)
-    add_library(cpplib SHARED ${CPPLIB_PY_SOURCES} ${CPPLIB_SOURCES})
-    
-    # Include dirs
-    target_include_directories(cpplib 
-        PUBLIC 
-            ${PROJECT_SOURCE_DIR}/cpplib/src/BaseHeaders
-            ${PROJECT_SOURCE_DIR}/cpplib/src/Classes
-            ${PROJECT_SOURCE_DIR}/cpplib/src/Functions
-            ${PROJECT_SOURCE_DIR}/cpplib/src/Platform
-        PRIVATE
-            ${Python_INCLUDE_DIRS}
-    )
-    
-    set_target_properties(cpplib PROPERTIES
-        PREFIX ""
-        OUTPUT_NAME "cpplib"
-        LINKER_LANGUAGE C
-        POSITION_INDEPENDENT_CODE ON
-    )
-    
-    target_link_libraries(cpplib PRIVATE optimizations ${CMAKE_DL_LIBS})
+add_library(cpplib SHARED ${CPPLIB_PY_SOURCES} ${CPPLIB_SOURCES})
 
-    if(MSVC)
-        target_compile_options(cpplib PRIVATE $<$<CONFIG:Release>:/MD>)
-    endif()
+# Include dirs
+target_include_directories(cpplib
+    PUBLIC
+        ${PROJECT_SOURCE_DIR}/cpplib/src/BaseHeaders
+        ${PROJECT_SOURCE_DIR}/cpplib/src/Classes
+        ${PROJECT_SOURCE_DIR}/cpplib/src/Functions
+        ${PROJECT_SOURCE_DIR}/cpplib/src/Platform
+    PRIVATE
+        ${Python_INCLUDE_DIRS}
+)
 
-    # ============================================================================
-    # Link with Python (Stable ABI / Limited API)
-    # ============================================================================
-    
-    if(WIN32)
-        find_library(PYTHON_SABI_LIBRARY_RELEASE
-            NAMES python3
-            PATHS ${Python_LIBRARY_DIRS}
-            REQUIRED
-        )
-        
-        find_library(PYTHON_SABI_LIBRARY_DEBUG
-            NAMES python3_d
-            PATHS ${Python_LIBRARY_DIRS}
-            REQUIRED
-        )
-        
-        target_link_libraries(cpplib PRIVATE
-            optimized ${PYTHON_SABI_LIBRARY_RELEASE}
-            debug ${PYTHON_SABI_LIBRARY_DEBUG}
-        )
-    else()
-        target_link_libraries(cpplib PRIVATE ${Python_LIBRARIES})
-    endif()
-    
-    # ============================================================================
-    # Copy target to module dir
-    # ============================================================================
-    if(WIN32)
-        set(MODULE_EXTENSION "pyd")
-    else()
-        set(MODULE_EXTENSION "so")
-    endif()
-    
-    add_custom_command(
-        TARGET cpplib POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy
-            $<TARGET_FILE:cpplib>
-            ${CMAKE_SOURCE_DIR}/module/cpplib.${MODULE_EXTENSION}
-        COMMENT "Copying module to ${CMAKE_SOURCE_DIR}/module/"
-    )    
+set_target_properties(cpplib PROPERTIES
+    PREFIX ""
+    OUTPUT_NAME "cpplib"
+    POSITION_INDEPENDENT_CODE ON
+)
+
+target_link_libraries(cpplib PRIVATE optimizations ${CMAKE_DL_LIBS})
+
+if(MSVC)
+    target_compile_options(cpplib PRIVATE $<$<CONFIG:Release>:/MD>)
 endif()
+
+# ============================================================================
+# Link with Python (Stable ABI / Limited API)
+# ============================================================================
+
+if(WIN32)
+    find_library(PYTHON_SABI_LIBRARY_RELEASE
+        NAMES python3
+        PATHS ${Python_LIBRARY_DIRS}
+        REQUIRED
+    )
+
+    # Stable ABI targets the selected release interpreter in every C++ config.
+    target_link_libraries(cpplib PRIVATE ${PYTHON_SABI_LIBRARY_RELEASE})
+else()
+    target_link_libraries(cpplib PRIVATE ${Python_LIBRARIES})
+endif()
+
+# ============================================================================
+# Copy target to module dir
+# ============================================================================
+if(WIN32)
+    set(MODULE_EXTENSION "pyd")
+else()
+    set(MODULE_EXTENSION "so")
+endif()
+
+set_target_properties(cpplib PROPERTIES SUFFIX ".${MODULE_EXTENSION}")
+add_custom_command(TARGET cpplib POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${DATA_FULL_PATHS} "$<TARGET_FILE_DIR:cpplib>"
+    VERBATIM)
+option(CPPLIB_COPY_MODULE_TO_SOURCE "Copy the extension into module/ after building" ON)
+if(CPPLIB_COPY_MODULE_TO_SOURCE)
+    add_custom_command(TARGET cpplib POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:cpplib> "${CMAKE_SOURCE_DIR}/module/cpplib.${MODULE_EXTENSION}"
+        VERBATIM)
+endif()
+
 
 # ============================================================================
 # Tests
@@ -245,7 +199,7 @@ if(BUILD_TESTING)
     # ------------------------------------------------------------------------
     # C++ tests (Google Test)
     # ------------------------------------------------------------------------
-    if(EXISTS "${CMAKE_SOURCE_DIR}/cpplib/Tests" AND WIN32)
+    if(EXISTS "${CMAKE_SOURCE_DIR}/cpplib/Tests")
         add_subdirectory(cpplib/Tests)
         message(STATUS "Google Test enabled")
     endif()
@@ -255,8 +209,9 @@ if(BUILD_TESTING)
     # ------------------------------------------------------------------------
     set(PYTHON_TEST_DIR "${CMAKE_SOURCE_DIR}/cpplib/Tests/Python")
 
-    if(EXISTS "${PYTHON_TEST_DIR}")
+    if(EXISTS "${PYTHON_TEST_DIR}" AND TARGET cpplib)
 
+        # pytest availability is checked at configure time. Re-run CMake after installing it.
         execute_process(
             COMMAND ${Python_EXECUTABLE} -m pytest --version
             RESULT_VARIABLE PYTEST_RESULT
@@ -269,6 +224,7 @@ if(BUILD_TESTING)
             add_test(
                 NAME PythonTests
                 COMMAND
+                    ${CMAKE_COMMAND} -E env "CPPLIB_TEST_EXTENSION=$<TARGET_FILE:cpplib>"
                     ${Python_EXECUTABLE}
                     -m pytest
                     -v
@@ -285,7 +241,7 @@ if(BUILD_TESTING)
         else()
             message(WARNING
                 "pytest not found. Install it using: "
-                "${Python_EXECUTABLE} -m pip install pytest"
+                "${Python_EXECUTABLE} -m pip install pytest, then re-run CMake to register PythonTests."
             )
         endif()
 

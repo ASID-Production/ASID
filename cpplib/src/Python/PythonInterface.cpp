@@ -31,6 +31,7 @@
 #include <concepts>
 #include <filesystem>
 #include <string>
+#include <regex>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -59,58 +60,98 @@ enum class ErrorState {
 	OK = 0,
 	UnknownError,
 };
+[[noreturn]] static void invalid_python_input(PyObject* exception, const char* message) {
+    if (!PyErr_Occurred()) PyErr_SetString(exception, message);
+    throw std::invalid_argument(message);
+}
+static double finite_python_number(PyObject* object) {
+    const double value = PyFloat_AsDouble(object);
+    if (PyErr_Occurred()) invalid_python_input(PyExc_TypeError, "Expected a number");
+    if (!std::isfinite(value)) invalid_python_input(PyExc_ValueError, "Numbers must be finite");
+    return value;
+}
 struct Prepare_WC {
-	std::vector<cpplib::basic_types::AtomTypeBase> types;
-	std::vector<cpplib::geometry::Point<FloatingPointType>> points;
-	explicit Prepare_WC(PyObject* otuples) {
-		Py_ssize_t s = PyList_Size(otuples);
-		types.reserve(static_cast<size_t>(s));
-		points.reserve(static_cast<size_t>(s));
-
-		for (Py_ssize_t i = 0; i < s; i++) {
-			PyObject* o_tuple = PyList_GetItem(otuples, i);
-			types.push_back(static_cast<AtomTypeBase>(PyLong_AsLong(PyTuple_GetItem(o_tuple, 0))));
-			points.emplace_back(static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 1))),
-								static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 2))),
-								static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 3))));
-		}
-	}
+    std::vector<cpplib::basic_types::AtomTypeBase> types;
+    std::vector<cpplib::geometry::Point<FloatingPointType>> points;
+    explicit Prepare_WC(PyObject* tuples) {
+        if (!PyList_Check(tuples)) invalid_python_input(PyExc_TypeError, "atoms must be a list of (type, x, y, z) tuples");
+        const auto count = PyList_Size(tuples);
+        if (count < 0) invalid_python_input(PyExc_TypeError, "Invalid atom list");
+        types.reserve(static_cast<size_t>(count)); points.reserve(static_cast<size_t>(count));
+        for (Py_ssize_t i = 0; i < count; ++i) {
+            PyObject* atom = PyList_GetItem(tuples,i);
+            if (!atom || !PyTuple_Check(atom) || PyTuple_Size(atom) != 4)
+                invalid_python_input(PyExc_TypeError, "Each atom must be a (type, x, y, z) tuple");
+            const long type = PyLong_AsLong(PyTuple_GetItem(atom,0));
+            if (PyErr_Occurred()) invalid_python_input(PyExc_TypeError, "Atom type must be an integer");
+            if (type <= 0 || type > static_cast<long>(Distances::MAX_TYPE))
+                invalid_python_input(PyExc_ValueError, "Atom type is outside the supported range");
+            types.push_back(static_cast<AtomTypeBase>(type));
+            const auto x=finite_python_number(PyTuple_GetItem(atom,1));
+            const auto y=finite_python_number(PyTuple_GetItem(atom,2));
+            const auto z=finite_python_number(PyTuple_GetItem(atom,3));
+            points.emplace_back(x,y,z);
+        }
+    }
 };
 struct Prepare_IC : public Prepare_WC {
-	std::array<cpplib::basic_types::FloatingPointType, 6> cell;
-	std::vector<const char*> symm;
-	Prepare_IC(PyObject* ocell, PyObject* osymm, PyObject* otuples) : Prepare_WC(otuples) {
-		for (Py_ssize_t i = 0; i < 6; i++) {
-			cell[i] = static_cast<FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(ocell, i)));
-		}
-		const Py_ssize_t s = PyList_Size(osymm);
-		symm.resize(s);
-		for (Py_ssize_t i = 0; i < s; i++) {
-			Py_ssize_t us;
-			symm[i] = PyUnicode_AsUTF8AndSize(PyList_GetItem(osymm, i), &us);
-		}
-	}
+    std::array<cpplib::basic_types::FloatingPointType,6> cell;
+    std::vector<const char*> symm;
+    std::vector<std::string> symm_storage;
+    Prepare_IC(PyObject* ocell, PyObject* osymm, PyObject* tuples) : Prepare_WC(tuples) {
+        if (!PyList_Check(ocell) || PyList_Size(ocell) != 6)
+            invalid_python_input(PyExc_TypeError, "cell must be a list of six numbers");
+        for (Py_ssize_t i=0;i<6;++i) cell[i]=finite_python_number(PyList_GetItem(ocell,i));
+        for (int i=0;i<3;++i) if (!(cell[i]>0) || !(cell[i+3]>0 && cell[i+3]<180))
+            invalid_python_input(PyExc_ValueError, "Cell lengths and angles are invalid");
+        const double ca=std::cos(geometry::GradtoRad(cell[3]));
+        const double cb=std::cos(geometry::GradtoRad(cell[4]));
+        const double cg=std::cos(geometry::GradtoRad(cell[5]));
+        if (!(1+2*ca*cb*cg-ca*ca-cb*cb-cg*cg>0))
+            invalid_python_input(PyExc_ValueError, "Cell must have positive volume");
+        if (!PyList_Check(osymm)) invalid_python_input(PyExc_TypeError, "symm must be a list of strings");
+        const auto count=PyList_Size(osymm);
+        if (count<0) invalid_python_input(PyExc_TypeError, "Invalid symmetry list");
+        symm.reserve(static_cast<size_t>(count));
+        symm_storage.reserve(static_cast<size_t>(count));
+        // Match exactly three bounded affine expressions before the legacy parser,
+        // which assumes commas and uses signed int arithmetic for numeric terms.
+        static const std::string term=R"((?:[xyzXYZ]|[0-9]{1,8}(?:\.[0-9]{1,8})?(?:/[1-9][0-9]{0,7})?))";
+        static const std::string expression="[+-]?"+term+"(?:[+-]"+term+")*";
+        static const std::regex pattern("^"+expression+","+expression+","+expression+"$");
+        for (Py_ssize_t i=0;i<count;++i) {
+            PyObject* item=PyList_GetItem(osymm,i);
+            if (!item || !PyUnicode_Check(item)) invalid_python_input(PyExc_TypeError,"Symmetry must be a string");
+            Py_ssize_t size=0;
+            const char* text=PyUnicode_AsUTF8AndSize(item,&size);
+            if (!text) invalid_python_input(PyExc_UnicodeError,"Cannot encode symmetry");
+            std::string compact;
+            int digits=0;
+            for (Py_ssize_t j=0;j<size;++j) {
+                const char ch=text[j];
+                if (ch==' ' || ch=='\t' || ch=='\'' || ch=='"') continue;
+                if (ch>='0' && ch<='9') {
+                    if (++digits>8) invalid_python_input(PyExc_ValueError,"Symmetry number is too large");
+                } else if (ch!='.') digits=0;
+                compact+=ch;
+            }
+            if (!std::regex_match(compact,pattern)) invalid_python_input(PyExc_ValueError,"Invalid symmetry expression");
+            symm_storage.push_back(std::move(compact));
+            symm.push_back(symm_storage.back().c_str());
+        }
+    }
 };
 
 static std::filesystem::path python_module_directory(PyObject* self) {
-	PyObject* file = PyObject_GetAttrString(self, "__file__");
-	if (!file)
-		throw std::runtime_error("Cannot determine cpplib Python module path");
-	if (!PyUnicode_Check(file)) {
-		Py_DECREF(file);
-		throw std::runtime_error("cpplib Python module __file__ is not a string");
-	}
-	Py_ssize_t filename_size = 0;
-	const char* filename = PyUnicode_AsUTF8AndSize(file, &filename_size);
-	if (!filename) {
-		Py_DECREF(file);
-		throw std::runtime_error("Cannot read cpplib Python module path");
-	}
-	const std::filesystem::path module_file(std::string(filename, static_cast<size_t>(filename_size)));
-	Py_DECREF(file);
-	if (module_file.empty())
-		throw std::runtime_error("cpplib Python module path is empty");
-	return std::filesystem::absolute(module_file).parent_path();
+    std::unique_ptr<PyObject, decltype(&Py_DecRef)> file(PyObject_GetAttrString(self, "__file__"), Py_DecRef);
+    if (!file) throw std::runtime_error("Cannot determine cpplib Python module path");
+    if (!PyUnicode_Check(file.get())) throw std::runtime_error("cpplib Python module __file__ is not a string");
+    Py_ssize_t size = 0;
+    const char* filename = PyUnicode_AsUTF8AndSize(file.get(), &size);
+    if (!filename) throw std::runtime_error("Cannot read cpplib Python module path");
+    const auto module_file = std::filesystem::u8path(filename, filename + size);
+    if (module_file.empty()) throw std::runtime_error("cpplib Python module path is empty");
+    return std::filesystem::absolute(module_file).parent_path();
 }
 
 inline static const Distances& useDistances(PyObject* self) {
@@ -130,9 +171,9 @@ static PyObject* python_entry(PyObject* self, PyObject* args) noexcept {
 	try {
 		return Entry(self, args);
 	} catch (const std::exception& e) {
-		PyErr_SetString(PyExc_RuntimeError, e.what());
+		if (!PyErr_Occurred()) PyErr_SetString(PyExc_RuntimeError, e.what());
 	} catch (...) {
-		PyErr_SetString(PyExc_RuntimeError, "Unknown C++ exception in cpplib");
+		if (!PyErr_Occurred()) PyErr_SetString(PyExc_RuntimeError, "Unknown C++ exception in cpplib");
 	}
 	return nullptr;
 }
@@ -184,7 +225,8 @@ inline static ErrorState pyListToVectorInt(PyObject* plist, std::vector<I>* pret
 	return ErrorState::OK;
 }
 
-extern "C" {
+// Internal handlers retain C++ linkage so /EHsc catches their exceptions.
+namespace {
 
 	inline static ErrorState pyListToVectorFloat(PyObject* plist, std::vector<cpplib::basic_types::FloatingPointType>* pret) {
 		const Py_ssize_t s = PyList_Size(plist);
@@ -266,7 +308,7 @@ extern "C" {
 		int np = 0;
 		int exact = 0;
 		if (!PyArg_ParseTuple(args, "sOip", &search, &o, &np, &exact)) {
-			Py_RETURN_NONE;
+			return nullptr;
 		}
 		std::vector< const char*> data; pyListToVectorCharP(o, &data);
 		const auto ret = SearchMain(search, std::move(data), np, (exact != 0));
@@ -277,7 +319,7 @@ extern "C" {
 		const char* s2 = NULL;
 		int b = 0;
 		if (!PyArg_ParseTuple(args, "ssp", &s1, &s2, &b)) {
-			Py_RETURN_NONE;
+			return nullptr;
 		}
 		if (CompareGraph(s1, s2, (b != 0))) {
 			Py_RETURN_TRUE;
@@ -293,7 +335,7 @@ extern "C" {
 		PyObject* osymm = NULL;
 		PyObject* otuple = NULL;
 		if (!PyArg_ParseTuple(args, "OOO", &ocell, &osymm, &otuple)) {
-			Py_RETURN_NONE;
+			return nullptr;
 		}
 
 		Prepare_IC all(ocell, osymm, otuple);
@@ -370,7 +412,7 @@ extern "C" {
 		std::byte flags;
 
 		if (!PyArg_ParseTuple(args, "OBO", &otuples, &flags, &osymm)) {
-			Py_RETURN_NONE;
+			return nullptr;
 		}
 		bool movetocell = (flags & std::byte(1)) != std::byte(0);
 		bool movemasstocell = (flags & std::byte(2)) != std::byte(0);
@@ -428,7 +470,7 @@ extern "C" {
 		PyObject* oparams = NULL;
 
 		if (!PyArg_ParseTuple(args, "OOOO", &ocell, &osymm, &otuples, &oparams)) {
-			Py_RETURN_NONE;
+			return nullptr;
 		}
 		Prepare_IC all(ocell, osymm, otuples);
 
@@ -453,7 +495,7 @@ extern "C" {
 		PyObject* otuples = NULL;
 		PyObject* oparams = NULL;
 		if (!PyArg_ParseTuple(args, "OO", &otuples, &oparams)) {
-			Py_RETURN_NONE;
+			return nullptr;
 		}
 		Prepare_WC all(otuples);
 
@@ -482,7 +524,7 @@ extern "C" {
 		PyObject* otuples = NULL;
 		PyObject* oparams = NULL;
 		if (!PyArg_ParseTuple(args, "OOOO", &ocell, &osymm, &otuples, &oparams)) {
-			Py_RETURN_NONE;
+			return nullptr;
 		}
 		Prepare_IC all(ocell, osymm, otuples);
 
@@ -511,7 +553,7 @@ extern "C" {
 		PyObject* otuples = NULL;
 		PyObject* oparams = NULL;
 		if (!PyArg_ParseTuple(args, "OO", &otuples, &oparams)) {
-			Py_RETURN_NONE;
+			return nullptr;
 		}
 
 		Prepare_WC all(otuples);
@@ -544,7 +586,7 @@ extern "C" {
 		PyObject* otuples = NULL;
 		PyObject* oparams = NULL;
 		if (!PyArg_ParseTuple(args, "OOOO", &ocell, &osymm, &otuples, &oparams)) {
-			Py_RETURN_NONE;
+			return nullptr;
 		}
 
 		Prepare_IC all(ocell, osymm, otuples);
@@ -578,7 +620,7 @@ extern "C" {
 		PyObject* otuples = NULL;
 		PyObject* oparams = NULL;
 		if (!PyArg_ParseTuple(args, "OO", &otuples, &oparams)) {
-			Py_RETURN_NONE;
+			return nullptr;
 		}
 
 		Prepare_WC all(otuples);
@@ -613,7 +655,7 @@ extern "C" {
 		PyObject* osymm = NULL;
 		PyObject* otuples = NULL;
 		if (!PyArg_ParseTuple(args, "OOO", &ocell, &osymm, &otuples)) {
-			Py_RETURN_NONE;
+			return nullptr;
 		}
 		useDistances(self);
 		Prepare_IC all(ocell, osymm, otuples);
@@ -709,7 +751,7 @@ extern "C" {
 		std::vector<FloatingPointType> himp;
 
 		if (!PyArg_ParseTuple(args, "OO", &o_tuple, &o_himp)) {
-			Py_RETURN_NONE;
+			return nullptr;
 		}
 		Prepare_WC all(o_tuple);
 
@@ -751,7 +793,7 @@ extern "C" {
 		const char* s1 = NULL;
 		const char* s2 = NULL;
 		if (!PyArg_ParseTuple(args, "ss", &s1, &s2)) {
-			Py_RETURN_NONE;
+			return nullptr;
 		}
 		bool res = false;
 
@@ -774,7 +816,7 @@ extern "C" {
 		PyObject* otuple = NULL;
 
 		if (!PyArg_ParseTuple(args, "OOO", &ocell, &osymm, &otuple)) {
-			Py_RETURN_NONE;
+			return nullptr;
 		}
 		useDistances(self);
 
@@ -801,7 +843,7 @@ extern "C" {
 		PyObject* ocoords = NULL;
 		double over_radius = 0;
 		if (!PyArg_ParseTuple(args, "OOOOd", &ocell, &osymm, &otuples, &ocoords, &over_radius)) {
-			Py_RETURN_NONE;
+			return nullptr;
 		}
 		useDistances(self);
 
@@ -838,7 +880,7 @@ extern "C" {
 		PyObject* obools = NULL;
 		float cutoff_temp = 6.0;
 		if (!PyArg_ParseTuple(args, "OOOOf", &ocell, &osymm, &otuples, &obools, &cutoff_temp)) {
-			Py_RETURN_NONE;
+			return nullptr;
 		}
 
 		LOG_INTERFACE_GUARD("cpplib_Voronoi");
@@ -883,16 +925,24 @@ extern "C" {
 		PyObject* ocell = NULL;
 		PyObject* osymm = NULL;
 		PyObject* otuples = NULL;
-		float cutoff_tmp = 6.0;
-		if (!PyArg_ParseTuple(args, "OOOOf", &ocell, &osymm, &otuples, &cutoff_tmp)) {
-			Py_RETURN_NONE;
+		double cutoff_tmp = 6.0;
+		if (!PyArg_ParseTuple(args, "OOOd", &ocell, &osymm, &otuples, &cutoff_tmp)) {
+			return nullptr;
 		}
 
-		FloatingPointType cutoff = static_cast<FloatingPointType>(cutoff_tmp);
+		if (!std::isfinite(cutoff_tmp) || cutoff_tmp <= 0)
+            invalid_python_input(PyExc_ValueError, "cutoff must be finite and positive");
+        FloatingPointType cutoff = static_cast<FloatingPointType>(cutoff_tmp);
 
 		LOG_INTERFACE_GUARD("cpplib_FindCP");
 
 		Prepare_IC all(ocell, osymm, otuples);
+        if (all.points.empty()) invalid_python_input(PyExc_ValueError, "FindCP requires atoms");
+        const auto& ed = useElectronDensity(self);
+        for (const auto type : all.types)
+            if (static_cast<size_t>(type) >= ed.splines().size() || ed.splines()[type].spline.radius() == 0)
+                invalid_python_input(PyExc_ValueError, "No electron density data for atom type");
+
 		geometry::Cell cell(all.cell);
 		std::vector<bool> bools(all.points.size(), true);
 
@@ -915,8 +965,6 @@ extern "C" {
 		// Expand Point Net
 		// 1. Calculate theoretical radius.
 
-		// Load (once, lazily) the ED singleton from ED.txt located next to the starting module.
-		const auto& ed = useElectronDensity(self);
 		const auto ED_cutoff = cpplib::BaderOperator::GetOptimalRadius(3.0, 1.0E-6, ed.splines(), buildresult.atoms.types);
 		const size_t max_type = ed.size();
 		const size_t initial_type_size = buildresult.atoms.types.size();
@@ -934,7 +982,7 @@ extern "C" {
 
 			for (double eps:array_of_eps) {
 
-				BaderOperator::OptimizePoint(cp, psoa, eps);
+				BaderOperator::OptimizePoint(cp, psoa, ed.splines(), eps);
 			}
 		}
 
@@ -1016,7 +1064,8 @@ extern "C" {
 		NULL, NULL, NULL, NULL
 	};
 
-	PyMODINIT_FUNC PyInit_cpplib(void) {
+} // namespace
+
+PyMODINIT_FUNC PyInit_cpplib(void) {
 		return PyModule_Create(&cpplib_module);
 	}
-}

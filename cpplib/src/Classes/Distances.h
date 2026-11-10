@@ -210,7 +210,7 @@ namespace cpplib {
 
 				char is_real_bond = isBond(types[l1], types[l2], sqrt(bond.dist_sq));
 
-				if (is_real_bond != 0) {
+				if (is_real_bond == 1) {
 					ret.push_back(bond);
 				}
 			}
@@ -241,7 +241,7 @@ namespace cpplib {
 
 				char is_real_bond = isBond(types[l1], types[l2], dist(points[l1], moved_point2));
 
-				if (is_real_bond != 0) {
+				if (is_real_bond == 1) {
 					ret.push_back(*iter);
 				}
 

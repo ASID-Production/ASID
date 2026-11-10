@@ -29,7 +29,20 @@
 #pragma once
 
 #define Py_LIMITED_API 0x030A0000
+// The limited API uses release Python even when C++ assertions/CRT are Debug.
+// Python 3.10's Windows header otherwise auto-links python310_d.lib.
+#include <cstdlib>
+#include <cstdio>
+#include <cwchar>
+#if defined(_MSC_VER) && defined(_DEBUG)
+#  define CPPLIB_RESTORE_DEBUG
+#  undef _DEBUG
+#endif
 #include <Python.h>
+#ifdef CPPLIB_RESTORE_DEBUG
+#  define _DEBUG 1
+#  undef CPPLIB_RESTORE_DEBUG
+#endif
 
 #include <array>
 #include <concepts>
@@ -159,7 +172,6 @@ namespace py_util {
 				return nullptr;
 			}
 			if (PyList_SetItem(list, i, item) != 0) [[unlikely]] {
-
 				Py_DECREF(list);
 				return nullptr;
 			}
@@ -237,7 +249,11 @@ namespace py_util {
 	inline PyObject* convert_u32_slice(const std::vector<uint32_t>& data,
 									   uint32_t offset,
 									   uint16_t count) {
-		PyObject* list = PyList_New(static_cast<Py_ssize_t>(count));
+		if (offset > data.size() || count > data.size() - offset) {
+            PyErr_SetString(PyExc_ValueError, "Invalid Voronoi slice");
+            return nullptr;
+        }
+        PyObject* list = PyList_New(static_cast<Py_ssize_t>(count));
 		if (!list) return nullptr;
 
 		for (uint16_t i = 0; i < count; ++i) {
@@ -248,7 +264,6 @@ namespace py_util {
 			}
 
 			if (PyList_SetItem(list, static_cast<Py_ssize_t>(i), item) != 0) [[unlikely]] {
-				Py_DECREF(item);
 				Py_DECREF(list);
 				return nullptr;
 			}
@@ -263,6 +278,15 @@ namespace py_util {
 		uint32_t offset,
 		uint16_t count)
 	{
+        if (offset > ids.size() || count > ids.size() - offset) {
+            PyErr_SetString(PyExc_ValueError, "Invalid Voronoi vertex slice");
+            return nullptr;
+        }
+        for (size_t i = 0; i < count; ++i) if (ids[offset+i] >= vf.vertices.size()) {
+            PyErr_SetString(PyExc_ValueError, "Invalid Voronoi vertex index");
+            return nullptr;
+        }
+
 		PyObject* list = PyList_New(static_cast<Py_ssize_t>(count));
 		if (!list) return nullptr;
 
@@ -275,7 +299,6 @@ namespace py_util {
 			}
 
 			if (PyList_SetItem(list, static_cast<Py_ssize_t>(i), item) != 0) [[unlikely]] {
-				Py_DECREF(item);
 				Py_DECREF(list);
 				return nullptr;
 			}
@@ -319,7 +342,6 @@ namespace py_util {
 		}
 
 		if (PyList_SetItem(list, 0, v0) != 0) [[unlikely]] {
-			Py_DECREF(v0);
 			Py_DECREF(list);
 			return nullptr;
 		}
@@ -331,7 +353,6 @@ namespace py_util {
 		}
 
 		if (PyList_SetItem(list, 1, v1) != 0) [[unlikely]] {
-			Py_DECREF(v1);
 			Py_DECREF(list);
 			return nullptr;
 		}
@@ -378,7 +399,6 @@ namespace py_util {
 		}
 
 		if (PyList_SetItem(atoms, 0, owner) != 0) [[unlikely]] {
-			Py_DECREF(owner);
 			Py_DECREF(atoms);
 			Py_DECREF(dict);
 			return nullptr;
@@ -392,7 +412,6 @@ namespace py_util {
 		}
 
 		if (PyList_SetItem(atoms, 1, other) != 0) [[unlikely]] {
-			Py_DECREF(other);
 			Py_DECREF(atoms);
 			Py_DECREF(dict);
 			return nullptr;
@@ -460,27 +479,18 @@ namespace py_util {
 		PyObject* dict = PyDict_New();
 		if (!dict) [[unlikely]] return nullptr;
 
-		PyObject* polygons = convert_list(vf.polygons,
-										  [&](const auto& p) { return convert(p, vf); });
-
-		PyObject* polyhedra = convert_list(vf.polyhedra,
-										   [&](const auto& p) { return convert(p, vf); });
-
-		if (!polygons || !polyhedra) [[unlikely]] {
-			Py_XDECREF(polygons);
-			Py_XDECREF(polyhedra);
-			Py_DECREF(dict);
-			return nullptr;
-		}
-
-		if (!add_to_dict("vertices", convert(vf.vertices), dict) ||
-			!add_to_dict("edges", convert(vf.edges), dict) ||
-			!add_to_dict("polygons", polygons, dict) ||
-			!add_to_dict("polyhedra", polyhedra, dict)) [[unlikely]]
-		{
-			Py_DECREF(dict);
-			return nullptr;
-		}
+        // Convert and transfer one owned reference at a time. add_to_dict consumes
+        // its argument on both success and failure; short-circuiting cannot leak
+        // a list that has not yet been inserted.
+        if (!add_to_dict("polygons", convert_list(vf.polygons,
+                [&](const auto& p) { return convert(p, vf); }), dict) ||
+            !add_to_dict("polyhedra", convert_list(vf.polyhedra,
+                [&](const auto& p) { return convert(p, vf); }), dict) ||
+            !add_to_dict("vertices", convert(vf.vertices), dict) ||
+            !add_to_dict("edges", convert(vf.edges), dict)) {
+            Py_DECREF(dict);
+            return nullptr;
+        }
 
 		return dict;
 	}

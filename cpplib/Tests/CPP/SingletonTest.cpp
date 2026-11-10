@@ -28,13 +28,15 @@ class TestData : public cpplib::SingletonBase<TestData> {
 	friend class cpplib::SingletonBase<TestData>;
 	TestData(const std::filesystem::path& file, cpplib::STATE& state) : SingletonBase(file) {
 		std::ifstream input(file);
+        std::getline(input, value);
 		state = input.is_open() ? cpplib::STATE::OK : cpplib::STATE::FILE_NOT_FOUND;
 	}
 public:
+    std::string value;
 	TestData() : SingletonBase(std::filesystem::path{}) {}
 };
 
-TEST(SingletonLoadingTest, RetriesFailureAndRejectsDifferentPaths) {
+void CheckSingletonLoading() {
 	using cpplib::STATE;
 	TemporaryData data;
 	const auto first = data.path("first.ini");
@@ -50,6 +52,10 @@ TEST(SingletonLoadingTest, RetriesFailureAndRejectsDifferentPaths) {
 	const TestData* loaded = nullptr;
 	ASSERT_NO_THROW(loaded = &TestData::instance(first));
 	EXPECT_TRUE(TestData::exists());
+    const auto original_cwd = std::filesystem::current_path();
+    std::filesystem::current_path(first.parent_path());
+    EXPECT_EQ(&TestData::instance(), loaded);
+    std::filesystem::current_path(original_cwd);
 	EXPECT_EQ(TestData::state(), STATE::OK);
 	EXPECT_EQ(&TestData::instance(first.parent_path() / "." / first.filename()), loaded);
 	EXPECT_EQ(TestData::try_call(second).second, STATE::INVALID_ARGUMENT);
@@ -57,6 +63,20 @@ TEST(SingletonLoadingTest, RetriesFailureAndRejectsDifferentPaths) {
 	EXPECT_EQ(&TestData::instance(first), loaded);
 	EXPECT_EQ(TestData::reload(second), STATE::FILE_NOT_FOUND);
 	EXPECT_EQ(&TestData::instance(first), loaded);
+    std::ofstream(second) << "new data";
+    ASSERT_EQ(TestData::reload(second), STATE::OK);
+    EXPECT_EQ(loaded->value, "data");
+    EXPECT_EQ(TestData::instance().value, "new data");
+    EXPECT_EQ(loaded->filename(), first); // old reference survives reload
+    EXPECT_NE(&TestData::instance(), loaded);
+    EXPECT_EQ(TestData::instance().filename(), second);
+
+
+}
+
+TEST(SingletonLoadingDeathTest, RetriesFailureAndRejectsDifferentPaths) {
+    ASSERT_EXIT({ CheckSingletonLoading(); std::exit(::testing::Test::HasFailure() ? 1 : 0); },
+                ::testing::ExitedWithCode(0), "");
 }
 
 TEST(DistancesLoadingTest, DefaultPathUsesLoadedModuleDirectory) {

@@ -66,12 +66,17 @@ static cpplib::DATTuple& ConvertDATTuple(cpplib::DATTuple& dat, const cpplib::FA
 // Bond length data is now provided by the cpplib::Distances singleton
 // (see Distances::instance()). The old global pointer p_distances was removed.
 
-static const Distances* tryDistances() noexcept {
-	try {
-		return &Distances::instance();
-	} catch (...) {
-		return nullptr;
-	}
+static std::pair<const Distances*, STATE> tryDistances() noexcept {
+    try {
+        auto [object, state] = Distances::try_call();
+        return {state == STATE::OK ? &object : nullptr, state};
+    } catch (...) {
+        return {nullptr, state_from_current_exception()};
+    }
+}
+static void requireDistances(STATE state) {
+    if (state != STATE::OK)
+        throw std::runtime_error(std::string("Could not load BondLength.ini: ") + cpplib::to_string(state));
 }
 
 bool CompareGraph(const char* search1, const char* search2, const bool exact) {
@@ -113,9 +118,9 @@ std::tuple<std::string, std::string, FindMolecules::RightType> FindMoleculesInCe
 																		 std::vector<const char*>& symm,
 																		 cpplib::FAM_Struct::AtomContainerType& types,
 																		 cpplib::FAM_Struct::PointConteinerType& points) {
-	const auto* loaded = tryDistances();
+	const auto [loaded, state] = tryDistances();
 	if (!loaded) {
-		return std::make_tuple(std::string(), std::string("Error! Could not open BondLength.ini"),
+		return std::make_tuple(std::string(), std::string("Error! Could not load BondLength.ini: ") + cpplib::to_string(state),
 							FindMolecules::RightType());
 	}
 	const auto& distances = *loaded;
@@ -161,9 +166,9 @@ std::tuple<std::string, std::string, FindMolecules::RightType> FindMoleculesInCe
 }
 std::tuple<std::string, std::string, FindMolecules::RightType>  FindMoleculesWithoutCell(cpplib::FAM_Struct::AtomContainerType& types,
 																			  cpplib::FAM_Struct::PointConteinerType& points) {
-	const auto* loaded = tryDistances();
+	const auto [loaded, state] = tryDistances();
 	if (!loaded) {
-		return std::make_tuple(std::string(), std::string("Error! Could not open BondLength.ini"),
+		return std::make_tuple(std::string(), std::string("Error! Could not load BondLength.ini: ") + cpplib::to_string(state),
 							FindMolecules::RightType());
 	}
 	const auto& distances = *loaded;
@@ -317,9 +322,8 @@ cpplib::DATTuple FindDAT_IC(const std::array<cpplib::basic_types::FloatingPointT
 							std::vector<const char*>& symm,
 							cpplib::FAM_Struct::AtomContainerType& types,
 							cpplib::FAM_Struct::PointConteinerType& points) {
-	const auto* distances = tryDistances();
-	if (!distances)
-		return {};
+	const auto [distances, state] = tryDistances();
+	requireDistances(state);
 
 	FAM_Struct fs;
 	FAM_Cell fc(FAM_Cell::base(unit_cell, true));
@@ -339,9 +343,8 @@ cpplib::DATTuple FindDAT_IC(const std::array<cpplib::basic_types::FloatingPointT
 
 cpplib::DATTuple FindDAT_WC(cpplib::FAM_Struct::AtomContainerType& types,
 							cpplib::FAM_Struct::PointConteinerType& points) {
-	const auto* distances = tryDistances();
-	if (!distances)
-		return {};
+	const auto [distances, state] = tryDistances();
+	requireDistances(state);
 
 	FAM_Struct fs;
 	ParseData(fs, std::move(types), std::move(points));
@@ -456,9 +459,9 @@ std::tuple<std::vector<cpplib::geometry::Point<FloatingPointType>>, std::list<st
 												const std::vector<const char*>& symm,
 												cpplib::FAM_Struct::AtomContainerType& types,
 												cpplib::FAM_Struct::PointConteinerType& points) {
-	const auto* loaded = tryDistances();
+	const auto [loaded, state] = tryDistances();
 	if (!loaded) {
-		return std::make_tuple(std::vector<cpplib::geometry::Point<FloatingPointType>>(), std::list<std::string>(1, "Error!Could not open BondLength.ini"));
+		return std::make_tuple(std::vector<cpplib::geometry::Point<FloatingPointType>>(), std::list<std::string>(1, std::string("Could not load BondLength.ini: ") + cpplib::to_string(state)));
 	}
 	const auto& distances = *loaded;
 	FAM_Struct fs;
@@ -487,10 +490,8 @@ Cluster::ClusterData ClusterCreate(const std::array<cpplib::basic_types::Floatin
 
 	using ShiftType = Cluster::ShiftType;
 
-	const auto* loaded = tryDistances();
-	if (!loaded) {
-		return {};
-	}
+	const auto [loaded, state] = tryDistances();
+	requireDistances(state);
 	const auto& distances = *loaded;
 
 	cpplib::geometry::Cell cell(unit_cell);
