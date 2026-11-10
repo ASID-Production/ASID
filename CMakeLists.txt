@@ -28,14 +28,14 @@
 
 cmake_minimum_required(VERSION 3.12)
 
-if(MSVC)
-  set(CMAKE_CL_SHOWINCLUDES_PREFIX "Note: including file: " CACHE INTERNAL "Fix for non-English MSVC output")
-endif()
-
 # ============================================================================
 # Project and basic options
 # ============================================================================
 project(cpplib LANGUAGES CXX C)
+
+if(MSVC AND CMAKE_VERSION VERSION_GREATER_EQUAL 3.28)
+    set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
+endif()
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD 20)

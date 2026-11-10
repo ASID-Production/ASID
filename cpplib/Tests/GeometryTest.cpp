@@ -317,6 +317,31 @@ TEST(CellTest, TriclinicCell) {
     }
 }
 
+TEST(SGTest, PeriodicBondShiftMatchesPairOrientation) {
+    Cell<FloatingPointType> cell(10.0f, 10.0f, 10.0f, 90.0f, 90.0f, 90.0f);
+    std::vector<Point<FloatingPointType>> points{
+        {0.05f, 0.2f, 0.2f},
+        {0.95f, 0.2f, 0.2f},
+        {0.95f, 0.6f, 0.2f},
+        {0.05f, 0.6f, 0.2f}
+    };
+
+    SG<FloatingPointType> sg(cell, true, 2.0f);
+    sg.updateOnlyPoints(points);
+    const auto bonds = sg.findAllContacts();
+
+    ASSERT_EQ(bonds.size(), 2);
+    EXPECT_EQ(bonds[0].first, 0);
+    EXPECT_EQ(bonds[0].second, 1);
+    EXPECT_EQ(static_cast<int>(bonds[0].shiftcode.get_shift()[0]), -1);
+    EXPECT_NEAR(bonds[0].dist_sq, 1.0f, EPSILON);
+
+    EXPECT_EQ(bonds[1].first, 2);
+    EXPECT_EQ(bonds[1].second, 3);
+    EXPECT_EQ(static_cast<int>(bonds[1].shiftcode.get_shift()[0]), 1);
+    EXPECT_NEAR(bonds[1].dist_sq, 1.0f, EPSILON);
+}
+
 // ==================== TESTS FOR Symm ====================
 std::vector<const char*> SYMMETRY_STRINGS = {
 "x, y, z"
