@@ -1,4 +1,4 @@
-// Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
+﻿// Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
 // This file is part of ASID - Atomistic Simulation Instruments and Database
 // For more information see <https://github.com/ASID-Production/ASID>
 //
@@ -30,9 +30,9 @@
 #include <algorithm>
 #include <vector>
 
-#include <BaseTypes.h>
-#include "Engine.h"
-#include "Bond.h"
+#include "../../src/BaseHeaders/BaseTypes.h"
+#include "../../src/Classes/Engine.h"
+#include "../../src/Classes/Bond.h"
 
 using namespace cpplib;
 

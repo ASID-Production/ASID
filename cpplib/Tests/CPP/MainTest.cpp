@@ -1,4 +1,4 @@
-// Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
+﻿// Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
 // This file is part of ASID - Atomistic Simulation Instruments and Database
 // For more information see <https://github.com/ASID-Production/ASID>
 //
@@ -34,26 +34,25 @@
 #include <tuple>
 #include <utility>
 #include <vector>
+#include <fstream>
+#include <format>
 
-#include <BaseTypes.h>
-#include <Currents.h>
-#include <DebugMes.h>
-#include <Cluster.h>
-#include <Distances.h>
-#include <FindMolecules.h>
-#include <MoleculeGraph.h>
-#include <SearchGraph.h>
+#include "../../src/BaseHeaders/BaseTypes.h"
+#include "../../src/BaseHeaders/Currents.h"
+#include "../../src/BaseHeaders/DebugMes.h"
 
-#include "../src/Functions/Functions.h"
+#include "../../src/Classes/BaderOperator.h"
+#include "../../src/Classes/Cluster.h"
+#include "../../src/Classes/Distances.h"
+#include "../../src/Classes/FindMolecules.h"
+#include "../../src/Classes/MoleculeGraph.h"
+#include "../../src/Classes/SearchGraph.h"
 
-extern const cpplib::Distances* p_distances;
-
-
+#include "../../src/Functions/Functions.h"
 
 #pragma warning( disable : 4305 )
 #pragma warning( disable : 4244 )
 
-#define DISABLE_BENCH 1
 
 using namespace cpplib;
 using namespace cpplib::currents;
@@ -62,7 +61,67 @@ using namespace cpplib::geometry;
 using PointType = cpplib::FAM_Cell::PointType;
 using SymmType = cpplib::FAM_Cell::SymmType;
 
-const Distances testdistances("BondLength.ini");
+class DistancesEnvironment : public ::testing::Environment {
+	void SetUp() override {
+		ASSERT_NO_THROW({
+			const auto& distances = Distances::instance();
+			ASSERT_TRUE(distances.isReady());
+		});
+	}
+};
+
+// Registration reads no data; loading happens after GoogleTest starts.
+static auto* const distances_environment =
+	::testing::AddGlobalTestEnvironment(new DistancesEnvironment);
+
+namespace {
+using MoleculeResult=std::tuple<std::string,std::string,FindMolecules::RightType>;
+void CheckMoleculeResult(const MoleculeResult& result,size_t input_count) {
+    const auto& molecules=std::get<2>(result);
+    EXPECT_TRUE(!molecules.empty() || !std::get<1>(result).empty()) << "No molecules and no diagnostic";
+    for(const auto& [atoms,multiplicity,bonds]:molecules) {
+        ASSERT_FALSE(atoms.empty());
+        EXPECT_GT(multiplicity,0);
+        std::vector<std::vector<size_t>> adjacent(atoms.size());
+        for(const auto& [point,source]:atoms) {
+            EXPECT_GE(source,0);
+            EXPECT_LT(static_cast<size_t>(source),input_count);
+            for(int axis=0;axis<3;++axis) EXPECT_TRUE(std::isfinite(point[axis]));
+        }
+        for(const auto& bond:bonds) {
+            ASSERT_GE(bond.first,0); ASSERT_GE(bond.second,0);
+            ASSERT_LT(static_cast<size_t>(bond.first),atoms.size());
+            ASSERT_LT(static_cast<size_t>(bond.second),atoms.size());
+            EXPECT_NE(bond.first,bond.second);
+            adjacent[bond.first].push_back(bond.second);
+            adjacent[bond.second].push_back(bond.first);
+        }
+        std::vector<bool> seen(atoms.size(),false);
+        std::vector<size_t> queue{0}; seen[0]=true;
+        for(size_t i=0;i<queue.size();++i) for(const auto next:adjacent[queue[i]])
+            if(!seen[next]) { seen[next]=true; queue.push_back(next); }
+        EXPECT_EQ(queue.size(),atoms.size()) << "Returned molecule must be connected";
+    }
+}
+void CheckCartesianBonds(const FindMolecules::RightType& molecules,
+                         std::vector<std::pair<AtomIndex,AtomIndex>> expected) {
+    ASSERT_EQ(molecules.size(),1);
+    const auto& [atoms,count,bonds]=molecules.front();
+    EXPECT_EQ(count,1);
+    std::vector<std::pair<AtomIndex,AtomIndex>> actual;
+    for(const auto& bond:bonds) {
+        ASSERT_LT(static_cast<size_t>(bond.first),atoms.size());
+        ASSERT_LT(static_cast<size_t>(bond.second),atoms.size());
+        auto first=std::get<1>(atoms[bond.first]), second=std::get<1>(atoms[bond.second]);
+        if(first>second) std::swap(first,second);
+        actual.emplace_back(first,second);
+    }
+    std::sort(actual.begin(),actual.end()); std::sort(expected.begin(),expected.end());
+    EXPECT_EQ(actual,expected);
+}
+
+}
+
 struct FMIC_TS {
 	std::array<cpplib::basic_types::FloatingPointType, 6> cell;
 	std::vector<const char*> symm;
@@ -78,7 +137,20 @@ struct FMIC_TS {
 		}
 	}
 	inline auto call() {
-		return FindMoleculesInCell(cell, symm, types, points);
+		const auto count=types.size();
+        auto translated_types=types;
+        auto translated_points=points;
+        for(auto& point:translated_points) point+=PointType(1,-1,2);
+        auto result=FindMoleculesInCell(cell,symm,types,points);
+        CheckMoleculeResult(result,count);
+        auto translated=FindMoleculesInCell(cell,symm,translated_types,translated_points);
+        CheckMoleculeResult(translated,count);
+        const auto original_graph="0 "+std::get<0>(result);
+        const auto translated_graph="0 "+std::get<0>(translated);
+        EXPECT_TRUE(CompareGraph(MoleculeParser<AtomTypeRequest>::_ParseOldInputString(original_graph.c_str()).c_str(),
+                                 translated_graph.c_str(),true)) << "Integer lattice translations preserve graph isomorphism";
+        EXPECT_EQ(std::get<1>(result).empty(),std::get<1>(translated).empty());
+        return result;
 	}
 	inline auto compaq() {
 		return Compaq(cell, symm, types, points);
@@ -89,32 +161,15 @@ struct FMIC_TS {
 		for (size_t i = 0; i < s; i++) {
 			anch.emplace_back(PointType(p[4 * i], p[4 * i + 1], p[4 * i + 2]), p[4 * i + 3]);
 		}
-		return ClusterCreate(cell, symm, types, points, anch, r2, b);
+
+		std::vector<AtomTypeBase> copy_types(types);
+		std::vector<PointType> copy_points(points);
+
+		return ClusterCreate(cell, symm, copy_types, copy_points, anch, r2, b);
 	}
 };
 
-TEST(CreateClusterTest, SingleNegative) {
-	p_distances = &testdistances;
-	std::array<cpplib::basic_types::FloatingPointType, 6> cell{10.0, 10.0, 10.0, 90.0, 90.0, 90.0};
-	std::vector<const char*> symm{
-		"x, y, z"
-	};
-
-	std::vector<AtomTypeBase> types{10};
-	std::vector<cpplib::basic_types::FloatingPointType> xyz{
-		-0.1, -0.1, -0.1
-	};
-
-	bool hasPoly = false;
-	FMIC_TS ts(cell, symm, types, xyz);
-	std::vector<FloatingPointType> anchors{-0.1, -2.1, -1.3, 2.9};
-	auto res = ts.cluster(anchors, 10.0, hasPoly);
-	EXPECT_EQ(res.size(), 1);
-	EXPECT_FALSE(hasPoly);
-}
-
 TEST(CreateClusterTest, Benzene) {
-	p_distances = &testdistances;
 	std::array<cpplib::basic_types::FloatingPointType, 6> cell{7.243, 9.310, 6.756, 90.0, 90.0, 90.0};
 	std::vector<const char*> symm{
 		"x, y, z",
@@ -129,12 +184,12 @@ TEST(CreateClusterTest, Benzene) {
 
 	std::vector<AtomTypeBase> types{6, 6, 6, 1, 1, 1};
 	std::vector<cpplib::basic_types::FloatingPointType> xyz{
-        -0.06070, 0.13930, -0.00690,
-        -0.13770, 0.04470,  0.12600,
-         0.07700, 0.09580, -0.13250,
-        -0.10460, 0.25020, -0.01230,
-        -0.24580, 0.07810,  0.22410,
-         0.13710, 0.16810, -0.23600};
+		-0.06070, 0.13930, -0.00690,
+		-0.13770, 0.04470,  0.12600,
+		 0.07700, 0.09580, -0.13250,
+		-0.10460, 0.25020, -0.01230,
+		-0.24580, 0.07810,  0.22410,
+		 0.13710, 0.16810, -0.23600};
 
 	bool hasPoly = false;
 	FMIC_TS ts(cell, symm, types, xyz);
@@ -144,9 +199,48 @@ TEST(CreateClusterTest, Benzene) {
 	EXPECT_FALSE(hasPoly);
 }
 
+TEST(CreateClusterTest, polyError) {
+	std::array<cpplib::basic_types::FloatingPointType, 6> cell{8.466, 8.352, 13.31, 90.0, 94.76, 90.0};
+	std::vector<const char*> symm{"x,y,z", "-x+1/2,y+1/2,-z+1/2", "-x,-y,-z", "x-1/2,-y-1/2,z-1/2"};
+	std::vector<AtomTypeBase> types{92, 8, 6, 92, 8, 6, 1, 1, 8, 6, 1, 1, 1, 8, 6, 8, 6, 1, 1, 8, 6, 1, 1, 1};
+	std::vector<cpplib::basic_types::FloatingPointType> xyz{0.5, 0.5, 0.5, 0.4636, 0.3568, 0.40393, 0.7044, 0.2688, 0.6084, 1.0, 0.5, 0.5, 1.0169, 0.3116, 0.44259, 0.8087, 0.1367, 0.6491, 0.855486, 0.167231, 0.717074, 0.896753, 0.123382, 0.605313, 0.5573, 0.2669, 0.61203, 0.7241, -0.0224, 0.6565, 0.644725, -0.013849, 0.705751, 0.801262, -0.105578, 0.677981, 0.671723, -0.050488, 0.590406, 0.7644, 0.3918, 0.56656, 0.7865, 0.5824, 0.3261, 0.7331, 0.5657, 0.41369, 0.6769, 0.5814, 0.2336, 0.624258, 0.687156, 0.226523, 0.593622, 0.500134, 0.241248, 0.9338, 0.5934, 0.32488, 0.7562, 0.546, 0.138, 0.834714, 0.62931, 0.127549, 0.676121, 0.544249, 0.080431, 0.808974, 0.44165, 0.144184};
+	std::vector<FloatingPointType> anchors{0.5, 0.5, 0.5, 5.0, 0.4636, 0.3568, 0.40393, 5.0, 0.7044, 0.2688, 0.6084, 5.0, 1.0, 0.5, 0.5, 5.0, 1.0169, 0.3116, 0.44259, 5.0, 0.8087, 0.1367, 0.6491, 5.0, 0.855486, 0.167231, 0.717074, 5.0, 0.896753, 0.123382, 0.605313, 5.0, 0.5573, 0.2669, 0.61203, 5.0, 0.7241, -0.0224, 0.6565, 5.0, 0.644725, -0.013849, 0.705751, 5.0, 0.801262, -0.105578, 0.677981, 5.0, 0.671723, -0.050488, 0.590406, 5.0, 0.7644, 0.3918, 0.56656, 5.0, 0.7865, 0.5824, 0.3261, 5.0, 0.7331, 0.5657, 0.41369, 5.0, 0.6769, 0.5814, 0.2336, 5.0, 0.624258, 0.687156, 0.226523, 5.0, 0.593622, 0.500134, 0.241248, 5.0, 0.9338, 0.5934, 0.32488, 5.0, 0.7562, 0.546, 0.138, 5.0, 0.834714, 0.62931, 0.127549, 5.0, 0.676121, 0.544249, 0.080431, 5.0, 0.808974, 0.44165, 0.144184, 5.0};
+
+	bool hasPoly = false;
+	FMIC_TS ts(cell, symm, types, xyz);
+	auto res = ts.cluster(anchors, 0.5, hasPoly);
+	EXPECT_EQ(res.size(), 24);
+	EXPECT_TRUE(hasPoly);
+}
+
+TEST(CreateClusterTest, SingleNegative) {
+	std::array<cpplib::basic_types::FloatingPointType, 6> cell{1.5, 1.5, 1.5, 90.0, 90.0, 90.0};
+	std::vector<const char*> symm{
+		"x, y, z"
+	};
+
+	std::vector<AtomTypeBase> types{6};
+	std::vector<cpplib::basic_types::FloatingPointType> xyz{
+		0, 0, 0
+	};
+
+
+
+
+
+
+	bool hasPoly = false;
+	FMIC_TS ts(cell, symm, types, xyz);
+	std::vector<FloatingPointType> anchors{0, 0, 0, 20.0};
+	auto res1 = ts.cluster(anchors, 3.0, hasPoly);
+	auto res2 = ts.cluster(anchors, 20.0, hasPoly);
+	EXPECT_GT(res2.size(), res1.size());
+	EXPECT_TRUE(hasPoly);
+}
+
+
 
 TEST(CreateClusterTest, Next) {
-	p_distances = &testdistances;
 	std::array<cpplib::basic_types::FloatingPointType, 6> cell{8.57, 8.7, 20.39, 92.99, 95.38, 117.87};
 	std::vector<const char*> symm{"x,y,z", "-x,-y,-z", "x+1,y,z", "x-1,y,z", "x,y+1,z", "x,y-1,z", "x,y,z+1", "x,y,z-1"};
 
@@ -164,7 +258,6 @@ TEST(CreateClusterTest, Next) {
 }
 
 //TEST(CreateClusterTest, AADRIB) {
-//	p_distances = &testdistances;
 //	std::array<cpplib::basic_types::FloatingPointType, 6> cell{ 8.96031, 5.601366, 21.087873, 90.0, 101.909157, 90.0 };
 //	std::vector<const char*> symm{ "+X,+Y,+Z", "-X,1/2+Y,1/2-Z", "-X,-Y,-Z", "+X,1/2-Y,1/2+Z", "x+1,y,z", "x-1,y,z", "x,y+1,z", "x,y-1,z", "x,y,z+1", "x,y,z-1" };
 //
@@ -229,7 +322,6 @@ TEST(SearchMainTest, CO2Search) {
 }
 
 TEST(FindMoleculesWithoutCellTest, HO2) {
-	p_distances = &testdistances;
 	std::vector<AtomTypeBase>  types{1,8,8};
 
 	std::vector<PointType>  points{
@@ -238,11 +330,18 @@ TEST(FindMoleculesWithoutCellTest, HO2) {
 		{ 0.438335628,  0.987240971, -3.993208195 }
 	};
 
-	auto res = FindMoleculesWithoutCell(types, points);
+	const auto input_count=types.size();
+    auto res = FindMoleculesWithoutCell(types, points);
+    CheckMoleculeResult(res,input_count);
+    EXPECT_TRUE(std::get<1>(res).empty()) << std::get<1>(res);
+    ASSERT_EQ(std::get<2>(res).size(),1);
+    const auto& molecule=std::get<2>(res).front();
+    EXPECT_EQ(std::get<0>(molecule).size(),input_count);
+    EXPECT_EQ(std::get<2>(molecule).size(),input_count-1);
+    CheckCartesianBonds(std::get<2>(res),{{0,1},{0,2}});
 }
 
 TEST(CompaqTest, AAXTHP) {
-	p_distances = &testdistances;
 	std::array<cpplib::basic_types::FloatingPointType, 6> cell{13.966, 12.991, 11.225, 90.0, 100.931, 90.0};
 	std::vector<const char*> symm{"x,y,z", "x,-y,z+1/2", "x+1,y,z", "x-1,y,z", "x,y+1,z", "x,y-1,z", "x,y,z+1", "x,y,z-1"};
 	std::vector<AtomTypeBase>  types{8, 8, 8, 7, 6, 6, 7, 7, 6, 1, 1, 6, 1, 6, 6, 6, 6, 6, 1, 6, 6, 1, 6, 1, 6, 6, 1, 8, 6, 1, 6, 1, 1, 6, 1, 1, 6, 1, 6, 1, 6, 1, 1, 1, 6, 1, 1, 1, 6, 1, 1, 1, 8, 8, 7, 7, 6, 6, 6, 7, 6, 1, 6, 6, 1, 8, 6, 1, 1, 6, 1, 6, 1, 6, 6, 6, 1, 1, 8, 6, 6, 1, 6, 6, 1, 1, 6, 1, 6, 1, 1, 6, 1, 1, 1, 6, 1, 6, 1, 6, 1, 1, 1, 1};
@@ -250,11 +349,21 @@ TEST(CompaqTest, AAXTHP) {
 	auto type_s = types.size();
 
 	FMIC_TS ts(cell, symm, types, xyz);
+	const auto original=ts.points;
 	auto vec = ts.compaq();
 	auto& points = std::get<0>(vec);
 	ASSERT_EQ(points.size(), type_s);
-	if (!std::get<1>(vec).empty())
-		std::cout << std::get<1>(vec).front() << std::endl;
+    const Cell<double> geometry(cell);
+    for(size_t i=0;i<points.size();++i) {
+        for(int axis=0;axis<3;++axis) EXPECT_TRUE(std::isfinite(points[i][axis]));
+        double nearest=std::numeric_limits<double>::infinity();
+        for(const char* code:ts.symm) {
+            const auto transformed=SymmType(code).GenSymm(original[i]);
+            const auto difference=points[i]-transformed;
+            nearest=std::min(nearest,(geometry.fracToCart()*(difference-difference.round())).r());
+        }
+        EXPECT_LT(nearest,1e-8) << "Packing must preserve each atom up to a symmetry and lattice shift";
+    }
 
 }
 
@@ -274,7 +383,6 @@ TEST(SubSearch, Same) {
 }
 
 TEST(FindDistanceTest, C3H6O2) {
-	p_distances = &testdistances;
 	std::vector<AtomTypeBase>  types{1,8,8,6,6,1,1,6,1,1,1};
 
 	std::vector<PointType>  points{
@@ -290,11 +398,12 @@ TEST(FindDistanceTest, C3H6O2) {
 		{ 1.319085628,  0.965221387, -0.354947074 },
 		{-0.442414372,  0.965221387, -0.354947074 }};
 	auto res = FindDistanceWC(types, points, {8,8}, {1, 5});
-	ASSERT_FALSE(res.empty());
+	ASSERT_EQ(res.size(),1);
+    EXPECT_EQ(std::get<0>(res.front()),1);
+    EXPECT_EQ(std::get<1>(res.front()),2);
+    EXPECT_NEAR(std::get<2>(res.front()),std::hypot(1.434717404+0.587240971,3.993208195-3.001401644),1e-10);
 }
 TEST(FindDistanceTest, EKESIW) {
-	p_distances = &testdistances;
-
 	std::array<cpplib::basic_types::FloatingPointType, 6> cell{6.83, 11.339, 14.627, 94.58, 95.92, 102.54};
 	std::vector<const char*> symm{"x,y,z", "-x,-y,-z"};
 	std::vector<AtomTypeBase>  types{29, 19, 19, 7, 6, 6, 7, 6, 1, 6, 1, 6, 6, 8, 8, 8, 8, 7, 6, 6, 7, 6, 1, 6, 1, 6, 6, 8, 8, 8, 8, 8, 1, 1, 8, 1, 1, 8, 1, 1, 8, 1, 1, 8, 1, 1, 8, 1, 1, 8, 1, 1, 8, 8, 8, 8, 8, 8, 8, 19, 19, 19, 19, 19, 19, 1, 1, 1, 1};
@@ -304,8 +413,6 @@ TEST(FindDistanceTest, EKESIW) {
 	ASSERT_FALSE(res.empty());
 }
 TEST(FindMoleculesInCellTest, AZIVIO) {
-	p_distances = &testdistances;
-
 	std::array<cpplib::basic_types::FloatingPointType, 6> cell{17.898012159999997, 9.13280964, 5.93442917, 90.0, 90.0, 90.0};
 	std::vector<const char*> symm{"+x,+y,+z", "-x+1/2,+y+1/2,+z+1/2", "+x+1/2,-y+1/2,+z", "-x,-y,+z+1/2"};
 	std::vector<AtomTypeBase>  types{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 6, 6, 6, 6, 6, 6, 6, 6, 7, 8, 8, 9, 9, 9};
@@ -322,7 +429,9 @@ TEST(SortGraph, Main) {
 	auto ret = cpplib::MoleculeParser<cpplib::currents::AtomTypeData>::ResortString(search);
 
 	const char search2[]{"52403 95 107 6 1 15 0 6 0 6 0 6 1 6 1 6 0 6 3 6 0 6 0 6 1 6 0 6 3 6 0 6 0 6 1 6 0 6 1 6 0 6 3 6 3 6 2 6 0 6 0 6 1 6 0 6 1 6 1 6 0 6 3 6 0 6 2 6 1 6 0 6 3 6 1 6 0 6 1 6 3 6 0 6 1 6 1 6 0 6 1 6 1 6 1 6 1 6 1 6 0 6 0 9 0 9 0 9 0 9 0 5 0 6 0 6 0 6 0 9 0 6 0 6 0 9 0 9 0 6 0 6 0 9 0 9 0 6 0 6 0 9 0 6 0 9 0 6 0 9 0 6 0 6 0 6 0 6 0 6 0 9 0 9 0 6 0 6 0 9 0 6 0 9 0 6 0 6 0 9 0 6 0 9 0 9 0 9 0 6 0 6 0 1 19 1 48 2 14 2 24 3 49 3 23 3 25 4 26 4 14 4 23 5 37 5 31 6 48 6 45 7 42 7 49 7 43 8 12 9 15 9 14 9 50 10 15 10 17 10 27 11 29 11 37 12 26 12 32 12 13 15 22 15 40 16 38 16 43 17 19 17 28 18 49 18 36 19 40 20 31 21 29 22 34 23 32 23 43 24 29 24 31 25 41 26 33 27 46 28 47 30 34 33 50 34 50 34 39 35 37 36 41 38 44 40 45 42 44 46 47 51 57 52 78 53 60 54 90 55 61 55 77 55 65 55 64 56 84 56 85 56 64 57 71 57 95 58 80 58 90 58 75 59 68 60 79 60 76 61 90 61 78 62 75 63 85 64 88 65 79 65 82 66 76 67 94 68 78 68 75 69 81 69 88 69 83 70 83 71 72 71 94 73 86 73 77 73 95 74 87 76 87 77 94 79 91 82 89 82 87 83 85 88 93 92 95"};
-	auto ret2 = cpplib::MoleculeParser<cpplib::currents::AtomTypeData>::ResortString(search2);
+    auto ret2 = cpplib::MoleculeParser<cpplib::currents::AtomTypeData>::ResortString(search2);
+    EXPECT_TRUE(CompareGraph(cpplib::MoleculeParser<AtomTypeRequest>::_ParseOldInputString(search).c_str(),ret.c_str(),true));
+    EXPECT_TRUE(CompareGraph(cpplib::MoleculeParser<AtomTypeRequest>::_ParseOldInputString(search2).c_str(),ret2.c_str(),true));
 
 
 }
@@ -418,7 +527,6 @@ TEST(CompareGraphTest, s161834) {
 	EXPECT_TRUE(res);
 }
 TEST(FindMoleculesInCellTest, AADRIB) {
-	p_distances = &testdistances;
 	std::array<cpplib::basic_types::FloatingPointType, 6> cell{17.125, 11.453, 8.590, 90, 109.18, 90};
 	std::vector<const char*> symm{"x,y,z", "-x,1/2+y,-z"};
 
@@ -430,7 +538,6 @@ TEST(FindMoleculesInCellTest, AADRIB) {
 	ASSERT_NO_THROW({res = std::get<0>(ts.call());});
 }
 TEST(FindMoleculesInCellTest, AAXTHP) {
-	p_distances = &testdistances;
 	std::array<cpplib::basic_types::FloatingPointType, 6> cell{8.332, 13.644, 16.345, 90, 90, 90};
 	std::vector<const char*> symm{"x,y,z", "1/2+x,1/2-y,-z", "-x,1/2+y,1/2-z", "1/2-x,-y,1/2+z"};
 
@@ -442,7 +549,6 @@ TEST(FindMoleculesInCellTest, AAXTHP) {
 	ASSERT_NO_THROW({res = std::get<0>(ts.call()); });
 }
 TEST(FindMoleculesInCellTest, AABHTZ) {
-	p_distances = &testdistances;
 	std::array<cpplib::basic_types::FloatingPointType, 6> cell{11.372 ,  10.272 ,  7.359 ,  108.75 ,  71.07 ,  96.16};
 	std::vector<const char*> symm{"x,y,z", "-x,-y,-z"};
 
@@ -454,7 +560,6 @@ TEST(FindMoleculesInCellTest, AABHTZ) {
 	ASSERT_NO_THROW({res = std::get<0>(ts.call());});
 }
 TEST(FindMoleculesInCellTest, ABABAH) {
-	p_distances = &testdistances;
 	std::array<cpplib::basic_types::FloatingPointType, 6> cell{12.3717, 7.772, 32.821, 90.0, 90.0, 90.0};
 	std::vector<const char*> symm{"x,y,z", "1/2-x,-y,1/2+z", "-x,1/2+y,1/2-z", "1/2+x,1/2-y,-z", "-x,-y,-z", "-1/2+x,y,-1/2-z", "x,-1/2-y,-1/2+z", "-1/2-x,-1/2+y,z"};
 	std::vector<AtomTypeBase>  types{8, 8, 8, 6, 6, 1, 6, 6, 1, 6, 1, 1, 1, 6, 1, 1, 1, 6, 1, 1, 6, 1, 6, 1, 1, 1, 6, 1, 1, 1, 6, 6, 1, 6, 1, 6, 6, 1, 6, 1, 6, 1, 1, 1};
@@ -465,8 +570,6 @@ TEST(FindMoleculesInCellTest, ABABAH) {
 	ASSERT_NO_THROW({res = std::get<0>(ts.call()); });
 }
 TEST(FindMoleculesInCellTest, EKESIW) {
-	p_distances = &testdistances;
-
 	std::array<cpplib::basic_types::FloatingPointType, 6> cell{6.83, 11.339, 14.627, 94.58, 95.92, 102.54};
 	std::vector<const char*> symm{"x,y,z", "-x,-y,-z"};
 	std::vector<AtomTypeBase>  types{29, 19, 19, 7, 6, 6, 7, 6, 1, 6, 1, 6, 6, 8, 8, 8, 8, 7, 6, 6, 7, 6, 1, 6, 1, 6, 6, 8, 8, 8, 8, 8, 1, 1, 8, 1, 1, 8, 1, 1, 8, 1, 1, 8, 1, 1, 8, 1, 1, 8, 1, 1, 8, 8, 8, 8, 8, 8, 8, 19, 19, 19, 19, 19, 19, 1, 1, 1, 1};
@@ -477,7 +580,6 @@ TEST(FindMoleculesInCellTest, EKESIW) {
 	ASSERT_NO_THROW({res = std::get<0>(ts.call()); });
 }
 TEST(FindMoleculesWithoutCellTest, C3H6O2) {
-	p_distances = &testdistances;
 	std::vector<AtomTypeBase>  types{1,8,8,6,6,1,1,6,1,1,1};
 
 	std::vector<PointType>  points{
@@ -493,10 +595,17 @@ TEST(FindMoleculesWithoutCellTest, C3H6O2) {
 		{ 1.319085628,  0.965221387, -0.354947074 },
 		{-0.442414372,  0.965221387, -0.354947074 }};
 
-	auto res = FindMoleculesWithoutCell(types, points);
+	const auto input_count=types.size();
+    auto res = FindMoleculesWithoutCell(types, points);
+    CheckMoleculeResult(res,input_count);
+    EXPECT_TRUE(std::get<1>(res).empty()) << std::get<1>(res);
+    ASSERT_EQ(std::get<2>(res).size(),1);
+    const auto& molecule=std::get<2>(res).front();
+    EXPECT_EQ(std::get<0>(molecule).size(),input_count);
+    EXPECT_EQ(std::get<2>(molecule).size(),input_count-1);
+    CheckCartesianBonds(std::get<2>(res),{{0,1},{1,3},{2,3},{3,4},{4,5},{4,6},{4,7},{7,8},{7,9},{7,10}});
 }
 TEST(FindAngleTest, C3H6O2) {
-	p_distances = &testdistances;
 	std::vector<AtomTypeBase>  types{1,8,8,6,6,1,1,6,1,1,1};
 
 	std::vector<PointType>  points{
@@ -513,9 +622,16 @@ TEST(FindAngleTest, C3H6O2) {
 		{-0.442414372,  0.965221387, -0.354947074 }};
 	auto res = FindAngleWC(types, points, {8,6,8}, {std::make_pair(1.0f, 2.0f), std::make_pair(0.0f, 2.0f),}, std::make_pair(-180.f, 180.f));
 	ASSERT_FALSE(res.empty());
+    const double y1=-0.587240971-0.227304724, z1=-3.993208195+2.907173504;
+    const double y2=1.434717404-0.227304724, z2=-3.001401644+2.907173504;
+    const double expected=std::atan2(std::abs(y1*z2-z1*y2),y1*y2+z1*z2);
+    for(const auto& [first,middle,last,angle]:res) {
+        EXPECT_EQ(middle,3);
+        EXPECT_TRUE((first==1 && last==2) || (first==2 && last==1));
+        EXPECT_NEAR(angle,expected,1e-12);
+    }
 }
 TEST(FindTorsionTest, C3H6O2) {
-	p_distances = &testdistances;
 	std::vector<AtomTypeBase>  types{1,8,8,6,6,1,1,6,1,1,1};
 
 	std::vector<PointType>  points{
@@ -535,10 +651,15 @@ TEST(FindTorsionTest, C3H6O2) {
 							 {std::make_pair(0.f, 180.f), std::make_pair(0.f, 180.f)},
 							 std::make_pair(-180.f, 180.f));
 	ASSERT_FALSE(res.empty());
+    for(const auto& [first,second,third,last,angle]:res) {
+        EXPECT_TRUE(first==1 || first==2);
+        EXPECT_EQ(second,3); EXPECT_EQ(third,4); EXPECT_EQ(last,7);
+        // All four nuclei lie in the same Cartesian x-plane.
+        EXPECT_LT(std::min(std::abs(angle),std::abs(std::abs(angle)-std::acos(-1.0))),1e-7);
+    }
 }
 
 TEST(FindDATTest, wcC3H6O2) {
-	p_distances = &testdistances;
 	std::vector<AtomTypeBase>  types{1,8,8,6,6,1,1,6,1,1,1};
 
 	std::vector<PointType>  points{
@@ -559,7 +680,6 @@ TEST(FindDATTest, wcC3H6O2) {
 	EXPECT_EQ(std::get<2>(res).size(), 17);
 }
 TEST(FindDATTest, icEKESIW) {
-	p_distances = &testdistances;
 	std::array<cpplib::basic_types::FloatingPointType, 6> cell{6.83, 11.339, 14.627, 94.58, 95.92, 102.54};
 	std::vector<const char*> symm{"x,y,z", "-x,-y,-z"};
 	std::vector<cpplib::basic_types::AtomTypeBase>  types{29, 19, 19, 7, 6, 6, 7, 6, 1, 6, 1, 6, 6, 8, 8, 8, 8, 7, 6, 6, 7, 6, 1, 6, 1, 6, 6, 8, 8, 8, 8, 8, 1, 1, 8, 1, 1, 8, 1, 1, 8, 1, 1, 8, 1, 1, 8, 1, 1, 8, 1, 1, 8, 8, 8, 8, 8, 8, 8, 19, 19, 19, 19, 19, 19, 1, 1, 1, 1};
@@ -572,7 +692,6 @@ TEST(FindDATTest, icEKESIW) {
 }
 
 TEST(GenSymmTest, E28) {
-	p_distances = &testdistances;
 	std::vector<std::tuple<int, cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>> arg = {{16, 0.55638, 0.01587, 0.36247}, {6, 0.3188, -0.0361, 0.9365}, {8, 0.482, 0.22765, 0.8132}, {7, 0.3478, 0.0758, 0.9261}, {8, 0.9234, 0.03692, 0.6186}, {6, 0.4816, 0.1263, 0.8315}, {7, 0.6105, 0.05617, 0.7551}, {6, 0.457, -0.1057, 0.8582}, {1, 0.4495, -0.1831, 0.8662}, {7, 0.1671, -0.074, 1.018}, {8, 0.9404, -0.1496, 0.2756}, {6, 0.8764, 0.0011, 0.448}, {1, 0.9622, 0.0507, 0.3884}, {6, 0.5993, -0.0573, 0.7721}, {1, 0.6937, -0.1024, 0.7223}, {6, 0.5781, 0.1417, 0.4813}, {1, 0.6446, 0.2021, 0.4287}, {1, 0.4209, 0.164, 0.4952}, {6, 0.7468, 0.1111, 0.6457}, {1, 0.8252, 0.1788, 0.6996}, {6, 0.9693, -0.1166, 0.4419}, {1, 1.1389, -0.1199, 0.4998}, {1, 0.8807, -0.1671, 0.4964}, {1, 0.092, -0.026, 1.064}, {1, 0.257, 0.119, 0.97}, {1, 0.773, -0.176, 0.22}, {1, 0.133, -0.153, 1.019}, {17, 0.02131, 0.18155, 0.12771}};
 	std::vector<PointType> points;
 	std::vector<AtomTypeBase> atoms;
@@ -596,11 +715,25 @@ TEST(GenSymmTest, E28) {
 	fcell.GenerateSymm(famstr, symm3, mvtc, true);
 	EXPECT_EQ(famstr.sizePoints, 168);
 
-	EXPECT_TRUE(true);
+    ASSERT_EQ(famstr.points.size(),famstr.parseIndex.size());
+    for(size_t i=0;i<famstr.points.size();++i) {
+        const auto source=std::get<0>(famstr.parseIndex[i]);
+        ASSERT_GE(source,0);
+        ASSERT_LT(static_cast<size_t>(source),famstr.points.size());
+        // Successive GenerateSymm calls may refer to an image from an earlier
+        // generation. Check physical equivalence to the original atoms instead
+        // of assuming parseIndex always addresses the initial 28 entries.
+        double nearest=std::numeric_limits<double>::infinity();
+        for(const auto& atom:arg) {
+            const PointType original(std::get<1>(atom),std::get<2>(atom),std::get<3>(atom));
+            const auto difference=famstr.points[i]-original;
+            nearest=std::min(nearest,(difference-difference.round()).r());
+        }
+        EXPECT_LT(nearest,1e-12);
+    }
 }
 
 TEST(GenSymmTest, xyz) {
-	p_distances = &testdistances;
 	std::vector<std::tuple<int, cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>> arg = {{16, 0.55638, 0.01587, 0.36247}};
 	std::vector<PointType> points;
 	std::vector<AtomTypeBase> atoms;
@@ -641,151 +774,14 @@ TEST(SearchMainTest, multytype2) {
 	EXPECT_EQ(res.size(), 3);
 }
 
-// Benchmark section
-#ifdef NDEBUG
-TEST(databaseSearch10k, d10k) {
-	const char search1[]{"1 5 4 6 2 6 2 6 0 6 2 6 2 1 2 2 3 3 4 4 5"};
-	const char search2[]{"1 5 4 6 2 6 2 7 0 6 2 6 2 1 2 2 3 3 4 4 5"};
-	const char search3[]{"1 5 4 6 2 6 2 8 0 6 2 6 2 1 2 2 3 3 4 4 5"};
-	const char search4[]{"1 5 4 6 2 6 2 -1 0 6 2 6 2 1 2 2 3 3 4 4 5 -1 6 7 8 0"};
-
-	constexpr int np = 2;
-
-	std::ifstream db("../../../../../cpplib/Tests/d10k.datt");
-	if (!db.is_open())
-		FAIL() << "Could not open the dataset";
-	int s;
-	db >> s;
-	std::vector<std::string> datstr(s);
-	std::vector<const char*> dat(s);
-	std::vector<const char*> temp;
-	std::getline(db, datstr[0]);
-	for (size_t i = 0; i < s; i++) {
-		std::getline(db, datstr[i]);
-		datstr[i] = cpplib::MoleculeParser<cpplib::currents::AtomTypeData>::ResortString(datstr[i].c_str());
-		dat[i] = datstr[i].c_str();
-	}
-
-	temp = dat;
-	std::vector<int> res1 = SearchMain(cpplib::MoleculeParser<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search1).data(), std::move(temp), np, false);
-	EXPECT_EQ(res1.size(), 451);
-	temp = dat;
-	std::vector<int> res2 = SearchMain(cpplib::MoleculeParser<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search2).data(), std::move(temp), np, false);
-	EXPECT_EQ(res2.size(), 582);
-	temp = dat;
-	std::vector<int> res3 = SearchMain(cpplib::MoleculeParser<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search3).data(), std::move(temp), np, false);
-	EXPECT_EQ(res3.size(), 389);
-	temp = dat;
-	std::vector<int> res4 = SearchMain(cpplib::MoleculeParser<cpplib::currents::AtomTypeRequest>::_ParseOldInputString(search4).data(), std::move(temp), np, false);
-	EXPECT_EQ(res4.size(), 1276);
-	EXPECT_GE(res1.size() + res2.size() + res3.size(), res4.size());
-
-	std::sort(res1.begin(), res1.end());
-	std::sort(res2.begin(), res2.end());
-	std::sort(res3.begin(), res3.end());
-	std::sort(res4.begin(), res4.end());
-
-	size_t i1 = 0;
-	size_t i2 = 0;
-	size_t i3 = 0;
-
-	for (size_t i = 0; i < res4.size(); i++) {
-		bool flag = false;
-		for (; i1 < res1.size(); i1++) {
-			if (res1[i1] == res4[i]) {
-				flag = true;
-				i1++;
-				break;
-			}
-			if (res1[i1] > res4[i]) {
-				break;
-			}
-		}
-		for (; i2 < res2.size(); i2++) {
-			if (res2[i2] == res4[i]) {
-				flag = true;
-				i2++;
-				break;
-			}
-			if (res2[i2] > res4[i]) {
-				break;
-			}
-		}
-		for (; i3 < res3.size(); i3++) {
-			if (res3[i3] == res4[i]) {
-				flag = true;
-				i3++;
-				break;
-			}
-			if (res3[i3] > res4[i]) {
-				break;
-			}
-		}
-		EXPECT_TRUE(flag) << res4[i] << std::endl;
-	}
-	EXPECT_TRUE(res1.size() == i1);
-	EXPECT_TRUE(res2.size() == i2);
-	EXPECT_TRUE(res3.size() == i3);
+// Public synthetic fixtures exercise both cycle topology and parallel dispatch.
+TEST(SearchMainTest, CycleSizesAndThreadCounts) {
+    const char* query="1 6 6 6 2 4 4 6 2 4 4 6 2 4 4 6 2 4 4 6 2 4 4 6 2 4 4 1 2 2 3 3 4 4 5 5 6 1 6";
+    const char* six="11 6 6 6 2 6 2 6 2 6 2 6 2 6 2 1 2 2 3 3 4 4 5 5 6 1 6";
+    const char* seven="22 7 7 6 2 6 2 6 2 6 2 6 2 6 2 6 2 1 2 2 3 3 4 4 5 5 6 6 7 1 7";
+    for(int threads : {1,2,4,16}) {
+        std::vector<const char*> data{six,seven};
+        auto result=SearchMain(query,std::move(data),threads,false);
+        EXPECT_EQ(result,(std::vector<int>{11})); // a seven-cycle has no six-cycle subgraph
+    }
 }
-TEST(Benchmark, HexaneHeptane) {
-	const char search1[]{"1 6 6 6 2 4 4 6 2 4 4 6 2 4 4 6 2 4 4 6 2 4 4 6 2 4 4 1 2 2 3 3 4 4 5 5 6 1 6"};
-	const char data[]{"1 7 7 6 2 6 2 6 2 6 2 6 2 6 2 6 2 1 2 2 3 3 4 4 5 5 6 6 7 1 7"};
-
-	constexpr size_t s = 1000;
-
-	std::vector<const char*> dat(s);
-	for (size_t i = 0; i < s; i++) {
-		dat[i] = &(data[0]);
-	}
-
-	double oldres = INFINITY;
-	for (size_t j = 1; j < 16; j++) {
-		auto temp = dat;
-		auto start = std::chrono::steady_clock::now();
-
-		std::vector<int> res1 = SearchMain(search1, std::move(temp), j, false);
-
-		auto end = std::chrono::steady_clock::now();
-		double elapsed = std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
-		if (oldres < elapsed) {
-			std::cout << "Optimal low np = " << j - 1 << '\t' << oldres << std::endl;
-			break;
-		}
-		oldres = elapsed;
-	}
-}
-#endif
-#if DISABLE_BENCH == 0
-TEST(Benchmark, d10k) {
-	//const char search1[] {"1 6 6 6 2 2 4 6 2 2 4 6 2 2 4 6 2 2 4 6 2 2 4 6 2 2 4 1 2 2 3 3 4 4 5 5 6 1 6"};
-	const char search1[]{"1 6 6 6 0 3 4 6 0 3 4 6 0 3 4 6 0 3 4 6 0 3 4 6 0 3 4 1 2 2 3 3 4 4 5 5 6 1 6"};
-
-	constexpr int np = 6;
-
-	std::ifstream db("../../../../../cpplib/Tests/d10k.datt");
-	if (!db.is_open())
-		FAIL() << "Could not open the dataset";
-	int s;
-	db >> s;
-	std::vector<std::string> datstr(s);
-	std::vector<const char*> dat(s);
-	std::getline(db, datstr[0]);
-	for (size_t i = 0; i < s; i++) {
-		std::getline(db, datstr[i]);
-		datstr[i] = cpplib::MoleculeParser<cpplib::currents::AtomTypeData>::ResortString(datstr[i].c_str());
-		dat[i] = datstr[i].c_str();
-	}
-
-	double oldres = INFINITY;
-	for (size_t j = 1; j <= np; j++) {
-		auto temp = dat;
-		auto start = std::chrono::steady_clock::now();
-
-		std::vector<int> res1 = SearchMain(search1, std::move(temp), j, false);
-
-		auto end = std::chrono::steady_clock::now();
-		double elapsed = std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count();
-		std::cout << "\t np =\t" << j << '\t' << elapsed << std::endl;
-	}
-}
-#endif // DISABLE_BENCH == 0

@@ -1,4 +1,4 @@
-# Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
+﻿# Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
 # This file is part of ASID - Atomistic Simulation Instruments and Database
 # For more information see <https://github.com/ASID-Production/ASID>
 #
@@ -26,116 +26,227 @@
 #
 # ******************************************************************************************
 
-cmake_minimum_required (VERSION 3.19)
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+cmake_minimum_required(VERSION 3.18)
 
-# add_compile_definitions(DEBUG_MESS_ON)
+# ============================================================================
+# Project and basic options
+# ============================================================================
+project(cpplib LANGUAGES CXX C)
 
-if (POLICY CMP0141)
-    cmake_policy(SET CMP0141 NEW)
-    set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<IF:$<AND:$<C_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:MSVC>>,$<$<CONFIG:Debug,RelWithDebInfo>:EditAndContinue>,$<$<CONFIG:Debug,RelWithDebInfo>:ProgramDatabase>>")
+if(MSVC AND CMAKE_VERSION VERSION_GREATER_EQUAL 3.28)
+    set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 endif()
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-set(COMPILE_TESTS FALSE)
-if (WIN32)
-    set(COMPILE_TESTS TRUE)
-    project(cpplibLib)
-    if (UNIX OR APPLE)
-        find_package(Python COMPONENTS Interpreter Development)
-    endif (UNIX OR APPLE)
+# add_compile_definitions(DEBUG_MESS_ON)
 
-    if (WIN32)
-        find_package(Python COMPONENTS Interpreter Development EXACT 3.10)
-    endif (WIN32)
-    include_directories(SYSTEM ${Python3_INCLUDE_DIRS})
-    
-    add_library(cpplibLib  "cpplib/src/Functions/Functions.cpp"
-                           "cpplib/src/Python/PythonInterface.cpp"  
+# ============================================================================
+# Politics
+# ============================================================================
+if(POLICY CMP0141)
+    cmake_policy(SET CMP0141 NEW)
+    set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT
+        "$<$<CONFIG:Debug,RelWithDebInfo>:ProgramDatabase>")
+endif()
 
-                           "cpplib/src/BaseHeaders/BaseTypes.h" 
-                           "cpplib/src/BaseHeaders/Concepts.h" 
-                           "cpplib/src/BaseHeaders/Currents.h" 
-                           "cpplib/src/BaseHeaders/DebugMes.h"
-                           "cpplib/src/BaseHeaders/Support.h"
+# ============================================================================
+# Optimizations (interface)
+# ============================================================================
+set(CMAKE_SHOW_INCLUDES OFF)
+add_library(optimizations INTERFACE)
+option(CPPLIB_NATIVE_CPU "Optimize Release builds for the local CPU" OFF)
+option(CPPLIB_ENABLE_IPO "Enable interprocedural optimization when supported" OFF)
+if(MSVC)
+    target_compile_options(optimizations INTERFACE /fp:precise /EHsc
+        $<$<CONFIG:Release>:/O2>)
+    if(CPPLIB_NATIVE_CPU)
+        target_compile_options(optimizations INTERFACE $<$<CONFIG:Release>:/arch:AVX2>)
+    endif()
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
+    target_compile_options(optimizations INTERFACE $<$<CONFIG:Release>:-O3>)
+    if(CPPLIB_NATIVE_CPU)
+        target_compile_options(optimizations INTERFACE
+            "$<$<CONFIG:Release>:-march=native;-mtune=native>")
+    endif()
+endif()
+if(CPPLIB_ENABLE_IPO)
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT CPPLIB_IPO_SUPPORTED OUTPUT CPPLIB_IPO_ERROR LANGUAGES CXX)
+    if(NOT CPPLIB_IPO_SUPPORTED)
+        message(FATAL_ERROR "IPO requested but unavailable: ${CPPLIB_IPO_ERROR}")
+    endif()
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+endif()
+message(STATUS "cpplib: precise floating point; native CPU=${CPPLIB_NATIVE_CPU}; IPO=${CPPLIB_ENABLE_IPO}")
 
-                           "cpplib/src/Classes/Bond.h"
-                           "cpplib/src/Classes/Cluster.h" 
-                           "cpplib/src/Classes/Distances.h"
-                           "cpplib/src/Classes/DSU.h" 
-                           "cpplib/src/Classes/Engine.h"
-                           "cpplib/src/Classes/FindGeometry.h" 
-                           "cpplib/src/Classes/FindMolecules.h"
-                           "cpplib/src/Classes/Geometry.h"
-                           "cpplib/src/Classes/Hash.h"
-                           "cpplib/src/Classes/Interfaces.h"
-                           "cpplib/src/Classes/MoleculeGraph.h"
-                           "cpplib/src/Classes/SearchGraph.h"
-                           "cpplib/src/Classes/Voronoi.h"
-                            
-                           "cpplib/src/Functions/Functions.h"
+# ============================================================================
+# Python options
+# ============================================================================
+if(WIN32)
+    find_package(Python 3.10 EXACT COMPONENTS Interpreter Development REQUIRED)
+else()
+    find_package(Python 3.10 COMPONENTS Interpreter Development.Module REQUIRED)
+endif()
 
-                           "cpplib/src/Python/PythonInterface.h")
-    target_link_libraries(cpplibLib)
+message(STATUS "Python version: ${Python_VERSION}")
+message(STATUS "Python EXECUTABLE: ${Python_EXECUTABLE}")
 
-    target_include_directories(cpplibLib PUBLIC 
+# ============================================================================
+# Files
+# ============================================================================
+file(GLOB_RECURSE CPPLIB_HEADERS
+    "cpplib/src/*.h"
+)
+
+set(CPPLIB_SOURCES
+    cpplib/src/Functions/Functions.cpp
+)
+set(CPPLIB_PY_SOURCES
+    cpplib/src/Python/PythonInterface.cpp
+)
+
+set(DATA_FILES
+    BondLength.ini
+    ED.txt
+)
+set(DATA_FULL_PATHS "")
+foreach(file ${DATA_FILES})
+    list(APPEND DATA_FULL_PATHS ${CMAKE_SOURCE_DIR}/module/${file})
+endforeach()
+
+# ============================================================================
+# CPPLIB extension (all configurations)
+# ============================================================================
+add_library(cpplib SHARED ${CPPLIB_PY_SOURCES} ${CPPLIB_SOURCES})
+
+# Include dirs
+target_include_directories(cpplib
+    PUBLIC
         ${PROJECT_SOURCE_DIR}/cpplib/src/BaseHeaders
         ${PROJECT_SOURCE_DIR}/cpplib/src/Classes
+        ${PROJECT_SOURCE_DIR}/cpplib/src/Functions
         ${PROJECT_SOURCE_DIR}/cpplib/src/Platform
+    PRIVATE
+        ${Python_INCLUDE_DIRS}
+)
+
+set_target_properties(cpplib PROPERTIES
+    PREFIX ""
+    OUTPUT_NAME "cpplib"
+    POSITION_INDEPENDENT_CODE ON
+)
+
+target_link_libraries(cpplib PRIVATE optimizations ${CMAKE_DL_LIBS})
+
+if(MSVC)
+    target_compile_options(cpplib PRIVATE $<$<CONFIG:Release>:/MD>)
+endif()
+
+# ============================================================================
+# Link with Python (Stable ABI / Limited API)
+# ============================================================================
+
+if(WIN32)
+    find_library(PYTHON_SABI_LIBRARY_RELEASE
+        NAMES python3
+        PATHS ${Python_LIBRARY_DIRS}
+        REQUIRED
     )
-    
-endif(WIN32)
 
-############################################################
-# Create a library cpplib
-############################################################
+    # Stable ABI targets the selected release interpreter in every C++ config.
+    target_link_libraries(cpplib PRIVATE ${PYTHON_SABI_LIBRARY_RELEASE})
+else()
+    # Extension symbols resolve against the hosting interpreter. Linking an
+    # embedding libpython3.x here would pin a nominally Stable ABI module to x.
+    # Python::Module also supplies macOS dynamic_lookup linker options.
+    target_link_libraries(cpplib PRIVATE Python::Module)
+endif()
 
-project(cpplib)
+# ============================================================================
+# Copy target to module dir
+# ============================================================================
+if(WIN32)
+    set(MODULE_EXTENSION "pyd")
+else()
+    set(MODULE_EXTENSION "so")
+endif()
 
-    if (UNIX OR APPLE)
-        find_package(Python3 COMPONENTS Interpreter Development)
-    endif (UNIX OR APPLE)
+set_target_properties(cpplib PROPERTIES SUFFIX ".${MODULE_EXTENSION}")
+add_custom_command(TARGET cpplib POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different ${DATA_FULL_PATHS} "$<TARGET_FILE_DIR:cpplib>"
+    VERBATIM)
+option(CPPLIB_COPY_MODULE_TO_SOURCE "Copy the extension into module/ after building" ON)
+if(CPPLIB_COPY_MODULE_TO_SOURCE)
+    add_custom_command(TARGET cpplib POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:cpplib> "${CMAKE_SOURCE_DIR}/module/cpplib.${MODULE_EXTENSION}"
+        VERBATIM)
+endif()
 
-    if (WIN32)
-        find_package(Python3 COMPONENTS Interpreter Development EXACT 3.10)
-    endif (WIN32)
 
-    include_directories(cpplib PRIVATE SYSTEM ${Python3_INCLUDE_DIRS})
+# ============================================================================
+# Tests
+# ============================================================================
 
-    #Generate the shared library from the library sources
-    if(CMAKE_BUILD_TYPE MATCHES Release)
-        add_library(cpplib SHARED "cpplib/src/Functions/Functions.cpp" 
-                                  "cpplib/src/Python/PythonInterface.cpp")
-        if(WIN32)
-            target_link_libraries(cpplib PRIVATE ${Python_LIBRARY_DIRS}/python3.lib)
-        else()
-            target_link_libraries(cpplib PRIVATE ${Python_LIBRARY_DIRS})
-        endif()
-        set_target_properties(cpplib PROPERTIES
-            PREFIX ""
-            OUTPUT_NAME "cpplib"
-            LINKER_LANGUAGE C
-            POSITION_INDEPENDENT_CODE ON
+
+include(CTest)
+
+if(BUILD_TESTING)
+
+    # ------------------------------------------------------------------------
+    # C++ tests (Google Test)
+    # ------------------------------------------------------------------------
+    if(EXISTS "${CMAKE_SOURCE_DIR}/cpplib/Tests")
+        add_subdirectory(cpplib/Tests)
+        message(STATUS "Google Test enabled")
+    endif()
+
+    # ------------------------------------------------------------------------
+    # Python tests (pytest)
+    # ------------------------------------------------------------------------
+    set(PYTHON_TEST_DIR "${CMAKE_SOURCE_DIR}/cpplib/Tests/Python")
+
+    if(EXISTS "${PYTHON_TEST_DIR}" AND TARGET cpplib)
+
+        # pytest availability is checked at configure time. Re-run CMake after installing it.
+        execute_process(
+            COMMAND ${Python_EXECUTABLE} -m pytest --version
+            RESULT_VARIABLE PYTEST_RESULT
+            OUTPUT_QUIET
+            ERROR_QUIET
         )
 
-        if (UNIX OR APPLE)
-            add_custom_command(
-                TARGET cpplib POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy
-                    $<TARGET_FILE:cpplib>
-                    ${CMAKE_SOURCE_DIR}/module/cpplib.so)
-        endif (UNIX OR APPLE)
-        if (WIN32)
-            add_custom_command(
-                TARGET cpplib POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy
-                    $<TARGET_FILE:cpplib>
-                    ${CMAKE_SOURCE_DIR}/module/cpplib.pyd)
-        endif (WIN32)
-    endif(CMAKE_BUILD_TYPE MATCHES Release)
+        if(PYTEST_RESULT EQUAL 0)
 
-if((IS_DIRECTORY ${CMAKE_SOURCE_DIR}/cpplib/Tests) AND COMPILE_TESTS)
-    add_subdirectory ("cpplib/Tests")
-endif((IS_DIRECTORY ${CMAKE_SOURCE_DIR}/cpplib/Tests) AND COMPILE_TESTS)
+            add_test(
+                NAME PythonTests
+                COMMAND
+                    ${CMAKE_COMMAND} -E env "CPPLIB_TEST_EXTENSION=$<TARGET_FILE:cpplib>"
+                    ${Python_EXECUTABLE}
+                    -m pytest
+                    -v
+                    ${PYTHON_TEST_DIR}
+            )
+
+            # Allows Python tests to import cpplib from module/
+            set_tests_properties(PythonTests PROPERTIES
+                WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}/module"
+            )
+
+            message(STATUS "Python pytest enabled")
+
+        else()
+            message(WARNING
+                "pytest not found. Install it using: "
+                "${Python_EXECUTABLE} -m pip install pytest, then re-run CMake to register PythonTests."
+            )
+        endif()
+
+    endif()
+
+endif()
+
+# add_compile_definitions(DEBUG_MESS_ON)

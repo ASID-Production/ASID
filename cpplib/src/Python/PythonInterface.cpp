@@ -1,4 +1,4 @@
-// Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
+﻿// Copyright 2023 Alexander A. Korlyukov, Alexander D. Volodin, Petr A. Buikin, Alexander R. Romanenko
 // This file is part of ASID - Atomistic Simulation Instruments and Database
 // For more information see <https://github.com/ASID-Production/ASID>
 //
@@ -27,22 +27,29 @@
 // ******************************************************************************************
 #include <array>
 #include <cmath>
-#include <list>
+#include <cstddef>
+#include <concepts>
+#include <filesystem>
 #include <string>
+#include <regex>
 #include <tuple>
 #include <utility>
 #include <vector>
 
 #include "../Functions/Functions.h"
 #include "../BaseHeaders/BaseTypes.h"
+#include "../BaseHeaders/Currents.h"
 #include "../BaseHeaders/DebugMes.h"
+#include "../Classes/BaderOperator.h"
+#include "../Classes/Cluster.h"
 #include "../Classes/Distances.h"
 #include "../Classes/FindMolecules.h"
 #include "../Classes/Geometry.h"
+#include "../Classes/MoleculeGraph.h"
+#include "../Classes/SearchGraph.h"
 #include "../Classes/Voronoi.h"
 #include "../Python/PythonInterface.h"
 
-extern const cpplib::Distances* p_distances;
 
 using namespace cpplib;
 using namespace cpplib::currents;
@@ -53,41 +60,144 @@ enum class ErrorState {
 	OK = 0,
 	UnknownError,
 };
+[[noreturn]] static void invalid_python_input(PyObject* exception, const char* message) {
+    if (!PyErr_Occurred()) PyErr_SetString(exception, message);
+    throw std::invalid_argument(message);
+}
+static double finite_python_number(PyObject* object) {
+    const double value = PyFloat_AsDouble(object);
+    if (PyErr_Occurred()) invalid_python_input(PyExc_TypeError, "Expected a number");
+    if (!std::isfinite(value)) invalid_python_input(PyExc_ValueError, "Numbers must be finite");
+    return value;
+}
 struct Prepare_WC {
-	std::vector<cpplib::basic_types::AtomTypeBase> types;
-	std::vector<cpplib::geometry::Point<FloatingPointType>> points;
-	explicit Prepare_WC(PyObject* otuples) {
-		Py_ssize_t s = PyList_Size(otuples);
-		types.reserve(static_cast<size_t>(s));
-		points.reserve(static_cast<size_t>(s));
-
-		for (Py_ssize_t i = 0; i < s; i++) {
-			PyObject* o_tuple = PyList_GetItem(otuples, i);
-			types.push_back(static_cast<AtomTypeBase>(PyLong_AsLong(PyTuple_GetItem(o_tuple, 0))));
-			points.emplace_back(static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 1))),
-								static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 2))),
-								static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 3))));
-		}
-	}
+    std::vector<cpplib::basic_types::AtomTypeBase> types;
+    std::vector<cpplib::geometry::Point<FloatingPointType>> points;
+    explicit Prepare_WC(PyObject* tuples) { parse<false>(tuples); }
+    Prepare_WC(PyObject* tuples, std::true_type) { parse<true>(tuples); }
+private:
+    template <bool Validate>
+    void parse(PyObject* tuples) {
+        // Stable ABI accessors perform their own type/index checks. The fast path
+        // assumes the documented shape and checks only the final conversion error.
+        if constexpr (Validate) {
+            if (!PyList_Check(tuples)) invalid_python_input(PyExc_TypeError, "atoms must be a list");
+        }
+        const auto count = PyList_Size(tuples);
+        if (count < 0) invalid_python_input(PyExc_TypeError, "atoms must be a list");
+        types.reserve(static_cast<size_t>(count)); points.reserve(static_cast<size_t>(count));
+        for (Py_ssize_t i = 0; i < count; ++i) {
+            PyObject* atom = PyList_GetItem(tuples,i);
+            if constexpr (Validate) {
+                if (!atom || !PyTuple_Check(atom) || PyTuple_Size(atom) != 4)
+                    invalid_python_input(PyExc_TypeError, "Each atom must be a (type, x, y, z) tuple");
+            }
+            const long type = PyLong_AsLong(PyTuple_GetItem(atom,0));
+            if constexpr (Validate) {
+                if (PyErr_Occurred()) invalid_python_input(PyExc_TypeError, "Atom type must be an integer");
+                if (type <= 0 || type > static_cast<long>(Distances::MAX_TYPE))
+                    invalid_python_input(PyExc_ValueError, "Atom type is outside the supported range");
+            }
+            types.push_back(static_cast<AtomTypeBase>(type));
+            if constexpr (Validate) {
+                const auto x=finite_python_number(PyTuple_GetItem(atom,1));
+                const auto y=finite_python_number(PyTuple_GetItem(atom,2));
+                const auto z=finite_python_number(PyTuple_GetItem(atom,3));
+                points.emplace_back(x,y,z);
+            } else {
+                const auto x=PyFloat_AsDouble(PyTuple_GetItem(atom,1));
+                const auto y=PyFloat_AsDouble(PyTuple_GetItem(atom,2));
+                const auto z=PyFloat_AsDouble(PyTuple_GetItem(atom,3));
+                points.emplace_back(x,y,z);
+            }
+        }
+        if (PyErr_Occurred()) invalid_python_input(PyExc_TypeError, "Invalid atom values");
+    }
 };
 struct Prepare_IC : public Prepare_WC {
-	std::array<cpplib::basic_types::FloatingPointType, 6> cell;
-	std::vector<const char*> symm;
-	Prepare_IC(PyObject* ocell, PyObject* osymm, PyObject* otuples) : Prepare_WC(otuples) {
-		for (Py_ssize_t i = 0; i < 6; i++) {
-			cell[i] = static_cast<FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(ocell, i)));
-		}
-		const Py_ssize_t s = PyList_Size(osymm);
-		symm.resize(s);
-		for (Py_ssize_t i = 0; i < s; i++) {
-			Py_ssize_t us;
-			symm[i] = PyUnicode_AsUTF8AndSize(PyList_GetItem(osymm, i), &us);
-		}
-	}
+    std::array<cpplib::basic_types::FloatingPointType,6> cell;
+    std::vector<const char*> symm;
+    std::vector<std::string> symm_storage;
+    Prepare_IC(PyObject* ocell, PyObject* osymm, PyObject* tuples) : Prepare_WC(tuples, std::true_type{}) {
+        if (!PyList_Check(ocell) || PyList_Size(ocell) != 6)
+            invalid_python_input(PyExc_TypeError, "cell must be a list of six numbers");
+        for (Py_ssize_t i=0;i<6;++i) cell[i]=finite_python_number(PyList_GetItem(ocell,i));
+        for (int i=0;i<3;++i) if (!(cell[i]>0) || !(cell[i+3]>0 && cell[i+3]<180))
+            invalid_python_input(PyExc_ValueError, "Cell lengths and angles are invalid");
+        const double ca=std::cos(geometry::GradtoRad(cell[3]));
+        const double cb=std::cos(geometry::GradtoRad(cell[4]));
+        const double cg=std::cos(geometry::GradtoRad(cell[5]));
+        if (!(1+2*ca*cb*cg-ca*ca-cb*cb-cg*cg>0))
+            invalid_python_input(PyExc_ValueError, "Cell must have positive volume");
+        if (!PyList_Check(osymm)) invalid_python_input(PyExc_TypeError, "symm must be a list of strings");
+        const auto count=PyList_Size(osymm);
+        if (count<0) invalid_python_input(PyExc_TypeError, "Invalid symmetry list");
+        symm.reserve(static_cast<size_t>(count));
+        symm_storage.reserve(static_cast<size_t>(count));
+        // Match exactly three bounded affine expressions before the legacy parser,
+        // which assumes commas and uses signed int arithmetic for numeric terms.
+        static const std::string term=R"((?:[xyzXYZ]|[0-9]{1,8}(?:\.[0-9]{1,8})?(?:/[1-9][0-9]{0,7})?))";
+        static const std::string expression="[+-]?"+term+"(?:[+-]"+term+")*";
+        static const std::regex pattern("^"+expression+","+expression+","+expression+"$");
+        for (Py_ssize_t i=0;i<count;++i) {
+            PyObject* item=PyList_GetItem(osymm,i);
+            if (!item || !PyUnicode_Check(item)) invalid_python_input(PyExc_TypeError,"Symmetry must be a string");
+            Py_ssize_t size=0;
+            const char* text=PyUnicode_AsUTF8AndSize(item,&size);
+            if (!text) invalid_python_input(PyExc_UnicodeError,"Cannot encode symmetry");
+            std::string compact;
+            int digits=0;
+            for (Py_ssize_t j=0;j<size;++j) {
+                const char ch=text[j];
+                if (ch==' ' || ch=='\t' || ch=='\'' || ch=='"') continue;
+                if (ch>='0' && ch<='9') {
+                    if (++digits>8) invalid_python_input(PyExc_ValueError,"Symmetry number is too large");
+                } else if (ch!='.') digits=0;
+                compact+=ch;
+            }
+            if (!std::regex_match(compact,pattern)) invalid_python_input(PyExc_ValueError,"Invalid symmetry expression");
+            symm_storage.push_back(std::move(compact));
+            symm.push_back(symm_storage.back().c_str());
+        }
+    }
 };
 
-extern "C" {
-	inline static void useDistances(PyObject* self);
+static std::filesystem::path python_module_directory(PyObject* self) {
+    std::unique_ptr<PyObject, decltype(&Py_DecRef)> file(PyObject_GetAttrString(self, "__file__"), Py_DecRef);
+    if (!file) throw std::runtime_error("Cannot determine cpplib Python module path");
+    if (!PyUnicode_Check(file.get())) throw std::runtime_error("cpplib Python module __file__ is not a string");
+    Py_ssize_t size = 0;
+    const char* filename = PyUnicode_AsUTF8AndSize(file.get(), &size);
+    if (!filename) throw std::runtime_error("Cannot read cpplib Python module path");
+    const auto module_file = std::filesystem::u8path(filename, filename + size);
+    if (module_file.empty()) throw std::runtime_error("cpplib Python module path is empty");
+    return std::filesystem::absolute(module_file).parent_path();
+}
+
+inline static const Distances& useDistances(PyObject* self) {
+    if (Distances::exists()) return Distances::instance();
+	const auto module_directory = python_module_directory(self);
+	set_module_directory(module_directory);
+	return Distances::instance(module_directory / "BondLength.ini");
+}
+
+inline static const ElectronDensity& useElectronDensity(PyObject* self) {
+    if (ElectronDensity::exists()) return ElectronDensity::instance();
+	const auto module_directory = python_module_directory(self);
+	set_module_directory(module_directory);
+	return ElectronDensity::instance(module_directory / "ED.txt");
+}
+
+template <PyObject* (*Entry)(PyObject*, PyObject*)>
+static PyObject* python_entry(PyObject* self, PyObject* args) noexcept {
+	try {
+		return Entry(self, args);
+	} catch (const std::exception& e) {
+		if (!PyErr_Occurred()) PyErr_SetString(PyExc_RuntimeError, e.what());
+	} catch (...) {
+		if (!PyErr_Occurred()) PyErr_SetString(PyExc_RuntimeError, "Unknown C++ exception in cpplib");
+	}
+	return nullptr;
 }
 
 template <char times>
@@ -97,14 +207,15 @@ static std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basi
 		value[i].first = static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(oparams, d)));
 		value[i].second = static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(oparams, d + 1)));
 
-		if (value[i].first == 0) {
-			useDistances(self);
-			value[i].first = p_distances->minDistance(static_cast<cpplib::basic_types::AtomTypeBase>(type[i]), static_cast<cpplib::basic_types::AtomTypeBase>(type[i + 1]));
-		}
+		if (value[i].first == 0 || value[i].second == 0) {
+			const auto& distances = useDistances(self);
+			if (value[i].first == 0) {
+				value[i].first = distances.minDistance(static_cast<cpplib::basic_types::AtomTypeBase>(type[i]), static_cast<cpplib::basic_types::AtomTypeBase>(type[i + 1]));
+			}
 
-		if (value[i].second == 0) {
-			useDistances(self);
-			value[i].second = p_distances->maxDistance(static_cast<cpplib::basic_types::AtomTypeBase>(type[i]), static_cast<cpplib::basic_types::AtomTypeBase>(type[i + 1]));
+			if (value[i].second == 0) {
+				value[i].second = distances.maxDistance(static_cast<cpplib::basic_types::AtomTypeBase>(type[i]), static_cast<cpplib::basic_types::AtomTypeBase>(type[i + 1]));
+			}
 		}
 	}
 	return value;
@@ -112,14 +223,32 @@ static std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basi
 template <char times>
 static std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>, times> FindATParamsParse(PyObject* oparams, char& d) {
 	std::array<std::pair<cpplib::basic_types::FloatingPointType, cpplib::basic_types::FloatingPointType>, times> value;
-	for (char i = 0; i < times; i++, d += 2) 
-{
+	for (char i = 0; i < times; i++, d += 2)
+	{
 		value[i].first = static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(oparams, d)));
 		value[i].second = static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyList_GetItem(oparams, d + 1)));
 	}
 	return value;
 }
-extern "C" {
+template<std::integral I>
+inline static ErrorState pyListToVectorInt(PyObject* plist, std::vector<I>* pret) {
+	const Py_ssize_t s = PyList_Size(plist);
+	std::vector<I>& ret = *pret;
+	ret.resize(s);
+	if constexpr (sizeof(I) <= 4) {
+		for (Py_ssize_t i = 0; i < s; i++) {
+			ret[i] = static_cast<I>(PyLong_AsLong(PyList_GetItem(plist, i)));
+		}
+	} else {
+		for (Py_ssize_t i = 0; i < s; i++) {
+			ret[i] = static_cast<I>(PyLong_AsLongLong(PyList_GetItem(plist, i)));
+		}
+	}
+	return ErrorState::OK;
+}
+
+// Internal handlers retain C++ linkage so /EHsc catches their exceptions.
+namespace {
 
 	inline static ErrorState pyListToVectorFloat(PyObject* plist, std::vector<cpplib::basic_types::FloatingPointType>* pret) {
 		const Py_ssize_t s = PyList_Size(plist);
@@ -141,15 +270,7 @@ extern "C" {
 		}
 		return ErrorState::OK;
 	}
-	inline static ErrorState pyListToVectorInt(PyObject* plist, std::vector<int>* pret) {
-		const Py_ssize_t s = PyList_Size(plist);
-		std::vector<int>& ret = *pret;
-		ret.resize(s);
-		for (Py_ssize_t i = 0; i < s; i++) {
-			ret[i] = static_cast<int>(PyLong_AsLong(PyList_GetItem(plist, i)));
-		}
-		return ErrorState::OK;
-	}
+
 	inline static ErrorState pyListToVectorCharP(PyObject* plist, std::vector<const char*>* pret) {
 
 		std::vector<const char*>& ret = *pret;
@@ -177,26 +298,9 @@ extern "C" {
 		}
 		return ErrorState::OK;
 	}
-	inline static void useDistances(PyObject* self) {
-		if (p_distances != nullptr) {
-			return;
-		}
-		Py_ssize_t us; 
-		PyObject* file_obj = PyObject_GetAttrString(self, "__file__");
-		std::string full(PyUnicode_AsUTF8AndSize(file_obj, &us));
-		Py_DECREF(file_obj);
-
-		auto found = full.find_last_of("\\/");
-		auto bond_filename = full.substr(0, found + 1) + "BondLength.ini";
-
-		static Distances dist(bond_filename);
-		p_distances = &dist;
-	}
-
 	// Python section
 	static PyObject* cpplib_GenBonds(PyObject* self, PyObject* arg) {
-		useDistances(self);
-		auto& distances = *p_distances;
+		const auto& distances = useDistances(self);
 		Prepare_WC all(arg);
 
 		FAM_Struct famstr(std::move(all.types), std::move(all.points));
@@ -208,8 +312,7 @@ extern "C" {
 							 "bonds", lst);
 	}
 	static PyObject* cpplib_GenBondsEx(PyObject* self, PyObject* arg) {
-		useDistances(self);
-		auto& distances = *p_distances;
+		const auto& distances = useDistances(self);
 		Prepare_WC all(arg);
 		FAM_Struct famstr(std::move(all.types), std::move(all.points));
 		std::string errM;
@@ -227,7 +330,7 @@ extern "C" {
 		int np = 0;
 		int exact = 0;
 		if (!PyArg_ParseTuple(args, "sOip", &search, &o, &np, &exact)) {
-			Py_RETURN_NONE;
+			return nullptr;
 		}
 		std::vector< const char*> data; pyListToVectorCharP(o, &data);
 		const auto ret = SearchMain(search, std::move(data), np, (exact != 0));
@@ -238,12 +341,11 @@ extern "C" {
 		const char* s2 = NULL;
 		int b = 0;
 		if (!PyArg_ParseTuple(args, "ssp", &s1, &s2, &b)) {
-			Py_RETURN_NONE;
+			return nullptr;
 		}
 		if (CompareGraph(s1, s2, (b != 0))) {
 			Py_RETURN_TRUE;
-		}
-		else {
+		} else {
 			Py_RETURN_FALSE;
 		}
 	}
@@ -255,7 +357,7 @@ extern "C" {
 		PyObject* osymm = NULL;
 		PyObject* otuple = NULL;
 		if (!PyArg_ParseTuple(args, "OOO", &ocell, &osymm, &otuple)) {
-			Py_RETURN_NONE;
+			return nullptr;
 		}
 
 		Prepare_IC all(ocell, osymm, otuple);
@@ -332,7 +434,7 @@ extern "C" {
 		std::byte flags;
 
 		if (!PyArg_ParseTuple(args, "OBO", &otuples, &flags, &osymm)) {
-			Py_RETURN_NONE;
+			return nullptr;
 		}
 		bool movetocell = (flags & std::byte(1)) != std::byte(0);
 		bool movemasstocell = (flags & std::byte(2)) != std::byte(0);
@@ -390,7 +492,7 @@ extern "C" {
 		PyObject* oparams = NULL;
 
 		if (!PyArg_ParseTuple(args, "OOOO", &ocell, &osymm, &otuples, &oparams)) {
-			Py_RETURN_NONE;
+			return nullptr;
 		}
 		Prepare_IC all(ocell, osymm, otuples);
 
@@ -415,7 +517,7 @@ extern "C" {
 		PyObject* otuples = NULL;
 		PyObject* oparams = NULL;
 		if (!PyArg_ParseTuple(args, "OO", &otuples, &oparams)) {
-			Py_RETURN_NONE;
+			return nullptr;
 		}
 		Prepare_WC all(otuples);
 
@@ -444,7 +546,7 @@ extern "C" {
 		PyObject* otuples = NULL;
 		PyObject* oparams = NULL;
 		if (!PyArg_ParseTuple(args, "OOOO", &ocell, &osymm, &otuples, &oparams)) {
-			Py_RETURN_NONE;
+			return nullptr;
 		}
 		Prepare_IC all(ocell, osymm, otuples);
 
@@ -473,7 +575,7 @@ extern "C" {
 		PyObject* otuples = NULL;
 		PyObject* oparams = NULL;
 		if (!PyArg_ParseTuple(args, "OO", &otuples, &oparams)) {
-			Py_RETURN_NONE;
+			return nullptr;
 		}
 
 		Prepare_WC all(otuples);
@@ -506,7 +608,7 @@ extern "C" {
 		PyObject* otuples = NULL;
 		PyObject* oparams = NULL;
 		if (!PyArg_ParseTuple(args, "OOOO", &ocell, &osymm, &otuples, &oparams)) {
-			Py_RETURN_NONE;
+			return nullptr;
 		}
 
 		Prepare_IC all(ocell, osymm, otuples);
@@ -540,7 +642,7 @@ extern "C" {
 		PyObject* otuples = NULL;
 		PyObject* oparams = NULL;
 		if (!PyArg_ParseTuple(args, "OO", &otuples, &oparams)) {
-			Py_RETURN_NONE;
+			return nullptr;
 		}
 
 		Prepare_WC all(otuples);
@@ -575,8 +677,9 @@ extern "C" {
 		PyObject* osymm = NULL;
 		PyObject* otuples = NULL;
 		if (!PyArg_ParseTuple(args, "OOO", &ocell, &osymm, &otuples)) {
-			Py_RETURN_NONE;
+			return nullptr;
 		}
+		useDistances(self);
 		Prepare_IC all(ocell, osymm, otuples);
 
 		auto dat = FindDAT_IC(all.cell, all.symm, all.types, all.points);
@@ -618,6 +721,7 @@ extern "C" {
 		return ret;
 	}
 	static PyObject* cpplib_FindDAT_WC(PyObject* self, PyObject* otuples) {
+		useDistances(self);
 
 		Prepare_WC all(otuples);
 
@@ -669,15 +773,14 @@ extern "C" {
 		std::vector<FloatingPointType> himp;
 
 		if (!PyArg_ParseTuple(args, "OO", &o_tuple, &o_himp)) {
-			Py_RETURN_NONE;
+			return nullptr;
 		}
 		Prepare_WC all(o_tuple);
 
 		bool simplehimp = PyFloat_CheckExact(o_himp);
 		if (simplehimp) {
 			himp.resize(cpplib::constants::mend_size, static_cast<FloatingPointType>(PyFloat_AsDouble(o_himp)));
-		}
-		else {
+		} else {
 			pyListToVectorFloat(o_himp, &himp);
 		}
 		const auto himp_s = himp.size();
@@ -712,7 +815,7 @@ extern "C" {
 		const char* s1 = NULL;
 		const char* s2 = NULL;
 		if (!PyArg_ParseTuple(args, "ss", &s1, &s2)) {
-			Py_RETURN_NONE;
+			return nullptr;
 		}
 		bool res = false;
 
@@ -724,8 +827,7 @@ extern "C" {
 		graph.prepareToSearch();
 		if (graph.startFullSearch(false)) {
 			Py_RETURN_TRUE;
-		}
-		else {
+		} else {
 			Py_RETURN_FALSE;
 		}
 	}
@@ -736,7 +838,7 @@ extern "C" {
 		PyObject* otuple = NULL;
 
 		if (!PyArg_ParseTuple(args, "OOO", &ocell, &osymm, &otuple)) {
-			Py_RETURN_NONE;
+			return nullptr;
 		}
 		useDistances(self);
 
@@ -756,17 +858,18 @@ extern "C" {
 	}
 
 	// Args: [cell,symm,tuples,anchors,radius]
-	static PyObject* cpplib_ClusterCreate(PyObject* self, PyObject* args) {
+	static PyObject* cpplib_Cluster(PyObject* self, PyObject* args) {
 		PyObject* ocell = NULL;
 		PyObject* osymm = NULL;
 		PyObject* otuples = NULL;
 		PyObject* ocoords = NULL;
-		cpplib::basic_types::FloatingPointType over_radius = 0;
-		if (!PyArg_ParseTuple(args, "OOOOf", &ocell, &osymm, &otuples, &ocoords, &over_radius)) {
-			Py_RETURN_NONE;
+		double over_radius = 0;
+		if (!PyArg_ParseTuple(args, "OOOOd", &ocell, &osymm, &otuples, &ocoords, &over_radius)) {
+			return nullptr;
 		}
+		useDistances(self);
 
-		LOG_INTERFACE_GUARD("cpplib_ClusterCreate");
+		LOG_INTERFACE_GUARD("cpplib_Cluster");
 		Prepare_IC all(ocell, osymm, otuples);
 
 		Py_ssize_t s = PyList_Size(ocoords);
@@ -782,7 +885,8 @@ extern "C" {
 				static_cast<cpplib::basic_types::FloatingPointType>(PyFloat_AsDouble(PyTuple_GetItem(o_tuple, 3))));
 		}
 		bool hasPolymer = false;
-		auto ret = WITH_LOG(ClusterCreate, all.cell, all.symm, all.types, all.points, anchors, over_radius, hasPolymer);
+		auto poly_rad = static_cast<cpplib::basic_types::FloatingPointType>(over_radius);
+		auto ret = WITH_LOG(ClusterCreate, all.cell, all.symm, all.types, all.points, anchors, poly_rad, hasPolymer);
 
 		return Py_BuildValue("{s:N,s:N}",
 							 "points", py_util::convert(ret),
@@ -791,33 +895,29 @@ extern "C" {
 
 	/// Args: [cell, symm, tuples, bools<int>, cutoff]
 	static PyObject* cpplib_Voronoi(PyObject* self, PyObject* args) {
-		using Diagram = cpplib::voronoi::VoronoiDiagram;
 
 		PyObject* ocell = NULL;
 		PyObject* osymm = NULL;
 		PyObject* otuples = NULL;
 		PyObject* obools = NULL;
-		float cutoff = 6.0;
-		if (!PyArg_ParseTuple(args, "OOOOf", &ocell, &osymm, &otuples, &obools, &cutoff)) {
-			Py_RETURN_NONE;
+		float cutoff_temp = 6.0;
+		if (!PyArg_ParseTuple(args, "OOOOf", &ocell, &osymm, &otuples, &obools, &cutoff_temp)) {
+			return nullptr;
 		}
 
 		LOG_INTERFACE_GUARD("cpplib_Voronoi");
 
+		FloatingPointType cutoff = static_cast<FloatingPointType>(cutoff_temp);
+
 		Prepare_IC all(ocell, osymm, otuples);
 		auto ps = all.points.size();
-		std::vector<int> intbools;
+		std::vector<uint8_t> intbools;
 		intbools.reserve(ps);
 		pyListToVectorInt(obools, &intbools);
-		std::vector<bool> bools(ps);
-
-		for (int i = 0; i < ps; i++) {
-			bools[i] = intbools[i] != 0;
-		}
 
 		geometry::Cell cell(all.cell);
 
-		bools.resize(all.points.size(), false);
+		intbools.resize(all.points.size(), 0);
 
 		std::vector<geometry::Symm<FloatingPointType>> symmvec;
 		symmvec.reserve(all.symm.size());
@@ -830,18 +930,10 @@ extern "C" {
 		auto buildresult = ucb.build(all.points, all.types);
 
 
-		geometry::SpatialGrid<FloatingPointType> space;
-		space.build(buildresult.atoms.points, cell, cutoff);
-		auto bonds = WITH_LOG_M(space, get_bonds, false);
+		voronoi::VoronoiPipeline pipe;
+		pipe.build(buildresult.atoms.points, cell, cutoff, true, &intbools);
 
-		// Flags intentionally correspond only to the asymmetric-unit inputs; 
-		// VoronoiDiagram resizes the flag vector and treats symmetry-expanded sites as false.
-		Diagram diag(buildresult.atoms.points,bonds, cell, bools);
-
-		auto ce = diag.extractCells();
-				
-		cpplib::voronoi::VoronoiFused vf(ce, cell.fracToCart());
-		vf.polyhedra.resize(all.points.size());
+		auto vf = pipe.fuse();
 
 		// Build return value
 		return Py_BuildValue("{s:N,s:N}",
@@ -849,28 +941,141 @@ extern "C" {
 							 "unit_cell", py_util::convert(buildresult.atoms));
 	}
 
+	static PyObject* cpplib_FindCP(PyObject* self, PyObject* args) {
+		using BaderOperator = cpplib::BaderOperator;
+
+		PyObject* ocell = NULL;
+		PyObject* osymm = NULL;
+		PyObject* otuples = NULL;
+		double cutoff_tmp = 6.0;
+		if (!PyArg_ParseTuple(args, "OOOd", &ocell, &osymm, &otuples, &cutoff_tmp)) {
+			return nullptr;
+		}
+
+		if (!std::isfinite(cutoff_tmp) || cutoff_tmp <= 0)
+            invalid_python_input(PyExc_ValueError, "cutoff must be finite and positive");
+        FloatingPointType cutoff = static_cast<FloatingPointType>(cutoff_tmp);
+
+		LOG_INTERFACE_GUARD("cpplib_FindCP");
+
+		Prepare_IC all(ocell, osymm, otuples);
+        if (all.points.empty()) invalid_python_input(PyExc_ValueError, "FindCP requires atoms");
+        const auto& ed = useElectronDensity(self);
+        for (const auto type : all.types)
+            if (static_cast<size_t>(type) >= ed.splines().size() || ed.splines()[type].spline.radius() == 0)
+                invalid_python_input(PyExc_ValueError, "No electron density data for atom type");
+
+		geometry::Cell cell(all.cell);
+		std::vector<bool> bools(all.points.size(), true);
+
+		std::vector<geometry::Symm<FloatingPointType>> symmvec;
+		symmvec.reserve(all.symm.size());
+		for (const auto& s : all.symm) {
+			symmvec.emplace_back(s);
+		}
+
+		cluster_detail::UnitCellBuilder ucb(symmvec);
+		auto buildresult = ucb.build(all.points, all.types);
+
+		voronoi::VoronoiPipeline pipe;
+		pipe.build(buildresult.atoms.points, cell, cutoff, true);
+
+		auto vf = pipe.fuse();
+
+		auto critical_points = cpplib::BaderOperator::GenerateInitialCriticalPoints(vf, cell.fracToCart());
+
+		// Expand Point Net
+		// 1. Calculate theoretical radius.
+
+		const auto ED_cutoff = cpplib::BaderOperator::GetOptimalRadius(3.0, 1.0E-6, ed.splines(), buildresult.atoms.types);
+		const size_t max_type = ed.size();
+		const size_t initial_type_size = buildresult.atoms.types.size();
+
+		// 2. Use cutoff for prepare PointsSoA
+		cpplib::PointsSoA<double> psoa;
+		psoa.initializeWithPeriodicImages(buildresult.atoms.points, buildresult.atoms.types, cell.fracToCart(), cell.cartToFrac(), ED_cutoff);
+
+		// Optimize points
+		std::array<double, 1> array_of_eps{{1.0e-12}};
+		for (auto& cp : critical_points) {
+
+			auto val = CriticalPoint::CalculateEDinPoint(cp.pos_, psoa, ed.splines());
+			cp.UpdateVal(val);
+
+			for (double eps:array_of_eps) {
+
+				BaderOperator::OptimizePoint(cp, psoa, ed.splines(), eps);
+			}
+		}
+
+		BaderOperator::deleteAllDublicates(critical_points, 0.05);
+
+		constexpr CriticalPoint::value_type step = 0.02;
+		std::vector<std::vector<PointType>> paths;
+		for (const auto& cp : critical_points) {
+			if (cp.type_ != CriticalPoint::TYPE::B)
+				continue;
+			auto [p1, p2] = cp.CalculatePaths<step>(psoa, ed.splines());
+			paths.push_back(p1);
+			paths.push_back(p2);
+		}
+
+		// Write points
+		BaderOperator::writeCriticalPointsToFile(critical_points, "CPs.pdb");
+
+		// Write Paths
+		{
+			std::ofstream file_paths("paths.pdb", std::ios::binary);
+			size_t total_i = 1;
+			size_t path_i = 1;
+			for (auto& path : paths) {
+				const auto path_s = path.size();
+				std::string result;
+				result.reserve(10 + path_s * 80);
+
+				for (size_t i = 0; i < path_s; i++)
+				{
+					auto& p = path[i];
+					std::format_to(
+						std::back_inserter(result),
+						"HETATM{:>5}  C  PTH A {:>4}    {:>8.3f}{:>8.3f}{:>8.3f}  1.00  0.00           C\n",
+						total_i, path_i,
+						p[0], p[1], p[2]
+					);
+					total_i++;
+				}
+				std::format_to(std::back_inserter(result), "TER\n");
+				file_paths.write(result.data(), result.size());
+
+				path_i++;
+			}
+		}
+		Py_RETURN_NONE;
+	}
+
 	static struct PyMethodDef methods[] = {
-		{ "GenBonds", cpplib_GenBonds, METH_O, "Generate bond list"},
-		{ "GenBondsEx", cpplib_GenBondsEx, METH_O, "Generate bond list with length"},
-		{ "SearchMain", cpplib_SearchMain, METH_VARARGS, "Compare graph with data"},
-		{ "CompareGraph", cpplib_CompareGraph, METH_VARARGS, "Compare two graphs"},
-		{ "FindMoleculesInCell", cpplib_FindMoleculesInCell, METH_VARARGS, "Create graph from cell"},
-		{ "FindMoleculesWithoutCell", cpplib_FindMoleculesWithoutCell, METH_O, "Create graph from xyz"},
-		{ "GenSymm", cpplib_GenSymm, METH_VARARGS, "Generates symmetry by symm code"},
-		{ "FindDistanceIC", cpplib_FindDistanceIC, METH_VARARGS, "Find distances with current parameters in cell"},
-		{ "FindDistanceWC", cpplib_FindDistanceWC, METH_VARARGS, "Find distances with current parameters in xyz"},
-		{ "FindAngleIC", cpplib_FindAngleIC, METH_VARARGS, "Find angles with current parameters in cell"},
-		{ "FindAngleWC", cpplib_FindAngleWC, METH_VARARGS, "Find angles with current parameters in xyz"},
-		{ "FindTorsionIC", cpplib_FindTorsionIC, METH_VARARGS, "Find torsions with current parameters in cell"},
-		{ "FindTorsionWC", cpplib_FindTorsionWC, METH_VARARGS, "Find torsions with current parameters in xyz"},
-		{ "FindDAT_IC", cpplib_FindDAT_IC, METH_VARARGS, "Create dictionary with distances, angles and torsions in cell"},
-		{ "FindDAT_WC", cpplib_FindDAT_WC, METH_O, "Create dictionary with distances, angles and torsions in xyz"},
-		{ "himp", cpplib_himp, METH_VARARGS, "Moves hydrogens to the nearest atom"},
-		{ "SubSearch", cpplib_SubSearch, METH_VARARGS, "Compare two graphs"},
-		{ "compaq", cpplib_compaq, METH_VARARGS, "Do the same as Olex2 'compaq' function"},
-		{ "SortDatabase", cpplib_SortDatabase, METH_O, "Sort graph"},
-		{ "Cluster", cpplib_ClusterCreate, METH_VARARGS, "Create cluster"},
-		{ "VoronoiCalculation", cpplib_Voronoi, METH_VARARGS, "Calculate Voronoi cells"},
+		{ "GenBonds", python_entry<cpplib_GenBonds>, METH_O, "Generate bond list"},
+		{ "GenBondsEx", python_entry<cpplib_GenBondsEx>, METH_O, "Generate bond list with length"},
+		{ "SearchMain", python_entry<cpplib_SearchMain>, METH_VARARGS, "Compare graph with data"},
+		{ "CompareGraph", python_entry<cpplib_CompareGraph>, METH_VARARGS, "Compare two graphs"},
+		{ "FindMoleculesInCell", python_entry<cpplib_FindMoleculesInCell>, METH_VARARGS, "Create graph from cell"},
+		{ "FindMoleculesWithoutCell", python_entry<cpplib_FindMoleculesWithoutCell>, METH_O, "Create graph from xyz"},
+		{ "GenSymm", python_entry<cpplib_GenSymm>, METH_VARARGS, "Generates symmetry by symm code"},
+		{ "FindDistanceIC", python_entry<cpplib_FindDistanceIC>, METH_VARARGS, "Find distances with current parameters in cell"},
+		{ "FindDistanceWC", python_entry<cpplib_FindDistanceWC>, METH_VARARGS, "Find distances with current parameters in xyz"},
+		{ "FindAngleIC", python_entry<cpplib_FindAngleIC>, METH_VARARGS, "Find angles with current parameters in cell"},
+		{ "FindAngleWC", python_entry<cpplib_FindAngleWC>, METH_VARARGS, "Find angles with current parameters in xyz"},
+		{ "FindTorsionIC", python_entry<cpplib_FindTorsionIC>, METH_VARARGS, "Find torsions with current parameters in cell"},
+		{ "FindTorsionWC", python_entry<cpplib_FindTorsionWC>, METH_VARARGS, "Find torsions with current parameters in xyz"},
+		{ "FindDAT_IC", python_entry<cpplib_FindDAT_IC>, METH_VARARGS, "Create dictionary with distances, angles and torsions in cell"},
+		{ "FindDAT_WC", python_entry<cpplib_FindDAT_WC>, METH_O, "Create dictionary with distances, angles and torsions in xyz"},
+		{ "himp", python_entry<cpplib_himp>, METH_VARARGS, "Moves hydrogens to the nearest atom"},
+		{ "SubSearch", python_entry<cpplib_SubSearch>, METH_VARARGS, "Compare two graphs"},
+		{ "compaq", python_entry<cpplib_compaq>, METH_VARARGS, "Do the same as Olex2 'compaq' function"},
+		{ "SortDatabase", python_entry<cpplib_SortDatabase>, METH_O, "Sort graph"},
+		{ "Cluster", python_entry<cpplib_Cluster>, METH_VARARGS, "Create cluster"},
+		{ "VoronoiCalculation", python_entry<cpplib_Voronoi>, METH_VARARGS, "Calculate Voronoi cells"},
+		{ "FindCP", python_entry<cpplib_FindCP>, METH_VARARGS, "Find CP in crystal"},
 
 
 		{ NULL, NULL, 0, NULL }
@@ -881,7 +1086,8 @@ extern "C" {
 		NULL, NULL, NULL, NULL
 	};
 
-	PyMODINIT_FUNC PyInit_cpplib(void) {
+} // namespace
+
+PyMODINIT_FUNC PyInit_cpplib(void) {
 		return PyModule_Create(&cpplib_module);
 	}
-}
